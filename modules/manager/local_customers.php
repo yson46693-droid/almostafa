@@ -3917,6 +3917,82 @@ document.addEventListener('DOMContentLoaded', function() {
     #customerExportModal .table td {
         padding: 0.5rem 0.25rem;
     }
+    
+    /* إزالة أي backdrop يؤثر على النموذج */
+    #customerExportModal.modal.show,
+    #customerExportModal.modal.showing {
+        pointer-events: auto !important;
+        z-index: 1055 !important;
+    }
+    
+    #customerExportModal .modal-dialog {
+        pointer-events: auto !important;
+        z-index: 1056 !important;
+        touch-action: manipulation !important;
+    }
+    
+    #customerExportModal .modal-content {
+        pointer-events: auto !important;
+        z-index: 1057 !important;
+        touch-action: manipulation !important;
+    }
+    
+    #customerExportModal .modal-body,
+    #customerExportModal .modal-header,
+    #customerExportModal .modal-footer {
+        pointer-events: auto !important;
+        touch-action: manipulation !important;
+    }
+    
+    #customerExportModal button,
+    #customerExportModal input,
+    #customerExportModal select,
+    #customerExportModal a,
+    #customerExportModal .btn,
+    #customerExportModal .form-check-input,
+    #customerExportModal .page-link {
+        pointer-events: auto !important;
+        touch-action: manipulation !important;
+        -webkit-tap-highlight-color: rgba(0, 123, 255, 0.2) !important;
+    }
+    
+    /* إزالة backdrop الإضافي الذي يمنع التفاعل */
+    #customerExportModal + .modal-backdrop,
+    .modal-backdrop.show {
+        z-index: 1054 !important;
+    }
+    
+    /* إزالة أي backdrop إضافي */
+    body.modal-open .modal-backdrop ~ .modal-backdrop {
+        display: none !important;
+        pointer-events: none !important;
+    }
+    
+    /* ضمان أن backdrop واحد فقط موجود */
+    body.modal-open .modal-backdrop:not(:first-of-type) {
+        display: none !important;
+        pointer-events: none !important;
+    }
+    
+    /* إصلاح خاص للجدول داخل المودال */
+    #customerExportModal .table-responsive {
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-y !important;
+        pointer-events: auto !important;
+    }
+    
+    #customerExportModal table {
+        touch-action: manipulation !important;
+        pointer-events: auto !important;
+    }
+}
+
+/* إزالة backdrop الإضافي على جميع الشاشات */
+#customerExportModal + .modal-backdrop ~ .modal-backdrop,
+body.modal-open .modal-backdrop:not(:first-of-type) {
+    display: none !important;
+    pointer-events: none !important;
+    z-index: -1 !important;
 }
 
 /* تحسينات الأداء على الموبايل */
