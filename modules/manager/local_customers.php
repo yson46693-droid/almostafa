@@ -3964,6 +3964,9 @@ window.CUSTOMER_EXPORT_CONFIG = {
 </div>
 </script>
 
+<!-- Responsive Modals CSS -->
+<link rel="stylesheet" href="<?php echo getRelativeUrl('assets/css/responsive-modals.css'); ?>">
+
 <style>
 /* تحسين جداول العملاء على الهواتف */
 /* الأزرار في عمود الإجراءات: 2×2 على جميع الشاشات */

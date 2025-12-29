@@ -1,0 +1,81 @@
+/**
+ * Responsive Modals CSS
+ * تصميم متجاوب للـ Modals على الأجهزة المحمولة
+ * 
+ * هذا الملف يحتوي على قواعد CSS تجعل الـ Modals تعمل بشكل أفضل على الأجهزة المحمولة
+ * 
+ * المميزات:
+ * - تحسين عرض الـ Modals على الشاشات الصغيرة (حتى 768px)
+ * - تحسين خاص للهواتف الصغيرة جداً (حتى 480px)
+ * - إزالة المسافات الزائدة وتحسين التمرير
+ * 
+ * الاستخدام:
+ * 
+ * 1. في ملف HTML/PHP:
+ *    <link rel="stylesheet" href="assets/css/responsive-modals.css">
+ * 
+ * 2. في ملف PHP مع استخدام path_helper:
+ *    <link rel="stylesheet" href="<?php echo getRelativeUrl('assets/css/responsive-modals.css'); ?>">
+ * 
+ * 3. في قسم <head>:
+ *    <link rel="stylesheet" href="<?php echo getRelativeUrl('assets/css/responsive-modals.css'); ?>">
+ * 
+ * ملاحظة: هذا الملف يعمل مع جميع الـ Modals التي تستخدم Bootstrap classes:
+ * - .modal
+ * - .modal-dialog
+ * - .modal-content
+ * - .modal-body
+ * - .modal-header
+ * - .modal-footer
+ */
+
+/* ===== Responsive Modals for Mobile ===== */
+@media (max-width: 768px) {
+    .modal {
+        padding: 0 !important;
+    }
+
+    .modal-dialog {
+        margin: 0.5rem auto;
+        max-width: 95% !important;
+        width: 95% !important;
+        height: auto;
+    }
+
+    .modal-content {
+        max-height: 90vh;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    .modal-body {
+        overflow-y: auto;
+        max-height: calc(90vh - 120px); /* header + footer */
+        padding: 1rem;
+    }
+
+    .modal-header,
+    .modal-footer {
+        padding: 0.75rem 1rem;
+    }
+}
+
+/* ===== Extra Small Phones ===== */
+@media (max-width: 480px) {
+    .modal-dialog {
+        max-width: 100% !important;
+        width: 100% !important;
+        margin: 0;
+    }
+
+    .modal-content {
+        max-height: 100vh;
+        border-radius: 0;
+    }
+
+    .modal-body {
+        max-height: calc(100vh - 110px);
+        padding: 0.75rem;
+    }
+}
+
