@@ -515,34 +515,7 @@ async function updateNotificationList(notifications) {
             // إذا كان الإشعار من نوع "تنبيه: تأخير في الحضور"، لا يتم التحويل
             const notification = notifications.find(n => (n.id == notificationId || String(n.id) === String(notificationId)));
             if (notification && notification.link && notification.title !== 'تنبيه: تأخير في الحضور') {
-                const link = String(notification.link).trim();
-                
-                // التحقق من صحة الرابط قبل التوجيه
-                if (link && link !== '#' && link !== '' && link !== 'null' && link !== 'undefined') {
-                    // التحقق من أن الرابط يبدأ بـ / أو http أو https
-                    if (link.startsWith('/') || link.startsWith('http://') || link.startsWith('https://')) {
-                        // تنظيف الرابط من أي مسافات أو أحرف غير صالحة
-                        const cleanLink = link.replace(/\s+/g, '');
-                        
-                        // التحقق من أن الرابط لا يحتوي على مسارات خطيرة
-                        if (!cleanLink.includes('../') && !cleanLink.includes('..\\')) {
-                            try {
-                                window.location.href = cleanLink;
-                            } catch (error) {
-                                console.error('Error redirecting to notification link:', error, cleanLink);
-                                alert('عذراً، حدث خطأ أثناء التوجيه إلى الصفحة المطلوبة.');
-                            }
-                        } else {
-                            console.warn('Invalid notification link (contains dangerous path):', cleanLink);
-                            alert('عذراً، رابط الإشعار غير صحيح.');
-                        }
-                    } else {
-                        console.warn('Invalid notification link format:', link);
-                        alert('عذراً، رابط الإشعار غير صحيح.');
-                    }
-                } else {
-                    console.warn('Empty or invalid notification link:', link);
-                }
+                window.location.href = notification.link;
             }
         });
     });

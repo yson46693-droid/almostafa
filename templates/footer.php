@@ -56,6 +56,33 @@ if (!defined('ACCESS_ALLOWED')) {
                     return;
                 }
                 
+                // التحقق من أن الصفحة ليست صفحة الحضور (attendance) - منع refresh عند فتح الكاميرا
+                const isAttendancePage = window.location.pathname.includes('attendance.php') ||
+                                         window.location.pathname.includes('attendance');
+                
+                if (isAttendancePage) {
+                    // التحقق من أن modal الكاميرا مفتوح - إذا كان مفتوحاً، لا تقم بعمل refresh
+                    const cameraModal = document.getElementById('cameraModal');
+                    if (cameraModal && cameraModal.classList.contains('show')) {
+                        pageshowRefreshHandled = true;
+                        return;
+                    }
+                    
+                    // التحقق من أن الكاميرا تعمل - إذا كانت تعمل، لا تقم بعمل refresh
+                    const video = document.getElementById('video');
+                    if (video && video.srcObject && !video.paused) {
+                        pageshowRefreshHandled = true;
+                        return;
+                    }
+                    
+                    // التحقق من أن حالة التحميل نشطة - إذا كانت نشطة، لا تقم بعمل refresh
+                    const cameraLoading = document.getElementById('cameraLoading');
+                    if (cameraLoading && cameraLoading.style.display !== 'none' && cameraLoading.style.visibility !== 'hidden') {
+                        pageshowRefreshHandled = true;
+                        return;
+                    }
+                }
+                
                 // التحقق من sessionStorage لمنع refresh متكرر في نفس الجلسة
                 try {
                     const lastRefresh = sessionStorage.getItem('last_pageshow_refresh');
