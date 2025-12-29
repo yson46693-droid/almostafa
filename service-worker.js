@@ -180,6 +180,8 @@ self.addEventListener('fetch', (event) => {
         )
       ])
       .then((networkResponse) => {
+        // Always return the response, even if it's an error status (500, 404, etc.)
+        // This allows the server to handle errors properly
         // Only cache successful responses
         if (networkResponse.status === 200 && networkResponse.ok) {
           const responseClone = networkResponse.clone();
@@ -192,15 +194,26 @@ self.addEventListener('fetch', (event) => {
         return networkResponse;
       })
       .catch((error) => {
-        console.error('Network fetch failed for PHP page:', error);
-        // Try cache as fallback
-        return caches.match(request)
-          .then((cached) => {
-            if (cached) {
-              return cached;
-            }
-            // If no cache and network failed, return offline page for navigation
-            if (request.mode === 'navigate') {
+        // Check if this is a real network error (not a server error)
+        const isNetworkError = 
+          error.name === 'TypeError' ||
+          error.name === 'NetworkError' ||
+          error.message === 'Failed to fetch' ||
+          error.message === 'Request timeout' ||
+          error.message?.includes('network') ||
+          error.message?.includes('fetch') ||
+          error.message?.includes('timeout');
+        
+        // Only show offline page for actual network failures
+        if (isNetworkError && request.mode === 'navigate') {
+          console.error('Network fetch failed for PHP page (real network error):', error);
+          // Try cache as fallback
+          return caches.match(request)
+            .then((cached) => {
+              if (cached) {
+                return cached;
+              }
+              // If no cache, return offline page for navigation
               return caches.match('/offline.html')
                 .then((offlinePage) => {
                   if (offlinePage) {
@@ -219,19 +232,31 @@ self.addEventListener('fetch', (event) => {
                     headers: { 'Content-Type': 'text/html; charset=utf-8' }
                   });
                 });
-            }
-            throw error;
-          })
-          .catch(() => {
-            // If cache operations fail, return error response for navigation requests
-            if (request.mode === 'navigate') {
-              return new Response('لا يوجد اتصال بالشبكة', {
-                status: 503,
-                headers: { 'Content-Type': 'text/html; charset=utf-8' }
-              });
-            }
-            throw error;
-          });
+            })
+            .catch(() => {
+              // If cache operations fail, return error response for navigation requests
+              return caches.match('/offline.html')
+                .then((offlinePage) => {
+                  if (offlinePage) {
+                    return offlinePage;
+                  }
+                  return new Response('لا يوجد اتصال بالشبكة', {
+                    status: 503,
+                    headers: { 'Content-Type': 'text/html; charset=utf-8' }
+                  });
+                })
+                .catch(() => {
+                  return new Response('لا يوجد اتصال بالشبكة', {
+                    status: 503,
+                    headers: { 'Content-Type': 'text/html; charset=utf-8' }
+                  });
+                });
+            });
+        }
+        
+        // For non-network errors or non-navigation requests, re-throw to let browser handle
+        console.error('Fetch error for PHP page (not a network error):', error);
+        throw error;
       })
     );
     return;
@@ -336,6 +361,7 @@ self.addEventListener('fetch', (event) => {
         )
       ])
       .then((networkResponse) => {
+        // Always return the response, even if it's an error status
         if (networkResponse.status === 200 && networkResponse.ok) {
           const responseClone = networkResponse.clone();
           caches.open(RUNTIME_CACHE_NAME)
@@ -347,14 +373,25 @@ self.addEventListener('fetch', (event) => {
         return networkResponse;
       })
       .catch((error) => {
-        console.error('Network fetch failed for HTML page:', error);
-        return caches.match(request)
-          .then((cached) => {
-            if (cached) {
-              return cached;
-            }
-            // Fallback to offline page for navigation requests
-            if (request.mode === 'navigate') {
+        // Check if this is a real network error
+        const isNetworkError = 
+          error.name === 'TypeError' ||
+          error.name === 'NetworkError' ||
+          error.message === 'Failed to fetch' ||
+          error.message === 'Request timeout' ||
+          error.message?.includes('network') ||
+          error.message?.includes('fetch') ||
+          error.message?.includes('timeout');
+        
+        // Only show offline page for actual network failures
+        if (isNetworkError && request.mode === 'navigate') {
+          console.error('Network fetch failed for HTML page (real network error):', error);
+          return caches.match(request)
+            .then((cached) => {
+              if (cached) {
+                return cached;
+              }
+              // Fallback to offline page for navigation requests
               return caches.match('/offline.html')
                 .then((offlinePage) => {
                   if (offlinePage) {
@@ -371,31 +408,44 @@ self.addEventListener('fetch', (event) => {
                     headers: { 'Content-Type': 'text/html; charset=utf-8' }
                   });
                 });
-            }
-            return new Response('لا يوجد اتصال بالشبكة', {
-              status: 503,
-              headers: { 'Content-Type': 'text/plain; charset=utf-8' }
-            });
-          })
-          .catch(() => {
-            // If cache operations fail, return error response
-            if (request.mode === 'navigate') {
+            })
+            .catch(() => {
+              // If cache operations fail, return error response
+              if (request.mode === 'navigate') {
+                return caches.match('/offline.html')
+                  .then((offlinePage) => {
+                    if (offlinePage) {
+                      return offlinePage;
+                    }
+                    return new Response('لا يوجد اتصال بالشبكة', {
+                      status: 503,
+                      headers: { 'Content-Type': 'text/html; charset=utf-8' }
+                    });
+                  })
+                  .catch(() => {
+                    return new Response('لا يوجد اتصال بالشبكة', {
+                      status: 503,
+                      headers: { 'Content-Type': 'text/html; charset=utf-8' }
+                    });
+                  });
+              }
               return new Response('لا يوجد اتصال بالشبكة', {
                 status: 503,
-                headers: { 'Content-Type': 'text/html; charset=utf-8' }
+                headers: { 'Content-Type': 'text/plain; charset=utf-8' }
               });
-            }
-            return new Response('لا يوجد اتصال بالشبكة', {
-              status: 503,
-              headers: { 'Content-Type': 'text/plain; charset=utf-8' }
             });
-          });
+        }
+        
+        // For non-network errors, re-throw to let browser handle
+        console.error('Fetch error for HTML page (not a network error):', error);
+        throw error;
       })
     );
     return;
   }
 
   // Default: network first with timeout, fallback to cache
+  // Only handle if no other handler matched
   event.respondWith(
     Promise.race([
       fetch(request, {
@@ -407,6 +457,7 @@ self.addEventListener('fetch', (event) => {
       )
     ])
     .then((networkResponse) => {
+      // Always return the response, even if it's an error status
       if (networkResponse.status === 200 && networkResponse.ok) {
         const responseClone = networkResponse.clone();
         caches.open(RUNTIME_CACHE_NAME)
@@ -418,18 +469,34 @@ self.addEventListener('fetch', (event) => {
       return networkResponse;
     })
     .catch((error) => {
-      console.error('Network fetch failed:', error);
-      return caches.match(request)
-        .then((cached) => {
-          if (cached) {
-            return cached;
-          }
-          throw error;
-        })
-        .catch(() => {
-          // If cache operations fail, re-throw original error
-          throw error;
-        });
+      // Check if this is a real network error
+      const isNetworkError = 
+        error.name === 'TypeError' ||
+        error.name === 'NetworkError' ||
+        error.message === 'Failed to fetch' ||
+        error.message === 'Request timeout' ||
+        error.message?.includes('network') ||
+        error.message?.includes('fetch') ||
+        error.message?.includes('timeout');
+      
+      if (isNetworkError) {
+        console.error('Network fetch failed (real network error):', error);
+        return caches.match(request)
+          .then((cached) => {
+            if (cached) {
+              return cached;
+            }
+            throw error;
+          })
+          .catch(() => {
+            // If cache operations fail, re-throw original error
+            throw error;
+          });
+      }
+      
+      // For non-network errors, re-throw to let browser handle
+      console.error('Fetch error (not a network error):', error);
+      throw error;
     })
   );
 });
