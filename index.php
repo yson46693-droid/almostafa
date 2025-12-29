@@ -416,6 +416,25 @@ if ($isUserLoggedIn && !$isLoginAttempt) {
     }
     $dashboardUrl = preg_replace('/\/+/', '/', $dashboardUrl);
     
+    // منع حلقة إعادة التوجيه: التحقق من أننا لسنا بالفعل على URL الهدف
+    $currentUri = $_SERVER['REQUEST_URI'] ?? '';
+    $currentPath = parse_url($currentUri, PHP_URL_PATH) ?? '';
+    $currentPath = preg_replace('/\/+/', '/', rtrim($currentPath, '/'));
+    $dashboardPath = parse_url($dashboardUrl, PHP_URL_PATH) ?? $dashboardUrl;
+    $dashboardPath = preg_replace('/\/+/', '/', rtrim($dashboardPath, '/'));
+    
+    // إذا كنا بالفعل على dashboard URL، لا نعيد التوجيه (منع حلقة إعادة التوجيه)
+    if ($currentPath === $dashboardPath || (strpos($currentPath, '/dashboard/') !== false && strpos($currentPath, $userRole . '.php') !== false)) {
+        // نحن بالفعل على dashboard، لا حاجة لإعادة التوجيه
+        // إذا كان REQUEST_URI يشير إلى dashboard ولكننا في index.php، قد يكون هناك خطأ في .htaccess
+        // في هذه الحالة، نتخطى إعادة التوجيه لتجنب الحلقة
+        error_log("Redirect loop prevention: Already on dashboard URL. Current: {$currentPath}, Target: {$dashboardPath}");
+        // لا نعيد التوجيه - اترك الكود يستمر (قد يكون هناك خطأ في التكوين)
+        // لكن يجب أن نتأكد من أننا لا نعرض صفحة تسجيل الدخول
+        // في هذه الحالة، نخرج لأن المستخدم مسجل دخول بالفعل
+        exit;
+    }
+    
     if (!headers_sent()) {
         header('Location: ' . $dashboardUrl, true, 303);
         exit;

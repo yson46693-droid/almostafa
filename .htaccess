@@ -2,8 +2,18 @@
 RewriteEngine On
 
 # إعادة توجيه HTTP إلى HTTPS - إجبار استخدام HTTPS
+# تحسين للتعامل مع الخوادم خلف البروكسي (مثل InfinityFree)
+# فقط أعد التوجيه إذا كنا متأكدين 100% أننا على HTTP وليس HTTPS
+# التحقق من جميع المؤشرات قبل إعادة التوجيه لمنع الحلقة
+# ملاحظة: إذا استمرت مشكلة "ERR_TOO_MANY_REDIRECTS"، قم بتعطيل هذا القسم
+# عن طريق إضافة # في بداية كل سطر من السطور التالية
 RewriteCond %{HTTPS} off
 RewriteCond %{HTTP:X-Forwarded-Proto} !https
+RewriteCond %{HTTP:X-Forwarded-SSL} !on  
+RewriteCond %{SERVER_PORT} !^443$
+# منع إعادة التوجيه إذا كان الطلب لملفات ثابتة أو API
+RewriteCond %{REQUEST_URI} !^/api/
+RewriteCond %{REQUEST_URI} !\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|json|webp)$
 RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
 # إعادة توجيه manifest.json إلى manifest.php لضمان معالجة BOM
