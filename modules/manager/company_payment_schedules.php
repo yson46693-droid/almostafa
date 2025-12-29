@@ -1683,4 +1683,191 @@ document.addEventListener('DOMContentLoaded', function() {
         max-height: none !important;
     }
 }
+
+/* ===== منع scroll و touch خارج النموذج عند فتحه ===== */
+/* منع scroll في body عند فتح النموذج */
+body.modal-open {
+    overflow: hidden !important;
+    position: fixed !important;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* ضمان أن backdrop يمنع التفاعل */
+.modal-backdrop {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    z-index: 1040 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    background-color: #000 !important;
+    pointer-events: auto !important;
+    touch-action: none !important;
+}
+
+.modal-backdrop.show {
+    opacity: 0.5 !important;
+}
+
+/* منع touch events على المحتوى خلف النموذج */
+body.modal-open > *:not(.modal):not(.modal-backdrop) {
+    pointer-events: none !important;
+    touch-action: none !important;
+}
+
+/* السماح بالتفاعل داخل النموذج فقط */
+#addScheduleModal.modal.show,
+#editScheduleModal.modal.show,
+#reminderModal.modal.show {
+    pointer-events: auto !important;
+    touch-action: auto !important;
+}
+
+#addScheduleModal .modal-dialog,
+#editScheduleModal .modal-dialog,
+#reminderModal .modal-dialog {
+    pointer-events: auto !important;
+    touch-action: auto !important;
+}
+
+#addScheduleModal .modal-content,
+#editScheduleModal .modal-content,
+#reminderModal .modal-content {
+    pointer-events: auto !important;
+    touch-action: auto !important;
+}
+
+/* السماح بالتمرير داخل modal-body فقط */
+#addScheduleModal .modal-body,
+#editScheduleModal .modal-body,
+#reminderModal .modal-body {
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-y !important;
+    pointer-events: auto !important;
+}
+
+/* منع scroll على المحتوى خلف النموذج على الموبايل */
+@media (max-width: 768px) {
+    body.modal-open {
+        overflow: hidden !important;
+        position: fixed !important;
+        width: 100% !important;
+        height: 100% !important;
+        touch-action: none !important;
+    }
+    
+    body.modal-open > *:not(.modal):not(.modal-backdrop) {
+        pointer-events: none !important;
+        touch-action: none !important;
+        -webkit-overflow-scrolling: none !important;
+    }
+    
+    /* السماح بالتمرير داخل النموذج فقط */
+    #addScheduleModal .modal-body,
+    #editScheduleModal .modal-body,
+    #reminderModal .modal-body {
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-y !important;
+        overflow-y: auto !important;
+        max-height: calc(100vh - 180px) !important;
+    }
+}
 </style>
+
+<script>
+// ===== منع scroll و touch خارج النموذج =====
+document.addEventListener('DOMContentLoaded', function() {
+    const modals = ['addScheduleModal', 'editScheduleModal', 'reminderModal'];
+    
+    modals.forEach(function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (!modal) return;
+        
+        // عند فتح النموذج
+        modal.addEventListener('show.bs.modal', function() {
+            // حفظ موضع scroll الحالي
+            const scrollY = window.scrollY || window.pageYOffset;
+            document.body.style.top = `-${scrollY}px`;
+            
+            // منع scroll في body
+            document.body.classList.add('modal-open');
+            document.body.style.overflow = 'hidden';
+            document.body.style.position = 'fixed';
+            document.body.style.width = '100%';
+            document.body.style.height = '100%';
+            
+            // منع touch events على المحتوى خلف النموذج
+            const allElements = document.body.children;
+            for (let i = 0; i < allElements.length; i++) {
+                const el = allElements[i];
+                if (!el.classList.contains('modal') && !el.classList.contains('modal-backdrop')) {
+                    el.style.pointerEvents = 'none';
+                    el.style.touchAction = 'none';
+                }
+            }
+        });
+        
+        // عند إغلاق النموذج
+        modal.addEventListener('hidden.bs.modal', function() {
+            // استعادة scroll
+            const scrollY = document.body.style.top;
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.position = '';
+            document.body.style.width = '';
+            document.body.style.height = '';
+            document.body.style.top = '';
+            
+            // استعادة موضع scroll
+            if (scrollY) {
+                window.scrollTo(0, parseInt(scrollY || '0') * -1);
+            }
+            
+            // استعادة touch events
+            const allElements = document.body.children;
+            for (let i = 0; i < allElements.length; i++) {
+                const el = allElements[i];
+                if (!el.classList.contains('modal') && !el.classList.contains('modal-backdrop')) {
+                    el.style.pointerEvents = '';
+                    el.style.touchAction = '';
+                }
+            }
+        });
+        
+        // منع propagation للأحداث من النموذج إلى body
+        modal.addEventListener('touchstart', function(e) {
+            e.stopPropagation();
+        }, { passive: true });
+        
+        modal.addEventListener('touchmove', function(e) {
+            e.stopPropagation();
+        }, { passive: true });
+        
+        modal.addEventListener('touchend', function(e) {
+            e.stopPropagation();
+        }, { passive: true });
+        
+        // منع scroll على backdrop
+        modal.addEventListener('wheel', function(e) {
+            const modalContent = modal.querySelector('.modal-content');
+            if (modalContent && !modalContent.contains(e.target)) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+    });
+    
+    // منع scroll على backdrop مباشرة
+    document.addEventListener('touchmove', function(e) {
+        if (e.target.classList.contains('modal-backdrop')) {
+            e.preventDefault();
+        }
+    }, { passive: false });
+    
+    document.addEventListener('wheel', function(e) {
+        if (e.target.classList.contains('modal-backdrop')) {
+            e.preventDefault();
+        }
+    }, { passive: false });
+});
+</script>
