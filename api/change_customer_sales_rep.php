@@ -5,8 +5,9 @@
  * ملاحظة: لا يتم نقل التحصيلات (تبقى مع المندوب الأصلي)
  */
 
+// تعريف ACCESS_ALLOWED إذا لم يكن معرفاً (للاستدعاءات المباشرة)
 if (!defined('ACCESS_ALLOWED')) {
-    die('Direct access not allowed');
+    define('ACCESS_ALLOWED', true);
 }
 
 // تنظيف أي output buffer
@@ -14,6 +15,7 @@ while (ob_get_level() > 0) {
     ob_end_clean();
 }
 
+// تعيين headers قبل أي output
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-cache, must-revalidate');
 
