@@ -48,9 +48,16 @@ async function initCamera() {
         }
         
         // إظهار حالة التحميل
-        if (cameraLoading) cameraLoading.style.display = 'block';
-        if (cameraError) cameraError.style.display = 'none';
+        if (cameraLoading) {
+            cameraLoading.style.display = 'block';
+            cameraLoading.style.visibility = 'visible';
+        }
+        if (cameraError) {
+            cameraError.style.display = 'none';
+            cameraError.style.visibility = 'hidden';
+        }
         video.style.display = 'none';
+        video.style.visibility = 'hidden';
         
         // التحقق من دعم getUserMedia
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -65,6 +72,19 @@ async function initCamera() {
             }
         }
         
+        // التحقق من الصلاحيات قبل محاولة الوصول للكاميرا (إذا كان متاحاً)
+        try {
+            if (navigator.permissions && navigator.permissions.query) {
+                const permissionStatus = await navigator.permissions.query({ name: 'camera' });
+                if (permissionStatus.state === 'denied') {
+                    throw new Error('تم رفض الوصول إلى الكاميرا. يرجى السماح بالوصول في إعدادات المتصفح.');
+                }
+            }
+        } catch (permError) {
+            // تجاهل أخطاء التحقق من الصلاحيات - سنحاول الوصول للكاميرا مباشرة
+            safeLog('Permission check failed, continuing anyway:', permError);
+        }
+        
         // إيقاف أي stream سابق
         if (currentStream) {
             stopCamera();
@@ -77,7 +97,12 @@ async function initCamera() {
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         
         // محاولة الوصول للكاميرا مع خيارات مختلفة
-        let constraints = {
+        // على الموبايل، استخدم constraints أبسط لتحسين التوافق
+        let constraints = isMobile ? {
+            video: {
+                facingMode: { ideal: 'user' }
+            }
+        } : {
             video: {
                 width: { ideal: 1280, min: 640 },
                 height: { ideal: 720, min: 480 },
@@ -155,7 +180,11 @@ async function initCamera() {
         
         currentStream = stream;
         video.srcObject = currentStream;
+        
+        // إظهار الفيديو فوراً بعد تعيين srcObject
         video.style.display = 'block';
+        video.style.visibility = 'visible';
+        video.style.opacity = '1';
         
         // انتظر حتى يكون الفيديو جاهزاً مع timeout
         await new Promise((resolve, reject) => {
@@ -189,12 +218,31 @@ async function initCamera() {
                 if (video.readyState < 2) {
                     rejectOnce(new Error('انتهت مهلة تحميل الكاميرا. يرجى إعادة المحاولة.'));
                 } else {
+                    // التأكد من أن الفيديو مرئي
+                    video.style.display = 'block';
+                    video.style.visibility = 'visible';
+                    video.style.opacity = '1';
                     resolveOnce();
                 }
             }, 15000);
             
             video.onloadedmetadata = () => {
                 cleanup();
+                // التأكد من أن الفيديو مرئي قبل التشغيل
+                video.style.display = 'block';
+                video.style.visibility = 'visible';
+                video.style.opacity = '1';
+                // إضافة event listener للتحقق من أن الفيديو يعمل
+                video.addEventListener('playing', () => {
+                    safeLog('Video is now playing');
+                    // التأكد من إظهار زر التقاط الصورة بعد بدء تشغيل الفيديو
+                    const captureBtn = document.getElementById('captureBtn');
+                    if (captureBtn) {
+                        captureBtn.style.display = 'inline-block';
+                        captureBtn.style.visibility = 'visible';
+                        captureBtn.style.opacity = '1';
+                    }
+                }, { once: true });
                 video.play().then(() => {
                     resolveOnce();
                 }).catch((playError) => {
@@ -208,6 +256,21 @@ async function initCamera() {
             
             // إذا كان الفيديو جاهزاً بالفعل
             if (video.readyState >= 2) {
+                // التأكد من أن الفيديو مرئي قبل التشغيل
+                video.style.display = 'block';
+                video.style.visibility = 'visible';
+                video.style.opacity = '1';
+                // إضافة event listener للتحقق من أن الفيديو يعمل
+                video.addEventListener('playing', () => {
+                    safeLog('Video is now playing (readyState >= 2)');
+                    // التأكد من إظهار زر التقاط الصورة بعد بدء تشغيل الفيديو
+                    const captureBtn = document.getElementById('captureBtn');
+                    if (captureBtn) {
+                        captureBtn.style.display = 'inline-block';
+                        captureBtn.style.visibility = 'visible';
+                        captureBtn.style.opacity = '1';
+                    }
+                }, { once: true });
                 video.play().then(() => {
                     resolveOnce();
                 }).catch((playError) => {
@@ -220,15 +283,64 @@ async function initCamera() {
         if (cameraLoading) cameraLoading.style.display = 'none';
         if (cameraError) cameraError.style.display = 'none';
         
+        // التأكد من أن الفيديو مرئي
+        if (video) {
+            video.style.display = 'block';
+            video.style.visibility = 'visible';
+            video.style.opacity = '1';
+        }
+        
+        // إظهار زر التقاط الصورة
         const captureBtn = document.getElementById('captureBtn');
-        if (captureBtn) captureBtn.style.display = 'inline-block';
+        if (captureBtn) {
+            captureBtn.style.display = 'inline-block';
+            captureBtn.style.visibility = 'visible';
+            captureBtn.style.opacity = '1';
+            // التأكد من أن الزر قابل للنقر
+            captureBtn.disabled = false;
+        }
+        
+        // التأكد من أن الفيديو يعمل بشكل صحيح
+        // إضافة event listener للتحقق من أن الفيديو يعمل
+        const checkVideoPlaying = () => {
+            if (video && video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
+                safeLog('Video is playing successfully', {
+                    width: video.videoWidth,
+                    height: video.videoHeight,
+                    readyState: video.readyState
+                });
+            } else {
+                safeLog('Video not ready yet', {
+                    readyState: video?.readyState,
+                    width: video?.videoWidth,
+                    height: video?.videoHeight
+                });
+            }
+        };
+        
+        // التحقق بعد ثانية من تحميل الكاميرا
+        setTimeout(checkVideoPlaying, 1000);
         
         safeLog('Camera initialized successfully');
         
     } catch (error) {
         console.error('Error accessing camera:', error);
         // إخفاء حالة التحميل عند حدوث خطأ
-        if (cameraLoading) cameraLoading.style.display = 'none';
+        if (cameraLoading) {
+            cameraLoading.style.display = 'none';
+            cameraLoading.style.visibility = 'hidden';
+        }
+        // التأكد من إخفاء الفيديو عند حدوث خطأ
+        if (video) {
+            video.style.display = 'none';
+            video.style.visibility = 'hidden';
+        }
+        // إخفاء زر التقاط الصورة عند حدوث خطأ
+        const captureBtn = document.getElementById('captureBtn');
+        if (captureBtn) {
+            captureBtn.style.display = 'none';
+            captureBtn.style.visibility = 'hidden';
+        }
         showCameraError(error);
     }
 }
@@ -245,9 +357,15 @@ function showCameraError(error) {
     if (cameraLoading) cameraLoading.style.display = 'none';
     
     // إظهار عنصر الفيديو حتى لو كان هناك خطأ (لإظهار الصندوق الأسود بدلاً من عدم وجود شيء)
-    if (video) video.style.display = 'block';
+    if (video) {
+        video.style.display = 'block';
+        video.style.visibility = 'visible';
+    }
     
-    if (cameraError) cameraError.style.display = 'block';
+    if (cameraError) {
+        cameraError.style.display = 'block';
+        cameraError.style.visibility = 'visible';
+    }
     if (cameraErrorText) {
         let errorMessage = 'فشل في الوصول إلى الكاميرا. يرجى التأكد من السماح بالوصول إلى الكاميرا.';
         
@@ -283,6 +401,7 @@ async function retryCamera() {
     if (video) {
         video.srcObject = null;
         video.style.display = 'none';
+        video.style.visibility = 'hidden';
     }
     
     // إيقاف أي stream سابق
@@ -899,16 +1018,39 @@ document.addEventListener('DOMContentLoaded', function() {
         const capturedImageContainer = document.getElementById('capturedImageContainer');
         const delayReasonContainer = document.getElementById('delayReasonContainer');
         const delayReasonInput = document.getElementById('delayReason');
+        const video = document.getElementById('video');
         
-        if (cameraContainer) cameraContainer.style.display = 'block';
-        if (capturedImageContainer) capturedImageContainer.style.display = 'none';
-        if (captureBtn) captureBtn.style.display = 'none';
-        if (retakeBtn) retakeBtn.style.display = 'none';
-        if (submitBtn) submitBtn.style.display = 'none';
+        if (cameraContainer) {
+            cameraContainer.style.display = 'block';
+            cameraContainer.style.visibility = 'visible';
+        }
+        if (capturedImageContainer) {
+            capturedImageContainer.style.display = 'none';
+            capturedImageContainer.style.visibility = 'hidden';
+        }
+        if (captureBtn) {
+            captureBtn.style.display = 'none';
+            captureBtn.style.visibility = 'hidden';
+        }
+        if (retakeBtn) {
+            retakeBtn.style.display = 'none';
+            retakeBtn.style.visibility = 'hidden';
+        }
+        if (submitBtn) {
+            submitBtn.style.display = 'none';
+            submitBtn.style.visibility = 'hidden';
+        }
         if (delayReasonContainer) delayReasonContainer.style.display = 'none';
         if (delayReasonInput) {
             delayReasonInput.value = '';
             delayReasonInput.disabled = true;
+        }
+        
+        // إعادة تعيين الفيديو
+        if (video) {
+            video.srcObject = null;
+            video.style.display = 'none';
+            video.style.visibility = 'hidden';
         }
         
         // إيقاف أي stream سابق
@@ -957,15 +1099,18 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // إزالة backdrop بعد تأخير قصير (للتأكد من إزالته حتى لو تم إنشاؤه بعد فتح Modal)
-        setTimeout(async () => {
-            removeBackdrop();
-            try {
-                await initCamera();
-            } catch (error) {
-                console.error('Error initializing camera in modal:', error);
-                // showCameraError سيتم استدعاؤها من داخل initCamera
-            }
-        }, 100);
+        // استخدام requestAnimationFrame لضمان أن الـ modal مرئي تماماً قبل تحميل الكاميرا
+        requestAnimationFrame(() => {
+            requestAnimationFrame(async () => {
+                removeBackdrop();
+                try {
+                    await initCamera();
+                } catch (error) {
+                    console.error('Error initializing camera in modal:', error);
+                    // showCameraError سيتم استدعاؤها من داخل initCamera
+                }
+            });
+        });
         
         // مراقبة مستمرة لإزالة backdrop (زيادة الفترة من 50ms إلى 1000ms لتقليل الضغط)
         const backdropInterval = setInterval(() => {
