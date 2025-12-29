@@ -4019,7 +4019,6 @@ window.CUSTOMER_EXPORT_CONFIG = {
         </div>
     </div>
 </div>
-</script>
 
 <style>
 /* تحسين جداول العملاء على الهواتف */
