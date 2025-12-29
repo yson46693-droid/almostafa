@@ -1102,11 +1102,11 @@ $lang = $translations;
     </div>
     
     <!-- Bootstrap 5 JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
     <!-- WebAuthn JS -->
-    <script src="<?php echo ASSETS_URL; ?>js/webauthn.js?v=<?php echo time(); ?>"></script>
+    <script src="<?php echo ASSETS_URL; ?>js/webauthn.js?v=<?php echo time(); ?>" defer></script>
     <!-- Custom JS -->
-    <script src="<?php echo ASSETS_URL; ?>js/main.js"></script>
+    <script src="<?php echo ASSETS_URL; ?>js/main.js" defer></script>
     
     <script>
         // التحقق من تحميل webauthn.js

@@ -1193,7 +1193,7 @@ if (isset($_GET['id'])) {
                     </div>
                     <div class="mb-3">
                         <label class="form-label">مبلغ التحصيل <span class="text-danger">*</span></label>
-                        <input type="number" name="amount" class="form-control" step="0.01" min="0.01" id="editScheduleAmount" required>
+                        <input type="number" name="amount" class="form-control" step="1" min="0" id="editScheduleAmount" required>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">موعد التحصيل <span class="text-danger">*</span></label>
