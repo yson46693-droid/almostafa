@@ -1041,8 +1041,11 @@ if (DB_CONNECTION_CLEANUP_ENABLED) {
 /**
  * الحصول على رقم الإصدار الحالي من version.json
  * @return string رقم الإصدار (مثال: v1.0)
+ * 
+ * ملاحظة: تم حذف version_helper.php - الإصدار يُقرأ مباشرة من version.json
  */
-function getCurrentVersion(): string {
+if (!function_exists('getCurrentVersion')) {
+    function getCurrentVersion(): string {
     $versionFile = __DIR__ . '/../version.json';
     
     if (!file_exists($versionFile)) {
@@ -1066,6 +1069,7 @@ function getCurrentVersion(): string {
     }
     
     return 'v1.0';
+    }
 }
 
 /**

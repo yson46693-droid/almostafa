@@ -35,7 +35,7 @@ require_once __DIR__ . '/../includes/notifications.php';
 require_once __DIR__ . '/../includes/packaging_alerts.php';
 require_once __DIR__ . '/../includes/payment_schedules.php';
 require_once __DIR__ . '/../includes/production_reports.php';
-require_once __DIR__ . '/../includes/version_helper.php';
+// تم حذف version_helper.php - الإصدار يُقرأ مباشرة من version.json
 
 // تعطيل التحديث التلقائي للإصدار - استخدام عداد يدوي من version.json فقط
 // @checkAndUpdateVersion(); // معطل - الإصدار يتم قراءته يدوياً من version.json
