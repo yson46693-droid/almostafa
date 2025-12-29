@@ -452,7 +452,7 @@ try {
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="bi bi-cash-coin me-2"></i>التحصيلات</h2>
     <?php if ($currentUser['role'] === 'sales'): ?>
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addCollectionModal">
+        <button class="btn btn-primary" onclick="showAddCollectionModal()">
             <i class="bi bi-plus-circle me-2"></i>إضافة تحصيل جديد
         </button>
     <?php endif; ?>
@@ -689,7 +689,8 @@ try {
 
 <!-- Modal إضافة تحصيل -->
 <?php if ($currentUser['role'] === 'sales'): ?>
-<div class="modal fade" id="addCollectionModal" tabindex="-1">
+<!-- للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="addCollectionModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -741,4 +742,120 @@ try {
 </div>
 <?php endif; ?>
 
+<!-- Card إضافة تحصيل - للموبايل فقط -->
+<?php if ($currentUser['role'] === 'sales'): ?>
+<div class="card shadow-sm mb-4 d-md-none" id="addCollectionCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-plus-circle me-2"></i>إضافة تحصيل جديد
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="action" value="add_collection">
+            <div class="mb-3">
+                <label class="form-label">العميل <span class="text-danger">*</span></label>
+                <select class="form-select" name="customer_id" id="addCollectionCardCustomerId" required>
+                    <option value="">اختر العميل</option>
+                    <?php foreach ($customers as $customer): ?>
+                        <option value="<?php echo $customer['id']; ?>">
+                            <?php echo htmlspecialchars($customer['name']); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">المبلغ <span class="text-danger">*</span></label>
+                <input type="number" step="0.01" class="form-control" name="amount" id="addCollectionCardAmount" required min="0.01">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">التاريخ <span class="text-danger">*</span></label>
+                <input type="date" class="form-control" name="date" id="addCollectionCardDate" value="<?php echo date('Y-m-d'); ?>" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">طريقة الدفع</label>
+                <select class="form-select" name="payment_method" id="addCollectionCardPaymentMethod">
+                    <option value="cash">نقدي</option>
+                    <option value="bank_transfer">تحويل بنكي</option>
+                    <option value="check">شيك</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">ملاحظات</label>
+                <textarea class="form-control" name="notes" id="addCollectionCardNotes" rows="3"></textarea>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">إضافة</button>
+                <button type="button" class="btn btn-secondary" onclick="closeAddCollectionCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+<?php endif; ?>
+
+<script>
+// ========== دوال Modal/Card Dual System للتحصيلات ==========
+function isMobile() {
+    return window.innerWidth <= 768;
+}
+
+function scrollToElement(element) {
+    if (!element) return;
+    setTimeout(function() {
+        const rect = element.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const elementTop = rect.top + scrollTop;
+        const offset = 80;
+        requestAnimationFrame(function() {
+            window.scrollTo({
+                top: Math.max(0, elementTop - offset),
+                behavior: 'smooth'
+            });
+        });
+    }, 200);
+}
+
+function showAddCollectionModal() {
+    if (isMobile()) {
+        const card = document.getElementById('addCollectionCard');
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        const modal = document.getElementById('addCollectionModal');
+        if (modal) {
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+function closeAddCollectionCard() {
+    const card = document.getElementById('addCollectionCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+</script>
+
+<style>
+/* إخفاء Modal على الموبايل */
+@media (max-width: 768px) {
+    #addCollectionModal {
+        display: none !important;
+    }
+}
+
+/* إخفاء Card على الكمبيوتر */
+@media (min-width: 769px) {
+    #addCollectionCard {
+        display: none !important;
+    }
+}
+</style>
 

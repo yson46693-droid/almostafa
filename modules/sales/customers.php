@@ -1717,7 +1717,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
         </button>
         <?php endif; ?>
         <?php if ($section === 'company' || $isSalesUser): ?>
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addCustomerModal">
+        <button class="btn btn-primary" onclick="showAddCustomerModal()">
             <i class="bi bi-person-plus me-2"></i>إضافة عميل جديد
         </button>
         <?php endif; ?>
@@ -4973,127 +4973,10 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
     
-    // معالج تعديل العميل
-    var editCustomerButtons = document.querySelectorAll('.edit-customer-btn');
-    var editCustomerModal = document.getElementById('editCustomerModal');
-    
-    if (editCustomerModal && editCustomerButtons.length > 0) {
-        editCustomerButtons.forEach(function(btn) {
-            btn.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
+    // معالج تعديل العميل - تم استبداله بدالة showEditCustomerModal
+    // الكود القديم تم نقله إلى دالة showEditCustomerModal
                 
-                var customerId = this.getAttribute('data-customer-id');
-                var customerName = this.getAttribute('data-customer-name');
-                var customerPhone = this.getAttribute('data-customer-phone') || '';
-                var customerAddress = this.getAttribute('data-customer-address') || '';
-                var customerRegionId = this.getAttribute('data-customer-region-id') || '';
-                var customerBalance = this.getAttribute('data-customer-balance') || '0';
-                
-                if (!customerId) {
-                    console.error('Customer ID not found');
-                    return;
-                }
-                
-                var idInput = document.getElementById('editCustomerId');
-                var nameInput = document.getElementById('editCustomerName');
-                var phoneInput = document.getElementById('editCustomerPhone');
-                var addressInput = document.getElementById('editCustomerAddress');
-                var regionInput = document.getElementById('editCustomerRegionId');
-                var balanceInput = document.getElementById('editCustomerBalance');
-                var editPhoneContainer = document.getElementById('editPhoneNumbersContainer');
-                
-                if (idInput) idInput.value = customerId;
-                if (nameInput) nameInput.value = customerName || '';
-                if (addressInput) addressInput.value = customerAddress;
-                if (regionInput) regionInput.value = customerRegionId;
-                
-                // تحميل أرقام الهواتف المتعددة
-                if (editPhoneContainer) {
-                    editPhoneContainer.innerHTML = '';
-                    // جلب أرقام الهواتف من قاعدة البيانات عبر AJAX
-                    fetch('?action=get_customer_phones&customer_id=' + customerId)
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.success && data.phones && data.phones.length > 0) {
-                                data.phones.forEach(function(phone, index) {
-                                    var phoneGroup = document.createElement('div');
-                                    phoneGroup.className = 'input-group mb-2';
-                                    phoneGroup.innerHTML = `
-                                        <input type="text" class="form-control phone-input" name="phones[]" value="${phone}" placeholder="مثال: 01234567890">
-                                        <button type="button" class="btn btn-outline-danger remove-phone-btn">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
-                                    `;
-                                    editPhoneContainer.appendChild(phoneGroup);
-                                });
-                            } else if (customerPhone) {
-                                // إذا لم تكن هناك أرقام في customer_phones، استخدم الرقم القديم
-                                var phoneGroup = document.createElement('div');
-                                phoneGroup.className = 'input-group mb-2';
-                                phoneGroup.innerHTML = `
-                                    <input type="text" class="form-control phone-input" name="phones[]" value="${customerPhone}" placeholder="مثال: 01234567890">
-                                    <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                `;
-                                editPhoneContainer.appendChild(phoneGroup);
-                            } else {
-                                // إضافة حقل فارغ واحد
-                                var phoneGroup = document.createElement('div');
-                                phoneGroup.className = 'input-group mb-2';
-                                phoneGroup.innerHTML = `
-                                    <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
-                                    <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                `;
-                                editPhoneContainer.appendChild(phoneGroup);
-                            }
-                            updateEditRemoveButtons();
-                        })
-                        .catch(error => {
-                            console.error('Error loading phones:', error);
-                            // في حالة الخطأ، استخدم الرقم القديم
-                            if (customerPhone) {
-                                var phoneGroup = document.createElement('div');
-                                phoneGroup.className = 'input-group mb-2';
-                                phoneGroup.innerHTML = `
-                                    <input type="text" class="form-control phone-input" name="phones[]" value="${customerPhone}" placeholder="مثال: 01234567890">
-                                    <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                `;
-                                editPhoneContainer.appendChild(phoneGroup);
-                            }
-                            if (typeof updateEditRemoveButtons === 'function') {
-                                updateEditRemoveButtons();
-                            }
-                        });
-                } else if (phoneInput) {
-                    phoneInput.value = customerPhone;
-                }
-                if (balanceInput) balanceInput.value = customerBalance;
-                
-                try {
-                    var modal = bootstrap.Modal.getOrCreateInstance(editCustomerModal);
-                    modal.show();
-                } catch (err) {
-                    console.error('Error showing modal:', err);
-                    // Fallback
-                    var modal = new bootstrap.Modal(editCustomerModal);
-                    modal.show();
-                }
-            });
-        });
-    } else {
-        if (!editCustomerModal) {
-            console.warn('Edit customer modal not found');
-        }
-        if (editCustomerButtons.length === 0) {
-                console.warn('Edit customer buttons not found');
-        }
-    }
+                // تم استبدال هذا الكود بدالة showEditCustomerModal
     
     // معالج إضافة منطقة جديدة من نموذج العميل (للمدير فقط)
     var addRegionFromCustomerForm = document.getElementById('addRegionFromCustomerForm');
@@ -5408,6 +5291,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                         <button
                                             type="button"
                                             class="btn btn-sm btn-outline-warning edit-customer-btn"
+                                            onclick="showEditCustomerModal(this)"
                                             data-customer-id="<?php echo (int)$customer['id']; ?>"
                                             data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
                                             data-customer-phone="<?php echo htmlspecialchars($customer['phone'] ?? ''); ?>"
@@ -5421,8 +5305,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                         <button
                                             type="button"
                                             class="btn btn-sm <?php echo $customerBalance > 0 ? 'btn-success' : 'btn-outline-secondary'; ?>"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#collectPaymentModal"
+                                            onclick="showCollectPaymentModal(this)"
                                             data-customer-id="<?php echo (int)$customer['id']; ?>"
                                             data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
                                             data-customer-balance="<?php echo $rawBalance; ?>"

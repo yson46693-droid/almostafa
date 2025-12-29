@@ -442,7 +442,7 @@ if (isset($_GET['id'])) {
             تم إرسال <?php echo $sentReminders; ?> تذكير
         </div>
         <?php endif; ?>
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addScheduleModal"
+        <button class="btn btn-primary" onclick="showAddScheduleModal()"
                 <?php echo $hasDebtorCustomers ? '' : 'disabled'; ?>>
             <i class="bi bi-plus-circle me-2"></i>إضافة موعد تحصيل
         </button>
