@@ -271,14 +271,20 @@ self.addEventListener('install', (event) => {
       }
 
       try {
+        // التحقق من دعم CacheStorage أولاً
+        if (!('caches' in self) || typeof caches.open !== 'function') {
+          console.warn('[SW] CacheStorage API not available - skipping precaching');
+          return;
+        }
+        
         // محاولة فتح الكاش مع معالجة أفضل للأخطاء
         let precache, staticCache;
         try {
           precache = await caches.open(PRECACHE_NAME);
           staticCache = await caches.open(STATIC_CACHE_NAME);
         } catch (openError) {
-          // إذا فشل فتح الكاش، تخطي التخزين المؤقت
-          console.warn('[SW] Failed to open cache storage:', openError.message);
+          // إذا فشل فتح الكاش، تخطي التخزين المؤقت بصمت
+          // لا نطبع warning لأن هذا قد يكون طبيعياً في بعض الحالات (خصوصية المتصفح، إعدادات الأمان)
           return;
         }
         
