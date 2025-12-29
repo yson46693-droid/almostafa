@@ -21,6 +21,16 @@ if (session_status() === PHP_SESSION_NONE) {
         (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
     );
     
+    // تحميل security_config إذا كان متوفراً للحصول على SESSION_TIMEOUT
+    if (file_exists(__DIR__ . '/security_config.php')) {
+        require_once __DIR__ . '/security_config.php';
+    }
+    
+    // إعداد مدة الجلسة (استخدام SESSION_TIMEOUT إذا كان معرف، وإلا 8 ساعات افتراضياً)
+    $sessionTimeout = defined('SESSION_TIMEOUT') ? SESSION_TIMEOUT : 28800; // 8 ساعات افتراضياً
+    ini_set('session.gc_maxlifetime', $sessionTimeout);
+    ini_set('session.cookie_lifetime', $sessionTimeout);
+    
     ini_set('session.cookie_httponly', '1');
     ini_set('session.cookie_secure', $isHttps ? '1' : '0');
     ini_set('session.cookie_samesite', 'Lax');

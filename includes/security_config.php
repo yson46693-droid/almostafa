@@ -10,7 +10,7 @@ if (!defined('ACCESS_ALLOWED')) {
 
 // إعدادات الجلسات
 if (!defined('SESSION_TIMEOUT')) {
-    define('SESSION_TIMEOUT', 1800);              // 30 دقيقة
+    define('SESSION_TIMEOUT', 28800);             // 8 ساعات (بدلاً من 30 دقيقة)
 }
 if (!defined('USE_IP_VALIDATION')) {
     define('USE_IP_VALIDATION', false);           // معطل لتجنب مشاكل InfinityFree
