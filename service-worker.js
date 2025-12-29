@@ -386,6 +386,22 @@ self.addEventListener('fetch', (event) => {
   }
 
   // ============================================
+  // Skip Service Worker for Camera/Media Requests
+  // ============================================
+  // Don't intercept camera/media related requests
+  // This ensures getUserMedia works correctly
+  if (
+    url.pathname.includes('attendance') ||
+    url.pathname.includes('camera') ||
+    request.destination === 'media' ||
+    url.searchParams.has('_camera') ||
+    url.searchParams.has('_media')
+  ) {
+    // Let browser handle these requests directly
+    return;
+  }
+
+  // ============================================
   // Handle PHP Pages - Network Only (No Caching)
   // ============================================
   if (url.pathname.endsWith('.php')) {
@@ -404,8 +420,17 @@ self.addEventListener('fetch', (event) => {
     request.destination === 'image' ||
     url.pathname.match(/\.(css|js|woff|woff2|ttf|eot|png|jpg|jpeg|gif|svg|ico|webp)$/i);
 
+  // Skip caching for attendance-related JavaScript files to ensure latest version
+  const isAttendanceJS = url.pathname.includes('attendance.js') || 
+                          url.pathname.includes('attendance_notifications.js');
+
   if (isStaticAsset) {
-    event.respondWith(cacheFirst(request, STATIC_CACHE_NAME));
+    if (isAttendanceJS) {
+      // Network only for attendance JS files - no caching to ensure latest version
+      event.respondWith(networkOnly(request, false));
+    } else {
+      event.respondWith(cacheFirst(request, STATIC_CACHE_NAME));
+    }
     return;
   }
 
