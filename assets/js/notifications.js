@@ -417,24 +417,24 @@ function updateNotificationList(notifications) {
         const safeTitle = sanitizeText(notification.title || '');
         const safeMessage = sanitizeText(notification.message || '');
         const markReadButton = unread ? `
-                        <button type="button" class="btn btn-sm btn-outline-secondary notification-mark-read" data-id="${notificationId}" title="تمت الرؤية" data-bs-auto-close="false">
-                            <i class="bi bi-check2 me-1"></i><span class="notification-btn-text">تم الرؤية</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary notification-mark-read" data-id="${notificationId}" title="تمت الرؤية" data-bs-auto-close="false" style="display: inline-flex !important; visibility: visible !important; opacity: 1 !important;">
+                            <i class="bi bi-check2 me-1"></i><span class="notification-btn-text" style="display: inline !important;">تم الرؤية</span>
                         </button>` : `
                         <span class="badge bg-light text-muted border">تمت الرؤية</span>`;
         
         html += `
-            <div class="notification-item ${unreadClass} ${recentClass}" data-id="${notificationId}">
-                <div class="d-flex align-items-start">
+            <div class="notification-item ${unreadClass} ${recentClass}" data-id="${notificationId}" style="overflow: visible !important;">
+                <div class="d-flex align-items-start" style="overflow: visible !important; flex-wrap: wrap;">
                     <i class="bi ${icon} ${typeClass} me-2 mt-1"></i>
-                    <div class="flex-grow-1">
+                    <div class="flex-grow-1" style="overflow: visible !important;">
                         <div class="fw-bold">${safeTitle}</div>
                         <div class="small text-muted">${safeMessage}</div>
                         <div class="small text-muted mt-1">${timeAgo}</div>
                     </div>
-                    <div class="notification-actions">
+                    <div class="notification-actions" style="display: flex !important; visibility: visible !important; opacity: 1 !important; overflow: visible !important; width: 100%; margin-top: 0.5rem; justify-content: flex-end; gap: 0.5rem;">
                         ${markReadButton}
-                        <button type="button" class="btn btn-sm btn-outline-danger notification-delete" data-id="${notificationId}" title="حذف الإشعار" data-bs-auto-close="false">
-                            <i class="bi bi-trash me-1"></i><span class="notification-btn-text">حذف</span>
+                        <button type="button" class="btn btn-sm btn-outline-danger notification-delete" data-id="${notificationId}" title="حذف الإشعار" data-bs-auto-close="false" style="display: inline-flex !important; visibility: visible !important; opacity: 1 !important;">
+                            <i class="bi bi-trash me-1"></i><span class="notification-btn-text" style="display: inline !important;">حذف</span>
                         </button>
                     </div>
                 </div>

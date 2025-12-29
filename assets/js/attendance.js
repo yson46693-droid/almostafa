@@ -6,6 +6,34 @@ let currentStream = null;
 let capturedPhoto = null;
 let currentAction = null;
 
+// دالة للتحقق من الموبايل
+function isMobile() {
+    return window.innerWidth <= 768;
+}
+
+// دالة للـ scroll تلقائي محسّنة
+function scrollToElement(element) {
+    if (!element) return;
+    
+    // الانتظار قليلاً للتأكد من أن العنصر ظاهر
+    setTimeout(function() {
+        // استخدام getBoundingClientRect للحصول على الموضع النسبي
+        const rect = element.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const elementTop = rect.top + scrollTop;
+        const offset = 80; // offset من الأعلى (لإعطاء مساحة للـ header)
+        const targetPosition = elementTop - offset;
+        
+        // استخدام requestAnimationFrame لضمان smooth scroll
+        requestAnimationFrame(function() {
+            window.scrollTo({
+                top: Math.max(0, targetPosition), // التأكد من عدم السكرول لأعلى من الصفحة
+                behavior: 'smooth'
+            });
+        });
+    }, 200);
+}
+
 // الحصول على API path ديناميكياً
 function getAttendanceApiPath() {
     const currentPath = window.location.pathname;
@@ -23,9 +51,11 @@ function getAttendanceApiPath() {
 // تهيئة الكاميرا
 async function initCamera() {
     try {
-        const video = document.getElementById('video');
-        const cameraLoading = document.getElementById('cameraLoading');
-        const cameraError = document.getElementById('cameraError');
+        // تحديد العناصر حسب نوع الجهاز
+        const isMobileDevice = isMobile();
+        const video = isMobileDevice ? document.getElementById('videoCard') : document.getElementById('video');
+        const cameraLoading = isMobileDevice ? document.getElementById('cameraLoadingCard') : document.getElementById('cameraLoading');
+        const cameraError = isMobileDevice ? document.getElementById('cameraErrorCard') : document.getElementById('cameraError');
         
         if (!video) {
             console.error('Video element not found');
@@ -143,7 +173,8 @@ async function initCamera() {
         }
         
         // إظهار زر التقاط الصورة بشكل واضح
-        const captureBtn = document.getElementById('captureBtn');
+        const isMobileDevice = isMobile();
+        const captureBtn = isMobileDevice ? document.getElementById('captureBtnCard') : document.getElementById('captureBtn');
         if (captureBtn) {
             captureBtn.style.display = 'inline-block';
             captureBtn.style.visibility = 'visible';
@@ -163,11 +194,12 @@ async function initCamera() {
 
 // إظهار رسالة خطأ الكاميرا
 function showCameraError(error) {
-    const cameraError = document.getElementById('cameraError');
-    const cameraErrorText = document.getElementById('cameraErrorText');
-    const captureBtn = document.getElementById('captureBtn');
-    const cameraLoading = document.getElementById('cameraLoading');
-    const video = document.getElementById('video');
+    const isMobileDevice = isMobile();
+    const cameraError = isMobileDevice ? document.getElementById('cameraErrorCard') : document.getElementById('cameraError');
+    const cameraErrorText = isMobileDevice ? document.getElementById('cameraErrorTextCard') : document.getElementById('cameraErrorText');
+    const captureBtn = isMobileDevice ? document.getElementById('captureBtnCard') : document.getElementById('captureBtn');
+    const cameraLoading = isMobileDevice ? document.getElementById('cameraLoadingCard') : document.getElementById('cameraLoading');
+    const video = isMobileDevice ? document.getElementById('videoCard') : document.getElementById('video');
     
     // إخفاء حالة التحميل
     if (cameraLoading) cameraLoading.style.display = 'none';
@@ -208,13 +240,15 @@ function stopCamera() {
 
 // التقاط صورة
 async function capturePhoto() {
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const capturedImage = document.getElementById('capturedImage');
-    const cameraContainer = document.getElementById('cameraContainer');
-    const capturedImageContainer = document.getElementById('capturedImageContainer');
-    const delayReasonContainer = document.getElementById('delayReasonContainer');
-    const delayReasonInput = document.getElementById('delayReason');
+    // تحديد العناصر حسب نوع الجهاز
+    const isMobileDevice = isMobile();
+    const video = isMobileDevice ? document.getElementById('videoCard') : document.getElementById('video');
+    const canvas = isMobileDevice ? document.getElementById('canvasCard') : document.getElementById('canvas');
+    const capturedImage = isMobileDevice ? document.getElementById('capturedImageCard') : document.getElementById('capturedImage');
+    const cameraContainer = isMobileDevice ? document.getElementById('cameraContainerCard') : document.getElementById('cameraContainer');
+    const capturedImageContainer = isMobileDevice ? document.getElementById('capturedImageContainerCard') : document.getElementById('capturedImageContainer');
+    const delayReasonContainer = isMobileDevice ? document.getElementById('delayReasonContainerCard') : document.getElementById('delayReasonContainer');
+    const delayReasonInput = isMobileDevice ? document.getElementById('delayReasonCard') : document.getElementById('delayReason');
     
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -232,9 +266,15 @@ async function capturePhoto() {
     capturedImageContainer.style.display = 'block';
     
     // إظهار أزرار إعادة التقاط والتأكيد
-    document.getElementById('captureBtn').style.display = 'none';
-    document.getElementById('retakeBtn').style.display = 'inline-block';
-    document.getElementById('submitBtn').style.display = 'inline-block';
+    if (isMobileDevice) {
+        document.getElementById('captureBtnCard').style.display = 'none';
+        document.getElementById('retakeBtnCard').style.display = 'inline-block';
+        document.getElementById('submitBtnCard').style.display = 'inline-block';
+    } else {
+        document.getElementById('captureBtn').style.display = 'none';
+        document.getElementById('retakeBtn').style.display = 'inline-block';
+        document.getElementById('submitBtn').style.display = 'inline-block';
+    }
     
     // تحديث ملخص الوقت بعد التقاط الصورة
     if (currentAction === 'check_in') {
@@ -301,21 +341,41 @@ async function capturePhoto() {
 
 // إعادة التقاط
 function retakePhoto() {
+    const isMobileDevice = isMobile();
     capturedPhoto = null;
-    document.getElementById('capturedImageContainer').style.display = 'none';
-    document.getElementById('cameraContainer').style.display = 'block';
-    document.getElementById('retakeBtn').style.display = 'none';
-    document.getElementById('submitBtn').style.display = 'none';
-    document.getElementById('captureBtn').style.display = 'inline-block';
     
-    // إخفاء حقل سبب التأخير
-    const delayReasonContainer = document.getElementById('delayReasonContainer');
-    if (delayReasonContainer) {
-        delayReasonContainer.style.display = 'none';
-    }
-    const delayReasonInput = document.getElementById('delayReason');
-    if (delayReasonInput) {
-        delayReasonInput.value = '';
+    if (isMobileDevice) {
+        document.getElementById('capturedImageContainerCard').style.display = 'none';
+        document.getElementById('cameraContainerCard').style.display = 'block';
+        document.getElementById('retakeBtnCard').style.display = 'none';
+        document.getElementById('submitBtnCard').style.display = 'none';
+        document.getElementById('captureBtnCard').style.display = 'inline-block';
+        
+        // إخفاء حقل سبب التأخير
+        const delayReasonContainer = document.getElementById('delayReasonContainerCard');
+        if (delayReasonContainer) {
+            delayReasonContainer.style.display = 'none';
+        }
+        const delayReasonInput = document.getElementById('delayReasonCard');
+        if (delayReasonInput) {
+            delayReasonInput.value = '';
+        }
+    } else {
+        document.getElementById('capturedImageContainer').style.display = 'none';
+        document.getElementById('cameraContainer').style.display = 'block';
+        document.getElementById('retakeBtn').style.display = 'none';
+        document.getElementById('submitBtn').style.display = 'none';
+        document.getElementById('captureBtn').style.display = 'inline-block';
+        
+        // إخفاء حقل سبب التأخير
+        const delayReasonContainer = document.getElementById('delayReasonContainer');
+        if (delayReasonContainer) {
+            delayReasonContainer.style.display = 'none';
+        }
+        const delayReasonInput = document.getElementById('delayReason');
+        if (delayReasonInput) {
+            delayReasonInput.value = '';
+        }
     }
     
     initCamera();
@@ -328,7 +388,8 @@ async function submitAttendance(action) {
         return;
     }
     
-    const submitBtn = document.getElementById('submitBtn');
+    const isMobileDevice = isMobile();
+    const submitBtn = isMobileDevice ? document.getElementById('submitBtnCard') : document.getElementById('submitBtn');
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>جاري الإرسال...';
     
@@ -344,7 +405,9 @@ async function submitAttendance(action) {
         });
         
         // الحصول على سبب التأخير (فقط عند تسجيل الحضور)
-        const delayReasonInput = document.getElementById('delayReason');
+        // تحديد العناصر حسب نوع الجهاز
+        const isMobileDevice = isMobile();
+        const delayReasonInput = isMobileDevice ? document.getElementById('delayReasonCard') : document.getElementById('delayReason');
         const delayReason = (action === 'check_in' && delayReasonInput && !delayReasonInput.disabled) 
             ? delayReasonInput.value.trim() 
             : '';
@@ -382,10 +445,18 @@ async function submitAttendance(action) {
         console.log('API Response:', data);
         
         if (data.success) {
-            // إغلاق الـ modal
-            const modal = bootstrap.Modal.getInstance(document.getElementById('cameraModal'));
-            if (modal) {
-                modal.hide();
+            // إغلاق الـ modal أو card
+            const isMobileDevice = isMobile();
+            if (isMobileDevice) {
+                const card = document.getElementById('cameraCard');
+                if (card) {
+                    card.style.display = 'none';
+                }
+            } else {
+                const modal = bootstrap.Modal.getInstance(document.getElementById('cameraModal'));
+                if (modal) {
+                    modal.hide();
+                }
             }
             
             // إظهار رسالة نجاح
@@ -403,15 +474,19 @@ async function submitAttendance(action) {
             }, 1500);
         } else {
             showAlert('danger', data.message || 'فشل التسجيل');
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = '<i class="bi bi-check-circle me-2"></i>تأكيد وإرسال';
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="bi bi-check-circle me-2"></i>تأكيد وإرسال';
+            }
         }
         
     } catch (error) {
         console.error('Error submitting attendance:', error);
         showAlert('danger', 'حدث خطأ أثناء الإرسال: ' + error.message);
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = '<i class="bi bi-check-circle me-2"></i>تأكيد وإرسال';
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="bi bi-check-circle me-2"></i>تأكيد وإرسال';
+        }
     }
 }
 
@@ -502,8 +577,13 @@ let timeSummaryInterval = null;
 
 // عرض ملخص الوقت
 async function updateTimeSummary() {
+    const isMobileDevice = isMobile();
+    const timeSummaryContainer = isMobileDevice ? document.getElementById('timeSummaryContainerCard') : document.getElementById('timeSummaryContainer');
+    const currentTimeDisplay = isMobileDevice ? document.getElementById('currentTimeDisplayCard') : document.getElementById('currentTimeDisplay');
+    const officialTimeDisplay = isMobileDevice ? document.getElementById('officialTimeDisplayCard') : document.getElementById('officialTimeDisplay');
+    const timeStatusDisplay = isMobileDevice ? document.getElementById('timeStatusDisplayCard') : document.getElementById('timeStatusDisplay');
+    
     if (currentAction !== 'check_in') {
-        const timeSummaryContainer = document.getElementById('timeSummaryContainer');
         if (timeSummaryContainer) {
             timeSummaryContainer.style.display = 'none';
         }
@@ -545,7 +625,6 @@ async function updateTimeSummary() {
         const checkInTime = new Date(now);
         
         // تحديث عرض الوقت الحالي
-        const currentTimeDisplay = document.getElementById('currentTimeDisplay');
         if (currentTimeDisplay) {
             const hours = String(checkInTime.getHours()).padStart(2, '0');
             const minutes = String(checkInTime.getMinutes()).padStart(2, '0');
@@ -553,7 +632,6 @@ async function updateTimeSummary() {
         }
         
         // تحديث عرض موعد العمل
-        const officialTimeDisplay = document.getElementById('officialTimeDisplay');
         if (officialTimeDisplay) {
             const officialHours = String(officialStartTime.getHours()).padStart(2, '0');
             const officialMinutes = String(officialStartTime.getMinutes()).padStart(2, '0');
@@ -561,7 +639,6 @@ async function updateTimeSummary() {
         }
         
         // تحديث عرض الحالة
-        const timeStatusDisplay = document.getElementById('timeStatusDisplay');
         if (timeStatusDisplay) {
             const diffMs = checkInTime - officialStartTime;
             const diffMinutes = Math.round(diffMs / 60000);
@@ -583,14 +660,12 @@ async function updateTimeSummary() {
         }
         
         // إظهار ملخص الوقت
-        const timeSummaryContainer = document.getElementById('timeSummaryContainer');
         if (timeSummaryContainer) {
             timeSummaryContainer.style.display = 'block';
         }
         
     } catch (error) {
         console.error('Error updating time summary:', error);
-        const timeSummaryContainer = document.getElementById('timeSummaryContainer');
         if (timeSummaryContainer) {
             timeSummaryContainer.style.display = 'none';
         }
@@ -625,7 +700,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // عند فتح الـ modal
+    // عند فتح الـ modal (للكمبيوتر فقط)
     cameraModal.addEventListener('show.bs.modal', function(event) {
         const button = event.relatedTarget;
         
@@ -647,62 +722,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        // إعادة تعيين الحالة
-        capturedPhoto = null;
-        const cameraContainer = document.getElementById('cameraContainer');
-        const capturedImageContainer = document.getElementById('capturedImageContainer');
-        const delayReasonContainer = document.getElementById('delayReasonContainer');
-        const delayReasonInput = document.getElementById('delayReason');
-        
-        if (cameraContainer) {
-            cameraContainer.style.display = 'block';
-            cameraContainer.style.visibility = 'visible';
-        }
-        if (capturedImageContainer) {
-            capturedImageContainer.style.display = 'none';
-            capturedImageContainer.style.visibility = 'hidden';
-        }
-        if (captureBtn) {
-            captureBtn.style.display = 'none';
-            captureBtn.style.visibility = 'hidden';
-            captureBtn.disabled = false; // التأكد من أن الزر غير معطل
-        }
-        if (retakeBtn) {
-            retakeBtn.style.display = 'none';
-            retakeBtn.style.visibility = 'hidden';
-        }
-        if (submitBtn) {
-            submitBtn.style.display = 'none';
-            submitBtn.style.visibility = 'hidden';
-        }
-        if (delayReasonContainer) delayReasonContainer.style.display = 'none';
-        if (delayReasonInput) {
-            delayReasonInput.value = '';
-            delayReasonInput.disabled = true;
-        }
-        
-        // إيقاف أي stream سابق
-        stopCamera();
-        
-        // تحديث ملخص الوقت (للتسجيل الحضور فقط)
-        workTimeData = null; // إعادة تعيين
-        if (currentAction === 'check_in') {
-            updateTimeSummary();
-            // تحديث الوقت كل ثانية
-            if (timeSummaryInterval) {
-                clearInterval(timeSummaryInterval);
-            }
-            timeSummaryInterval = setInterval(updateTimeSummary, 1000);
-        } else {
-            const timeSummaryContainer = document.getElementById('timeSummaryContainer');
-            if (timeSummaryContainer) {
-                timeSummaryContainer.style.display = 'none';
-            }
-            if (timeSummaryInterval) {
-                clearInterval(timeSummaryInterval);
-                timeSummaryInterval = null;
-            }
-        }
+        // إعادة تعيين الحالة (للكمبيوتر فقط)
+        resetCameraState(false);
         
         // إزالة backdrop فقط - لا نستدعي initCamera هنا
         // سنستدعيها في shown.bs.modal بعد أن يكون Modal مرئياً تماماً
@@ -800,6 +821,142 @@ document.addEventListener('DOMContentLoaded', function() {
         backdrops.forEach(backdrop => backdrop.remove());
     });
     
+    // دالة لفتح الكاميرا (Modal للكمبيوتر أو Card للموبايل)
+    function openCamera(action) {
+        currentAction = action;
+        
+        if (isMobile()) {
+            // على الموبايل: استخدام Card
+            const card = document.getElementById('cameraCard');
+            const cardTitle = document.getElementById('cameraCardTitle');
+            
+            if (card && cardTitle) {
+                // تحديث العنوان
+                if (action === 'check_in') {
+                    cardTitle.textContent = 'تسجيل الحضور - التقاط صورة';
+                } else {
+                    cardTitle.textContent = 'تسجيل الانصراف - التقاط صورة';
+                }
+                
+                // إعادة تعيين الحالة
+                resetCameraState(true);
+                
+                // إظهار Card
+                card.style.display = 'block';
+                
+                // التمرير التلقائي
+                setTimeout(function() {
+                    scrollToElement(card);
+                }, 50);
+                
+                // تهيئة الكاميرا بعد التأكد من أن Card مرئي
+                setTimeout(async () => {
+                    try {
+                        await initCamera();
+                    } catch (error) {
+                        console.error('Error initializing camera in card:', error);
+                    }
+                }, 200);
+            }
+        } else {
+            // على الكمبيوتر: استخدام Modal
+            const modal = new bootstrap.Modal(cameraModal);
+            modal.show();
+        }
+    }
+    
+    // دالة لإعادة تعيين حالة الكاميرا
+    function resetCameraState(isMobileDevice) {
+        capturedPhoto = null;
+        
+        if (isMobileDevice) {
+            const cameraContainer = document.getElementById('cameraContainerCard');
+            const capturedImageContainer = document.getElementById('capturedImageContainerCard');
+            const delayReasonContainer = document.getElementById('delayReasonContainerCard');
+            const delayReasonInput = document.getElementById('delayReasonCard');
+            
+            if (cameraContainer) {
+                cameraContainer.style.display = 'block';
+                cameraContainer.style.visibility = 'visible';
+            }
+            if (capturedImageContainer) {
+                capturedImageContainer.style.display = 'none';
+                capturedImageContainer.style.visibility = 'hidden';
+            }
+            if (delayReasonContainer) delayReasonContainer.style.display = 'none';
+            if (delayReasonInput) {
+                delayReasonInput.value = '';
+                delayReasonInput.disabled = true;
+            }
+            
+            const captureBtn = document.getElementById('captureBtnCard');
+            const retakeBtn = document.getElementById('retakeBtnCard');
+            const submitBtn = document.getElementById('submitBtnCard');
+            
+            if (captureBtn) {
+                captureBtn.style.display = 'none';
+                captureBtn.style.visibility = 'hidden';
+                captureBtn.disabled = false;
+            }
+            if (retakeBtn) retakeBtn.style.display = 'none';
+            if (submitBtn) submitBtn.style.display = 'none';
+        } else {
+            const cameraContainer = document.getElementById('cameraContainer');
+            const capturedImageContainer = document.getElementById('capturedImageContainer');
+            const delayReasonContainer = document.getElementById('delayReasonContainer');
+            const delayReasonInput = document.getElementById('delayReason');
+            
+            if (cameraContainer) {
+                cameraContainer.style.display = 'block';
+                cameraContainer.style.visibility = 'visible';
+            }
+            if (capturedImageContainer) {
+                capturedImageContainer.style.display = 'none';
+                capturedImageContainer.style.visibility = 'hidden';
+            }
+            if (delayReasonContainer) delayReasonContainer.style.display = 'none';
+            if (delayReasonInput) {
+                delayReasonInput.value = '';
+                delayReasonInput.disabled = true;
+            }
+            
+            const captureBtn = document.getElementById('captureBtn');
+            const retakeBtn = document.getElementById('retakeBtn');
+            const submitBtn = document.getElementById('submitBtn');
+            
+            if (captureBtn) {
+                captureBtn.style.display = 'none';
+                captureBtn.style.visibility = 'hidden';
+                captureBtn.disabled = false;
+            }
+            if (retakeBtn) retakeBtn.style.display = 'none';
+            if (submitBtn) submitBtn.style.display = 'none';
+        }
+        
+        // إيقاف أي stream سابق
+        stopCamera();
+        
+        // تحديث ملخص الوقت (للتسجيل الحضور فقط)
+        workTimeData = null; // إعادة تعيين
+        if (currentAction === 'check_in') {
+            updateTimeSummary();
+            // تحديث الوقت كل ثانية
+            if (timeSummaryInterval) {
+                clearInterval(timeSummaryInterval);
+            }
+            timeSummaryInterval = setInterval(updateTimeSummary, 1000);
+        } else {
+            const timeSummaryContainer = isMobileDevice ? document.getElementById('timeSummaryContainerCard') : document.getElementById('timeSummaryContainer');
+            if (timeSummaryContainer) {
+                timeSummaryContainer.style.display = 'none';
+            }
+            if (timeSummaryInterval) {
+                clearInterval(timeSummaryInterval);
+                timeSummaryInterval = null;
+            }
+        }
+    }
+    
     // إضافة event listeners للأزرار مع التحقق من حالة التعطيل
     if (checkInBtn) {
         checkInBtn.addEventListener('click', function(e) {
@@ -808,10 +965,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 e.stopPropagation();
                 return false;
             }
-            // تعيين الإجراء وفتح modal
-            currentAction = 'check_in';
-            const modal = new bootstrap.Modal(cameraModal);
-            modal.show();
+            // تعيين الإجراء وفتح modal/card
+            openCamera('check_in');
         });
     }
     
@@ -822,14 +977,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 e.stopPropagation();
                 return false;
             }
-            // تعيين الإجراء وفتح modal
-            currentAction = 'check_out';
-            const modal = new bootstrap.Modal(cameraModal);
-            modal.show();
+            // تعيين الإجراء وفتح modal/card
+            openCamera('check_out');
         });
     }
     
-    // أحداث الأزرار
+    // أحداث الأزرار (Modal)
     if (captureBtn) {
         captureBtn.addEventListener('click', capturePhoto);
     }
@@ -846,6 +999,35 @@ document.addEventListener('DOMContentLoaded', function() {
     if (cancelBtn) {
         cancelBtn.addEventListener('click', function() {
             stopCamera();
+        });
+    }
+    
+    // أحداث الأزرار (Card للموبايل)
+    const captureBtnCard = document.getElementById('captureBtnCard');
+    const retakeBtnCard = document.getElementById('retakeBtnCard');
+    const submitBtnCard = document.getElementById('submitBtnCard');
+    const cancelBtnCard = document.getElementById('cancelBtnCard');
+    
+    if (captureBtnCard) {
+        captureBtnCard.addEventListener('click', capturePhoto);
+    }
+    if (retakeBtnCard) {
+        retakeBtnCard.addEventListener('click', retakePhoto);
+    }
+    if (submitBtnCard) {
+        submitBtnCard.addEventListener('click', function() {
+            if (currentAction) {
+                submitAttendance(currentAction);
+            }
+        });
+    }
+    if (cancelBtnCard) {
+        cancelBtnCard.addEventListener('click', function() {
+            stopCamera();
+            const card = document.getElementById('cameraCard');
+            if (card) {
+                card.style.display = 'none';
+            }
         });
     }
 });

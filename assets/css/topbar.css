@@ -544,9 +544,19 @@
     .notifications-dropdown .dropdown-item-text {
         padding: 0.5rem !important;
         overflow: visible !important;
+        overflow-x: visible !important;
+        overflow-y: visible !important;
         max-width: 100% !important;
         width: 100% !important;
         min-width: 0 !important;
+        box-sizing: border-box !important;
+    }
+    
+    /* إزالة أي overflow hidden من dropdown-item-text وعناصره */
+    .notifications-dropdown .dropdown-item-text * {
+        overflow: visible !important;
+        overflow-x: visible !important;
+        overflow-y: visible !important;
     }
     
     /* إزالة أي قيود على العرض */
@@ -908,16 +918,33 @@
     .notifications-dropdown .dropdown-item-text {
         padding: 0.5rem !important;
         overflow: visible !important;
+        overflow-x: visible !important;
+        overflow-y: visible !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    
+    /* إزالة أي overflow hidden من dropdown-item-text وعناصره */
+    .notifications-dropdown .dropdown-item-text * {
+        overflow: visible !important;
+        overflow-x: visible !important;
+        overflow-y: visible !important;
     }
     
     .notifications-dropdown .notification-item {
         max-width: 100% !important;
         box-sizing: border-box !important;
+        overflow: visible !important;
+        overflow-x: visible !important;
+        overflow-y: visible !important;
     }
     
-    /* ضمان ظهور الأزرار على الموبايل */
-    .notifications-dropdown .notification-actions {
+    /* ضمان ظهور الأزرار على الموبايل - قواعد أقوى */
+    .notifications-dropdown .notification-actions,
+    .notifications-dropdown .notification-item .notification-actions {
         display: flex !important;
+        flex-direction: row !important;
         visibility: visible !important;
         opacity: 1 !important;
         pointer-events: auto !important;
@@ -925,10 +952,22 @@
         min-width: 100% !important;
         max-width: 100% !important;
         overflow: visible !important;
+        overflow-x: visible !important;
+        overflow-y: visible !important;
+        position: relative !important;
+        z-index: 1000 !important;
+        margin-top: 0.5rem !important;
+        gap: 0.5rem !important;
+        justify-content: flex-end !important;
+        flex-wrap: nowrap !important;
     }
     
     .notifications-dropdown .notification-actions .btn,
-    .notifications-dropdown .notification-actions button {
+    .notifications-dropdown .notification-actions button,
+    .notifications-dropdown .notification-item .notification-actions .btn,
+    .notifications-dropdown .notification-item .notification-actions button,
+    .notifications-dropdown .notification-mark-read,
+    .notifications-dropdown .notification-delete {
         display: inline-flex !important;
         visibility: visible !important;
         opacity: 1 !important;
@@ -937,6 +976,24 @@
         min-width: 70px !important;
         max-width: none !important;
         flex: 0 0 auto !important;
+        overflow: visible !important;
+        position: relative !important;
+        z-index: 1001 !important;
+        padding: 0.5rem 0.75rem !important;
+        font-size: 0.75rem !important;
+        border: 1px solid currentColor !important;
+        touch-action: manipulation !important;
+        -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1) !important;
+    }
+    
+    /* ضمان ظهور النصوص والأيقونات داخل الأزرار */
+    .notifications-dropdown .notification-actions .btn *,
+    .notifications-dropdown .notification-actions button *,
+    .notifications-dropdown .notification-item .notification-actions .btn *,
+    .notifications-dropdown .notification-item .notification-actions button * {
+        display: inline !important;
+        visibility: visible !important;
+        opacity: 1 !important;
         overflow: visible !important;
     }
     

@@ -1371,15 +1371,21 @@ function scrollToElement(element) {
     
     // الانتظار قليلاً للتأكد من أن العنصر ظاهر
     setTimeout(function() {
-        const elementTop = element.getBoundingClientRect().top + window.pageYOffset;
-        const offset = 20; // offset من الأعلى
+        // استخدام getBoundingClientRect للحصول على الموضع النسبي
+        const rect = element.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const elementTop = rect.top + scrollTop;
+        const offset = 80; // offset من الأعلى (لإعطاء مساحة للـ header)
         const targetPosition = elementTop - offset;
         
-        window.scrollTo({
-            top: targetPosition,
-            behavior: 'smooth'
+        // استخدام requestAnimationFrame لضمان smooth scroll
+        requestAnimationFrame(function() {
+            window.scrollTo({
+                top: Math.max(0, targetPosition), // التأكد من عدم السكرول لأعلى من الصفحة
+                behavior: 'smooth'
+            });
         });
-    }, 150);
+    }, 200);
 }
 
 function showReminderModal(scheduleId) {
@@ -1484,7 +1490,7 @@ function closeReminderCard() {
     }
 }
 
-// كود مبسط - تنظيف فقط
+// كود مبسط - تنظيف و scroll تلقائي
 document.addEventListener('DOMContentLoaded', function() {
     // تنظيف عند إغلاق editScheduleModal (على الكمبيوتر فقط)
     const editScheduleModal = document.getElementById('editScheduleModal');
@@ -1505,6 +1511,18 @@ document.addEventListener('DOMContentLoaded', function() {
             if (daysInput) daysInput.value = '3';
         });
     }
+    
+    // Scroll تلقائي عند فتح نموذج إضافة موعد تحصيل (على الموبايل فقط)
+    <?php if ($showAddForm): ?>
+    if (isMobile()) {
+        const addFormCard = document.querySelector('.card.shadow-sm.mb-4');
+        if (addFormCard) {
+            setTimeout(function() {
+                scrollToElement(addFormCard);
+            }, 200);
+        }
+    }
+    <?php endif; ?>
 });
 </script>
 

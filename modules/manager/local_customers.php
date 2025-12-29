@@ -1387,7 +1387,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
             <i class="bi bi-download me-2"></i>تصدير عملاء محددين
         </button>
         <?php endif; ?>
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addLocalCustomerModal">
+        <button class="btn btn-primary" onclick="showAddLocalCustomerModal()">
             <i class="bi bi-person-plus me-2"></i>إضافة عميل محلي جديد
         </button>
     </div>
@@ -1642,8 +1642,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                                         <button
                                             type="button"
                                             class="btn btn-sm <?php echo $customerBalance > 0 ? 'btn-success' : 'btn-outline-secondary'; ?>"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#collectPaymentModal"
+                                            onclick="showCollectPaymentModal(this)"
                                             data-customer-id="<?php echo (int)$customer['id']; ?>"
                                             data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
                                             data-customer-balance="<?php echo $rawBalance; ?>"
@@ -1736,8 +1735,8 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
     </div>
 </div>
 
-<!-- Modal تحصيل ديون العميل -->
-<div class="modal fade" id="collectPaymentModal" tabindex="-1" aria-hidden="true">
+<!-- Modal تحصيل ديون العميل - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="collectPaymentModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -1779,8 +1778,46 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
     </div>
 </div>
 
-<!-- Modal إضافة عميل محلي جديد -->
-<div class="modal fade" id="addLocalCustomerModal" tabindex="-1">
+<!-- Card تحصيل ديون العميل - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="collectPaymentCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-cash-coin me-2"></i>تحصيل ديون العميل المحلي</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
+            <input type="hidden" name="action" value="collect_debt">
+            <input type="hidden" name="customer_id" id="collectPaymentCardCustomerId">
+            <div class="mb-3">
+                <div class="fw-semibold text-muted">العميل</div>
+                <div class="fs-5" id="collectPaymentCardCustomerName">-</div>
+            </div>
+            <div class="mb-3">
+                <div class="fw-semibold text-muted">الديون الحالية</div>
+                <div class="fs-5 text-warning" id="collectPaymentCardCurrentDebt">-</div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="collectPaymentCardAmount">مبلغ التحصيل <span class="text-danger">*</span></label>
+                <input
+                    type="number"
+                    class="form-control"
+                    id="collectPaymentCardAmount"
+                    name="amount"
+                    step="0.01"
+                    min="0.01"
+                    required
+                >
+                <div class="form-text">لن يتم قبول مبلغ أكبر من قيمة الديون الحالية.</div>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">تحصيل المبلغ</button>
+                <button type="button" class="btn btn-secondary" onclick="closeCollectPaymentCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal إضافة عميل محلي جديد - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="addLocalCustomerModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
@@ -1881,8 +1918,88 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
     </div>
 </div>
 
-<!-- Modal سجل مشتريات العميل المحلي -->
-<div class="modal fade" id="localCustomerPurchaseHistoryModal" tabindex="-1" aria-hidden="true">
+<!-- Card إضافة عميل محلي جديد - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="addLocalCustomerCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">إضافة عميل محلي جديد</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
+            <input type="hidden" name="action" value="add_customer">
+            <div class="row g-2">
+                <div class="col-12 mb-2">
+                    <label class="form-label">اسم العميل <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" name="name" required>
+                </div>
+                <div class="col-12 mb-2">
+                    <label class="form-label">أرقام الهاتف</label>
+                    <div id="addCustomerCardPhoneNumbersContainer">
+                        <div class="input-group mb-2">
+                            <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
+                            <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="addCustomerCardPhoneBtn">
+                        <i class="bi bi-plus-circle"></i> إضافة رقم آخر
+                    </button>
+                    <input type="hidden" name="phone" value="">
+                </div>
+                <div class="col-6 mb-2">
+                    <label class="form-label">ديون العميل / رصيد العميل</label>
+                    <input type="number" class="form-control" name="balance" step="0.01" value="0" placeholder="مثال: 0 أو -500">
+                </div>
+                <div class="col-6 mb-2">
+                    <label class="form-label">العنوان</label>
+                    <textarea class="form-control" name="address" rows="2"></textarea>
+                </div>
+                <div class="col-6 mb-2">
+                    <label class="form-label">المنطقة</label>
+                    <div class="input-group">
+                        <select class="form-select" name="region_id" id="addCustomerCardRegionId">
+                            <option value="">اختر المنطقة</option>
+                            <?php
+                            $regions = $db->query("SELECT id, name FROM regions ORDER BY name ASC");
+                            foreach ($regions as $region):
+                            ?>
+                                <option value="<?php echo $region['id']; ?>"><?php echo htmlspecialchars($region['name']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
+                        <button type="button" class="btn btn-outline-primary" onclick="showAddRegionModal()">
+                            <i class="bi bi-plus-circle"></i>
+                        </button>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <div class="col-6 mb-2">
+                    <label class="form-label">الموقع الجغرافي</label>
+                    <div class="d-flex gap-2 mb-2">
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="getLocationCardBtn">
+                            <i class="bi bi-geo-alt"></i> الحصول على الموقع
+                        </button>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <input type="text" class="form-control" name="latitude" id="addCustomerCardLatitude" placeholder="خط العرض" readonly>
+                        </div>
+                        <div class="col-6">
+                            <input type="text" class="form-control" name="longitude" id="addCustomerCardLongitude" placeholder="خط الطول" readonly>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="d-flex gap-2 mt-3">
+                <button type="submit" class="btn btn-primary">إضافة</button>
+                <button type="button" class="btn btn-secondary" onclick="closeAddLocalCustomerCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal سجل مشتريات العميل المحلي - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="localCustomerPurchaseHistoryModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
@@ -1987,8 +2104,8 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
     </div>
 </div>
 
-<!-- Modal إرجاع منتجات العميل المحلي -->
-<div class="modal fade" id="localCustomerReturnModal" tabindex="-1" aria-hidden="true">
+<!-- Modal إرجاع منتجات العميل المحلي - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="localCustomerReturnModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content shadow-lg">
             <div class="modal-header bg-warning text-dark border-bottom border-warning">
@@ -2126,8 +2243,8 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
     </div>
 </div>
 
-<!-- Modal عرض موقع العميل -->
-<div class="modal fade" id="viewLocationModal" tabindex="-1" aria-hidden="true">
+<!-- Modal عرض موقع العميل - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="viewLocationModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -2165,6 +2282,180 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
 </div>
 
 <script>
+// ===== دوال النظام المزدوج (Modal للكمبيوتر / Card للموبايل) =====
+
+// دالة للتحقق من الموبايل
+function isMobile() {
+    return window.innerWidth <= 768;
+}
+
+// دالة للـ scroll تلقائي محسّنة
+function scrollToElement(element) {
+    if (!element) return;
+    
+    setTimeout(function() {
+        const rect = element.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const elementTop = rect.top + scrollTop;
+        const offset = 80;
+        const targetPosition = elementTop - offset;
+        
+        requestAnimationFrame(function() {
+            window.scrollTo({
+                top: Math.max(0, targetPosition),
+                behavior: 'smooth'
+            });
+        });
+    }, 200);
+}
+
+// دالة لإغلاق جميع النماذج المفتوحة
+function closeAllForms() {
+    // إغلاق جميع Cards على الموبايل
+    const collectCard = document.getElementById('collectPaymentCard');
+    const addCard = document.getElementById('addLocalCustomerCard');
+    const editCard = document.getElementById('editLocalCustomerCard');
+    
+    if (collectCard && collectCard.style.display !== 'none') {
+        collectCard.style.display = 'none';
+        const form = collectCard.querySelector('form');
+        if (form) form.reset();
+    }
+    
+    if (addCard && addCard.style.display !== 'none') {
+        addCard.style.display = 'none';
+        const form = addCard.querySelector('form');
+        if (form) form.reset();
+    }
+    
+    if (editCard && editCard.style.display !== 'none') {
+        editCard.style.display = 'none';
+        const form = editCard.querySelector('form');
+        if (form) form.reset();
+    }
+    
+    // إغلاق جميع Modals على الكمبيوتر
+    const modals = ['collectPaymentModal', 'addLocalCustomerModal', 'editLocalCustomerModal', 
+                    'localCustomerPurchaseHistoryModal', 'localCustomerReturnModal', 'viewLocationModal'];
+    
+    modals.forEach(function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            if (modalInstance) modalInstance.hide();
+        }
+    });
+}
+
+// دالة فتح نموذج تحصيل الديون
+function showCollectPaymentModal(button) {
+    if (!button) return;
+    
+    closeAllForms();
+    
+    const customerId = button.getAttribute('data-customer-id') || '';
+    const customerName = button.getAttribute('data-customer-name') || '-';
+    const balanceRaw = button.getAttribute('data-customer-balance') || '0';
+    const balanceFormatted = button.getAttribute('data-customer-balance-formatted') || balanceRaw;
+    const numericBalance = parseFloat(balanceRaw);
+    const debtAmount = (numericBalance > 0 ? numericBalance : 0);
+    
+    if (isMobile()) {
+        const card = document.getElementById('collectPaymentCard');
+        if (card) {
+            const customerIdInput = card.querySelector('#collectPaymentCardCustomerId');
+            const customerNameEl = card.querySelector('#collectPaymentCardCustomerName');
+            const debtEl = card.querySelector('#collectPaymentCardCurrentDebt');
+            const amountInput = card.querySelector('#collectPaymentCardAmount');
+            
+            if (customerIdInput) customerIdInput.value = customerId;
+            if (customerNameEl) customerNameEl.textContent = customerName;
+            if (debtEl) debtEl.textContent = balanceFormatted;
+            if (amountInput) {
+                amountInput.value = debtAmount.toFixed(2);
+                amountInput.setAttribute('max', debtAmount.toFixed(2));
+                amountInput.setAttribute('min', '0');
+                amountInput.readOnly = debtAmount <= 0;
+            }
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        const modal = document.getElementById('collectPaymentModal');
+        if (modal) {
+            const customerIdInput = modal.querySelector('input[name="customer_id"]');
+            const customerNameEl = modal.querySelector('.collection-customer-name');
+            const debtEl = modal.querySelector('.collection-current-debt');
+            const amountInput = modal.querySelector('#collectionAmount');
+            
+            if (customerIdInput) customerIdInput.value = customerId;
+            if (customerNameEl) customerNameEl.textContent = customerName;
+            if (debtEl) debtEl.textContent = balanceFormatted;
+            if (amountInput) {
+                amountInput.value = debtAmount.toFixed(2);
+                amountInput.setAttribute('max', debtAmount.toFixed(2));
+                amountInput.setAttribute('min', '0');
+                amountInput.readOnly = debtAmount <= 0;
+            }
+            
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+// دالة فتح نموذج إضافة عميل
+function showAddLocalCustomerModal() {
+    closeAllForms();
+    
+    if (isMobile()) {
+        const card = document.getElementById('addLocalCustomerCard');
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        const modal = document.getElementById('addLocalCustomerModal');
+        if (modal) {
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+// دوال إغلاق Cards
+function closeCollectPaymentCard() {
+    const card = document.getElementById('collectPaymentCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closeAddLocalCustomerCard() {
+    const card = document.getElementById('addLocalCustomerCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closeEditLocalCustomerCard() {
+    const card = document.getElementById('editLocalCustomerCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function () {
     // معالج نموذج التحصيل
     var collectionModal = document.getElementById('collectPaymentModal');
@@ -3187,6 +3478,11 @@ document.addEventListener('DOMContentLoaded', function() {
         // إعادة تعيين العناصر المحددة
         localSelectedItemsForReturn = [];
         
+        // إغلاق جميع النماذج المفتوحة أولاً
+        if (typeof closeAllForms === 'function') {
+            closeAllForms();
+        }
+        
         // إظهار الـ modal
         if (purchaseHistoryModal) {
             const modal = new bootstrap.Modal(purchaseHistoryModal);
@@ -3241,6 +3537,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 e.preventDefault();
                 e.stopPropagation();
                 
+                // إغلاق جميع النماذج المفتوحة أولاً
+                if (typeof closeAllForms === 'function') {
+                    closeAllForms();
+                }
+                
                 var customerId = this.getAttribute('data-customer-id');
                 var customerName = this.getAttribute('data-customer-name');
                 var customerPhone = this.getAttribute('data-customer-phone') || '';
@@ -3253,13 +3554,30 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
                 
-                var idInput = document.getElementById('editLocalCustomerId');
-                var nameInput = document.getElementById('editLocalCustomerName');
-                var phoneInput = document.getElementById('editLocalCustomerPhone');
-                var addressInput = document.getElementById('editLocalCustomerAddress');
-                var regionInput = document.getElementById('editLocalCustomerRegionId');
-                var balanceInput = document.getElementById('editLocalCustomerBalance');
-                var editPhoneContainer = document.getElementById('editPhoneNumbersContainer');
+                var isMobileDevice = typeof isMobile === 'function' ? isMobile() : window.innerWidth <= 768;
+                
+                // تحديد العناصر حسب نوع الجهاز
+                var idInput, nameInput, phoneInput, addressInput, regionInput, balanceInput, editPhoneContainer;
+                
+                if (isMobileDevice) {
+                    // على الموبايل: استخدام Card
+                    idInput = document.getElementById('editLocalCustomerCardId');
+                    nameInput = document.getElementById('editLocalCustomerCardName');
+                    phoneInput = document.getElementById('editLocalCustomerCardPhone');
+                    addressInput = document.getElementById('editLocalCustomerCardAddress');
+                    regionInput = document.getElementById('editLocalCustomerCardRegionId');
+                    balanceInput = document.getElementById('editLocalCustomerCardBalance');
+                    editPhoneContainer = document.getElementById('editLocalCustomerCardPhoneNumbersContainer');
+                } else {
+                    // على الكمبيوتر: استخدام Modal
+                    idInput = document.getElementById('editLocalCustomerId');
+                    nameInput = document.getElementById('editLocalCustomerName');
+                    phoneInput = document.getElementById('editLocalCustomerPhone');
+                    addressInput = document.getElementById('editLocalCustomerAddress');
+                    regionInput = document.getElementById('editLocalCustomerRegionId');
+                    balanceInput = document.getElementById('editLocalCustomerBalance');
+                    editPhoneContainer = document.getElementById('editPhoneNumbersContainer');
+                }
                 
                 if (idInput) idInput.value = customerId;
                 if (nameInput) nameInput.value = customerName || '';
@@ -3335,14 +3653,27 @@ document.addEventListener('DOMContentLoaded', function() {
                     phoneInput.value = customerPhone;
                 }
                 
-                try {
-                    var modal = bootstrap.Modal.getOrCreateInstance(editLocalCustomerModal);
-                    modal.show();
-                } catch (err) {
-                    console.error('Error showing modal:', err);
-                    // Fallback
-                    var modal = new bootstrap.Modal(editLocalCustomerModal);
-                    modal.show();
+                if (isMobileDevice) {
+                    // على الموبايل: إظهار Card
+                    var card = document.getElementById('editLocalCustomerCard');
+                    if (card) {
+                        card.style.display = 'block';
+                        if (typeof scrollToElement === 'function') {
+                            setTimeout(function() {
+                                scrollToElement(card);
+                            }, 50);
+                        }
+                    }
+                } else {
+                    // على الكمبيوتر: إظهار Modal
+                    try {
+                        var modal = bootstrap.Modal.getOrCreateInstance(editLocalCustomerModal);
+                        modal.show();
+                    } catch (err) {
+                        console.error('Error showing modal:', err);
+                        var modal = new bootstrap.Modal(editLocalCustomerModal);
+                        modal.show();
+                    }
                 }
             });
         });
@@ -3722,9 +4053,9 @@ document.addEventListener('DOMContentLoaded', function() {
 })();
 </script>
 
-<!-- Modal تعديل عميل محلي -->
+<!-- Modal تعديل عميل محلي - للكمبيوتر فقط -->
 <?php if (in_array($currentRole, ['manager', 'accountant', 'sales'], true)): ?>
-<div class="modal fade" id="editLocalCustomerModal" tabindex="-1">
+<div class="modal fade d-none d-md-block" id="editLocalCustomerModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -3794,6 +4125,72 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             </form>
         </div>
+    </div>
+</div>
+
+<!-- Card تعديل عميل محلي - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="editLocalCustomerCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">تعديل بيانات العميل المحلي</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
+            <input type="hidden" name="action" value="edit_customer">
+            <input type="hidden" name="customer_id" id="editLocalCustomerCardId">
+            <div class="mb-3">
+                <label class="form-label">اسم العميل</label>
+                <input type="text" class="form-control" id="editLocalCustomerCardName" disabled>
+                <small class="text-muted">لا يمكن تعديل اسم العميل</small>
+            </div>
+            <?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
+            <div class="mb-3">
+                <label class="form-label">ديون العميل / رصيد العميل</label>
+                <input type="number" class="form-control" name="balance" id="editLocalCustomerCardBalance" step="0.01" placeholder="مثال: 0 أو -500">
+            </div>
+            <?php endif; ?>
+            <div class="mb-3">
+                <label class="form-label">أرقام الهاتف</label>
+                <div id="editLocalCustomerCardPhoneNumbersContainer">
+                    <div class="input-group mb-2">
+                        <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
+                        <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="addEditLocalCustomerCardPhoneBtn">
+                    <i class="bi bi-plus-circle"></i> إضافة رقم آخر
+                </button>
+                <input type="hidden" name="phone" id="editLocalCustomerCardPhone" value="">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">العنوان</label>
+                <textarea class="form-control" name="address" id="editLocalCustomerCardAddress" rows="2"></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">المنطقة</label>
+                <div class="input-group">
+                    <select class="form-select" name="region_id" id="editLocalCustomerCardRegionId">
+                        <option value="">اختر المنطقة</option>
+                        <?php
+                        $regions = $db->query("SELECT id, name FROM regions ORDER BY name ASC");
+                        foreach ($regions as $region):
+                        ?>
+                            <option value="<?php echo $region['id']; ?>"><?php echo htmlspecialchars($region['name']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
+                    <button type="button" class="btn btn-outline-primary" onclick="showAddRegionModal()">
+                        <i class="bi bi-plus-circle"></i>
+                    </button>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">حفظ التعديلات</button>
+                <button type="button" class="btn btn-secondary" onclick="closeEditLocalCustomerCard()">إلغاء</button>
+            </div>
+        </form>
     </div>
 </div>
 <?php endif; ?>
@@ -4190,6 +4587,73 @@ window.CUSTOMER_EXPORT_CONFIG = {
 </div>
 
 <style>
+/* ===== CSS مبسط - Modal للكمبيوتر فقط، Card للموبايل ===== */
+
+/* إخفاء Modal على الموبايل */
+@media (max-width: 768px) {
+    #collectPaymentModal,
+    #addLocalCustomerModal,
+    #editLocalCustomerModal,
+    #localCustomerPurchaseHistoryModal,
+    #localCustomerReturnModal,
+    #viewLocationModal {
+        display: none !important;
+    }
+}
+
+/* إخفاء Card على الكمبيوتر */
+@media (min-width: 769px) {
+    #collectPaymentCard,
+    #addLocalCustomerCard,
+    #editLocalCustomerCard {
+        display: none !important;
+    }
+}
+
+/* منع الملفات العامة من التأثير على Modals (على الكمبيوتر فقط) */
+#collectPaymentModal,
+#addLocalCustomerModal,
+#editLocalCustomerModal,
+#localCustomerPurchaseHistoryModal,
+#localCustomerReturnModal,
+#viewLocationModal {
+    height: auto !important;
+    max-height: none !important;
+}
+
+#collectPaymentModal .modal-dialog,
+#addLocalCustomerModal .modal-dialog,
+#editLocalCustomerModal .modal-dialog,
+#localCustomerPurchaseHistoryModal .modal-dialog,
+#localCustomerReturnModal .modal-dialog,
+#viewLocationModal .modal-dialog {
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 1.75rem auto !important;
+}
+
+#collectPaymentModal .modal-content,
+#addLocalCustomerModal .modal-content,
+#editLocalCustomerModal .modal-content,
+#localCustomerPurchaseHistoryModal .modal-content,
+#localCustomerReturnModal .modal-content,
+#viewLocationModal .modal-content {
+    height: auto !important;
+    max-height: none !important;
+}
+
+#collectPaymentModal .modal-body,
+#addLocalCustomerModal .modal-body,
+#editLocalCustomerModal .modal-body,
+#localCustomerPurchaseHistoryModal .modal-body,
+#localCustomerReturnModal .modal-body,
+#viewLocationModal .modal-body {
+    height: auto !important;
+    max-height: none !important;
+    overflow-y: visible !important;
+}
+
 /* تحسين جداول العملاء على الهواتف */
 /* الأزرار في عمود الإجراءات: 2×2 على جميع الشاشات */
 .dashboard-table tbody td:last-child .d-flex {

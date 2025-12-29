@@ -553,8 +553,8 @@ $lang = isset($translations) ? $translations : [];
     </div>
 </div>
 
-<!-- Modal الكاميرا -->
-<div class="modal fade" id="cameraModal" tabindex="-1" data-bs-backdrop="false" data-bs-keyboard="true">
+<!-- Modal الكاميرا - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="cameraModal" tabindex="-1" data-bs-backdrop="false" data-bs-keyboard="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
@@ -623,6 +623,71 @@ $lang = isset($translations) ? $translations : [];
     </div>
 </div>
 
+<!-- Card الكاميرا - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="cameraCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0" id="cameraCardTitle">التقاط صورة</h5>
+    </div>
+    <div class="card-body">
+        <!-- ملخص الوقت (للتسجيل الحضور فقط) -->
+        <div id="timeSummaryContainerCard" style="display: none;" class="mb-3">
+            <div class="card border-info">
+                <div class="card-body p-3">
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <div class="small text-muted mb-1">الوقت الحالي</div>
+                            <div class="fw-bold" id="currentTimeDisplayCard">--:--</div>
+                        </div>
+                        <div class="col-4">
+                            <div class="small text-muted mb-1">موعد العمل</div>
+                            <div class="fw-bold" id="officialTimeDisplayCard">--:--</div>
+                        </div>
+                        <div class="col-4">
+                            <div class="small text-muted mb-1">الحالة</div>
+                            <div id="timeStatusDisplayCard" class="fw-bold">--</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="cameraContainerCard" class="text-center">
+            <div id="cameraLoadingCard" class="text-center mb-3" style="display: none;">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">جاري تحميل الكاميرا...</span>
+                </div>
+                <p class="mt-2 text-muted">جاري تحميل الكاميرا...</p>
+            </div>
+            <video id="videoCard" autoplay playsinline muted style="width: 100%; border-radius: 8px; background: #000;"></video>
+            <canvas id="canvasCard" style="display: none;"></canvas>
+            <div id="cameraErrorCard" class="alert alert-danger" style="display: none;">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <span id="cameraErrorTextCard">خطأ في الكاميرا</span>
+            </div>
+        </div>
+        <div id="capturedImageContainerCard" style="display: none; text-align: center;">
+            <img id="capturedImageCard" src="" alt="الصورة الملتقطة" style="max-width: 100%; border-radius: 8px;">
+        </div>
+        <div class="mt-3" id="delayReasonContainerCard" style="display: none;">
+            <label class="form-label">سبب التأخير <span class="text-muted">(اختياري)</span></label>
+            <textarea class="form-control" id="delayReasonCard" rows="2" placeholder="يرجى كتابة سبب التأخير إن وجد..." disabled></textarea>
+            <small class="text-muted">يتم تفعيل هذا الحقل تلقائياً في حالة التأخير</small>
+        </div>
+        <div class="d-flex gap-2 mt-3">
+            <button type="button" class="btn btn-secondary" id="cancelBtnCard">إلغاء</button>
+            <button type="button" class="btn btn-primary" id="captureBtnCard" style="display: none; visibility: hidden;">
+                <i class="bi bi-camera me-2"></i>التقاط
+            </button>
+            <button type="button" class="btn btn-success" id="retakeBtnCard" style="display: none;">
+                <i class="bi bi-arrow-counterclockwise me-2"></i>إعادة التقاط
+            </button>
+            <button type="button" class="btn btn-primary" id="submitBtnCard" style="display: none;">
+                <i class="bi bi-check-circle me-2"></i>تأكيد وإرسال
+            </button>
+        </div>
+    </div>
+</div>
+
 <script>
     // تمرير بيانات المستخدم للـ JavaScript
     window.currentUser = {
@@ -632,5 +697,21 @@ $lang = isset($translations) ? $translations : [];
 </script>
 <script src="<?php echo ASSETS_URL; ?>js/attendance.js"></script>
 <script src="<?php echo ASSETS_URL; ?>js/attendance_notifications.js"></script>
+
+<style>
+/* إخفاء Modal على الموبايل */
+@media (max-width: 768px) {
+    #cameraModal {
+        display: none !important;
+    }
+}
+
+/* إخفاء Card على الكمبيوتر */
+@media (min-width: 769px) {
+    #cameraCard {
+        display: none !important;
+    }
+}
+</style>
 
 <?php include __DIR__ . '/templates/footer.php'; ?>
