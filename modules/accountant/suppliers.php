@@ -1181,7 +1181,7 @@ $historyTypeLabels = [
                     <h5 class="modal-title"><i class="bi bi-pencil me-2"></i><?php echo isset($lang['edit']) ? $lang['edit'] : 'تعديل'; ?> <?php echo (isset($lang) && isset($lang['suppliers'])) ? $lang['suppliers'] : 'مورد'; ?></h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body" style="max-height: calc(100vh - 200px); overflow-y: auto;">
+                <div class="modal-body">
                     <?php 
                     $userRole = strtolower($currentUser['role'] ?? '');
                     $isAccountant = $userRole === 'accountant';
