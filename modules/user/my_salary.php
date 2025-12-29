@@ -28,6 +28,10 @@ if (isset($currentUser['hourly_rate'])) {
 
 // استبعاد المدير - ليس له راتب
 if ($currentUser['role'] === 'manager') {
+    // تنظيف أي output buffer قبل redirect
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
     header('Location: ' . getDashboardUrl('manager'));
     exit;
 }
@@ -1325,6 +1329,7 @@ $dashboardUrl = getDashboardUrl($currentUser['role']);
 $monthName = date('F', mktime(0, 0, 0, $selectedMonth, 1));
 ?>
 
+<div class="container-fluid px-0">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
 
@@ -2504,3 +2509,4 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+</div> <!-- End container-fluid -->
