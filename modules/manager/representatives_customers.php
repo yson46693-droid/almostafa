@@ -2092,7 +2092,7 @@ function viewRepReturnItemDetails(invoiceItemId) {
     console.log('View details for item:', invoiceItemId);
 }
 
-    // تهيئة modal تفاصيل المندوب - تنظيف الطلبات عند إغلاق الـ modal 
+    // تهيئة modal تفاصيل المندوب - تنظيف الطلبات عند إغلاق الـ modal  
 document.addEventListener('DOMContentLoaded', function() {
     const repDetailsModal = document.getElementById('repDetailsModal');
     if (repDetailsModal) {
