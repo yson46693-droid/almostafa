@@ -1365,10 +1365,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // إزالة أي classes أو attributes قد تسبب مشاكل
                 form.classList.remove('was-validated');
-                const inputs = form.querySelectorAll('input, select');
-                inputs.forEach(input => {
-                    input.classList.remove('is-invalid', 'is-valid');
-                });
+                // إزالة classes من جميع inputs و selects مباشرة (بدون loop)
+                const invalidInputs = form.querySelectorAll('.is-invalid, .is-valid');
+                if (invalidInputs.length > 0) {
+                    // استخدام CSS classList API مباشرة
+                    invalidInputs.forEach(input => {
+                        input.classList.remove('is-invalid', 'is-valid');
+                    });
+                }
             }
         });
         
@@ -1497,41 +1501,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const alertElement = successAlert || errorAlert;
         
         if (alertElement && alertElement.dataset.autoRefresh === 'true') {
-            // التحقق من عدم وجود modal مفتوح قبل عمل refresh
-            if (isModalOpen()) {
-                // إذا كان هناك modal مفتوح، ننتظر حتى يُغلق
-                const checkInterval = setInterval(function() {
-                    if (!isModalOpen()) {
-                        clearInterval(checkInterval);
-                        // عمل refresh بعد إغلاق المودال
-                        setTimeout(function() {
-                            currentUrl.searchParams.delete('success');
-                            currentUrl.searchParams.delete('error');
-                            currentUrl.searchParams.delete('created');
-                            currentUrl.searchParams.delete('_nocache');
-                            window.location.href = currentUrl.toString();
-                        }, 1000);
-                    }
-                }, 500);
-                
-                // timeout أقصى 30 ثانية
-                setTimeout(function() {
-                    clearInterval(checkInterval);
-                }, 30000);
-            } else {
-                // عمل refresh مرة واحدة فقط بعد 3 ثوانٍ
-                setTimeout(function() {
-                    // التحقق مرة أخرى من عدم وجود modal مفتوح قبل refresh
-                    if (!isModalOpen()) {
-                        // إزالة معاملات الرسائل من URL
-                        currentUrl.searchParams.delete('success');
-                        currentUrl.searchParams.delete('error');
-                        currentUrl.searchParams.delete('created');
-                        // إزالة _nocache إذا كان موجوداً
-                        currentUrl.searchParams.delete('_nocache');
-                        window.location.href = currentUrl.toString();
-                    }
-                }, 3000);
+            // إزالة معاملات الرسائل من URL مباشرة بدون timeout
+            if (!isModalOpen()) {
+                currentUrl.searchParams.delete('success');
+                currentUrl.searchParams.delete('error');
+                currentUrl.searchParams.delete('created');
+                currentUrl.searchParams.delete('_nocache');
+                // تحديث URL بدون إعادة تحميل الصفحة
+                window.history.replaceState({}, '', currentUrl.toString());
             }
         }
     }
@@ -1797,15 +1774,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.body.style.width = '100%';
             document.body.style.height = '100%';
             
-            // منع touch events على المحتوى خلف النموذج
-            const allElements = document.body.children;
-            for (let i = 0; i < allElements.length; i++) {
-                const el = allElements[i];
-                if (!el.classList.contains('modal') && !el.classList.contains('modal-backdrop')) {
-                    el.style.pointerEvents = 'none';
-                    el.style.touchAction = 'none';
-                }
-            }
+            // منع touch events على المحتوى خلف النموذج (يتم عبر CSS)
         });
         
         // عند إغلاق النموذج
@@ -1824,15 +1793,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 window.scrollTo(0, parseInt(scrollY || '0') * -1);
             }
             
-            // استعادة touch events
-            const allElements = document.body.children;
-            for (let i = 0; i < allElements.length; i++) {
-                const el = allElements[i];
-                if (!el.classList.contains('modal') && !el.classList.contains('modal-backdrop')) {
-                    el.style.pointerEvents = '';
-                    el.style.touchAction = '';
-                }
-            }
+            // استعادة touch events (يتم عبر CSS)
         });
         
         // منع propagation للأحداث من النموذج إلى body
