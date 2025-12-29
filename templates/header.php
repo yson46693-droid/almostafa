@@ -37,9 +37,6 @@ require_once __DIR__ . '/../includes/payment_schedules.php';
 require_once __DIR__ . '/../includes/production_reports.php';
 // تم حذف version_helper.php - الإصدار يُقرأ مباشرة من version.json
 
-// تعطيل التحديث التلقائي للإصدار - استخدام عداد يدوي من version.json فقط
-// @checkAndUpdateVersion(); // معطل - الإصدار يتم قراءته يدوياً من version.json
-
 // تحديد اللغة الحالية
 $currentLang = getCurrentLanguage();
 $dir = getDirection();
