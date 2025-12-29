@@ -314,22 +314,22 @@ if (ob_get_level() > 0) {
     <?php endif; ?>
     
     <!-- Bootstrap 5 CSS - تحميل غير متزامن على الموبايل لتحسين الأداء -->
-    <?php if ($isMobile): ?>
-    <!-- Mobile: تحميل Bootstrap CSS بشكل غير متزامن -->
+    <?php if ($isMobile && !$isChatPage): ?>
+    <!-- Mobile: تحميل Bootstrap CSS بشكل غير متزامن (ما عدا صفحة الشات) -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" media="print" onload="this.media='all'" crossorigin="anonymous">
     <noscript><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous"></noscript>
     <?php else: ?>
-    <!-- Desktop: تحميل عادي -->
+    <!-- Desktop أو صفحة الشات: تحميل عادي لضمان التحميل الكامل -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous">
     <?php endif; ?>
     
     <!-- Bootstrap Icons - تحميل مشروط للموبايل (أقل) -->
-    <?php if ($isMobile): ?>
-    <!-- Mobile: تحميل Bootstrap Icons مع lazy loading -->
+    <?php if ($isMobile && !$isChatPage): ?>
+    <!-- Mobile: تحميل Bootstrap Icons مع lazy loading (ما عدا صفحة الشات) -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet" media="print" onload="this.media='all'" crossorigin="anonymous">
     <noscript><link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet" crossorigin="anonymous"></noscript>
     <?php else: ?>
-    <!-- Desktop: تحميل عادي -->
+    <!-- Desktop أو صفحة الشات: تحميل عادي لضمان التحميل الكامل -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet" crossorigin="anonymous">
     <?php endif; ?>
     

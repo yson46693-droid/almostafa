@@ -562,47 +562,6 @@ $lang = isset($translations) ? $translations : [];
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
             </div>
             <div class="modal-body">
-                <!-- تفاصيل حضور جميع الموظفين (فقط للمحاسبين والمديرين) -->
-                <?php if (hasRole('accountant') || hasRole('manager')): ?>
-                <div id="allEmployeesAttendanceContainer" class="mb-3" style="display: none;">
-                    <div class="card border-primary">
-                        <div class="card-header bg-primary text-white py-2">
-                            <h6 class="mb-0">
-                                <i class="bi bi-people me-2"></i>تفاصيل حضور الموظفين اليوم
-                            </h6>
-                        </div>
-                        <div class="card-body p-2">
-                            <div id="allEmployeesAttendanceLoading" class="text-center py-2">
-                                <div class="spinner-border spinner-border-sm text-primary" role="status">
-                                    <span class="visually-hidden">جاري التحميل...</span>
-                                </div>
-                                <small class="text-muted d-block mt-1">جاري تحميل البيانات...</small>
-                            </div>
-                            <div id="allEmployeesAttendanceList" style="display: none;">
-                                <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
-                                    <table class="table table-sm table-hover mb-0">
-                                        <thead class="table-light sticky-top">
-                                            <tr>
-                                                <th style="font-size: 0.75rem; padding: 0.25rem;">الاسم</th>
-                                                <th style="font-size: 0.75rem; padding: 0.25rem;">الموعد الرسمي</th>
-                                                <th style="font-size: 0.75rem; padding: 0.25rem;">وقت الحضور</th>
-                                                <th style="font-size: 0.75rem; padding: 0.25rem;">التأخير</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="allEmployeesAttendanceTableBody">
-                                            <!-- سيتم ملؤه عبر JavaScript -->
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                            <div id="allEmployeesAttendanceError" class="alert alert-danger py-2" style="display: none;">
-                                <small>حدث خطأ أثناء تحميل البيانات</small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <?php endif; ?>
-                
                 <!-- ملخص الوقت (للتسجيل الحضور فقط) -->
                 <div id="timeSummaryContainer" style="display: none;" class="mb-3">
                     <div class="card border-info">

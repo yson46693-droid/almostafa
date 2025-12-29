@@ -185,6 +185,11 @@ async function initCamera() {
         video.style.display = 'block';
         video.style.visibility = 'visible';
         video.style.opacity = '1';
+        video.style.position = 'relative';
+        video.style.zIndex = '2';
+        video.style.width = '100%';
+        video.style.height = 'auto';
+        video.style.maxWidth = '100%';
         
         // انتظر حتى يكون الفيديو جاهزاً مع timeout
         await new Promise((resolve, reject) => {
@@ -734,121 +739,6 @@ let workTimeData = null;
 let timeSummaryInterval = null;
 let visibilityHandlerAdded = false;
 
-// دالة لتحميل تفاصيل حضور جميع الموظفين
-async function loadAllEmployeesAttendance() {
-    const container = document.getElementById('allEmployeesAttendanceContainer');
-    const loading = document.getElementById('allEmployeesAttendanceLoading');
-    const list = document.getElementById('allEmployeesAttendanceList');
-    const error = document.getElementById('allEmployeesAttendanceError');
-    const tableBody = document.getElementById('allEmployeesAttendanceTableBody');
-    
-    if (!container || !loading || !list || !error || !tableBody) {
-        return;
-    }
-    
-    // إظهار الحاوية وإخفاء القائمة وإظهار التحميل
-    container.style.display = 'block';
-    list.style.display = 'none';
-    error.style.display = 'none';
-    loading.style.display = 'block';
-    
-    try {
-        const apiPath = getAttendanceApiPath();
-        const today = new Date().toISOString().split('T')[0];
-        const response = await fetch(apiPath + '?action=get_all_employees_today&date=' + today, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json; charset=utf-8'
-            }
-        });
-        
-        if (!response.ok) {
-            throw new Error('فشل تحميل البيانات');
-        }
-        
-        const data = await response.json();
-        
-        if (data.success && data.employees && Array.isArray(data.employees)) {
-            // مسح الجدول
-            tableBody.innerHTML = '';
-            
-            if (data.employees.length === 0) {
-                tableBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="font-size: 0.75rem;">لا يوجد موظفين</td></tr>';
-            } else {
-                data.employees.forEach(employee => {
-                    const row = document.createElement('tr');
-                    
-                    // الاسم
-                    const nameCell = document.createElement('td');
-                    nameCell.style.fontSize = '0.75rem';
-                    nameCell.style.padding = '0.25rem';
-                    nameCell.textContent = employee.full_name || employee.username || '-';
-                    row.appendChild(nameCell);
-                    
-                    // الموعد الرسمي
-                    const officialTimeCell = document.createElement('td');
-                    officialTimeCell.style.fontSize = '0.75rem';
-                    officialTimeCell.style.padding = '0.25rem';
-                    if (employee.official_start_time) {
-                        const timeParts = employee.official_start_time.split(':');
-                        const hours = parseInt(timeParts[0]);
-                        const minutes = timeParts[1];
-                        officialTimeCell.textContent = String(hours).padStart(2, '0') + ':' + minutes;
-                    } else {
-                        officialTimeCell.textContent = '-';
-                    }
-                    row.appendChild(officialTimeCell);
-                    
-                    // وقت الحضور الفعلي
-                    const checkInTimeCell = document.createElement('td');
-                    checkInTimeCell.style.fontSize = '0.75rem';
-                    checkInTimeCell.style.padding = '0.25rem';
-                    if (employee.has_checked_in && employee.check_in_time) {
-                        const checkInDate = new Date(employee.check_in_time);
-                        const hours = String(checkInDate.getHours()).padStart(2, '0');
-                        const minutes = String(checkInDate.getMinutes()).padStart(2, '0');
-                        checkInTimeCell.innerHTML = '<strong>' + hours + ':' + minutes + '</strong>';
-                    } else {
-                        checkInTimeCell.innerHTML = '<span class="text-muted">لم يسجل</span>';
-                    }
-                    row.appendChild(checkInTimeCell);
-                    
-                    // التأخير
-                    const delayCell = document.createElement('td');
-                    delayCell.style.fontSize = '0.75rem';
-                    delayCell.style.padding = '0.25rem';
-                    if (employee.has_checked_in) {
-                        if (employee.delay_minutes > 0) {
-                            delayCell.innerHTML = '<span class="badge bg-warning" style="font-size: 0.7rem;">' + employee.delay_minutes + ' دقيقة</span>';
-                        } else {
-                            delayCell.innerHTML = '<span class="badge bg-success" style="font-size: 0.7rem;">في الوقت</span>';
-                        }
-                    } else {
-                        delayCell.innerHTML = '<span class="text-muted">-</span>';
-                    }
-                    row.appendChild(delayCell);
-                    
-                    tableBody.appendChild(row);
-                });
-            }
-            
-            // إخفاء التحميل وإظهار القائمة
-            loading.style.display = 'none';
-            list.style.display = 'block';
-        } else {
-            throw new Error('بيانات غير صحيحة');
-        }
-    } catch (err) {
-        console.error('Error loading all employees attendance:', err);
-        loading.style.display = 'none';
-        error.style.display = 'block';
-        const errorSmall = error.querySelector('small');
-        if (errorSmall) {
-            errorSmall.textContent = 'حدث خطأ أثناء تحميل البيانات: ' + (err.message || 'خطأ غير معروف');
-        }
-    }
-}
-
 // عرض ملخص الوقت
 async function updateTimeSummary() {
     if (currentAction !== 'check_in') {
@@ -1000,17 +890,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        // تحميل تفاصيل حضور جميع الموظفين (فقط للمحاسبين والمديرين)
-        const userRole = window.currentUser?.role;
-        if (userRole === 'accountant' || userRole === 'manager') {
-            loadAllEmployeesAttendance();
-        } else {
-            // إخفاء قسم تفاصيل حضور جميع الموظفين للمستخدمين العاديين
-            const container = document.getElementById('allEmployeesAttendanceContainer');
-            if (container) {
-                container.style.display = 'none';
-            }
-        }
         
         // إعادة تعيين الحالة
         capturedPhoto = null;
@@ -1051,6 +930,9 @@ document.addEventListener('DOMContentLoaded', function() {
             video.srcObject = null;
             video.style.display = 'none';
             video.style.visibility = 'hidden';
+            video.style.opacity = '0';
+            video.style.position = 'relative';
+            video.style.zIndex = 'auto';
         }
         
         // إيقاف أي stream سابق
@@ -1098,20 +980,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        // إزالة backdrop بعد تأخير قصير (للتأكد من إزالته حتى لو تم إنشاؤه بعد فتح Modal)
-        // استخدام requestAnimationFrame لضمان أن الـ modal مرئي تماماً قبل تحميل الكاميرا
-        requestAnimationFrame(() => {
-            requestAnimationFrame(async () => {
-                removeBackdrop();
-                try {
-                    await initCamera();
-                } catch (error) {
-                    console.error('Error initializing camera in modal:', error);
-                    // showCameraError سيتم استدعاؤها من داخل initCamera
-                }
-            });
-        });
-        
         // مراقبة مستمرة لإزالة backdrop (زيادة الفترة من 50ms إلى 1000ms لتقليل الضغط)
         const backdropInterval = setInterval(() => {
             removeBackdrop();
@@ -1119,6 +987,60 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // حفظ interval ID لإيقافه لاحقاً
         cameraModal.dataset.backdropInterval = backdropInterval;
+    });
+    
+    // عند اكتمال فتح الـ modal (بعد أن يكون مرئياً تماماً) - مهم جداً للموبايل
+    cameraModal.addEventListener('shown.bs.modal', function(event) {
+        // كشف ما إذا كان الجهاز موبايل
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        // إزالة backdrop
+        removeBackdrop();
+        
+        // على الموبايل، ننتظر وقت أطول لضمان أن Modal مرئي تماماً
+        const delay = isMobile ? 300 : 100;
+        
+        setTimeout(async () => {
+            // التأكد مرة أخرى من إزالة backdrop
+            removeBackdrop();
+            
+            // التأكد من أن Modal مرئي
+            const modalElement = document.getElementById('cameraModal');
+            if (!modalElement || !modalElement.classList.contains('show')) {
+                console.warn('Modal not visible, retrying...');
+                setTimeout(async () => {
+                    try {
+                        await initCamera();
+                    } catch (error) {
+                        console.error('Error initializing camera in modal:', error);
+                    }
+                }, 200);
+                return;
+            }
+            
+            // التأكد من أن container مرئي
+            const cameraContainer = document.getElementById('cameraContainer');
+            if (cameraContainer) {
+                cameraContainer.style.display = 'block';
+                cameraContainer.style.visibility = 'visible';
+                cameraContainer.style.opacity = '1';
+                cameraContainer.style.zIndex = '1';
+            }
+            
+            // التأكد من أن video element جاهز
+            const video = document.getElementById('video');
+            if (video) {
+                video.style.position = 'relative';
+                video.style.zIndex = '2';
+            }
+            
+            try {
+                await initCamera();
+            } catch (error) {
+                console.error('Error initializing camera in modal:', error);
+                // showCameraError سيتم استدعاؤها من داخل initCamera
+            }
+        }, delay);
     });
     
     // عند إغلاق الـ modal

@@ -4337,12 +4337,12 @@ window.CUSTOMER_EXPORT_CONFIG = {
 }
 
 /* ===== تنسيقات جميع النماذج الأخرى - نفس أبعاد نموذج تحصيل من مندوب ===== */
-/* قائمة النماذج: addLocalCustomerModal, localCustomerPurchaseHistoryModal, localCustomerReturnModal, 
+/* قائمة النماذج: localCustomerPurchaseHistoryModal, localCustomerReturnModal, 
    editLocalCustomerModal, addRegionFromLocalCustomerModal, customerExportModal, importLocalCustomersModal, 
    viewLocationModal, deleteLocalCustomerModal */
+/* ملاحظة: addLocalCustomerModal له قسم خاص منفصل أدناه */
 
 @media (min-width: 769px) {
-    #addLocalCustomerModal .modal-dialog.modal-dialog-centered,
     #localCustomerPurchaseHistoryModal .modal-dialog.modal-dialog-centered,
     #localCustomerReturnModal .modal-dialog.modal-dialog-centered,
     #editLocalCustomerModal .modal-dialog.modal-dialog-centered,
@@ -4357,7 +4357,6 @@ window.CUSTOMER_EXPORT_CONFIG = {
         max-height: calc(100vh - 1rem);
     }
 
-    #addLocalCustomerModal .modal-content,
     #localCustomerPurchaseHistoryModal .modal-content,
     #localCustomerReturnModal .modal-content,
     #editLocalCustomerModal .modal-content,
@@ -4374,7 +4373,6 @@ window.CUSTOMER_EXPORT_CONFIG = {
     }
 
     /* إصلاح المساحة البيضاء - منع modal-body من التمدد */
-    #addLocalCustomerModal .modal-body,
     #localCustomerPurchaseHistoryModal .modal-body,
     #localCustomerReturnModal .modal-body,
     #editLocalCustomerModal .modal-body,
@@ -4398,7 +4396,6 @@ window.CUSTOMER_EXPORT_CONFIG = {
 }
 
 /* قواعد عامة للـ header والـ footer */
-#addLocalCustomerModal .modal-header,
 #localCustomerPurchaseHistoryModal .modal-header,
 #localCustomerReturnModal .modal-header,
 #editLocalCustomerModal .modal-header,
@@ -4411,7 +4408,6 @@ window.CUSTOMER_EXPORT_CONFIG = {
     flex-grow: 0 !important;
 }
 
-#addLocalCustomerModal .modal-footer,
 #localCustomerPurchaseHistoryModal .modal-footer,
 #localCustomerReturnModal .modal-footer,
 #editLocalCustomerModal .modal-footer,
@@ -4429,7 +4425,6 @@ window.CUSTOMER_EXPORT_CONFIG = {
 
 /* padding للـ header والـ footer على الشاشات الكبيرة فقط */
 @media (min-width: 769px) {
-    #addLocalCustomerModal .modal-footer,
     #localCustomerPurchaseHistoryModal .modal-footer,
     #localCustomerReturnModal .modal-footer,
     #editLocalCustomerModal .modal-footer,
@@ -4444,8 +4439,6 @@ window.CUSTOMER_EXPORT_CONFIG = {
 }
 
 /* إزالة أي pseudo-elements قد تسبب مساحة فارغة */
-#addLocalCustomerModal .modal-content::after,
-#addLocalCustomerModal .modal-content::before,
 #localCustomerPurchaseHistoryModal .modal-content::after,
 #localCustomerPurchaseHistoryModal .modal-content::before,
 #localCustomerReturnModal .modal-content::after,
@@ -4468,7 +4461,6 @@ window.CUSTOMER_EXPORT_CONFIG = {
 
 /* إصلاح خاص لـ modal-dialog-scrollable (للشاشات الكبيرة فقط) */
 @media (min-width: 769px) {
-    #addLocalCustomerModal .modal-dialog.modal-dialog-scrollable .modal-content,
     #localCustomerPurchaseHistoryModal .modal-dialog.modal-dialog-scrollable .modal-content,
     #localCustomerReturnModal .modal-dialog.modal-dialog-scrollable .modal-content,
     #editLocalCustomerModal .modal-dialog.modal-dialog-scrollable .modal-content,
@@ -4480,7 +4472,6 @@ window.CUSTOMER_EXPORT_CONFIG = {
         overflow: hidden !important;
     }
 
-    #addLocalCustomerModal .modal-dialog.modal-dialog-scrollable .modal-body,
     #localCustomerPurchaseHistoryModal .modal-dialog.modal-dialog-scrollable .modal-body,
     #localCustomerReturnModal .modal-dialog.modal-dialog-scrollable .modal-body,
     #editLocalCustomerModal .modal-dialog.modal-dialog-scrollable .modal-body,
@@ -4496,7 +4487,6 @@ window.CUSTOMER_EXPORT_CONFIG = {
 
 /* تنسيقات للشاشات الصغيرة */
 @media (max-width: 768px) {
-    #addLocalCustomerModal .modal-dialog,
     #localCustomerPurchaseHistoryModal .modal-dialog,
     #localCustomerReturnModal .modal-dialog,
     #editLocalCustomerModal .modal-dialog,
@@ -4511,7 +4501,6 @@ window.CUSTOMER_EXPORT_CONFIG = {
         height: auto !important;
     }
     
-    #addLocalCustomerModal .modal-content,
     #localCustomerPurchaseHistoryModal .modal-content,
     #localCustomerReturnModal .modal-content,
     #editLocalCustomerModal .modal-content,
@@ -4524,7 +4513,6 @@ window.CUSTOMER_EXPORT_CONFIG = {
         height: auto !important;
     }
     
-    #addLocalCustomerModal .modal-body,
     #localCustomerPurchaseHistoryModal .modal-body,
     #localCustomerReturnModal .modal-body,
     #editLocalCustomerModal .modal-body,
@@ -4541,7 +4529,6 @@ window.CUSTOMER_EXPORT_CONFIG = {
         overflow-y: visible !important;
     }
     
-    #addLocalCustomerModal .modal-footer,
     #localCustomerPurchaseHistoryModal .modal-footer,
     #localCustomerReturnModal .modal-footer,
     #editLocalCustomerModal .modal-footer,
@@ -4557,7 +4544,6 @@ window.CUSTOMER_EXPORT_CONFIG = {
         padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
     }
     
-    #addLocalCustomerModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body,
     #localCustomerPurchaseHistoryModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body,
     #localCustomerReturnModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body,
     #editLocalCustomerModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body,

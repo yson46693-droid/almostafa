@@ -562,6 +562,27 @@ body.attendance-page.modal-open .modal-backdrop {
         max-width: calc(100% + 2 * 0.75rem) !important;
     }
     
+    /* ضمان أن الفيديو مرئي على الموبايل */
+    .attendance-page #cameraModal #video {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        position: relative !important;
+        z-index: 2 !important;
+        width: 100% !important;
+        height: auto !important;
+        max-width: 100% !important;
+        background: #000 !important;
+    }
+    
+    .attendance-page #cameraModal #cameraContainer {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        position: relative !important;
+        z-index: 1 !important;
+    }
+    
     .attendance-page #cameraModal .modal-footer {
         padding: 0.5rem 0.75rem !important;
     }
@@ -578,6 +599,22 @@ body.attendance-page.modal-open .modal-backdrop {
         max-width: 100% !important;
         height: auto !important;
         object-fit: cover !important;
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        position: relative !important;
+        z-index: 2 !important;
+        background: #000 !important;
+    }
+    
+    /* ضمان أن cameraContainer مرئي */
+    .attendance-page #cameraModal #cameraContainer {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        position: relative !important;
+        z-index: 1 !important;
+        width: 100% !important;
     }
     
     .attendance-page #cameraModal #capturedImage {
