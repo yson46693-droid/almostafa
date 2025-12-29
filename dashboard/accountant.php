@@ -130,10 +130,10 @@ try {
     // إذا حدث خطأ في requireRole، نعيد التوجيه إلى تسجيل الدخول
     error_log("Accountant dashboard ERROR: requireRole failed: " . $e->getMessage());
     
-    // حماية من حلقة إعادة التوجيه: إذا كان المستخدم قد سجل دخوله للتو (في آخر 10 ثواني)، لا نعيد التوجيه
+    // حماية من حلقة إعادة التوجيه: إذا كان المستخدم قد سجل دخوله للتو (في آخر 30 ثانية)، لا نعيد التوجيه
     $loginTime = $_SESSION['login_time'] ?? 0;
     $timeSinceLogin = time() - $loginTime;
-    if ($timeSinceLogin < 10 && isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+    if ($timeSinceLogin < 30 && isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
         // المستخدم قد سجل دخوله للتو - قد يكون هناك تأخير في قاعدة البيانات
         // نترك الصفحة تعمل بدلاً من إعادة التوجيه لتجنب الحلقة
         error_log("Accountant dashboard: User just logged in ({$timeSinceLogin}s ago), skipping redirect to prevent loop");

@@ -104,6 +104,16 @@ function isLoggedIn() {
                 $retryCount[$sessionId] = 0;
             }
             
+            // حماية من حلقة إعادة التوجيه: إذا كان المستخدم قد سجل دخوله للتو (في آخر 30 ثانية)، لا نحذف الجلسة
+            $loginTime = $_SESSION['login_time'] ?? 0;
+            $timeSinceLogin = time() - $loginTime;
+            if ($timeSinceLogin < 30 && isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+                // المستخدم قد سجل دخوله للتو - قد يكون هناك تأخير في قاعدة البيانات
+                // نرجع true مؤقتاً لتجنب حلقة إعادة التوجيه
+                error_log("isLoggedIn() - User just logged in ({$timeSinceLogin}s ago), allowing access to prevent redirect loop");
+                return true;
+            }
+            
             // إذا فشل التحقق أقل من 3 مرات، نعتبره خطأ مؤقت ونحتفظ بالجلسة
             if ($retryCount[$sessionId] < 3) {
                 $retryCount[$sessionId]++;
@@ -1133,13 +1143,13 @@ function requireLogin() {
     // تسجيل محاولة الوصول غير المصرح به
     error_log("requireLogin() FAILED: User attempted to access protected page without valid session | Script: " . ($_SERVER['SCRIPT_NAME'] ?? 'unknown') . " | IsProtectedPage: " . ($isProtectedPage ? 'true' : 'false'));
     
-    // حماية من حلقة إعادة التوجيه: إذا كان المستخدم قد سجل دخوله للتو (في آخر 15 ثواني)، لا نعيد التوجيه
+    // حماية من حلقة إعادة التوجيه: إذا كان المستخدم قد سجل دخوله للتو (في آخر 30 ثانية)، لا نعيد التوجيه
     // هذا يمنع الحلقة عندما يكون هناك تأخير في قاعدة البيانات بعد تسجيل الدخول
     $loginTime = $_SESSION['login_time'] ?? 0;
     $timeSinceLogin = time() - $loginTime;
     $hasSessionData = isset($_SESSION['user_id']) && !empty($_SESSION['user_id']);
     
-    if ($timeSinceLogin < 15 && $hasSessionData) {
+    if ($timeSinceLogin < 30 && $hasSessionData) {
         // المستخدم قد سجل دخوله للتو - قد يكون هناك تأخير في قاعدة البيانات
         // نعتبره مسجل دخول مؤقتاً لتجنب حلقة إعادة التوجيه
         error_log("requireLogin() - User just logged in ({$timeSinceLogin}s ago), allowing access to prevent redirect loop");
