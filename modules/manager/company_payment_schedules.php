@@ -1730,23 +1730,49 @@ body.modal-open > *:not(.modal):not(.modal-backdrop) {
 @media (max-width: 768px) {
     body.modal-open {
         overflow: hidden !important;
-        touch-action: none !important;
+        /* إزالة touch-action: none - يسبب freeze على الموبايل */
+        position: fixed !important;
+        width: 100% !important;
     }
     
     body.modal-open > *:not(.modal):not(.modal-backdrop) {
         pointer-events: none !important;
-        touch-action: none !important;
+        /* إزالة touch-action: none - يسبب freeze */
         -webkit-overflow-scrolling: none !important;
     }
     
-    /* السماح بالتمرير داخل النموذج فقط */
+    /* السماح بالتمرير والتفاعل داخل النموذج فقط */
     #addScheduleModal .modal-body,
     #editScheduleModal .modal-body,
     #reminderModal .modal-body {
         -webkit-overflow-scrolling: touch !important;
-        touch-action: pan-y !important;
+        touch-action: pan-y pinch-zoom !important; /* السماح بالتمرير والـ pinch-zoom */
         overflow-y: auto !important;
         max-height: calc(100vh - 180px) !important;
+    }
+    
+    /* السماح بالتفاعل الكامل داخل modal-content */
+    #addScheduleModal .modal-content,
+    #editScheduleModal .modal-content,
+    #reminderModal .modal-content {
+        touch-action: auto !important; /* السماح بجميع touch actions */
+    }
+    
+    /* السماح بالتفاعل الكامل مع الحقول والأزرار */
+    #addScheduleModal input,
+    #addScheduleModal select,
+    #addScheduleModal textarea,
+    #addScheduleModal button,
+    #editScheduleModal input,
+    #editScheduleModal select,
+    #editScheduleModal textarea,
+    #editScheduleModal button,
+    #reminderModal input,
+    #reminderModal select,
+    #reminderModal textarea,
+    #reminderModal button {
+        touch-action: manipulation !important; /* السماح بالتفاعل الطبيعي */
+        -webkit-tap-highlight-color: rgba(0, 123, 255, 0.2) !important;
     }
 }
 </style>
@@ -1770,16 +1796,31 @@ document.addEventListener('DOMContentLoaded', function() {
             // لا شيء - Bootstrap يتعامل مع هذا تلقائياً
         });
         
-        // منع propagation للأحداث من النموذج إلى body
+        // منع propagation للأحداث من النموذج إلى body - فقط للأحداث خارج modal-content
         modal.addEventListener('touchstart', function(e) {
+            // السماح بالتفاعل داخل modal-content (الحقول والأزرار)
+            const modalContent = modal.querySelector('.modal-content');
+            if (modalContent && modalContent.contains(e.target)) {
+                return; // لا تمنع propagation داخل modal-content
+            }
             e.stopPropagation();
         }, { passive: true });
         
         modal.addEventListener('touchmove', function(e) {
+            // السماح بالتمرير والتفاعل داخل modal-content
+            const modalContent = modal.querySelector('.modal-content');
+            if (modalContent && modalContent.contains(e.target)) {
+                return; // لا تمنع propagation داخل modal-content
+            }
             e.stopPropagation();
         }, { passive: true });
         
         modal.addEventListener('touchend', function(e) {
+            // السماح بالتفاعل داخل modal-content
+            const modalContent = modal.querySelector('.modal-content');
+            if (modalContent && modalContent.contains(e.target)) {
+                return; // لا تمنع propagation داخل modal-content
+            }
             e.stopPropagation();
         }, { passive: true });
         
@@ -1792,16 +1833,26 @@ document.addEventListener('DOMContentLoaded', function() {
         }, { passive: false });
     });
     
-    // منع scroll على backdrop مباشرة
+    // منع scroll على backdrop مباشرة - فقط على backdrop نفسه
     document.addEventListener('touchmove', function(e) {
-        if (e.target.classList.contains('modal-backdrop')) {
-            e.preventDefault();
+        // التحقق من أن الهدف هو backdrop وليس أي عنصر داخل modal
+        const target = e.target;
+        if (target && target.classList && target.classList.contains('modal-backdrop')) {
+            // التحقق من عدم وجود modal مفتوح يحتوي على العنصر
+            const openModal = document.querySelector('.modal.show');
+            if (!openModal || !openModal.contains(target)) {
+                e.preventDefault();
+            }
         }
     }, { passive: false });
     
     document.addEventListener('wheel', function(e) {
-        if (e.target.classList.contains('modal-backdrop')) {
-            e.preventDefault();
+        const target = e.target;
+        if (target && target.classList && target.classList.contains('modal-backdrop')) {
+            const openModal = document.querySelector('.modal.show');
+            if (!openModal || !openModal.contains(target)) {
+                e.preventDefault();
+            }
         }
     }, { passive: false });
 });
