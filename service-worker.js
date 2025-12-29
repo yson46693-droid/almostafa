@@ -249,7 +249,7 @@ async function networkOnly(request, isNavigation = false) {
       }
     }
     
-    // للأخطاء الأخرى (مثل timeout)، نترك البrowser يتعامل معها
+    //  للأخطاء الأخرى (مثل timeout)، نترك البrowser يتعامل معها
     // نعيد error للبrowser بدلاً من offline page
     throw error;
   }
