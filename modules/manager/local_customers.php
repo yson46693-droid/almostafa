@@ -4570,6 +4570,119 @@ window.CUSTOMER_EXPORT_CONFIG = {
         max-height: none !important;
     }
 }
+
+/* ===== تنسيقات خاصة بنموذج إضافة عميل محلي جديد - نفس أبعاد نموذج تحصيل من مندوب ===== */
+@media (min-width: 769px) {
+    #addLocalCustomerModal .modal-dialog.modal-dialog-centered {
+        margin: 0.5rem auto;
+        display: flex;
+        flex-direction: column;
+        max-height: calc(100vh - 1rem);
+    }
+
+    #addLocalCustomerModal .modal-content {
+        display: flex !important;
+        flex-direction: column !important;
+        height: auto !important;
+        max-height: 100% !important;
+        overflow: hidden !important;
+    }
+
+    /* إصلاح المساحة البيضاء - منع modal-body من التمدد */
+    #addLocalCustomerModal .modal-body {
+        flex: 0 1 auto !important; /* منع التمدد التلقائي */
+        flex-grow: 0 !important;
+        flex-shrink: 1 !important;
+        flex-basis: auto !important;
+        min-height: 0 !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        padding-bottom: 1rem !important;
+        margin-bottom: 0 !important;
+    }
+}
+
+/* قواعد عامة للـ header والـ footer (لا تتعارض مع media queries) */
+#addLocalCustomerModal .modal-header {
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
+}
+
+#addLocalCustomerModal .modal-footer {
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    border-top: 1px solid #dee2e6 !important;
+}
+
+/* padding للـ header والـ footer على الشاشات الكبيرة فقط */
+@media (min-width: 769px) {
+    #addLocalCustomerModal .modal-footer {
+        padding-top: 1rem !important;
+        padding-bottom: 1rem !important;
+    }
+}
+
+/* إزالة أي pseudo-elements قد تسبب مساحة فارغة */
+#addLocalCustomerModal .modal-content::after,
+#addLocalCustomerModal .modal-content::before {
+    display: none !important;
+    content: none !important;
+}
+
+/* إصلاح خاص لـ modal-dialog-scrollable (للشاشات الكبيرة فقط) */
+@media (min-width: 769px) {
+    #addLocalCustomerModal .modal-dialog.modal-dialog-scrollable .modal-content {
+        max-height: 100% !important;
+        overflow: hidden !important;
+    }
+
+    #addLocalCustomerModal .modal-dialog.modal-dialog-scrollable .modal-body {
+        flex: 0 1 auto !important;
+        overflow-y: auto !important;
+        max-height: calc(100vh - 250px) !important;
+    }
+}
+
+/* تنسيقات للشاشات الصغيرة */
+@media (max-width: 768px) {
+    #addLocalCustomerModal .modal-dialog {
+        margin: 0.5rem !important;
+        max-width: calc(100% - 1rem) !important;
+        max-height: calc(100vh - 1rem) !important;
+        height: auto !important;
+    }
+    
+    #addLocalCustomerModal .modal-content {
+        max-height: calc(100vh - 1rem) !important;
+        height: auto !important;
+    }
+    
+    #addLocalCustomerModal .modal-body {
+        flex: 0 1 auto !important;
+        flex-grow: 0 !important;
+        padding-bottom: 1rem !important;
+        max-height: none !important;
+        height: auto !important;
+        overflow-y: visible !important;
+    }
+    
+    #addLocalCustomerModal .modal-footer {
+        flex-shrink: 0 !important;
+        flex-grow: 0 !important;
+        margin-top: 0 !important;
+        padding-top: 1rem !important;
+        padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
+    }
+    
+    #addLocalCustomerModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body {
+        overflow-y: visible !important;
+        max-height: none !important;
+    }
+}
 </style>
 
 <!-- Modal حذف العميل المحلي -->
