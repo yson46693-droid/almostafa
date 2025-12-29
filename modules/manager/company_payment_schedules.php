@@ -1183,7 +1183,7 @@ if ($showAddForm):
 
 <!-- Modal تعديل موعد تحصيل -->
 <div class="modal fade" id="editScheduleModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title"><i class="bi bi-pencil-fill me-2"></i>تعديل موعد التحصيل</h5>
@@ -1222,7 +1222,7 @@ if ($showAddForm):
 
 <!-- Modal تحديد عدد أيام التنبيه -->
 <div class="modal fade" id="reminderModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-warning text-dark">
                 <h5 class="modal-title"><i class="bi bi-bell-fill me-2"></i>تحديد عدد أيام التنبيه</h5>
@@ -1250,11 +1250,7 @@ if ($showAddForm):
 </div>
 
 <script>
-// متغير لتتبع ما إذا كان المستخدم قد غير القيمة
-let userChangedDays = false;
-let lastScheduleId = null;
-
-// دالة للتحقق من صحة النموذج قبل الإرسال
+// دوال مبسطة جداً - بدون متغيرات معقدة
 function validateReminderForm(form) {
     const daysInput = form.querySelector('input[name="days_before_due"]');
     if (daysInput) {
@@ -1269,31 +1265,17 @@ function validateReminderForm(form) {
 
 function showReminderModal(scheduleId) {
     const scheduleIdInput = document.getElementById('reminderScheduleId');
-    const daysInput = document.getElementById('daysBeforeDueInput');
     const modalElement = document.getElementById('reminderModal');
     
-    if (!scheduleIdInput || !daysInput || !modalElement) {
-        console.error('Required elements not found');
-        return;
+    if (scheduleIdInput && modalElement) {
+        scheduleIdInput.value = scheduleId;
+        const modal = new bootstrap.Modal(modalElement);
+        modal.show();
     }
-    
-    // إذا كان scheduleId مختلف عن الأخير، نعيد تعيين المتغيرات
-    if (lastScheduleId !== scheduleId) {
-        userChangedDays = false;
-        lastScheduleId = scheduleId;
-    }
-    
-    scheduleIdInput.value = scheduleId;
-    
-    // فتح المودال مباشرة - event listener سيجلب القيمة تلقائياً
-    const modal = new bootstrap.Modal(modalElement);
-    modal.show();
 }
 
 function showEditScheduleModal(button) {
-    if (!button) {
-        return;
-    }
+    if (!button) return;
 
     const scheduleId = button.getAttribute('data-schedule-id') || '';
     const customer = button.getAttribute('data-customer') || '';
@@ -1301,9 +1283,7 @@ function showEditScheduleModal(button) {
     const dueDate = button.getAttribute('data-due-date') || '';
 
     const modalEl = document.getElementById('editScheduleModal');
-    if (!modalEl) {
-        return;
-    }
+    if (!modalEl) return;
 
     const idInput = modalEl.querySelector('#editScheduleId');
     const customerInput = modalEl.querySelector('#editScheduleCustomer');
@@ -1319,77 +1299,26 @@ function showEditScheduleModal(button) {
     modal.show();
 }
 
+// كود مبسط جداً - بدون fetch أو event listeners معقدة
 document.addEventListener('DOMContentLoaded', function() {
-
+    // فقط تنظيف بسيط عند إغلاق editScheduleModal
     const editScheduleModal = document.getElementById('editScheduleModal');
     if (editScheduleModal) {
-        editScheduleModal.addEventListener('hidden.bs.modal', function () {
+        editScheduleModal.addEventListener('hidden.bs.modal', function() {
             const form = editScheduleModal.querySelector('form');
-            if (form) {
-                form.reset();
-            }
+            if (form) form.reset();
         });
     }
     
-    // إعادة تعيين مودال التنبيه عند إغلاقه
+    // reminderModal - بدون fetch (يسبب lag) - استخدام القيمة الافتراضية فقط
     const reminderModal = document.getElementById('reminderModal');
     if (reminderModal) {
-        // تتبع تغييرات المستخدم في حقل عدد الأيام
-        const daysInput = document.getElementById('daysBeforeDueInput');
-        if (daysInput) {
-            daysInput.addEventListener('input', function() {
-                userChangedDays = true;
-            });
-        }
-        
-        // عند فتح المودال، جلب القيمة المحفوظة
-        reminderModal.addEventListener('show.bs.modal', function () {
-            const scheduleIdInput = document.getElementById('reminderScheduleId');
-            const daysInputEl = document.getElementById('daysBeforeDueInput');
-            
-            if (scheduleIdInput && scheduleIdInput.value && daysInputEl) {
-                const scheduleId = scheduleIdInput.value;
-                
-                // إعادة تعيين userChangedDays عند فتح المودال
-                userChangedDays = false;
-                
-                // جلب القيمة المحفوظة عند فتح المودال
-                fetch('?page=company_payment_schedules&action=get_reminder_days&schedule_id=' + scheduleId)
-                    .then(response => {
-                        // التحقق من نوع المحتوى
-                        const contentType = response.headers.get('content-type');
-                        if (!contentType || !contentType.includes('application/json')) {
-                            return response.text().then(text => {
-                                console.error('Expected JSON but got HTML:', text.substring(0, 200));
-                                throw new Error('Expected JSON but got: ' + contentType);
-                            });
-                        }
-                        return response.json();
-                    })
-                    .then(data => {
-                        if (data.success && data.days_before_due) {
-                            // تحديث القيمة بالقيمة المحفوظة
-                            daysInputEl.value = data.days_before_due;
-                            console.log('Loaded saved days_before_due:', data.days_before_due);
-                        } else {
-                            // إذا لم تكن هناك قيمة محفوظة، نستخدم القيمة الافتراضية
-                            daysInputEl.value = '3';
-                            console.log('No saved value, using default: 3');
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error fetching reminder days on modal show:', error);
-                        // في حالة الخطأ، نستخدم القيمة الافتراضية
-                        daysInputEl.value = '3';
-                    });
-            }
-        });
-        
-        reminderModal.addEventListener('hidden.bs.modal', function () {
-            // إعادة تعيين المتغيرات عند إغلاق المودال
-            userChangedDays = false;
-            lastScheduleId = null;
-            // لا نعيد تعيين القيمة إلى 3 - سنجلبها من السيرفر عند فتح المودال مرة أخرى
+        reminderModal.addEventListener('hidden.bs.modal', function() {
+            const form = reminderModal.querySelector('form');
+            if (form) form.reset();
+            // إعادة تعيين القيمة الافتراضية
+            const daysInput = document.getElementById('daysBeforeDueInput');
+            if (daysInput) daysInput.value = '3';
         });
     }
 });
@@ -1433,58 +1362,59 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <style>
-/* ===== CSS مبسط جداً للمودالات - بدون أي تعارضات ===== */
-/* فقط القواعد الأساسية الضرورية - Bootstrap يتعامل مع الباقي */
+/* ===== CSS مبسط لأقصى درجة - منع التعارضات مع الملفات العامة ===== */
+/* منع CSS و JavaScript من الملفات العامة من التأثير على هذه المودالات */
 
-/* منع scroll في body عند فتح النموذج - بدون position: fixed */
-body.modal-open {
-    overflow: hidden;
+#editScheduleModal,
+#reminderModal {
+    /* منع JavaScript من modal-mobile-fix.js من تعديل الارتفاع */
+    height: auto !important;
+    max-height: none !important;
 }
 
-/* Backdrop بسيط */
-.modal-backdrop {
-    z-index: 1040;
-    background-color: #000;
-    opacity: 0.5;
+#editScheduleModal .modal-dialog,
+#reminderModal .modal-dialog {
+    /* منع CSS من modal-mobile-fix.css من التأثير */
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    /* إزالة أي inline styles */
+    margin: 1.75rem auto !important;
 }
 
-/* تنسيقات الموبايل - مبسطة جداً */
+#editScheduleModal .modal-content,
+#reminderModal .modal-content {
+    /* منع CSS المعقد من الملفات العامة */
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+}
+
+#editScheduleModal .modal-body,
+#reminderModal .modal-body {
+    /* Bootstrap يتعامل مع التمرير تلقائياً */
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    max-height: 60vh;
+}
+
+/* على الموبايل - تبسيط أكثر */
 @media (max-width: 768px) {
-    /* فقط منع scroll - بدون position: fixed أو pointer-events */
-    body.modal-open {
-        overflow: hidden;
+    #editScheduleModal .modal-dialog,
+    #reminderModal .modal-dialog {
+        margin: 0.5rem !important;
+        max-width: calc(100% - 1rem) !important;
     }
     
-    /* تحسين التفاعل مع الحقول والأزرار */
-    #editScheduleModal input,
-    #editScheduleModal select,
-    #editScheduleModal textarea,
-    #editScheduleModal button,
-    #reminderModal input,
-    #reminderModal select,
-    #reminderModal textarea,
-    #reminderModal button {
-        -webkit-tap-highlight-color: rgba(0, 123, 255, 0.2);
+    #editScheduleModal .modal-body,
+    #reminderModal .modal-body {
+        max-height: calc(100vh - 200px);
     }
 }
 </style>
 
 <script>
-// ===== كود مبسط جداً للمودالات - بدون أي تعارضات =====
-document.addEventListener('DOMContentLoaded', function() {
-    // Bootstrap يتعامل مع المودالات تلقائياً - لا حاجة لكود إضافي
-    // فقط تنظيف بسيط عند إغلاق editScheduleModal
-    const editScheduleModal = document.getElementById('editScheduleModal');
-    if (editScheduleModal) {
-        editScheduleModal.addEventListener('hidden.bs.modal', function() {
-            const form = editScheduleModal.querySelector('form');
-            if (form) {
-                form.reset();
-            }
-        });
-    }
-    
-    // reminderModal له كود خاص به في مكان آخر - لا نضيف شيء هنا
-});
+// ===== كود مبسط لأقصى درجة - بدون أي تعارضات =====
+// الاعتماد الكامل على Bootstrap - لا event listeners إضافية
 </script>
 
