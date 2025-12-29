@@ -571,6 +571,9 @@ if (!defined('ACCESS_ALLOWED')) {
     <script src="<?php echo $assetsUrl; ?>js/main.js?v=<?php echo $cacheVersion; ?>" defer></script>
     <script src="<?php echo $assetsUrl; ?>js/sidebar.js?v=<?php echo $cacheVersion; ?>" defer></script>
     
+    <!-- AJAX Navigation - تحسين الأداء على الموبايل -->
+    <script src="<?php echo $assetsUrl; ?>js/ajax-navigation.js?v=<?php echo $cacheVersion; ?>" defer></script>
+    
     <!-- Modal Mobile Fix JS - إصلاح النماذج على الهواتف المحمولة -->
     <script src="<?php echo $assetsUrl; ?>js/modal-mobile-fix.js?v=<?php echo $cacheVersion; ?>" defer></script>
     

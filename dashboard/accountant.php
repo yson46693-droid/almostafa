@@ -857,8 +857,33 @@ require_once __DIR__ . '/../includes/lang/' . getCurrentLanguage() . '.php';
 $lang = isset($translations) ? $translations : [];
 $pageTitle = isset($lang['accountant_dashboard']) ? $lang['accountant_dashboard'] : 'لوحة المحاسب';
 $pageDescription = 'لوحة تحكم المحاسب - إدارة المعاملات المالية والمصروفات والتقارير - ' . APP_NAME;
+
+// التحقق من طلب AJAX للتنقل (AJAX Navigation)
+$isAjaxNavigation = (
+    isset($_SERVER['HTTP_X_REQUESTED_WITH']) && 
+    strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest' &&
+    isset($_SERVER['HTTP_ACCEPT']) && 
+    stripos($_SERVER['HTTP_ACCEPT'], 'text/html') !== false
+);
+
+// إذا كان طلب AJAX للتنقل، نعيد المحتوى فقط بدون header/footer
+if ($isAjaxNavigation) {
+    // تنظيف output buffer
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    
+    // إرسال headers للـ AJAX response
+    header('Content-Type: text/html; charset=utf-8');
+    header('X-AJAX-Navigation: true');
+    
+    // بدء output buffering
+    ob_start();
+}
 ?>
+<?php if (!$isAjaxNavigation): ?>
 <?php include __DIR__ . '/../templates/header.php'; ?>
+<?php endif; ?>
 
             <?php if ($page === 'dashboard' || $page === ''): ?>
                 <!-- Page Header -->
@@ -2635,8 +2660,23 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <script src="<?php echo ASSETS_URL; ?>js/attendance_notifications.js"></script>
 
+<?php if (!$isAjaxNavigation): ?>
 <?php include __DIR__ . '/../templates/footer.php'; ?>
 <script src="<?php echo ASSETS_URL; ?>js/reports.js"></script>
+<?php else: ?>
+<?php
+// إذا كان طلب AJAX، نعيد المحتوى فقط
+$content = ob_get_clean();
+// استخراج المحتوى من <main> فقط
+if (preg_match('/<main[^>]*>(.*?)<\/main>/is', $content, $matches)) {
+    echo $matches[1];
+} else {
+    // Fallback: إرجاع كل المحتوى
+    echo $content;
+}
+exit;
+?>
+<?php endif; ?>
 <?php
 // إرسال المحتوى من output buffer
 if (ob_get_level() > 0) {
