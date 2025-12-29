@@ -3856,12 +3856,10 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 
 <style>
-/* تحسينات responsive للمودال */
+/* تحسينات responsive للمودال - متوافقة مع responsive-modals.css */
 @media (max-width: 768px) {
-    #customerExportModal .modal-dialog {
-        margin: 0.5rem;
-        max-width: calc(100% - 1rem);
-    }
+    /* القواعد العامة للـ modal-dialog موجودة في responsive-modals.css */
+    /* نضيف فقط القواعد الخاصة بالجدول والأزرار */
     
     #customerExportModal .table-responsive {
         font-size: 0.875rem;
@@ -3875,10 +3873,8 @@ document.addEventListener('DOMContentLoaded', function() {
         flex: 1;
     }
     
-    #customerExportModal .modal-footer {
-        padding: 0.75rem;
-    }
-    
+    /* padding للـ footer موجود في responsive-modals.css */
+    /* نضيف فقط حجم الخط للأزرار */
     #customerExportModal .modal-footer .btn {
         font-size: 0.875rem;
     }
