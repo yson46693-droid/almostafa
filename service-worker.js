@@ -1,503 +1,381 @@
 'use strict';
 
-const PRECACHE_VERSION = 'v1';
-const PRECACHE_NAME = `albarakah-precache-${PRECACHE_VERSION}`;
-const RUNTIME_CACHE_NAME = 'albarakah-runtime';
+// ============================================
+// Configuration
+// ============================================
+const CACHE_VERSION = 'v2.0.0';
+const PRECACHE_NAME = `albarakah-precache-${CACHE_VERSION}`;
+const STATIC_CACHE_NAME = `albarakah-static-${CACHE_VERSION}`;
+const CDN_CACHE_NAME = `albarakah-cdn-${CACHE_VERSION}`;
 
+// Maximum cache size: 50MB (approximate)
+const MAX_CACHE_SIZE = 50 * 1024 * 1024;
+
+// Assets to precache during install
 const PRECACHE_ASSETS = [
   '/offline.html',
   '/assets/icons/icon-192x192.png',
   '/assets/icons/icon-512x512.png'
 ];
 
+// CDN assets to cache
 const CDN_ASSETS = [
   'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css',
   'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css'
 ];
 
-// Install event - cache essential assets
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    Promise.resolve().then(async () => {
+// Network timeout (10 seconds)
+const NETWORK_TIMEOUT = 10000;
+
+// ============================================
+// Helper Functions
+// ============================================
+
+/**
+ * Check if error is a real network error
+ */
+function isNetworkError(error) {
+  return (
+    error.name === 'TypeError' ||
+    error.name === 'NetworkError' ||
+    error.message === 'Failed to fetch' ||
+    error.message === 'Request timeout' ||
+    error.message?.includes('network') ||
+    error.message?.includes('fetch') ||
+    error.message?.includes('timeout')
+  );
+}
+
+/**
+ * Get offline page response
+ */
+async function getOfflinePage() {
+  try {
+    const cache = await caches.open(PRECACHE_NAME);
+    const offlinePage = await cache.match('/offline.html');
+    if (offlinePage) {
+      return offlinePage;
+    }
+  } catch (error) {
+    console.error('Failed to get offline page:', error);
+  }
+  
+  // Fallback offline response
+  return new Response(
+    '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>لا يوجد اتصال</title><style>body{font-family:Arial;text-align:center;padding:50px;background:#f5f5f5}h1{color:#333}</style></head><body><h1>لا يوجد اتصال بالشبكة</h1><p>يرجى التحقق من اتصالك بالإنترنت</p></body></html>',
+    {
+      status: 503,
+      headers: { 'Content-Type': 'text/html; charset=utf-8' }
+    }
+  );
+}
+
+/**
+ * Get JSON error response for API requests
+ */
+function getApiErrorResponse() {
+  return new Response(
+    JSON.stringify({ success: false, message: 'لا يوجد اتصال بالشبكة.' }),
+    {
+      status: 503,
+      headers: { 'Content-Type': 'application/json; charset=utf-8' }
+    }
+  );
+}
+
+/**
+ * Network request with timeout
+ */
+function fetchWithTimeout(request, timeout = NETWORK_TIMEOUT) {
+  return Promise.race([
+    fetch(request, {
+      cache: 'no-store',
+      credentials: 'same-origin'
+    }),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Request timeout')), timeout)
+    )
+  ]);
+}
+
+/**
+ * Cache First strategy - try cache, then network
+ */
+async function cacheFirst(request, cacheName) {
+  try {
+    const cache = await caches.open(cacheName);
+    const cached = await cache.match(request);
+    
+    if (cached) {
+      return cached;
+    }
+    
+    // Not in cache, fetch from network
+    const response = await fetch(request);
+    
+    // Only cache successful responses
+    if (response.status === 200 && response.ok) {
+      const responseClone = response.clone();
+      cache.put(request, responseClone).catch((error) => {
+        console.error(`Failed to cache ${request.url}:`, error);
+      });
+    }
+    
+    return response;
+  } catch (error) {
+    console.error(`Cache First error for ${request.url}:`, error);
+    // Fallback to network
+    try {
+      return await fetch(request);
+    } catch (networkError) {
+      console.error(`Network fallback failed for ${request.url}:`, networkError);
+      throw networkError;
+    }
+  }
+}
+
+/**
+ * Network First strategy - try network, then cache, then offline
+ */
+async function networkFirst(request, cacheName, isNavigation = false) {
+  try {
+    const response = await fetchWithTimeout(request);
+    
+    // Cache successful responses
+    if (response.status === 200 && response.ok) {
       try {
-        // Check if CacheStorage is available
-        if (!('caches' in self)) {
-          console.warn('CacheStorage API not available');
-          return;
-        }
-
-        const cache = await caches.open(PRECACHE_NAME).catch((error) => {
-          console.error('Failed to open cache:', error);
-          // Return null to skip caching, but don't fail install
-          return null;
+        const cache = await caches.open(cacheName);
+        const responseClone = response.clone();
+        cache.put(request, responseClone).catch((error) => {
+          console.error(`Failed to cache ${request.url}:`, error);
         });
+      } catch (cacheError) {
+        // Cache error shouldn't block response
+        console.error(`Cache error for ${request.url}:`, cacheError);
+      }
+    }
+    
+    return response;
+  } catch (error) {
+    // Network failed, try cache
+    if (isNetworkError(error)) {
+      console.error(`Network error for ${request.url}:`, error);
+      
+      try {
+        const cache = await caches.open(cacheName);
+        const cached = await cache.match(request);
+        
+        if (cached) {
+          return cached;
+        }
+      } catch (cacheError) {
+        console.error(`Cache lookup failed for ${request.url}:`, cacheError);
+      }
+      
+      // No cache, return offline page for navigation requests
+      if (isNavigation) {
+        return await getOfflinePage();
+      }
+    }
+    
+    // Re-throw non-network errors
+    throw error;
+  }
+}
 
-        if (!cache) {
-          console.warn('Cache not available, skipping precaching');
+/**
+ * Network Only strategy - no caching, offline fallback for navigation
+ */
+async function networkOnly(request, isNavigation = false) {
+  try {
+    const response = await fetchWithTimeout(request);
+    return response;
+  } catch (error) {
+    if (isNetworkError(error)) {
+      console.error(`Network error for ${request.url}:`, error);
+      
+      // Return offline page for navigation requests
+      if (isNavigation) {
+        return await getOfflinePage();
+      }
+    }
+    
+    // Re-throw non-network errors
+    throw error;
+  }
+}
+
+// ============================================
+// Install Event - Precaching
+// ============================================
+self.addEventListener('install', (event) => {
+  console.log(`[SW] Installing Service Worker v${CACHE_VERSION}`);
+  
+  event.waitUntil(
+    (async () => {
+      try {
+        if (!('caches' in self)) {
+          console.warn('[SW] CacheStorage API not available');
           return;
         }
 
-        // Cache assets with individual error handling
+        const cache = await caches.open(PRECACHE_NAME);
+        
+        // Cache precache assets
         const cachePromises = PRECACHE_ASSETS.map(async (asset) => {
           try {
             await cache.add(asset);
+            console.log(`[SW] Precached: ${asset}`);
           } catch (error) {
-            console.error(`Failed to cache ${asset}:`, error);
-            // Continue with other assets even if one fails
+            console.error(`[SW] Failed to precache ${asset}:`, error);
           }
         });
 
         await Promise.allSettled(cachePromises);
+        console.log('[SW] Precaching completed');
       } catch (error) {
-        // Handle any unexpected errors gracefully
-        console.error('Unexpected error during install:', error);
-        // Don't fail the install
+        console.error('[SW] Install error:', error);
+        // Don't fail installation
       }
-    })
+    })()
   );
-  self.skipWaiting();
+  
+  // Don't use skipWaiting to avoid unexpected page reloads
+  // Let the user control when to update
 });
 
-// Activate event - clean up old caches
+// ============================================
+// Activate Event - Cleanup Old Caches
+// ============================================
 self.addEventListener('activate', (event) => {
+  console.log(`[SW] Activating Service Worker v${CACHE_VERSION}`);
+  
   event.waitUntil(
-    Promise.resolve().then(async () => {
+    (async () => {
       try {
-        // Check if CacheStorage is available
         if (!('caches' in self)) {
-          console.warn('CacheStorage API not available');
+          console.warn('[SW] CacheStorage API not available');
           return;
         }
 
-        const keys = await caches.keys().catch((error) => {
-          console.error('Failed to get cache keys:', error);
-          return [];
-        });
-
-        const deletePromises = keys
-          .filter((key) => key !== PRECACHE_NAME && key !== RUNTIME_CACHE_NAME)
+        const cacheKeys = await caches.keys();
+        const currentCaches = [PRECACHE_NAME, STATIC_CACHE_NAME, CDN_CACHE_NAME];
+        
+        // Delete old caches
+        const deletePromises = cacheKeys
+          .filter((key) => !currentCaches.includes(key))
           .map(async (key) => {
             try {
               await caches.delete(key);
+              console.log(`[SW] Deleted old cache: ${key}`);
             } catch (error) {
-              console.error(`Failed to delete cache ${key}:`, error);
+              console.error(`[SW] Failed to delete cache ${key}:`, error);
             }
           });
 
         await Promise.allSettled(deletePromises);
+        console.log('[SW] Cache cleanup completed');
+        
+        // Claim clients (optional - can be removed if causing issues)
+        // await self.clients.claim();
       } catch (error) {
-        // Handle any unexpected errors gracefully
-        console.error('Unexpected error during activate:', error);
-        // Don't fail activation
+        console.error('[SW] Activate error:', error);
       }
-    })
+    })()
   );
-  self.clients.claim();
 });
 
-// Fetch event - handle network requests
+// ============================================
+// Fetch Event - Request Handling
+// ============================================
 self.addEventListener('fetch', (event) => {
   const { request } = event;
+  const url = new URL(request.url);
 
   // Only handle GET requests
   if (request.method !== 'GET') {
     return;
   }
 
-  const url = new URL(request.url);
+  // ============================================
+  // Handle CDN Assets (BEFORE cross-origin check)
+  // ============================================
+  if (CDN_ASSETS.some((cdn) => url.href.includes(cdn))) {
+    event.respondWith(cacheFirst(request, CDN_CACHE_NAME));
+    return;
+  }
 
-  // Skip cross-origin requests
+  // Skip cross-origin requests (except CDN which we handle above)
   if (url.origin !== location.origin) {
     return;
   }
 
-  // Handle API requests - network only
+  // ============================================
+  // Handle API Requests - Network Only
+  // ============================================
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          // Allow all server responses to pass through (even errors like 500, 404)
-          return response;
-        })
+      networkOnly(request, false)
         .catch((error) => {
-          // Only show network error for actual network failures
-          // Check if it's a real network error (TypeError, NetworkError, or failed fetch)
-          const isNetworkError = 
-            error.name === 'TypeError' ||
-            error.name === 'NetworkError' ||
-            error.message === 'Failed to fetch' ||
-            error.message?.includes('network') ||
-            error.message?.includes('fetch');
-          
-          // Only return network error message for actual network failures
-          if (isNetworkError) {
-            return new Response(
-              JSON.stringify({ success: false, message: 'لا يوجد اتصال بالشبكة.' }),
-              {
-                status: 503,
-                headers: { 'Content-Type': 'application/json; charset=utf-8' }
-              }
-            );
+          if (isNetworkError(error)) {
+            return getApiErrorResponse();
           }
-          
-          // For other errors, re-throw to let them propagate normally
           throw error;
         })
     );
     return;
   }
 
-  // Handle precached assets (static files only, not PHP pages)
+  // ============================================
+  // Handle PHP Pages - Network Only (No Caching)
+  // ============================================
+  if (url.pathname.endsWith('.php')) {
+    const isNavigation = request.mode === 'navigate';
+    event.respondWith(networkOnly(request, isNavigation));
+    return;
+  }
+
+  // ============================================
+  // Handle Static Assets - Cache First
+  // ============================================
+  const isStaticAsset = 
+    request.destination === 'script' ||
+    request.destination === 'style' ||
+    request.destination === 'font' ||
+    request.destination === 'image' ||
+    url.pathname.match(/\.(css|js|woff|woff2|ttf|eot|png|jpg|jpeg|gif|svg|ico|webp)$/i);
+
+  if (isStaticAsset) {
+    event.respondWith(cacheFirst(request, STATIC_CACHE_NAME));
+    return;
+  }
+
+  // ============================================
+  // Handle HTML Pages - Network First
+  // ============================================
+  const isHTML = request.headers.get('accept')?.includes('text/html');
+  
+  if (isHTML) {
+    const isNavigation = request.mode === 'navigate';
+    event.respondWith(networkFirst(request, STATIC_CACHE_NAME, isNavigation));
+    return;
+  }
+
+  // ============================================
+  // Handle Precached Assets
+  // ============================================
   const isPrecached = PRECACHE_ASSETS.some((asset) => {
     const assetUrl = new URL(asset, location.origin);
     return assetUrl.pathname === url.pathname;
   });
 
   if (isPrecached) {
-    event.respondWith(
-      caches.match(request)
-        .then((cached) => cached || fetch(request))
-        .catch((error) => {
-          console.error('CacheStorage error for precached asset:', error);
-          // Fallback to network fetch
-          return fetch(request);
-        })
-    );
+    event.respondWith(cacheFirst(request, PRECACHE_NAME));
     return;
   }
 
-  // Skip PHP pages from precaching - they are dynamic and should always be fetched fresh
-  if (url.pathname.endsWith('.php') && !url.pathname.includes('/api/')) {
-    // For PHP pages, always try network first with timeout
-    event.respondWith(
-      Promise.race([
-        fetch(request, {
-          cache: 'no-store',
-          credentials: 'same-origin'
-        }),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Request timeout')), 10000)
-        )
-      ])
-      .then((networkResponse) => {
-        // Always return the response, even if it's an error status (500, 404, etc.)
-        // This allows the server to handle errors properly
-        // Only cache successful responses
-        if (networkResponse.status === 200 && networkResponse.ok) {
-          const responseClone = networkResponse.clone();
-          caches.open(RUNTIME_CACHE_NAME).then((cache) => {
-            cache.put(request, responseClone);
-          }).catch((error) => {
-            console.error('Failed to cache PHP response:', error);
-          });
-        }
-        return networkResponse;
-      })
-      .catch((error) => {
-        // Check if this is a real network error (not a server error)
-        const isNetworkError = 
-          error.name === 'TypeError' ||
-          error.name === 'NetworkError' ||
-          error.message === 'Failed to fetch' ||
-          error.message === 'Request timeout' ||
-          error.message?.includes('network') ||
-          error.message?.includes('fetch') ||
-          error.message?.includes('timeout');
-        
-        // Only show offline page for actual network failures
-        if (isNetworkError && request.mode === 'navigate') {
-          console.error('Network fetch failed for PHP page (real network error):', error);
-          // Try cache as fallback
-          return caches.match(request)
-            .then((cached) => {
-              if (cached) {
-                return cached;
-              }
-              // If no cache, return offline page for navigation
-              return caches.match('/offline.html')
-                .then((offlinePage) => {
-                  if (offlinePage) {
-                    return offlinePage;
-                  }
-                  // Last resort: return error response
-                  return new Response('لا يوجد اتصال بالشبكة', {
-                    status: 503,
-                    headers: { 'Content-Type': 'text/html; charset=utf-8' }
-                  });
-                })
-                .catch(() => {
-                  // If cache lookup fails, return error response
-                  return new Response('لا يوجد اتصال بالشبكة', {
-                    status: 503,
-                    headers: { 'Content-Type': 'text/html; charset=utf-8' }
-                  });
-                });
-            })
-            .catch(() => {
-              // If cache operations fail, return error response for navigation requests
-              return caches.match('/offline.html')
-                .then((offlinePage) => {
-                  if (offlinePage) {
-                    return offlinePage;
-                  }
-                  return new Response('لا يوجد اتصال بالشبكة', {
-                    status: 503,
-                    headers: { 'Content-Type': 'text/html; charset=utf-8' }
-                  });
-                })
-                .catch(() => {
-                  return new Response('لا يوجد اتصال بالشبكة', {
-                    status: 503,
-                    headers: { 'Content-Type': 'text/html; charset=utf-8' }
-                  });
-                });
-            });
-        }
-        
-        // For non-network errors or non-navigation requests, re-throw to let browser handle
-        console.error('Fetch error for PHP page (not a network error):', error);
-        throw error;
-      })
-    );
-    return;
-  }
-
-  // Handle CDN assets - cache first, then network
-  if (CDN_ASSETS.some((cdn) => url.href.includes(cdn))) {
-    event.respondWith(
-      caches.open(PRECACHE_NAME)
-        .then((cache) =>
-          cache.match(request).then((cached) => {
-            const networkFetch = fetch(request)
-              .then((response) => {
-                if (response.status === 200) {
-                  cache.put(request, response.clone()).catch((error) => {
-                    console.error('Failed to cache CDN asset:', error);
-                  });
-                }
-                return response;
-              })
-              .catch(() => cached);
-            return cached || networkFetch;
-          })
-        )
-        .catch((error) => {
-          console.error('CacheStorage error for CDN assets:', error);
-          // Fallback to network fetch
-          return fetch(request);
-        })
-    );
-    return;
-  }
-
-  // Handle static assets (scripts, styles, fonts) - cache first
-  if (request.destination === 'script' || request.destination === 'style' || request.destination === 'font') {
-    event.respondWith(
-      caches.open(RUNTIME_CACHE_NAME)
-        .then((cache) =>
-          cache.match(request).then((cached) => {
-            const networkFetch = fetch(request).then((response) => {
-              if (response.status === 200) {
-                cache.put(request, response.clone()).catch((error) => {
-                  console.error('Failed to cache static asset:', error);
-                });
-              }
-              return response;
-            }).catch(() => cached);
-            return cached || networkFetch;
-          })
-        )
-        .catch((error) => {
-          console.error('CacheStorage error for static assets:', error);
-          // Fallback to network fetch
-          return fetch(request);
-        })
-    );
-    return;
-  }
-
-  // Handle images - cache first
-  if (request.destination === 'image') {
-    event.respondWith(
-      caches.open(RUNTIME_CACHE_NAME)
-        .then((cache) =>
-          cache.match(request).then((cached) => {
-            if (cached) {
-              return cached;
-            }
-            return fetch(request)
-              .then((response) => {
-                if (response.status === 200) {
-                  cache.put(request, response.clone()).catch((error) => {
-                    console.error('Failed to cache image:', error);
-                  });
-                }
-                return response;
-              })
-              .catch(() => null);
-          })
-        )
-        .catch((error) => {
-          console.error('CacheStorage error for images:', error);
-          // Fallback to network fetch
-          return fetch(request).catch(() => null);
-        })
-    );
-    return;
-  }
-
-  // Handle HTML pages (non-PHP) - network first, fallback to cache or offline page
-  const acceptsHTML = request.headers.get('accept')?.includes('text/html');
-
-  if (acceptsHTML && !url.pathname.endsWith('.php')) {
-    event.respondWith(
-      Promise.race([
-        fetch(request, {
-          cache: 'no-store',
-          credentials: 'same-origin'
-        }),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Request timeout')), 10000)
-        )
-      ])
-      .then((networkResponse) => {
-        // Always return the response, even if it's an error status
-        if (networkResponse.status === 200 && networkResponse.ok) {
-          const responseClone = networkResponse.clone();
-          caches.open(RUNTIME_CACHE_NAME)
-            .then((cache) => cache.put(request, responseClone))
-            .catch((error) => {
-              console.error('Failed to cache HTML response:', error);
-            });
-        }
-        return networkResponse;
-      })
-      .catch((error) => {
-        // Check if this is a real network error
-        const isNetworkError = 
-          error.name === 'TypeError' ||
-          error.name === 'NetworkError' ||
-          error.message === 'Failed to fetch' ||
-          error.message === 'Request timeout' ||
-          error.message?.includes('network') ||
-          error.message?.includes('fetch') ||
-          error.message?.includes('timeout');
-        
-        // Only show offline page for actual network failures
-        if (isNetworkError && request.mode === 'navigate') {
-          console.error('Network fetch failed for HTML page (real network error):', error);
-          return caches.match(request)
-            .then((cached) => {
-              if (cached) {
-                return cached;
-              }
-              // Fallback to offline page for navigation requests
-              return caches.match('/offline.html')
-                .then((offlinePage) => {
-                  if (offlinePage) {
-                    return offlinePage;
-                  }
-                  return new Response('لا يوجد اتصال بالشبكة', {
-                    status: 503,
-                    headers: { 'Content-Type': 'text/html; charset=utf-8' }
-                  });
-                })
-                .catch(() => {
-                  return new Response('لا يوجد اتصال بالشبكة', {
-                    status: 503,
-                    headers: { 'Content-Type': 'text/html; charset=utf-8' }
-                  });
-                });
-            })
-            .catch(() => {
-              // If cache operations fail, return error response
-              if (request.mode === 'navigate') {
-                return caches.match('/offline.html')
-                  .then((offlinePage) => {
-                    if (offlinePage) {
-                      return offlinePage;
-                    }
-                    return new Response('لا يوجد اتصال بالشبكة', {
-                      status: 503,
-                      headers: { 'Content-Type': 'text/html; charset=utf-8' }
-                    });
-                  })
-                  .catch(() => {
-                    return new Response('لا يوجد اتصال بالشبكة', {
-                      status: 503,
-                      headers: { 'Content-Type': 'text/html; charset=utf-8' }
-                    });
-                  });
-              }
-              return new Response('لا يوجد اتصال بالشبكة', {
-                status: 503,
-                headers: { 'Content-Type': 'text/plain; charset=utf-8' }
-              });
-            });
-        }
-        
-        // For non-network errors, re-throw to let browser handle
-        console.error('Fetch error for HTML page (not a network error):', error);
-        throw error;
-      })
-    );
-    return;
-  }
-
-  // Default: network first with timeout, fallback to cache
-  // Only handle if no other handler matched
-  event.respondWith(
-    Promise.race([
-      fetch(request, {
-        cache: 'no-store',
-        credentials: 'same-origin'
-      }),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Request timeout')), 10000)
-      )
-    ])
-    .then((networkResponse) => {
-      // Always return the response, even if it's an error status
-      if (networkResponse.status === 200 && networkResponse.ok) {
-        const responseClone = networkResponse.clone();
-        caches.open(RUNTIME_CACHE_NAME)
-          .then((cache) => cache.put(request, responseClone))
-          .catch((error) => {
-            console.error('Failed to cache default response:', error);
-          });
-      }
-      return networkResponse;
-    })
-    .catch((error) => {
-      // Check if this is a real network error
-      const isNetworkError = 
-        error.name === 'TypeError' ||
-        error.name === 'NetworkError' ||
-        error.message === 'Failed to fetch' ||
-        error.message === 'Request timeout' ||
-        error.message?.includes('network') ||
-        error.message?.includes('fetch') ||
-        error.message?.includes('timeout');
-      
-      if (isNetworkError) {
-        console.error('Network fetch failed (real network error):', error);
-        return caches.match(request)
-          .then((cached) => {
-            if (cached) {
-              return cached;
-            }
-            throw error;
-          })
-          .catch(() => {
-            // If cache operations fail, re-throw original error
-            throw error;
-          });
-      }
-      
-      // For non-network errors, re-throw to let browser handle
-      console.error('Fetch error (not a network error):', error);
-      throw error;
-    })
-  );
+  // ============================================
+  // Default: Network First for unknown requests
+  // ============================================
+  event.respondWith(networkFirst(request, STATIC_CACHE_NAME, false));
 });
-
