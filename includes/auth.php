@@ -205,7 +205,9 @@ function ensureSessionsTable() {
         
         if (!$tableExists) {
             // إنشاء جدول sessions
-            $db->execute("
+            // ملاحظة: CREATE TABLE لا يمكن استخدامه مع prepared statements
+            // لذلك نستخدم rawQuery
+            $createTableSql = "
                 CREATE TABLE IF NOT EXISTS `sessions` (
                     `id` INT(11) UNSIGNED NOT NULL AUTO_INCREMENT,
                     `user_id` INT(11) UNSIGNED NOT NULL,
@@ -220,7 +222,10 @@ function ensureSessionsTable() {
                     KEY `user_id` (`user_id`),
                     KEY `expires_at` (`expires_at`)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            ");
+            ";
+            
+            // استخدام rawQuery لإنشاء الجدول
+            $db->rawQuery($createTableSql, true);
         }
         
         return true;
@@ -806,39 +811,46 @@ function login($username, $password, $rememberMe = true) {
         $_SESSION['login_time'] = time();
         
         // === حفظ الجلسة في قاعدة البيانات ===
+        // ملاحظة: هذا اختياري - الجلسة PHP ستعمل حتى لو فشل حفظها في قاعدة البيانات
         try {
             $db = db();
             $sessionId = session_id();
             
             if (!empty($sessionId) && !empty($user['id'])) {
                 // التحقق من وجود جدول sessions وإنشاؤه إذا لزم الأمر
-                if (ensureSessionsTable()) {
-                    $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7); // 7 أيام افتراضياً
-                    $expiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
-                    $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-                    $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
-                    
-                    // حذف الجلسات القديمة للمستخدم (اختياري - للسماح بجلسة واحدة فقط)
-                    // يمكنك تعطيل هذا السطر إذا كنت تريد السماح بجلسات متعددة
-                    // $db->execute("DELETE FROM sessions WHERE user_id = ?", [$user['id']]);
-                    
-                    // حفظ الجلسة في قاعدة البيانات
-                    $db->execute(
-                        "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
-                         VALUES (?, ?, ?, ?, ?, NOW())
-                         ON DUPLICATE KEY UPDATE 
-                            last_activity = NOW(), 
-                            expires_at = ?,
-                            ip_address = ?,
-                            user_agent = ?",
-                        [$user['id'], $sessionId, $ipAddress, $userAgent, $expiresAt, $expiresAt, $ipAddress, $userAgent]
-                    );
+                try {
+                    if (ensureSessionsTable()) {
+                        $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7); // 7 أيام افتراضياً
+                        $expiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
+                        $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+                        $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
+                        
+                        // حذف الجلسات القديمة للمستخدم (اختياري - للسماح بجلسة واحدة فقط)
+                        // يمكنك تعطيل هذا السطر إذا كنت تريد السماح بجلسات متعددة
+                        // $db->execute("DELETE FROM sessions WHERE user_id = ?", [$user['id']]);
+                        
+                        // حفظ الجلسة في قاعدة البيانات
+                        $db->execute(
+                            "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
+                             VALUES (?, ?, ?, ?, ?, NOW())
+                             ON DUPLICATE KEY UPDATE 
+                                last_activity = NOW(), 
+                                expires_at = ?,
+                                ip_address = ?,
+                                user_agent = ?",
+                            [$user['id'], $sessionId, $ipAddress, $userAgent, $expiresAt, $expiresAt, $ipAddress, $userAgent]
+                        );
+                    }
+                } catch (Throwable $tableError) {
+                    // خطأ في إنشاء الجدول أو حفظ الجلسة - لا نوقف العملية
+                    error_log("Session table error: " . $tableError->getMessage());
                 }
             }
         } catch (Throwable $e) {
             // لا نوقف العملية إذا فشل حفظ الجلسة في قاعدة البيانات
             // الجلسة PHP ستعمل بشكل طبيعي
             error_log("Failed to save session to database: " . $e->getMessage());
+            error_log("Session save error trace: " . $e->getTraceAsString());
         }
         
         // إذا كان rememberMe مفعّل، نمدد مدة الجلسة
