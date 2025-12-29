@@ -1120,7 +1120,7 @@ if (isset($_GET['id'])) {
 
 <!-- Modal إضافة موعد تحصيل -->
 <div class="modal fade" id="addScheduleModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>إضافة موعد تحصيل</h5>
@@ -1177,7 +1177,7 @@ if (isset($_GET['id'])) {
 
 <!-- Modal تعديل موعد تحصيل -->
 <div class="modal fade" id="editScheduleModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title"><i class="bi bi-pencil-fill me-2"></i>تعديل موعد التحصيل</h5>
@@ -1216,7 +1216,7 @@ if (isset($_GET['id'])) {
 
 <!-- Modal تحديد عدد أيام التنبيه -->
 <div class="modal fade" id="reminderModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-warning text-dark">
                 <h5 class="modal-title"><i class="bi bi-bell-fill me-2"></i>تحديد عدد أيام التنبيه</h5>
@@ -1537,3 +1537,150 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 })();
 </script>
+
+<style>
+/* ===== تنسيقات جميع النماذج - نفس أبعاد نموذج تحصيل من مندوب ===== */
+/* قائمة النماذج: addScheduleModal, editScheduleModal, reminderModal */
+
+@media (min-width: 769px) {
+    #addScheduleModal .modal-dialog.modal-dialog-centered,
+    #editScheduleModal .modal-dialog.modal-dialog-centered,
+    #reminderModal .modal-dialog.modal-dialog-centered {
+        margin: 0.5rem auto;
+        display: flex;
+        flex-direction: column;
+        max-height: calc(100vh - 1rem);
+    }
+
+    #addScheduleModal .modal-content,
+    #editScheduleModal .modal-content,
+    #reminderModal .modal-content {
+        display: flex !important;
+        flex-direction: column !important;
+        height: auto !important;
+        max-height: 100% !important;
+        overflow: hidden !important;
+    }
+
+    /* إصلاح المساحة البيضاء - منع modal-body من التمدد */
+    #addScheduleModal .modal-body,
+    #editScheduleModal .modal-body,
+    #reminderModal .modal-body {
+        flex: 0 1 auto !important;
+        flex-grow: 0 !important;
+        flex-shrink: 1 !important;
+        flex-basis: auto !important;
+        min-height: 0 !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        padding-bottom: 1rem !important;
+        margin-bottom: 0 !important;
+    }
+}
+
+/* قواعد عامة للـ header والـ footer */
+#addScheduleModal .modal-header,
+#editScheduleModal .modal-header,
+#reminderModal .modal-header {
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
+}
+
+#addScheduleModal .modal-footer,
+#editScheduleModal .modal-footer,
+#reminderModal .modal-footer {
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    border-top: 1px solid #dee2e6 !important;
+}
+
+/* padding للـ header والـ footer على الشاشات الكبيرة فقط */
+@media (min-width: 769px) {
+    #addScheduleModal .modal-footer,
+    #editScheduleModal .modal-footer,
+    #reminderModal .modal-footer {
+        padding-top: 1rem !important;
+        padding-bottom: 1rem !important;
+    }
+}
+
+/* إزالة أي pseudo-elements قد تسبب مساحة فارغة */
+#addScheduleModal .modal-content::after,
+#addScheduleModal .modal-content::before,
+#editScheduleModal .modal-content::after,
+#editScheduleModal .modal-content::before,
+#reminderModal .modal-content::after,
+#reminderModal .modal-content::before {
+    display: none !important;
+    content: none !important;
+}
+
+/* إصلاح خاص لـ modal-dialog-scrollable (للشاشات الكبيرة فقط) */
+@media (min-width: 769px) {
+    #addScheduleModal .modal-dialog.modal-dialog-scrollable .modal-content,
+    #editScheduleModal .modal-dialog.modal-dialog-scrollable .modal-content,
+    #reminderModal .modal-dialog.modal-dialog-scrollable .modal-content {
+        max-height: 100% !important;
+        overflow: hidden !important;
+    }
+
+    #addScheduleModal .modal-dialog.modal-dialog-scrollable .modal-body,
+    #editScheduleModal .modal-dialog.modal-dialog-scrollable .modal-body,
+    #reminderModal .modal-dialog.modal-dialog-scrollable .modal-body {
+        flex: 0 1 auto !important;
+        overflow-y: auto !important;
+        max-height: calc(100vh - 250px) !important;
+    }
+}
+
+/* تنسيقات للشاشات الصغيرة */
+@media (max-width: 768px) {
+    #addScheduleModal .modal-dialog,
+    #editScheduleModal .modal-dialog,
+    #reminderModal .modal-dialog {
+        margin: 0.5rem !important;
+        max-width: calc(100% - 1rem) !important;
+        max-height: calc(100vh - 1rem) !important;
+        height: auto !important;
+    }
+    
+    #addScheduleModal .modal-content,
+    #editScheduleModal .modal-content,
+    #reminderModal .modal-content {
+        max-height: calc(100vh - 1rem) !important;
+        height: auto !important;
+    }
+    
+    #addScheduleModal .modal-body,
+    #editScheduleModal .modal-body,
+    #reminderModal .modal-body {
+        flex: 0 1 auto !important;
+        flex-grow: 0 !important;
+        padding-bottom: 1rem !important;
+        max-height: none !important;
+        height: auto !important;
+        overflow-y: visible !important;
+    }
+    
+    #addScheduleModal .modal-footer,
+    #editScheduleModal .modal-footer,
+    #reminderModal .modal-footer {
+        flex-shrink: 0 !important;
+        flex-grow: 0 !important;
+        margin-top: 0 !important;
+        padding-top: 1rem !important;
+        padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
+    }
+    
+    #addScheduleModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body,
+    #editScheduleModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body,
+    #reminderModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body {
+        overflow-y: visible !important;
+        max-height: none !important;
+    }
+}
+</style>
