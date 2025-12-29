@@ -207,25 +207,34 @@ function ensureSessionsTable() {
             // إنشاء جدول sessions
             // ملاحظة: CREATE TABLE لا يمكن استخدامه مع prepared statements
             // لذلك نستخدم rawQuery
-            $createTableSql = "
-                CREATE TABLE IF NOT EXISTS `sessions` (
-                    `id` INT(11) UNSIGNED NOT NULL AUTO_INCREMENT,
-                    `user_id` INT(11) UNSIGNED NOT NULL,
-                    `session_id` VARCHAR(128) NOT NULL,
-                    `ip_address` VARCHAR(45) DEFAULT NULL,
-                    `user_agent` VARCHAR(255) DEFAULT NULL,
-                    `expires_at` DATETIME NOT NULL,
-                    `last_activity` DATETIME NOT NULL,
-                    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (`id`),
-                    UNIQUE KEY `session_id` (`session_id`),
-                    KEY `user_id` (`user_id`),
-                    KEY `expires_at` (`expires_at`)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            ";
-            
-            // استخدام rawQuery لإنشاء الجدول
-            $db->rawQuery($createTableSql, true);
+            try {
+                $createTableSql = "
+                    CREATE TABLE IF NOT EXISTS `sessions` (
+                        `id` INT(11) UNSIGNED NOT NULL AUTO_INCREMENT,
+                        `user_id` INT(11) UNSIGNED NOT NULL,
+                        `session_id` VARCHAR(128) NOT NULL,
+                        `ip_address` VARCHAR(45) DEFAULT NULL,
+                        `user_agent` VARCHAR(255) DEFAULT NULL,
+                        `expires_at` DATETIME NOT NULL,
+                        `last_activity` DATETIME NOT NULL,
+                        `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (`id`),
+                        UNIQUE KEY `session_id` (`session_id`),
+                        KEY `user_id` (`user_id`),
+                        KEY `expires_at` (`expires_at`)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                ";
+                
+                // استخدام rawQuery لإنشاء الجدول
+                $result = $db->rawQuery($createTableSql, true);
+                if ($result === false) {
+                    error_log("Failed to create sessions table");
+                    return false;
+                }
+            } catch (Throwable $createError) {
+                error_log("Error creating sessions table: " . $createError->getMessage());
+                return false;
+            }
         }
         
         return true;
@@ -812,6 +821,12 @@ function login($username, $password, $rememberMe = true) {
         
         // === حفظ الجلسة في قاعدة البيانات ===
         // ملاحظة: هذا اختياري - الجلسة PHP ستعمل حتى لو فشل حفظها في قاعدة البيانات
+        // نستخدم @ لقمع أي أخطاء قد تظهر للمستخدم
+        @set_error_handler(function($errno, $errstr, $errfile, $errline) {
+            // تجاهل جميع الأخطاء في هذه العملية
+            return true;
+        });
+        
         try {
             $db = db();
             $sessionId = session_id();
@@ -819,7 +834,7 @@ function login($username, $password, $rememberMe = true) {
             if (!empty($sessionId) && !empty($user['id'])) {
                 // التحقق من وجود جدول sessions وإنشاؤه إذا لزم الأمر
                 try {
-                    if (ensureSessionsTable()) {
+                    if (@ensureSessionsTable()) {
                         $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7); // 7 أيام افتراضياً
                         $expiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
                         $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
@@ -830,7 +845,7 @@ function login($username, $password, $rememberMe = true) {
                         // $db->execute("DELETE FROM sessions WHERE user_id = ?", [$user['id']]);
                         
                         // حفظ الجلسة في قاعدة البيانات
-                        $db->execute(
+                        @$db->execute(
                             "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
                              VALUES (?, ?, ?, ?, ?, NOW())
                              ON DUPLICATE KEY UPDATE 
@@ -843,14 +858,16 @@ function login($username, $password, $rememberMe = true) {
                     }
                 } catch (Throwable $tableError) {
                     // خطأ في إنشاء الجدول أو حفظ الجلسة - لا نوقف العملية
-                    error_log("Session table error: " . $tableError->getMessage());
+                    @error_log("Session table error: " . $tableError->getMessage());
                 }
             }
         } catch (Throwable $e) {
             // لا نوقف العملية إذا فشل حفظ الجلسة في قاعدة البيانات
             // الجلسة PHP ستعمل بشكل طبيعي
-            error_log("Failed to save session to database: " . $e->getMessage());
-            error_log("Session save error trace: " . $e->getTraceAsString());
+            @error_log("Failed to save session to database: " . $e->getMessage());
+        } finally {
+            // استعادة معالج الأخطاء الأصلي
+            @restore_error_handler();
         }
         
         // إذا كان rememberMe مفعّل، نمدد مدة الجلسة
