@@ -1665,19 +1665,11 @@ document.addEventListener('DOMContentLoaded', function() {
 /* منع scroll في body عند فتح النموذج */
 body.modal-open {
     overflow: hidden !important;
-    position: fixed !important;
-    width: 100% !important;
-    height: 100% !important;
 }
 
 /* ضمان أن backdrop يمنع التفاعل */
 .modal-backdrop {
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
     z-index: 1040 !important;
-    width: 100vw !important;
-    height: 100vh !important;
     background-color: #000 !important;
     pointer-events: auto !important;
     touch-action: none !important;
@@ -1728,9 +1720,6 @@ body.modal-open > *:not(.modal):not(.modal-backdrop) {
 @media (max-width: 768px) {
     body.modal-open {
         overflow: hidden !important;
-        position: fixed !important;
-        width: 100% !important;
-        height: 100% !important;
         touch-action: none !important;
     }
     
@@ -1763,16 +1752,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // عند فتح النموذج
         modal.addEventListener('show.bs.modal', function() {
-            // حفظ موضع scroll الحالي
-            const scrollY = window.scrollY || window.pageYOffset;
-            document.body.style.top = `-${scrollY}px`;
-            
             // منع scroll في body
             document.body.classList.add('modal-open');
             document.body.style.overflow = 'hidden';
-            document.body.style.position = 'fixed';
-            document.body.style.width = '100%';
-            document.body.style.height = '100%';
             
             // منع touch events على المحتوى خلف النموذج (يتم عبر CSS)
         });
@@ -1780,18 +1762,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // عند إغلاق النموذج
         modal.addEventListener('hidden.bs.modal', function() {
             // استعادة scroll
-            const scrollY = document.body.style.top;
             document.body.classList.remove('modal-open');
             document.body.style.overflow = '';
-            document.body.style.position = '';
-            document.body.style.width = '';
-            document.body.style.height = '';
-            document.body.style.top = '';
-            
-            // استعادة موضع scroll
-            if (scrollY) {
-                window.scrollTo(0, parseInt(scrollY || '0') * -1);
-            }
             
             // استعادة touch events (يتم عبر CSS)
         });
