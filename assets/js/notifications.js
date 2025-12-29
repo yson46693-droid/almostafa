@@ -746,9 +746,20 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // إضافة event listener لزر مسح كل الإشعارات
-    const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
-    if (clearAllBtn) {
-        clearAllBtn.addEventListener('click', async function(e) {
+    function setupClearAllButton() {
+        const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
+        if (!clearAllBtn) {
+            // إعادة المحاولة بعد قليل إذا لم يكن الزر موجوداً
+            setTimeout(setupClearAllButton, 100);
+            return;
+        }
+        
+        // إزالة أي event listeners سابقة لتجنب التكرار
+        const newBtn = clearAllBtn.cloneNode(true);
+        clearAllBtn.parentNode.replaceChild(newBtn, clearAllBtn);
+        
+        // إضافة event listener جديد
+        newBtn.addEventListener('click', async function(e) {
             e.preventDefault();
             e.stopPropagation();
             e.stopImmediatePropagation();
@@ -763,7 +774,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
-            if (!confirm('هل أنت متأكد من رغبتك في مسح جميع الإشعارات؟')) {
+            // طلب التأكيد من المستخدم
+            const confirmed = confirm('هل أنت متأكد من رغبتك في مسح جميع الإشعارات؟\n\nهذه العملية لا يمكن التراجع عنها.');
+            if (!confirmed) {
                 return;
             }
             
@@ -797,7 +810,73 @@ document.addEventListener('DOMContentLoaded', function() {
                     await loadNotifications();
                 }
             }
-        }, { capture: true });
+        }, { capture: true, passive: false });
+        
+        // إضافة event listener للـ touch أيضاً على الموبايل
+        newBtn.addEventListener('touchend', async function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            
+            // منع إغلاق الـ dropdown
+            const dropdown = document.querySelector('.notifications-dropdown');
+            if (dropdown) {
+                const bsDropdown = bootstrap.Dropdown.getInstance(dropdown);
+                if (bsDropdown) {
+                    dropdown.classList.add('show');
+                }
+            }
+            
+            // طلب التأكيد من المستخدم
+            const confirmed = confirm('هل أنت متأكد من رغبتك في مسح جميع الإشعارات؟\n\nهذه العملية لا يمكن التراجع عنها.');
+            if (!confirmed) {
+                return;
+            }
+            
+            try {
+                const notificationsList = document.getElementById('notificationsList');
+                if (notificationsList) {
+                    notificationsList.innerHTML = '<small class="text-muted">جاري حذف الإشعارات...</small>';
+                }
+                
+                await deleteAllNotifications();
+                
+                if (notificationsList) {
+                    notificationsList.innerHTML = '<small class="text-muted">لا توجد إشعارات</small>';
+                }
+                
+                await updateNotificationBadge(0);
+                
+                if (typeof loadNotifications === 'function') {
+                    await loadNotifications();
+                }
+            } catch (error) {
+                console.error('Error deleting all notifications:', error);
+                alert('حدث خطأ أثناء حذف الإشعارات: ' + (error.message || 'خطأ غير معروف'));
+                
+                if (typeof loadNotifications === 'function') {
+                    await loadNotifications();
+                }
+            }
+        }, { capture: true, passive: false });
+    }
+    
+    // إعداد الزر عند تحميل الصفحة
+    setupClearAllButton();
+    
+    // إعادة إعداد الزر بعد تحديث قائمة الإشعارات (في حالة dynamic loading)
+    // استخدام MutationObserver لمراقبة تغييرات DOM
+    const notificationsList = document.getElementById('notificationsList');
+    if (notificationsList) {
+        const observer = new MutationObserver(function(mutations) {
+            // إعادة إعداد الزر بعد تحديث القائمة
+            setTimeout(setupClearAllButton, 50);
+        });
+        
+        observer.observe(notificationsList, {
+            childList: true,
+            subtree: true
+        });
     }
 });
 
