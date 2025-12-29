@@ -156,7 +156,7 @@ define('DB_CHARSET', 'utf8mb4');
 define('DB_HOST', 'localhost:3306');
 define('DB_USER', 'osama744444');
 
-// إعدادات المنطقة الزمنية - مصر/القاهرة
+// إعدادات المنطقة الزمنية - مصر/القاهرة   
 date_default_timezone_set('Africa/Cairo');
 
 // إعدادات اللغة
