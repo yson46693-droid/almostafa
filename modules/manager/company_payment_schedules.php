@@ -1181,8 +1181,8 @@ if ($showAddForm):
 </div>
 <?php endif; ?>
 
-<!-- Modal تعديل موعد تحصيل -->
-<div class="modal fade" id="editScheduleModal" tabindex="-1" aria-hidden="true">
+<!-- Modal تعديل موعد تحصيل - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="editScheduleModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
@@ -1220,8 +1220,44 @@ if ($showAddForm):
     </div>
 </div>
 
-<!-- Modal تحديد عدد أيام التنبيه -->
-<div class="modal fade" id="reminderModal" tabindex="-1">
+<!-- Card تعديل موعد تحصيل - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="editScheduleCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-pencil-fill me-2"></i>تعديل موعد التحصيل</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
+            <input type="hidden" name="action" value="update_schedule">
+            <input type="hidden" name="schedule_id" id="editScheduleCardId">
+            <div class="mb-3">
+                <label class="form-label">العميل</label>
+                <input type="text" class="form-control" id="editScheduleCardCustomer" readonly>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">مبلغ التحصيل <span class="text-danger">*</span></label>
+                <input type="number" name="amount" class="form-control" step="1" min="0" id="editScheduleCardAmount" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">موعد التحصيل <span class="text-danger">*</span></label>
+                <input type="date" name="due_date" class="form-control" id="editScheduleCardDueDate" required>
+            </div>
+            <div class="alert alert-info mb-3">
+                تعديل التاريخ سيُحدّث حالة الجدول تلقائياً ليتناسب مع الموعد الجديد.
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle me-2"></i>حفظ التعديلات
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeEditScheduleCard()">
+                    <i class="bi bi-x-circle me-2"></i>إلغاء
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal تحديد عدد أيام التنبيه - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="reminderModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-warning text-dark">
@@ -1249,6 +1285,32 @@ if ($showAddForm):
     </div>
 </div>
 
+<!-- Card تحديد عدد أيام التنبيه - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="reminderCard" style="display: none;">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0"><i class="bi bi-bell-fill me-2"></i>تحديد عدد أيام التنبيه</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="reminderCardForm" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>" onsubmit="return validateReminderForm(this)">
+            <input type="hidden" name="action" value="create_reminder">
+            <input type="hidden" name="schedule_id" id="reminderCardScheduleId">
+            <div class="mb-3">
+                <label class="form-label">عدد الأيام قبل موعد الاستحقاق <span class="text-danger">*</span></label>
+                <input type="number" class="form-control" name="days_before_due" id="reminderCardDaysInput" value="3" min="1" max="30" required>
+                <small class="text-muted">سيتم إرسال التذكير قبل موعد الاستحقاق بهذا العدد من الأيام</small>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-warning">
+                    <i class="bi bi-check-circle me-2"></i>حفظ
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeReminderCard()">
+                    <i class="bi bi-x-circle me-2"></i>إلغاء
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
 // دوال مبسطة جداً - بدون متغيرات معقدة
 function validateReminderForm(form) {
@@ -1263,14 +1325,43 @@ function validateReminderForm(form) {
     return true;
 }
 
+// دالة للتحقق من الموبايل
+function isMobile() {
+    return window.innerWidth <= 768;
+}
+
+// دالة للـ scroll تلقائي
+function scrollToElement(element) {
+    if (element) {
+        setTimeout(function() {
+            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            // إضافة offset صغير من الأعلى
+            window.scrollBy(0, -20);
+        }, 100);
+    }
+}
+
 function showReminderModal(scheduleId) {
-    const scheduleIdInput = document.getElementById('reminderScheduleId');
-    const modalElement = document.getElementById('reminderModal');
-    
-    if (scheduleIdInput && modalElement) {
-        scheduleIdInput.value = scheduleId;
-        const modal = new bootstrap.Modal(modalElement);
-        modal.show();
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const scheduleIdInput = document.getElementById('reminderCardScheduleId');
+        const cardElement = document.getElementById('reminderCard');
+        
+        if (scheduleIdInput && cardElement) {
+            scheduleIdInput.value = scheduleId;
+            cardElement.style.display = 'block';
+            scrollToElement(cardElement);
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        const scheduleIdInput = document.getElementById('reminderScheduleId');
+        const modalElement = document.getElementById('reminderModal');
+        
+        if (scheduleIdInput && modalElement) {
+            scheduleIdInput.value = scheduleId;
+            const modal = new bootstrap.Modal(modalElement);
+            modal.show();
+        }
     }
 }
 
@@ -1282,26 +1373,67 @@ function showEditScheduleModal(button) {
     const amount = button.getAttribute('data-amount') || '';
     const dueDate = button.getAttribute('data-due-date') || '';
 
-    const modalEl = document.getElementById('editScheduleModal');
-    if (!modalEl) return;
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const cardEl = document.getElementById('editScheduleCard');
+        if (!cardEl) return;
 
-    const idInput = modalEl.querySelector('#editScheduleId');
-    const customerInput = modalEl.querySelector('#editScheduleCustomer');
-    const amountInput = modalEl.querySelector('#editScheduleAmount');
-    const dueDateInput = modalEl.querySelector('#editScheduleDueDate');
+        const idInput = cardEl.querySelector('#editScheduleCardId');
+        const customerInput = cardEl.querySelector('#editScheduleCardCustomer');
+        const amountInput = cardEl.querySelector('#editScheduleCardAmount');
+        const dueDateInput = cardEl.querySelector('#editScheduleCardDueDate');
 
-    if (idInput) idInput.value = scheduleId;
-    if (customerInput) customerInput.value = customer;
-    if (amountInput) amountInput.value = amount;
-    if (dueDateInput) dueDateInput.value = dueDate;
+        if (idInput) idInput.value = scheduleId;
+        if (customerInput) customerInput.value = customer;
+        if (amountInput) amountInput.value = amount;
+        if (dueDateInput) dueDateInput.value = dueDate;
 
-    const modal = new bootstrap.Modal(modalEl);
-    modal.show();
+        cardEl.style.display = 'block';
+        scrollToElement(cardEl);
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        const modalEl = document.getElementById('editScheduleModal');
+        if (!modalEl) return;
+
+        const idInput = modalEl.querySelector('#editScheduleId');
+        const customerInput = modalEl.querySelector('#editScheduleCustomer');
+        const amountInput = modalEl.querySelector('#editScheduleAmount');
+        const dueDateInput = modalEl.querySelector('#editScheduleDueDate');
+
+        if (idInput) idInput.value = scheduleId;
+        if (customerInput) customerInput.value = customer;
+        if (amountInput) amountInput.value = amount;
+        if (dueDateInput) dueDateInput.value = dueDate;
+
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+    }
 }
 
-// كود مبسط جداً - بدون fetch أو event listeners معقدة
+// دوال إغلاق Cards على الموبايل
+function closeEditScheduleCard() {
+    const card = document.getElementById('editScheduleCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closeReminderCard() {
+    const card = document.getElementById('reminderCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+        const daysInput = document.getElementById('reminderCardDaysInput');
+        if (daysInput) daysInput.value = '3';
+    }
+}
+
+// كود مبسط - تنظيف فقط
 document.addEventListener('DOMContentLoaded', function() {
-    // فقط تنظيف بسيط عند إغلاق editScheduleModal
+    // تنظيف عند إغلاق editScheduleModal (على الكمبيوتر فقط)
     const editScheduleModal = document.getElementById('editScheduleModal');
     if (editScheduleModal) {
         editScheduleModal.addEventListener('hidden.bs.modal', function() {
@@ -1310,13 +1442,12 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // reminderModal - بدون fetch (يسبب lag) - استخدام القيمة الافتراضية فقط
+    // تنظيف عند إغلاق reminderModal (على الكمبيوتر فقط)
     const reminderModal = document.getElementById('reminderModal');
     if (reminderModal) {
         reminderModal.addEventListener('hidden.bs.modal', function() {
             const form = reminderModal.querySelector('form');
             if (form) form.reset();
-            // إعادة تعيين القيمة الافتراضية
             const daysInput = document.getElementById('daysBeforeDueInput');
             if (daysInput) daysInput.value = '3';
         });
@@ -1362,54 +1493,44 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <style>
-/* ===== CSS مبسط لأقصى درجة - منع التعارضات مع الملفات العامة ===== */
-/* منع CSS و JavaScript من الملفات العامة من التأثير على هذه المودالات */
+/* ===== CSS مبسط - Modal للكمبيوتر فقط، Card للموبايل ===== */
 
+/* إخفاء Modal على الموبايل */
+@media (max-width: 768px) {
+    #editScheduleModal,
+    #reminderModal {
+        display: none !important;
+    }
+}
+
+/* إخفاء Card على الكمبيوتر */
+@media (min-width: 769px) {
+    #editScheduleCard,
+    #reminderCard {
+        display: none !important;
+    }
+}
+
+/* منع الملفات العامة من التأثير على Modal (على الكمبيوتر فقط) */
 #editScheduleModal,
 #reminderModal {
-    /* منع JavaScript من modal-mobile-fix.js من تعديل الارتفاع */
     height: auto !important;
     max-height: none !important;
 }
 
 #editScheduleModal .modal-dialog,
 #reminderModal .modal-dialog {
-    /* منع CSS من modal-mobile-fix.css من التأثير */
     display: block !important;
     height: auto !important;
     max-height: none !important;
-    /* إزالة أي inline styles */
     margin: 1.75rem auto !important;
 }
 
 #editScheduleModal .modal-content,
 #reminderModal .modal-content {
-    /* منع CSS المعقد من الملفات العامة */
     display: block !important;
     height: auto !important;
     max-height: none !important;
-}
-
-#editScheduleModal .modal-body,
-#reminderModal .modal-body {
-    /* Bootstrap يتعامل مع التمرير تلقائياً */
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    max-height: 60vh;
-}
-
-/* على الموبايل - تبسيط أكثر */
-@media (max-width: 768px) {
-    #editScheduleModal .modal-dialog,
-    #reminderModal .modal-dialog {
-        margin: 0.5rem !important;
-        max-width: calc(100% - 1rem) !important;
-    }
-    
-    #editScheduleModal .modal-body,
-    #reminderModal .modal-body {
-        max-height: calc(100vh - 200px);
-    }
 }
 </style>
 
