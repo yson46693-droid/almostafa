@@ -3865,12 +3865,6 @@ try {
                         <button type="button" class="btn btn-primary btn-sm" id="printExcelBtn">
                             <i class="bi bi-printer me-2"></i>طباعة
                         </button>
-                        <button type="button" class="btn btn-success btn-sm" id="downloadExcelBtn">
-                            <i class="bi bi-download me-2"></i>تحميل الملف
-                        </button>
-                        <button type="button" class="btn btn-info btn-sm" id="shareExcelBtn">
-                            <i class="bi bi-share me-2"></i>مشاركة
-                        </button>
                     </div>
                 </div>
             </div>

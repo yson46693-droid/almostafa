@@ -89,24 +89,15 @@ async function initCamera() {
         // إعادة تعيين srcObject
         video.srcObject = null;
         
-        // كشف ما إذا كان الجهاز موبايل
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        
         // محاولة الوصول للكاميرا مع خيارات مختلفة
         const constraints = {
             video: {
                 width: { ideal: 1280, min: 640 },
                 height: { ideal: 720, min: 480 },
-                aspectRatio: { ideal: 16/9 }
+                aspectRatio: { ideal: 16/9 },
+                facingMode: { ideal: 'user' } // الكاميرا الأمامية بشكل افتراضي
             }
         };
-        
-        // على الموبايل نحتاج الكاميرا الأمامية بشكل افتراضي
-        if (isMobile) {
-            constraints.video.facingMode = { ideal: 'user' };
-        } else {
-            constraints.video.facingMode = { ideal: 'user' };
-        }
         
         // محاولة الوصول للكاميرا
         let stream = null;
@@ -173,7 +164,6 @@ async function initCamera() {
         }
         
         // إظهار زر التقاط الصورة بشكل واضح
-        const isMobileDevice = isMobile();
         const captureBtn = isMobileDevice ? document.getElementById('captureBtnCard') : document.getElementById('captureBtn');
         if (captureBtn) {
             captureBtn.style.display = 'inline-block';
@@ -824,11 +814,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // دالة لفتح الكاميرا (Modal للكمبيوتر أو Card للموبايل)
     function openCamera(action) {
         currentAction = action;
+        const isMobileDevice = isMobile();
         
-        if (isMobile()) {
+        console.log('openCamera called:', { action, isMobileDevice });
+        
+        if (isMobileDevice) {
             // على الموبايل: استخدام Card
             const card = document.getElementById('cameraCard');
             const cardTitle = document.getElementById('cameraCardTitle');
+            
+            console.log('Opening card:', { card: !!card, cardTitle: !!cardTitle });
             
             if (card && cardTitle) {
                 // تحديث العنوان
@@ -841,8 +836,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 // إعادة تعيين الحالة
                 resetCameraState(true);
                 
-                // إظهار Card
-                card.style.display = 'block';
+                // إظهار Card - استخدام setProperty مع !important
+                card.style.setProperty('display', 'block', 'important');
+                card.style.setProperty('visibility', 'visible', 'important');
+                card.style.setProperty('opacity', '1', 'important');
                 
                 // التمرير التلقائي
                 setTimeout(function() {
@@ -857,9 +854,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         console.error('Error initializing camera in card:', error);
                     }
                 }, 200);
+            } else {
+                console.error('Card elements not found!', { card: !!card, cardTitle: !!cardTitle });
             }
         } else {
             // على الكمبيوتر: استخدام Modal
+            console.log('Opening modal');
             const modal = new bootstrap.Modal(cameraModal);
             modal.show();
         }
