@@ -601,6 +601,60 @@
     opacity: 1 !important;
 }
 
+/* إخفاء أزرار الكمبيوتر على الموبايل */
+@media (max-width: 768px) {
+    .notification-item .notification-actions {
+        display: none !important;
+    }
+}
+
+/* أزرار الهواتف - تظهر فقط على الموبايل */
+.notification-actions-mobile {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .notification-actions-mobile {
+        display: flex !important;
+        flex-direction: row !important;
+        gap: 0.5rem !important;
+        width: 100% !important;
+        justify-content: flex-end !important;
+        align-items: center !important;
+        margin-top: 0.5rem !important;
+        padding-top: 0.5rem !important;
+        border-top: 1px solid var(--border-color);
+    }
+    
+    .notification-actions-mobile .btn {
+        padding: 0.5rem 0.75rem !important;
+        font-size: 0.75rem !important;
+        min-width: 70px !important;
+        flex: 0 0 auto !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        pointer-events: auto !important;
+        position: relative !important;
+        z-index: 100 !important;
+        white-space: nowrap !important;
+        overflow: visible !important;
+        border: 1px solid currentColor !important;
+        touch-action: manipulation !important;
+        -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1) !important;
+        cursor: pointer !important;
+        user-select: none !important;
+        box-sizing: border-box !important;
+        margin: 0 !important;
+    }
+    
+    .notification-actions-mobile .btn i {
+        margin-inline-end: 0.25rem;
+        display: inline-block !important;
+        font-size: 0.85rem !important;
+    }
+}
+
 /* تحسين عرض أزرار الإشعارات على الموبايل */
 @media (max-width: 768px) {
     .notification-item {
@@ -622,31 +676,9 @@
     .notification-item .flex-grow-1 {
         flex: 1 1 100% !important;
         min-width: 0;
-        margin-bottom: var(--spacing-xs);
+        margin-bottom: 0;
         max-width: 100% !important;
         width: 100% !important;
-    }
-    
-    .notification-item .notification-actions {
-        display: flex !important;
-        flex-direction: row !important;
-        gap: 0.5rem !important;
-        margin-inline-start: 0 !important;
-        width: 100% !important;
-        min-width: 100% !important;
-        max-width: 100% !important;
-        justify-content: flex-end !important;
-        flex-wrap: nowrap !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        position: relative !important;
-        z-index: 100 !important;
-        overflow: visible !important;
-        margin-top: 0.5rem !important;
-        flex-shrink: 0 !important;
-        order: 10 !important;
-        pointer-events: auto !important;
-        box-sizing: border-box !important;
     }
     
     .notification-item .notification-actions .btn,
@@ -697,46 +729,21 @@
     
     /* تحسين الأزرار على الشاشات الصغيرة جداً */
     @media (max-width: 480px) {
-        .notification-item .notification-actions {
+        .notification-actions-mobile {
             gap: 0.5rem !important;
             flex-wrap: nowrap !important;
-            width: 100% !important;
-            min-width: 100% !important;
-            max-width: 100% !important;
-            display: flex !important;
-            visibility: visible !important;
-            opacity: 1 !important;
         }
         
-        .notification-item .notification-actions .btn,
-        .notification-item .notification-actions button {
+        .notification-actions-mobile .btn {
             padding: 0.5rem 0.6rem !important;
             min-width: 65px !important;
             font-size: 0.7rem !important;
-            flex: 0 0 auto !important;
             max-width: calc(50% - 0.25rem) !important;
-            display: inline-flex !important;
-            visibility: visible !important;
-            opacity: 1 !important;
-            width: auto !important;
         }
         
-        .notification-item .notification-actions .btn span,
-        .notification-item .notification-actions button span,
-        .notification-item .notification-actions .btn .notification-btn-text,
-        .notification-item .notification-actions button .notification-btn-text {
-            display: inline !important;
-            visibility: visible !important;
-            opacity: 1 !important;
-        }
-        
-        .notification-item .notification-actions .btn i,
-        .notification-item .notification-actions button i {
+        .notification-actions-mobile .btn i {
             margin-inline-end: 0.2rem;
             font-size: 0.8rem !important;
-            display: inline-block !important;
-            visibility: visible !important;
-            opacity: 1 !important;
         }
     }
 }

@@ -416,27 +416,43 @@ function updateNotificationList(notifications) {
         const notificationId = notification.id ?? '';
         const safeTitle = sanitizeText(notification.title || '');
         const safeMessage = sanitizeText(notification.message || '');
+        // أزرار للكمبيوتر (مخفية على الموبايل)
         const markReadButton = unread ? `
-                        <button type="button" class="btn btn-sm btn-outline-secondary notification-mark-read" data-id="${notificationId}" title="تمت الرؤية" data-bs-auto-close="false" style="display: inline-flex !important; visibility: visible !important; opacity: 1 !important;">
-                            <i class="bi bi-check2 me-1"></i><span class="notification-btn-text" style="display: inline !important;">تم الرؤية</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary notification-mark-read" data-id="${notificationId}" title="تمت الرؤية" data-bs-auto-close="false">
+                            <i class="bi bi-check2 me-1"></i><span class="notification-btn-text">تم الرؤية</span>
+                        </button>` : `
+                        <span class="badge bg-light text-muted border">تمت الرؤية</span>`;
+        
+        // أزرار للهواتف (مخفية على الكمبيوتر)
+        const markReadButtonMobile = unread ? `
+                        <button type="button" class="btn btn-sm btn-outline-secondary notification-mark-read-mobile" data-id="${notificationId}" title="تمت الرؤية" data-bs-auto-close="false">
+                            <i class="bi bi-check2 me-1"></i>تم الرؤية
                         </button>` : `
                         <span class="badge bg-light text-muted border">تمت الرؤية</span>`;
         
         html += `
-            <div class="notification-item ${unreadClass} ${recentClass}" data-id="${notificationId}" style="overflow: visible !important;">
-                <div class="d-flex align-items-start" style="overflow: visible !important; flex-wrap: wrap;">
+            <div class="notification-item ${unreadClass} ${recentClass}" data-id="${notificationId}">
+                <div class="d-flex align-items-start">
                     <i class="bi ${icon} ${typeClass} me-2 mt-1"></i>
-                    <div class="flex-grow-1" style="overflow: visible !important;">
+                    <div class="flex-grow-1">
                         <div class="fw-bold">${safeTitle}</div>
                         <div class="small text-muted">${safeMessage}</div>
                         <div class="small text-muted mt-1">${timeAgo}</div>
                     </div>
-                    <div class="notification-actions" style="display: flex !important; visibility: visible !important; opacity: 1 !important; overflow: visible !important; width: 100%; margin-top: 0.5rem; justify-content: flex-end; gap: 0.5rem;">
+                    <!-- أزرار للكمبيوتر -->
+                    <div class="notification-actions d-none d-md-flex">
                         ${markReadButton}
-                        <button type="button" class="btn btn-sm btn-outline-danger notification-delete" data-id="${notificationId}" title="حذف الإشعار" data-bs-auto-close="false" style="display: inline-flex !important; visibility: visible !important; opacity: 1 !important;">
-                            <i class="bi bi-trash me-1"></i><span class="notification-btn-text" style="display: inline !important;">حذف</span>
+                        <button type="button" class="btn btn-sm btn-outline-danger notification-delete" data-id="${notificationId}" title="حذف الإشعار" data-bs-auto-close="false">
+                            <i class="bi bi-trash me-1"></i><span class="notification-btn-text">حذف</span>
                         </button>
                     </div>
+                </div>
+                <!-- أزرار للهواتف -->
+                <div class="notification-actions-mobile d-flex d-md-none mt-2">
+                    ${markReadButtonMobile}
+                    <button type="button" class="btn btn-sm btn-outline-danger notification-delete-mobile" data-id="${notificationId}" title="حذف الإشعار" data-bs-auto-close="false">
+                        <i class="bi bi-trash me-1"></i>حذف
+                    </button>
                 </div>
             </div>
         `;
@@ -459,6 +475,7 @@ function updateNotificationList(notifications) {
         });
     });
 
+    // أزرار الكمبيوتر
     list.querySelectorAll('.notification-mark-read').forEach(button => {
         button.addEventListener('click', function(event) {
             event.preventDefault();
@@ -477,6 +494,49 @@ function updateNotificationList(notifications) {
     });
 
     list.querySelectorAll('.notification-delete').forEach(button => {
+        button.addEventListener('click', function(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+            
+            // منع إغلاق الـ dropdown
+            const dropdown = document.querySelector('.notifications-dropdown');
+            if (dropdown) {
+                dropdown.classList.add('show');
+            }
+            
+            const notificationId = this.getAttribute('data-id');
+            deleteNotification(notificationId).then(() => {
+                const item = this.closest('.notification-item');
+                if (item) {
+                    item.remove();
+                }
+                if (!list.querySelector('.notification-item')) {
+                    list.innerHTML = '<small class="text-muted">لا توجد إشعارات</small>';
+                }
+            }).catch(console.error);
+        });
+    });
+    
+    // أزرار الهواتف
+    list.querySelectorAll('.notification-mark-read-mobile').forEach(button => {
+        button.addEventListener('click', function(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+            
+            // منع إغلاق الـ dropdown
+            const dropdown = document.querySelector('.notifications-dropdown');
+            if (dropdown) {
+                dropdown.classList.add('show');
+            }
+            
+            const notificationId = this.getAttribute('data-id');
+            markNotificationAsRead(notificationId).catch(console.error);
+        });
+    });
+
+    list.querySelectorAll('.notification-delete-mobile').forEach(button => {
         button.addEventListener('click', function(event) {
             event.preventDefault();
             event.stopPropagation();

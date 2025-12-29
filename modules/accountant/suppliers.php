@@ -638,10 +638,10 @@ if (isset($_GET['edit'])) {
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0"><i class="bi bi-truck me-2"></i><?php echo (isset($lang) && isset($lang['suppliers'])) ? $lang['suppliers'] : 'الموردين'; ?> (<?php echo $totalCount; ?>)</h5>
         <div class="d-flex gap-2">
-            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#printSupplierReportModal">
+            <button class="btn btn-success" onclick="showPrintSupplierReportModal()">
                 <i class="bi bi-printer me-2"></i>طباعة تقرير التوريدات
             </button>
-            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addSupplierModal">
+            <button class="btn btn-primary" onclick="showAddSupplierModal()">
                 <i class="bi bi-plus-circle me-2"></i><?php echo isset($lang['add']) ? $lang['add'] : 'إضافة'; ?>
             </button>
         </div>
@@ -755,8 +755,7 @@ if (isset($_GET['edit'])) {
                                         <!-- زر إضافة رصيد - متاح للمحاسب والمدير -->
                                         <button type="button"
                                                 class="btn btn-success mb-1"
-                                                data-bs-toggle="modal"
-                                                data-bs-target="#addSupplierBalanceModal"
+                                                onclick="showAddSupplierBalanceModal(this)"
                                                 data-supplier-id="<?php echo $supplierId; ?>"
                                                 data-supplier-name="<?php echo htmlspecialchars($supplier['name'], ENT_QUOTES, 'UTF-8'); ?>"
                                                 data-supplier-balance="<?php echo $balance; ?>">
@@ -767,8 +766,7 @@ if (isset($_GET['edit'])) {
                                         <!-- زر تسجيل سداد - متاح للمدير فقط -->
                                         <button type="button"
                                                 class="btn btn-warning mb-1"
-                                                data-bs-toggle="modal"
-                                                data-bs-target="#supplierPaymentModal"
+                                                onclick="showSupplierPaymentModal(this)"
                                                 data-supplier-id="<?php echo $supplierId; ?>"
                                                 data-supplier-name="<?php echo htmlspecialchars($supplier['name'], ENT_QUOTES, 'UTF-8'); ?>"
                                                 data-supplier-balance="<?php echo $balance; ?>">
@@ -785,7 +783,7 @@ if (isset($_GET['edit'])) {
                                             <i class="bi bi-truck"></i>
                                             <span class="d-none d-lg-inline">توريدات الشهر</span>
                                         </button>
-                                        <a href="?page=suppliers&edit=<?php echo $supplierId; ?>" class="btn btn-outline mb-1" data-bs-toggle="tooltip" title="<?php echo isset($lang['edit']) ? $lang['edit'] : 'تعديل'; ?>">
+                                        <a href="?page=suppliers&edit=<?php echo $supplierId; ?>" class="btn btn-outline mb-1" data-bs-toggle="tooltip" title="<?php echo isset($lang['edit']) ? $lang['edit'] : 'تعديل'; ?>" onclick="if(isMobile()) { event.preventDefault(); showEditSupplierModal(<?php echo $supplierId; ?>); }">
                                             <i class="bi bi-pencil"></i>
                                             <span class="d-none d-md-inline"><?php echo isset($lang['edit']) ? $lang['edit'] : 'تعديل'; ?></span>
                                         </a>
@@ -1111,10 +1109,74 @@ $historyTypeLabels = [
 #addSupplierModal .modal-body::-webkit-scrollbar-thumb:hover {
     background: #555;
 }
+
+/* ===== CSS للـ Modal/Card Dual System ===== */
+
+/* إخفاء Modal على الموبايل */
+@media (max-width: 768px) {
+    #addSupplierModal,
+    #editSupplierModal,
+    #addSupplierBalanceModal,
+    #supplierPaymentModal,
+    #printSupplierReportModal {
+        display: none !important;
+    }
+}
+
+/* إخفاء Card على الكمبيوتر */
+@media (min-width: 769px) {
+    #addSupplierCard,
+    #editSupplierCard,
+    #addSupplierBalanceCard,
+    #supplierPaymentCard,
+    #printSupplierReportCard {
+        display: none !important;
+    }
+}
+
+/* منع الملفات العامة من التأثير على Modals */
+#addSupplierModal,
+#editSupplierModal,
+#addSupplierBalanceModal,
+#supplierPaymentModal,
+#printSupplierReportModal {
+    height: auto !important;
+    max-height: none !important;
+}
+
+#addSupplierModal .modal-dialog,
+#editSupplierModal .modal-dialog,
+#addSupplierBalanceModal .modal-dialog,
+#supplierPaymentModal .modal-dialog,
+#printSupplierReportModal .modal-dialog {
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 1.75rem auto !important;
+}
+
+#addSupplierModal .modal-content,
+#editSupplierModal .modal-content,
+#addSupplierBalanceModal .modal-content,
+#supplierPaymentModal .modal-content,
+#printSupplierReportModal .modal-content {
+    height: auto !important;
+    max-height: none !important;
+}
+
+#addSupplierModal .modal-body,
+#editSupplierModal .modal-body,
+#addSupplierBalanceModal .modal-body,
+#supplierPaymentModal .modal-body,
+#printSupplierReportModal .modal-body {
+    height: auto !important;
+    max-height: none !important;
+    overflow-y: visible !important;
+}
 </style>
 
 <!-- Add Supplier Modal -->
-<div class="modal fade" id="addSupplierModal" tabindex="-1">
+<div class="modal fade d-none d-md-block" id="addSupplierModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-scrollable modal-lg">
         <div class="modal-content">
             <form method="POST" action="">
@@ -1169,9 +1231,62 @@ $historyTypeLabels = [
     </div>
 </div>
 
+<!-- Add Supplier Card (Mobile) -->
+<div class="card shadow-sm mb-4 d-md-none" id="addSupplierCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-plus-circle me-2"></i><?php echo isset($lang['add']) ? $lang['add'] : 'إضافة'; ?> <?php echo (isset($lang) && isset($lang['suppliers'])) ? $lang['suppliers'] : 'مورد'; ?>
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="">
+            <input type="hidden" name="action" value="add">
+            <div class="mb-3">
+                <label class="form-label"><?php echo isset($lang['supplier_name']) ? $lang['supplier_name'] : 'اسم المورد'; ?> <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" name="name" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">نوع المورد <span class="text-danger">*</span></label>
+                <select class="form-select" name="type" required id="addSupplierCardType">
+                    <option value="">اختر نوع المورد</option>
+                    <option value="honey">مورد عسل</option>
+                    <option value="packaging">أدوات تعبئة</option>
+                    <option value="nuts">مكسرات</option>
+                    <option value="sesame">مورد سمسم</option>
+                    <option value="olive_oil">زيت زيتون</option>
+                    <option value="derivatives">مشتقات</option>
+                    <option value="beeswax">شمع عسل</option>
+                </select>
+                <small class="text-muted">سيتم توليد كود المورد تلقائياً بناءً على النوع المختار</small>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label"><?php echo isset($lang['phone']) ? $lang['phone'] : 'الهاتف'; ?></label>
+                    <input type="text" class="form-control" name="phone">
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label"><?php echo isset($lang['address']) ? $lang['address'] : 'العنوان'; ?></label>
+                <textarea class="form-control" name="address" rows="3"></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label"><?php echo isset($lang['status']) ? $lang['status'] : 'الحالة'; ?></label>
+                <select class="form-select" name="status">
+                    <option value="active"><?php echo isset($lang['active']) ? $lang['active'] : 'نشط'; ?></option>
+                    <option value="inactive"><?php echo isset($lang['inactive']) ? $lang['inactive'] : 'غير نشط'; ?></option>
+                </select>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary"><?php echo isset($lang['save']) ? $lang['save'] : 'حفظ'; ?></button>
+                <button type="button" class="btn btn-secondary" onclick="closeAddSupplierCard()"><?php echo isset($lang['cancel']) ? $lang['cancel'] : 'إلغاء'; ?></button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- Edit Supplier Modal -->
 <?php if ($editSupplier): ?>
-<div class="modal fade" id="editSupplierModal" tabindex="-1">
+<div class="modal fade d-none d-md-block" id="editSupplierModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <form method="POST" action="">
@@ -1249,8 +1364,79 @@ $historyTypeLabels = [
 </style>
 <?php endif; ?>
 
+<!-- Edit Supplier Card (Mobile) -->
+<?php if ($editSupplier): ?>
+<div class="card shadow-sm mb-4 d-md-none" id="editSupplierCard" style="display: none;">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-pencil me-2"></i><?php echo isset($lang['edit']) ? $lang['edit'] : 'تعديل'; ?> <?php echo (isset($lang) && isset($lang['suppliers'])) ? $lang['suppliers'] : 'مورد'; ?>
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="">
+            <input type="hidden" name="action" value="edit">
+            <input type="hidden" name="id" value="<?php echo $editSupplier['id']; ?>">
+            <?php 
+            $userRole = strtolower($currentUser['role'] ?? '');
+            $isAccountant = $userRole === 'accountant';
+            ?>
+            
+            <?php if (!$isAccountant): ?>
+            <div class="mb-3">
+                <label class="form-label">كود المورد</label>
+                <input type="text" class="form-control" value="<?php echo htmlspecialchars($editSupplier['supplier_code'] ?? '-'); ?>" readonly>
+                <small class="text-muted">سيتم تحديث الكود تلقائياً إذا تم تغيير نوع المورد</small>
+            </div>
+            <div class="mb-3">
+                <label class="form-label"><?php echo isset($lang['supplier_name']) ? $lang['supplier_name'] : 'اسم المورد'; ?> <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" name="name" value="<?php echo htmlspecialchars($editSupplier['name']); ?>" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">نوع المورد <span class="text-danger">*</span></label>
+                <select class="form-select" name="type" required id="editSupplierCardType">
+                    <option value="">اختر نوع المورد</option>
+                    <option value="honey" <?php echo ($editSupplier['type'] ?? '') === 'honey' ? 'selected' : ''; ?>>مورد عسل</option>
+                    <option value="packaging" <?php echo ($editSupplier['type'] ?? '') === 'packaging' ? 'selected' : ''; ?>>أدوات تعبئة</option>
+                    <option value="nuts" <?php echo ($editSupplier['type'] ?? '') === 'nuts' ? 'selected' : ''; ?>>مكسرات</option>
+                    <option value="olive_oil" <?php echo ($editSupplier['type'] ?? '') === 'olive_oil' ? 'selected' : ''; ?>>زيت زيتون</option>
+                    <option value="derivatives" <?php echo ($editSupplier['type'] ?? '') === 'derivatives' ? 'selected' : ''; ?>>مشتقات</option>
+                    <option value="beeswax" <?php echo ($editSupplier['type'] ?? '') === 'beeswax' ? 'selected' : ''; ?>>شمع عسل</option>
+                    <option value="sesame" <?php echo ($editSupplier['type'] ?? '') === 'sesame' ? 'selected' : ''; ?>>مورد سمسم</option>
+                </select>
+                <small class="text-muted">سيتم توليد كود جديد إذا تم تغيير النوع</small>
+            </div>
+            <?php endif; ?>
+            
+            <div class="mb-3">
+                <label class="form-label"><?php echo isset($lang['phone']) ? $lang['phone'] : 'الهاتف'; ?></label>
+                <input type="text" class="form-control" name="phone" value="<?php echo htmlspecialchars($editSupplier['phone'] ?? ''); ?>" <?php echo $isAccountant ? 'required' : ''; ?>>
+            </div>
+            <div class="mb-3">
+                <label class="form-label"><?php echo isset($lang['address']) ? $lang['address'] : 'العنوان'; ?></label>
+                <textarea class="form-control" name="address" rows="3" <?php echo $isAccountant ? 'required' : ''; ?>><?php echo htmlspecialchars($editSupplier['address'] ?? ''); ?></textarea>
+            </div>
+            
+            <?php if (!$isAccountant): ?>
+            <div class="mb-3">
+                <label class="form-label"><?php echo isset($lang['status']) ? $lang['status'] : 'الحالة'; ?></label>
+                <select class="form-select" name="status">
+                    <option value="active" <?php echo $editSupplier['status'] === 'active' ? 'selected' : ''; ?>><?php echo isset($lang['active']) ? $lang['active'] : 'نشط'; ?></option>
+                    <option value="inactive" <?php echo $editSupplier['status'] === 'inactive' ? 'selected' : ''; ?>><?php echo isset($lang['inactive']) ? $lang['inactive'] : 'غير نشط'; ?></option>
+                </select>
+            </div>
+            <?php endif; ?>
+            
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary"><?php echo isset($lang['save']) ? $lang['save'] : 'حفظ'; ?></button>
+                <button type="button" class="btn btn-secondary" onclick="closeEditSupplierCard()"><?php echo isset($lang['cancel']) ? $lang['cancel'] : 'إلغاء'; ?></button>
+            </div>
+        </form>
+    </div>
+</div>
+<?php endif; ?>
+
 <!-- Add Balance Modal -->
-<div class="modal fade" id="addSupplierBalanceModal" tabindex="-1">
+<div class="modal fade d-none d-md-block" id="addSupplierBalanceModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <form method="POST" action="">
@@ -1287,8 +1473,43 @@ $historyTypeLabels = [
     </div>
 </div>
 
+<!-- Add Balance Card (Mobile) -->
+<div class="card shadow-sm mb-4 d-md-none" id="addSupplierBalanceCard" style="display: none;">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-plus-circle me-2"></i>إضافة رصيد للمورد
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="">
+            <input type="hidden" name="action" value="add_balance">
+            <input type="hidden" name="supplier_id" id="balanceCardSupplierId">
+            <div class="mb-3">
+                <div class="fw-semibold text-muted">المورد</div>
+                <div class="fs-5" id="balanceCardSupplierName">-</div>
+            </div>
+            <div class="mb-3">
+                <div class="fw-semibold text-muted">الرصيد الحالي</div>
+                <div class="fs-5" id="balanceCardPreviousValue">-</div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">المبلغ المطلوب إضافته <span class="text-danger">*</span></label>
+                <input type="number" step="0.01" min="0.01" class="form-control" name="amount" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">ملاحظات (اختياري)</label>
+                <textarea class="form-control" name="notes" rows="3" placeholder="سبب إضافة الرصيد أو تفاصيل العملية"></textarea>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-success">حفظ الرصيد</button>
+                <button type="button" class="btn btn-secondary" onclick="closeAddSupplierBalanceCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- Record Payment Modal -->
-<div class="modal fade" id="supplierPaymentModal" tabindex="-1">
+<div class="modal fade d-none d-md-block" id="supplierPaymentModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <form method="POST" action="">
@@ -1326,7 +1547,291 @@ $historyTypeLabels = [
     </div>
 </div>
 
+<!-- Payment Card (Mobile) -->
+<div class="card shadow-sm mb-4 d-md-none" id="supplierPaymentCard" style="display: none;">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0">
+            <i class="bi bi-cash-coin me-2"></i>تسجيل سداد للمورد
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="">
+            <input type="hidden" name="action" value="record_payment">
+            <input type="hidden" name="supplier_id" id="paymentCardSupplierId">
+            <div class="mb-3">
+                <div class="fw-semibold text-muted">المورد</div>
+                <div class="fs-5" id="paymentCardSupplierName">-</div>
+            </div>
+            <div class="mb-3">
+                <div class="fw-semibold text-muted">الرصيد الحالي</div>
+                <div class="fs-5" id="paymentCardCurrentBalance">-</div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">مبلغ السداد <span class="text-danger">*</span></label>
+                <input type="number" step="0.01" min="0.01" class="form-control" name="amount" id="paymentCardAmount" required>
+                <small class="text-muted d-block mt-1">لا يمكن إدخال مبلغ أكبر من الرصيد الحالي.</small>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">ملاحظات (اختياري)</label>
+                <textarea class="form-control" name="notes" rows="3" placeholder="تفاصيل الدفع، رقم الإيصال، إلخ"></textarea>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-warning text-white">حفظ السداد</button>
+                <button type="button" class="btn btn-secondary" onclick="closeSupplierPaymentCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
+// ===== دوال أساسية للـ Modal/Card Dual System =====
+
+// دالة التحقق من الموبايل
+function isMobile() {
+    return window.innerWidth <= 768;
+}
+
+// دالة Scroll تلقائي
+function scrollToElement(element) {
+    if (!element) return;
+    
+    setTimeout(function() {
+        const rect = element.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const elementTop = rect.top + scrollTop;
+        const offset = 80; // مساحة للـ header
+        
+        requestAnimationFrame(function() {
+            window.scrollTo({
+                top: Math.max(0, elementTop - offset),
+                behavior: 'smooth'
+            });
+        });
+    }, 200);
+}
+
+// دالة إغلاق جميع النماذج
+function closeAllForms() {
+    // إغلاق جميع Cards على الموبايل
+    const cards = ['addSupplierCard', 'editSupplierCard', 'addSupplierBalanceCard', 'supplierPaymentCard', 'printSupplierReportCard'];
+    cards.forEach(function(cardId) {
+        const card = document.getElementById(cardId);
+        if (card && card.style.display !== 'none') {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    });
+    
+    // إغلاق جميع Modals على الكمبيوتر
+    const modals = ['addSupplierModal', 'editSupplierModal', 'addSupplierBalanceModal', 'supplierPaymentModal', 'printSupplierReportModal'];
+    modals.forEach(function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            if (modalInstance) modalInstance.hide();
+        }
+    });
+}
+
+// ===== دوال فتح النماذج =====
+
+// دالة فتح نموذج إضافة مورد
+function showAddSupplierModal() {
+    closeAllForms();
+    
+    if (isMobile()) {
+        const card = document.getElementById('addSupplierCard');
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        const modal = document.getElementById('addSupplierModal');
+        if (modal) {
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+// دالة فتح نموذج تعديل مورد
+function showEditSupplierModal(supplierId) {
+    closeAllForms();
+    
+    if (isMobile()) {
+        const card = document.getElementById('editSupplierCard');
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        // على الكمبيوتر، يتم فتح Modal عبر URL
+        window.location.href = '?page=suppliers&edit=' + supplierId;
+    }
+}
+
+// دالة فتح نموذج إضافة رصيد
+function showAddSupplierBalanceModal(button) {
+    if (!button) return;
+    
+    closeAllForms();
+    
+    const supplierId = button.getAttribute('data-supplier-id') || '';
+    const supplierName = button.getAttribute('data-supplier-name') || '-';
+    const balance = parseFloat(button.getAttribute('data-supplier-balance') || 0);
+    
+    if (isMobile()) {
+        const card = document.getElementById('addSupplierBalanceCard');
+        if (card) {
+            const supplierIdInput = card.querySelector('#balanceCardSupplierId');
+            const supplierNameEl = card.querySelector('#balanceCardSupplierName');
+            const balanceEl = card.querySelector('#balanceCardPreviousValue');
+            
+            if (supplierIdInput) supplierIdInput.value = supplierId;
+            if (supplierNameEl) supplierNameEl.textContent = supplierName;
+            if (balanceEl) balanceEl.textContent = balance.toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' });
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        const modal = document.getElementById('addSupplierBalanceModal');
+        if (modal) {
+            modal.querySelector('#balanceSupplierId').value = supplierId;
+            modal.querySelector('#balanceSupplierName').value = supplierName;
+            modal.querySelector('#balancePreviousValue').value = balance.toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' });
+            modal.querySelector('input[name="amount"]').value = '';
+            modal.querySelector('textarea[name="notes"]').value = '';
+            
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+// دالة فتح نموذج تسجيل سداد
+function showSupplierPaymentModal(button) {
+    if (!button) return;
+    
+    closeAllForms();
+    
+    const supplierId = button.getAttribute('data-supplier-id') || '';
+    const supplierName = button.getAttribute('data-supplier-name') || '-';
+    const balance = parseFloat(button.getAttribute('data-supplier-balance') || 0);
+    
+    if (isMobile()) {
+        const card = document.getElementById('supplierPaymentCard');
+        if (card) {
+            const supplierIdInput = card.querySelector('#paymentCardSupplierId');
+            const supplierNameEl = card.querySelector('#paymentCardSupplierName');
+            const balanceEl = card.querySelector('#paymentCardCurrentBalance');
+            const amountInput = card.querySelector('#paymentCardAmount');
+            
+            if (supplierIdInput) supplierIdInput.value = supplierId;
+            if (supplierNameEl) supplierNameEl.textContent = supplierName;
+            if (balanceEl) balanceEl.textContent = balance.toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' });
+            if (amountInput) {
+                amountInput.value = '';
+                amountInput.max = balance.toFixed(2);
+            }
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        const modal = document.getElementById('supplierPaymentModal');
+        if (modal) {
+            modal.querySelector('#paymentSupplierId').value = supplierId;
+            modal.querySelector('#paymentSupplierName').value = supplierName;
+            modal.querySelector('#paymentCurrentBalance').value = balance.toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' });
+            const amountInput = modal.querySelector('input[name="amount"]');
+            amountInput.value = '';
+            amountInput.max = balance.toFixed(2);
+            modal.querySelector('textarea[name="notes"]').value = '';
+            
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+// دالة فتح نموذج طباعة التقرير
+function showPrintSupplierReportModal() {
+    closeAllForms();
+    
+    if (isMobile()) {
+        const card = document.getElementById('printSupplierReportCard');
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        const modal = document.getElementById('printSupplierReportModal');
+        if (modal) {
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+// ===== دوال إغلاق Cards =====
+
+function closeAddSupplierCard() {
+    const card = document.getElementById('addSupplierCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closeEditSupplierCard() {
+    const card = document.getElementById('editSupplierCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closeAddSupplierBalanceCard() {
+    const card = document.getElementById('addSupplierBalanceCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closeSupplierPaymentCard() {
+    const card = document.getElementById('supplierPaymentCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closePrintSupplierReportCard() {
+    const card = document.getElementById('printSupplierReportCard');
+    if (card) {
+        card.style.display = 'none';
+    }
+}
+
+// ===== دوال أخرى =====
+
 function deleteSupplier(id, name) {
     if (confirm('<?php echo isset($lang['confirm_delete']) ? $lang['confirm_delete'] : 'هل أنت متأكد من حذف'; ?> "' + name + '"؟')) {
         const form = document.createElement('form');
@@ -1349,53 +1854,29 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     <?php if ($editSupplier): ?>
-    const editModal = new bootstrap.Modal(document.getElementById('editSupplierModal'));
-    editModal.show();
+    // فتح Modal التعديل على الكمبيوتر فقط
+    if (!isMobile()) {
+        const editModal = document.getElementById('editSupplierModal');
+        if (editModal) {
+            const modalInstance = new bootstrap.Modal(editModal);
+            modalInstance.show();
+        }
+    } else {
+        // على الموبايل، إظهار Card
+        const editCard = document.getElementById('editSupplierCard');
+        if (editCard) {
+            editCard.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(editCard);
+            }, 50);
+        }
+    }
     <?php endif; ?>
-
-    const balanceModal = document.getElementById('addSupplierBalanceModal');
-    const paymentModal = document.getElementById('supplierPaymentModal');
-
-    document.querySelectorAll('[data-bs-target="#addSupplierBalanceModal"]').forEach(function(button) {
-        button.addEventListener('click', function() {
-            if (!balanceModal) {
-                return;
-            }
-            const supplierId = this.getAttribute('data-supplier-id');
-            const supplierName = this.getAttribute('data-supplier-name');
-            const balance = parseFloat(this.getAttribute('data-supplier-balance') || 0);
-
-            balanceModal.querySelector('#balanceSupplierId').value = supplierId;
-            balanceModal.querySelector('#balanceSupplierName').value = supplierName;
-            balanceModal.querySelector('#balancePreviousValue').value = balance.toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' });
-            balanceModal.querySelector('input[name="amount"]').value = '';
-            balanceModal.querySelector('textarea[name="notes"]').value = '';
-        });
-    });
-
-    document.querySelectorAll('[data-bs-target="#supplierPaymentModal"]').forEach(function(button) {
-        button.addEventListener('click', function() {
-            if (!paymentModal) {
-                return;
-            }
-            const supplierId = this.getAttribute('data-supplier-id');
-            const supplierName = this.getAttribute('data-supplier-name');
-            const balance = parseFloat(this.getAttribute('data-supplier-balance') || 0);
-
-            paymentModal.querySelector('#paymentSupplierId').value = supplierId;
-            paymentModal.querySelector('#paymentSupplierName').value = supplierName;
-            paymentModal.querySelector('#paymentCurrentBalance').value = balance.toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' });
-            const amountInput = paymentModal.querySelector('input[name="amount"]');
-            amountInput.value = '';
-            amountInput.max = balance.toFixed(2);
-            paymentModal.querySelector('textarea[name="notes"]').value = '';
-        });
-    });
 });
 </script>
 
 <!-- Print Supplier Report Modal -->
-<div class="modal fade" id="printSupplierReportModal" tabindex="-1">
+<div class="modal fade d-none d-md-block" id="printSupplierReportModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -1475,6 +1956,82 @@ document.addEventListener('DOMContentLoaded', function() {
             if (modal) {
                 modal.hide();
             }
+        });
+    }
+});
+</script>
+
+<!-- Print Report Card (Mobile) -->
+<div class="card shadow-sm mb-4 d-md-none" id="printSupplierReportCard" style="display: none;">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-printer me-2"></i>طباعة تقرير التوريدات
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="mb-3">
+            <label class="form-label">المورد <span class="text-danger">*</span></label>
+            <select class="form-select" name="supplier_id" required id="reportCardSupplierId">
+                <option value="">اختر المورد</option>
+                <?php 
+                $allSuppliers = $db->query("SELECT id, name, supplier_code FROM suppliers WHERE status = 'active' ORDER BY name ASC");
+                foreach ($allSuppliers as $supp): ?>
+                    <option value="<?php echo $supp['id']; ?>">
+                        <?php echo htmlspecialchars($supp['name']); ?> 
+                        <?php if (!empty($supp['supplier_code'])): ?>
+                            (<?php echo htmlspecialchars($supp['supplier_code']); ?>)
+                        <?php endif; ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label class="form-label">من تاريخ</label>
+                <input type="date" class="form-control" name="date_from" id="reportCardDateFrom" value="<?php echo date('Y-m-01'); ?>">
+            </div>
+            <div class="col-md-6 mb-3">
+                <label class="form-label">إلى تاريخ</label>
+                <input type="date" class="form-control" name="date_to" id="reportCardDateTo" value="<?php echo date('Y-m-d'); ?>">
+            </div>
+        </div>
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle me-2"></i>
+            سيتم فتح التقرير في نافذة جديدة للطباعة
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-success" id="printSupplierReportCardBtn">
+                <i class="bi bi-printer me-2"></i>طباعة التقرير
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="closePrintSupplierReportCard()">إلغاء</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// دالة Print Report للموبايل
+document.addEventListener('DOMContentLoaded', function() {
+    const printCardBtn = document.getElementById('printSupplierReportCardBtn');
+    if (printCardBtn) {
+        const reportBaseUrl = '<?php echo getRelativeUrl("print_supplier_report.php"); ?>';
+        
+        printCardBtn.addEventListener('click', function() {
+            const supplierId = document.getElementById('reportCardSupplierId').value;
+            const dateFrom = document.getElementById('reportCardDateFrom').value;
+            const dateTo = document.getElementById('reportCardDateTo').value;
+            
+            if (!supplierId) {
+                alert('يرجى اختيار مورد');
+                return;
+            }
+            
+            const reportUrl = reportBaseUrl + 
+                '?supplier_id=' + encodeURIComponent(supplierId) +
+                '&date_from=' + encodeURIComponent(dateFrom) +
+                '&date_to=' + encodeURIComponent(dateTo);
+            
+            window.open(reportUrl, '_blank');
+            closePrintSupplierReportCard();
         });
     }
 });

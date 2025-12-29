@@ -1134,6 +1134,9 @@ try {
 }
 ?>
 
+<!-- Responsive Modals CSS - يجب أن يكون في البداية قبل أي محتوى -->
+<link rel="stylesheet" href="<?php echo getRelativeUrl('assets/css/responsive-modals.css'); ?>">
+
 <!-- جدول جميع عملاء المندوبين -->
 <div class="card shadow-sm mt-4">
     <div class="card-header bg-primary text-white">
@@ -1323,8 +1326,7 @@ try {
                                         <button
                                             type="button"
                                             class="btn btn-sm <?php echo $customerBalance > 0 ? 'btn-success' : 'btn-outline-secondary'; ?> all-customers-collect-btn"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#allCustomersCollectPaymentModal"
+                                            onclick="showAllCustomersCollectPaymentModal(this)"
                                             data-customer-id="<?php echo (int)$customer['id']; ?>"
                                             data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
                                             data-customer-balance="<?php echo $rawBalance; ?>"
@@ -1491,8 +1493,8 @@ try {
 }
 </style>
 
-<!-- Modal تفاصيل المندوب -->
-<div class="modal fade" id="repDetailsModal" tabindex="-1" aria-labelledby="repDetailsModalLabel" aria-hidden="true">
+<!-- Modal تفاصيل المندوب - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="repDetailsModal" tabindex="-1" aria-labelledby="repDetailsModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -1780,8 +1782,7 @@ function loadRepDetails(repId, repName) {
                                     <button
                                         type="button"
                                         class="btn btn-sm ${collectBtnClass} rep-collect-btn"
-                                        data-bs-toggle="modal"
-                                        data-bs-target="#repCollectPaymentModal"
+                                        onclick="showRepCollectPaymentModal(this)"
                                         data-customer-id="${customer.id || 0}"
                                         data-customer-name="${escapeHtml(customer.name || '—')}"
                                         data-customer-balance="${rawBalance}"
@@ -2622,8 +2623,8 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
-<!-- Modal تحصيل ديون العميل -->
-<div class="modal fade" id="repCollectPaymentModal" tabindex="-1" aria-hidden="true">
+<!-- Modal تحصيل ديون العميل - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="repCollectPaymentModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
@@ -2667,6 +2668,155 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
     </div>
 </div>
+
+<!-- Card تحصيل ديون العميل - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="repCollectPaymentCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-cash-coin me-2"></i>تحصيل ديون العميل
+        </h5>
+    </div>
+    <div class="card-body">
+        <form id="repCollectionCardForm">
+            <input type="hidden" name="customer_id" id="repCollectionCardCustomerId" value="">
+            <div class="mb-3">
+                <div class="fw-semibold text-muted">العميل</div>
+                <div class="fs-5 rep-collection-card-customer-name">-</div>
+            </div>
+            <div class="mb-3">
+                <div class="fw-semibold text-muted">الديون الحالية</div>
+                <div class="fs-5 text-warning rep-collection-card-current-debt">-</div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="repCollectionCardAmount">مبلغ التحصيل <span class="text-danger">*</span></label>
+                <input
+                    type="number"
+                    class="form-control"
+                    id="repCollectionCardAmount"
+                    name="amount"
+                    step="0.01"
+                    min="0.01"
+                    required
+                >
+                <div class="form-text">لن يتم قبول مبلغ أكبر من قيمة الديون الحالية.</div>
+            </div>
+            <div id="repCollectionCardError" class="alert alert-danger d-none" role="alert"></div>
+            <div id="repCollectionCardSuccess" class="alert alert-success d-none" role="alert"></div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary" id="repCollectionCardSubmitBtn">
+                    <i class="bi bi-check-circle me-1"></i>تحصيل
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeRepCollectPaymentCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// معالج form submit للـ Card على الموبايل
+document.addEventListener('DOMContentLoaded', function() {
+    const repCollectionCardForm = document.getElementById('repCollectionCardForm');
+    if (repCollectionCardForm) {
+        repCollectionCardForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const customerId = document.getElementById('repCollectionCardCustomerId')?.value || '';
+            const amount = document.getElementById('repCollectionCardAmount')?.value || '';
+            const errorDiv = document.getElementById('repCollectionCardError');
+            const successDiv = document.getElementById('repCollectionCardSuccess');
+            const submitBtn = document.getElementById('repCollectionCardSubmitBtn');
+            
+            if (!customerId || customerId <= 0) {
+                if (errorDiv) {
+                    errorDiv.textContent = 'معرف العميل غير صالح';
+                    errorDiv.classList.remove('d-none');
+                }
+                return;
+            }
+            
+            if (!amount || parseFloat(amount) <= 0) {
+                if (errorDiv) {
+                    errorDiv.textContent = 'يجب إدخال مبلغ تحصيل أكبر من صفر';
+                    errorDiv.classList.remove('d-none');
+                }
+                return;
+            }
+            
+            // إخفاء رسائل الخطأ والنجاح السابقة
+            if (errorDiv) errorDiv.classList.add('d-none');
+            if (successDiv) successDiv.classList.add('d-none');
+            
+            // تعطيل الزر وإظهار loading
+            const originalBtnHtml = submitBtn?.innerHTML || '';
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جاري التحصيل...';
+            }
+            
+            // إرسال الطلب عبر AJAX
+            const apiUrl = '<?php echo getRelativeUrl("api/collect_from_rep_customer.php"); ?>';
+            const formData = new FormData();
+            formData.append('customer_id', customerId);
+            formData.append('amount', amount);
+            
+            fetch(apiUrl, {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin'
+            })
+            .then(response => {
+                const contentType = response.headers.get('content-type') || '';
+                if (!contentType.includes('application/json')) {
+                    return response.text().then(text => {
+                        console.error('Non-JSON response:', text);
+                        throw new Error('استجابة غير صحيحة من الخادم');
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('API Response:', data);
+                if (data.success) {
+                    if (successDiv) {
+                        successDiv.textContent = data.message || 'تم التحصيل بنجاح';
+                        successDiv.classList.remove('d-none');
+                    }
+                    
+                    // إعادة تحميل الصفحة بعد ثانيتين
+                    setTimeout(function() {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    if (errorDiv) {
+                        errorDiv.textContent = data.message || 'حدث خطأ أثناء التحصيل';
+                        errorDiv.classList.remove('d-none');
+                    }
+                    
+                    // إعادة تعيين الزر
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = originalBtnHtml;
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Collection error:', error);
+                if (errorDiv) {
+                    errorDiv.textContent = 'حدث خطأ أثناء إرسال الطلب. يرجى المحاولة مرة أخرى.';
+                    errorDiv.classList.remove('d-none');
+                }
+                
+                // إعادة تعيين الزر
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalBtnHtml;
+                }
+            });
+        });
+    }
+});
+</script>
 
 <style>
 /* تحسينات المودالات على الهواتف - repCollectPaymentModal */
@@ -2758,8 +2908,8 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 </style>
 
-<!-- Modal عرض موقع العميل -->
-<div class="modal fade" id="repViewLocationModal" tabindex="-1" aria-hidden="true">
+<!-- Modal عرض موقع العميل - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="repViewLocationModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
@@ -2794,8 +2944,8 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 
-<!-- Modal سجل المشتريات -->
-<div class="modal fade" id="repCustomerHistoryModal" tabindex="-1" aria-hidden="true">
+<!-- Modal سجل المشتريات - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="repCustomerHistoryModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-dark text-white">
@@ -2886,8 +3036,8 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 
-<!-- Modal إنشاء مرتجع -->
-<div class="modal fade" id="repCustomerReturnModal" tabindex="-1" aria-hidden="true">
+<!-- Modal إنشاء مرتجع - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="repCustomerReturnModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
@@ -3187,8 +3337,8 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 </style>
 
-<!-- Modal تحصيل ديون العميل -->
-<div class="modal fade" id="allCustomersCollectPaymentModal" tabindex="-1" aria-hidden="true">
+<!-- Modal تحصيل ديون العميل - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="allCustomersCollectPaymentModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-scrollable modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
@@ -3264,6 +3414,46 @@ document.addEventListener('DOMContentLoaded', function() {
                 </a>
             </div>
         </div>
+    </div>
+</div>
+
+<!-- Card تحصيل ديون العميل - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="allCustomersCollectPaymentCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-cash-coin me-2"></i>تحصيل ديون العميل
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
+            <input type="hidden" name="action" value="collect_debt">
+            <input type="hidden" name="customer_id" id="allCustomersCollectionCardCustomerId" value="">
+            <div class="mb-3">
+                <div class="fw-semibold text-muted">العميل</div>
+                <div class="fs-5 all-customers-collection-card-customer-name">-</div>
+            </div>
+            <div class="mb-3">
+                <div class="fw-semibold text-muted">الديون الحالية</div>
+                <div class="fs-5 text-warning all-customers-collection-card-current-debt">-</div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="allCustomersCollectionCardAmount">مبلغ التحصيل <span class="text-danger">*</span></label>
+                <input
+                    type="number"
+                    class="form-control"
+                    id="allCustomersCollectionCardAmount"
+                    name="amount"
+                    step="0.01"
+                    min="0.01"
+                    required
+                >
+                <div class="form-text">لن يتم قبول مبلغ أكبر من قيمة الديون الحالية.</div>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">تحصيل المبلغ</button>
+                <button type="button" class="btn btn-secondary" onclick="closeAllCustomersCollectPaymentCard()">إلغاء</button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -3720,9 +3910,9 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
-<!-- Modal تعديل عميل المندوب -->
+<!-- Modal تعديل عميل المندوب - للكمبيوتر فقط -->
 <?php if (in_array($currentRole, ['manager', 'accountant', 'sales'], true)): ?>
-<div class="modal fade" id="editRepCustomerModal" tabindex="-1">
+<div class="modal fade d-none d-md-block" id="editRepCustomerModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-scrollable modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
@@ -3791,7 +3981,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 <?php endif; ?>
 
-<!-- Modal تصدير العملاء المحددين -->
+<!-- Modal تصدير العملاء المحددين - للكمبيوتر فقط -->
 <?php
 // جلب قائمة المندوبين
 $salesRepsList = [];
@@ -3804,7 +3994,7 @@ try {
     $salesRepsList = [];
 }
 ?>
-<div class="modal fade" id="customerExportModal" tabindex="-1" aria-hidden="true" data-section="delegates">
+<div class="modal fade d-none d-md-block" id="customerExportModal" tabindex="-1" aria-hidden="true" data-section="delegates">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-info text-white d-flex justify-content-between align-items-center">
@@ -4201,8 +4391,8 @@ try {
 }
 </style>
 
-<!-- Modal تحديد الحد الائتماني -->
-<div class="modal fade" id="setCreditLimitModal" tabindex="-1" aria-hidden="true">
+<!-- Modal تحديد الحد الائتماني - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="setCreditLimitModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
@@ -4393,8 +4583,8 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
-<!-- Modal لتغيير المندوب -->
-<div class="modal fade" id="changeSalesRepModal" tabindex="-1" aria-labelledby="changeSalesRepModalLabel" aria-hidden="true">
+<!-- Modal لتغيير المندوب - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="changeSalesRepModal" tabindex="-1" aria-labelledby="changeSalesRepModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
@@ -4611,5 +4801,232 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 5000);
     }
 })();
+</script>
+
+<!-- JavaScript Functions الأساسية للـ Modal/Card Dual System -->
+<script>
+// دالة التحقق من الموبايل
+function isMobile() {
+    return window.innerWidth <= 768;
+}
+
+// دالة Scroll تلقائي
+function scrollToElement(element) {
+    if (!element) return;
+    
+    setTimeout(function() {
+        const rect = element.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const elementTop = rect.top + scrollTop;
+        const offset = 80; // مساحة للـ header
+        
+        requestAnimationFrame(function() {
+            window.scrollTo({
+                top: Math.max(0, elementTop - offset),
+                behavior: 'smooth'
+            });
+        });
+    }, 200);
+}
+
+// دالة إغلاق جميع النماذج
+function closeAllForms() {
+    // إغلاق جميع Cards على الموبايل
+    const cards = [
+        'repDetailsCard', 'repCollectPaymentCard', 'repViewLocationCard',
+        'repCustomerHistoryCard', 'repCustomerReturnCard',
+        'allCustomersCollectPaymentCard', 'allCustomersViewLocationCard',
+        'editRepCustomerCard', 'customerExportCard',
+        'setCreditLimitCard', 'changeSalesRepCard'
+    ];
+    cards.forEach(function(cardId) {
+        const card = document.getElementById(cardId);
+        if (card && card.style.display !== 'none') {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    });
+    
+    // إغلاق جميع Modals على الكمبيوتر
+    const modals = [
+        'repDetailsModal', 'repCollectPaymentModal', 'repViewLocationModal',
+        'repCustomerHistoryModal', 'repCustomerReturnModal',
+        'allCustomersCollectPaymentModal', 'allCustomersViewLocationModal',
+        'editRepCustomerModal', 'customerExportModal',
+        'setCreditLimitModal', 'changeSalesRepModal'
+    ];
+    modals.forEach(function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            if (modalInstance) modalInstance.hide();
+        }
+    });
+}
+
+// دالة فتح نموذج تحصيل ديون العميل (Modal أو Card)
+function showRepCollectPaymentModal(button) {
+    if (!button) return;
+    
+    closeAllForms();
+    
+    const customerId = button.getAttribute('data-customer-id') || '';
+    const customerName = button.getAttribute('data-customer-name') || '-';
+    const balanceRaw = button.getAttribute('data-customer-balance') || '0';
+    const balanceFormatted = button.getAttribute('data-customer-balance-formatted') || balanceRaw;
+    let numericBalance = parseFloat(balanceRaw);
+    if (!Number.isFinite(numericBalance)) {
+        numericBalance = 0;
+    }
+    const debtAmount = numericBalance > 0 ? numericBalance : 0;
+    
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('repCollectPaymentCard');
+        if (card) {
+            const customerIdInput = card.querySelector('#repCollectionCardCustomerId');
+            const customerNameEl = card.querySelector('.rep-collection-card-customer-name');
+            const debtEl = card.querySelector('.rep-collection-card-current-debt');
+            const amountInput = card.querySelector('#repCollectionCardAmount');
+            const errorDiv = card.querySelector('#repCollectionCardError');
+            const successDiv = card.querySelector('#repCollectionCardSuccess');
+            
+            if (customerIdInput) customerIdInput.value = customerId;
+            if (customerNameEl) customerNameEl.textContent = customerName;
+            if (debtEl) debtEl.textContent = balanceFormatted;
+            if (amountInput) {
+                amountInput.value = debtAmount.toFixed(2);
+                amountInput.setAttribute('max', debtAmount.toFixed(2));
+                amountInput.setAttribute('min', '0');
+                amountInput.readOnly = debtAmount <= 0;
+            }
+            if (errorDiv) errorDiv.classList.add('d-none');
+            if (successDiv) successDiv.classList.add('d-none');
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        const modal = document.getElementById('repCollectPaymentModal');
+        if (modal) {
+            const customerIdInput = modal.querySelector('#repCollectionCustomerId');
+            const customerNameEl = modal.querySelector('.rep-collection-customer-name');
+            const debtEl = modal.querySelector('.rep-collection-current-debt');
+            const amountInput = modal.querySelector('input[name="amount"]');
+            const errorDiv = modal.querySelector('#repCollectionError');
+            const successDiv = modal.querySelector('#repCollectionSuccess');
+            
+            if (customerIdInput) customerIdInput.value = customerId;
+            if (customerNameEl) customerNameEl.textContent = customerName;
+            if (debtEl) debtEl.textContent = balanceFormatted;
+            if (amountInput) {
+                amountInput.value = debtAmount.toFixed(2);
+                amountInput.setAttribute('max', debtAmount.toFixed(2));
+                amountInput.setAttribute('min', '0');
+                amountInput.readOnly = debtAmount <= 0;
+                if (debtAmount > 0) amountInput.focus();
+            }
+            if (errorDiv) errorDiv.classList.add('d-none');
+            if (successDiv) successDiv.classList.add('d-none');
+            
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+// دالة إغلاق Card تحصيل الديون
+function closeRepCollectPaymentCard() {
+    const card = document.getElementById('repCollectPaymentCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+        const errorDiv = card.querySelector('#repCollectionCardError');
+        const successDiv = card.querySelector('#repCollectionCardSuccess');
+        if (errorDiv) errorDiv.classList.add('d-none');
+        if (successDiv) successDiv.classList.add('d-none');
+    }
+}
+
+// دالة فتح نموذج تحصيل ديون العميل (لجميع العملاء) - Modal أو Card
+function showAllCustomersCollectPaymentModal(button) {
+    if (!button) return;
+    
+    closeAllForms();
+    
+    const customerId = button.getAttribute('data-customer-id') || '';
+    const customerName = button.getAttribute('data-customer-name') || '-';
+    const balanceRaw = button.getAttribute('data-customer-balance') || '0';
+    const balanceFormatted = button.getAttribute('data-customer-balance-formatted') || balanceRaw;
+    let numericBalance = parseFloat(balanceRaw);
+    if (!Number.isFinite(numericBalance)) {
+        numericBalance = 0;
+    }
+    const debtAmount = numericBalance > 0 ? numericBalance : 0;
+    
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('allCustomersCollectPaymentCard');
+        if (card) {
+            const customerIdInput = card.querySelector('#allCustomersCollectionCardCustomerId');
+            const customerNameEl = card.querySelector('.all-customers-collection-card-customer-name');
+            const debtEl = card.querySelector('.all-customers-collection-card-current-debt');
+            const amountInput = card.querySelector('#allCustomersCollectionCardAmount');
+            
+            if (customerIdInput) customerIdInput.value = customerId;
+            if (customerNameEl) customerNameEl.textContent = customerName;
+            if (debtEl) debtEl.textContent = balanceFormatted;
+            if (amountInput) {
+                amountInput.value = debtAmount.toFixed(2);
+                amountInput.setAttribute('max', debtAmount.toFixed(2));
+                amountInput.setAttribute('min', '0');
+                amountInput.readOnly = debtAmount <= 0;
+            }
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        const modal = document.getElementById('allCustomersCollectPaymentModal');
+        if (modal) {
+            const customerIdInput = modal.querySelector('input[name="customer_id"]');
+            const customerNameEl = modal.querySelector('.all-customers-collection-customer-name');
+            const debtEl = modal.querySelector('.all-customers-collection-current-debt');
+            const amountInput = modal.querySelector('#allCustomersCollectionAmount');
+            
+            if (customerIdInput) customerIdInput.value = customerId;
+            if (customerNameEl) customerNameEl.textContent = customerName;
+            if (debtEl) debtEl.textContent = balanceFormatted;
+            if (amountInput) {
+                amountInput.value = debtAmount.toFixed(2);
+                amountInput.setAttribute('max', debtAmount.toFixed(2));
+                amountInput.setAttribute('min', '0');
+                amountInput.readOnly = debtAmount <= 0;
+                if (debtAmount > 0) amountInput.focus();
+            }
+            
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+// دالة إغلاق Card تحصيل الديون (لجميع العملاء)
+function closeAllCustomersCollectPaymentCard() {
+    const card = document.getElementById('allCustomersCollectPaymentCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
 </script>
 

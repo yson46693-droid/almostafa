@@ -275,14 +275,67 @@ async function capturePhoto() {
     
     // تحويل إلى base64
     capturedPhoto = canvas.toDataURL('image/jpeg', 0.8);
-    capturedImage.src = capturedPhoto;
+    
+    // التحقق من أن العناصر موجودة
+    if (!capturedImage) {
+        console.error('Captured image element not found!');
+        return;
+    }
+    
+    if (!capturedImageContainer) {
+        console.error('Captured image container not found!');
+        return;
+    }
     
     // إيقاف الكاميرا
     stopCamera();
     
-    // إخفاء الكاميرا وإظهار الصورة
-    cameraContainer.style.display = 'none';
-    capturedImageContainer.style.display = 'block';
+    // إخفاء الكاميرا أولاً
+    if (cameraContainer) {
+        cameraContainer.style.setProperty('display', 'none', 'important');
+        cameraContainer.style.setProperty('visibility', 'hidden', 'important');
+    }
+    
+    // تعيين src للصورة
+    capturedImage.src = capturedPhoto;
+    
+    // إظهار container الصورة
+    capturedImageContainer.style.setProperty('display', 'block', 'important');
+    capturedImageContainer.style.setProperty('visibility', 'visible', 'important');
+    capturedImageContainer.style.setProperty('opacity', '1', 'important');
+    capturedImageContainer.style.setProperty('text-align', 'center', 'important');
+    
+    // إظهار الصورة نفسها
+    capturedImage.style.setProperty('display', 'block', 'important');
+    capturedImage.style.setProperty('visibility', 'visible', 'important');
+    capturedImage.style.setProperty('max-width', '100%', 'important');
+    capturedImage.style.setProperty('height', 'auto', 'important');
+    capturedImage.style.setProperty('border-radius', '8px', 'important');
+    capturedImage.style.setProperty('margin', '0 auto', 'important');
+    
+    // الانتظار حتى يتم تحميل الصورة
+    capturedImage.onload = function() {
+        console.log('Image loaded successfully:', {
+            width: capturedImage.width,
+            height: capturedImage.height,
+            src: capturedImage.src ? 'exists' : 'missing'
+        });
+        
+        // التأكد من أن الصورة مرئية
+        capturedImageContainer.style.setProperty('display', 'block', 'important');
+        capturedImage.style.setProperty('display', 'block', 'important');
+    };
+    
+    capturedImage.onerror = function() {
+        console.error('Error loading captured image');
+        alert('حدث خطأ في عرض الصورة الملتقطة. يرجى المحاولة مرة أخرى.');
+    };
+    
+    console.log('Image preview setup completed:', {
+        src: capturedImage.src ? 'exists' : 'missing',
+        containerDisplay: capturedImageContainer.style.display,
+        imageDisplay: capturedImage.style.display
+    });
     
     // إظهار أزرار إعادة التقاط والتأكيد
     if (isMobileDevice) {
@@ -383,40 +436,46 @@ function retakePhoto() {
     const isMobileDevice = isMobile();
     capturedPhoto = null;
     
-    if (isMobileDevice) {
-        document.getElementById('capturedImageContainerCard').style.display = 'none';
-        document.getElementById('cameraContainerCard').style.display = 'block';
-        document.getElementById('retakeBtnCard').style.display = 'none';
-        document.getElementById('submitBtnCard').style.display = 'none';
-        document.getElementById('captureBtnCard').style.display = 'inline-block';
-        
-        // إخفاء حقل سبب التأخير
-        const delayReasonContainer = document.getElementById('delayReasonContainerCard');
-        if (delayReasonContainer) {
-            delayReasonContainer.style.display = 'none';
-        }
-        const delayReasonInput = document.getElementById('delayReasonCard');
-        if (delayReasonInput) {
-            delayReasonInput.value = '';
-        }
-    } else {
-        document.getElementById('capturedImageContainer').style.display = 'none';
-        document.getElementById('cameraContainer').style.display = 'block';
-        document.getElementById('retakeBtn').style.display = 'none';
-        document.getElementById('submitBtn').style.display = 'none';
-        document.getElementById('captureBtn').style.display = 'inline-block';
-        
-        // إخفاء حقل سبب التأخير
-        const delayReasonContainer = document.getElementById('delayReasonContainer');
-        if (delayReasonContainer) {
-            delayReasonContainer.style.display = 'none';
-        }
-        const delayReasonInput = document.getElementById('delayReason');
-        if (delayReasonInput) {
-            delayReasonInput.value = '';
-        }
+    const capturedImageContainer = isMobileDevice ? document.getElementById('capturedImageContainerCard') : document.getElementById('capturedImageContainer');
+    const cameraContainer = isMobileDevice ? document.getElementById('cameraContainerCard') : document.getElementById('cameraContainer');
+    const retakeBtn = isMobileDevice ? document.getElementById('retakeBtnCard') : document.getElementById('retakeBtn');
+    const submitBtn = isMobileDevice ? document.getElementById('submitBtnCard') : document.getElementById('submitBtn');
+    const captureBtn = isMobileDevice ? document.getElementById('captureBtnCard') : document.getElementById('captureBtn');
+    const delayReasonContainer = isMobileDevice ? document.getElementById('delayReasonContainerCard') : document.getElementById('delayReasonContainer');
+    const delayReasonInput = isMobileDevice ? document.getElementById('delayReasonCard') : document.getElementById('delayReason');
+    
+    // إخفاء preview الصورة
+    if (capturedImageContainer) {
+        capturedImageContainer.style.setProperty('display', 'none', 'important');
+        capturedImageContainer.style.setProperty('visibility', 'hidden', 'important');
     }
     
+    // إظهار الكاميرا
+    if (cameraContainer) {
+        cameraContainer.style.setProperty('display', 'block', 'important');
+        cameraContainer.style.setProperty('visibility', 'visible', 'important');
+    }
+    
+    // إخفاء أزرار إعادة التقاط والتأكيد
+    if (retakeBtn) retakeBtn.style.setProperty('display', 'none', 'important');
+    if (submitBtn) submitBtn.style.setProperty('display', 'none', 'important');
+    
+    // إظهار زر التقاط
+    if (captureBtn) {
+        captureBtn.style.setProperty('display', 'inline-block', 'important');
+        captureBtn.style.setProperty('visibility', 'visible', 'important');
+    }
+    
+    // إخفاء حقل سبب التأخير
+    if (delayReasonContainer) {
+        delayReasonContainer.style.setProperty('display', 'none', 'important');
+    }
+    if (delayReasonInput) {
+        delayReasonInput.value = '';
+        delayReasonInput.disabled = true;
+    }
+    
+    // إعادة تهيئة الكاميرا
     initCamera();
 }
 

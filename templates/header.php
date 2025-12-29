@@ -37,11 +37,8 @@ require_once __DIR__ . '/../includes/payment_schedules.php';
 require_once __DIR__ . '/../includes/production_reports.php';
 require_once __DIR__ . '/../includes/version_helper.php';
 
-// التحقق من التعديلات وتحديث الإصدار تلقائياً
-// النظام يتحقق من تغييرات الملفات الرئيسية ويحدث الإصدار تلقائياً
-// يمكن تعطيل هذا السطر في الإنتاج لتوفير الأداء
-// ملاحظة: التحديث يحدث عند تغيير الملفات الرئيسية أو رفع تحديثات من GitHub
-@checkAndUpdateVersion();
+// تعطيل التحديث التلقائي للإصدار - استخدام عداد يدوي من version.json فقط
+// @checkAndUpdateVersion(); // معطل - الإصدار يتم قراءته يدوياً من version.json
 
 // تحديد اللغة الحالية
 $currentLang = getCurrentLanguage();
@@ -3431,12 +3428,30 @@ if (ob_get_level() > 0) {
                 </div>
                 <?php endif; ?>
                 
-                <!-- Version Badge -->
+                <!-- Version Badge - عداد يدوي من version.json -->
                 <div class="version-badge-container">
                     <span class="version-badge" title="إصدار النظام">
                         <?php 
-                        // الحصول على رقم الإصدار الحالي
-                        $currentVersion = function_exists('getCurrentVersion') ? getCurrentVersion() : 'v1.0';
+                        // قراءة الإصدار مباشرة من version.json (عداد يدوي)
+                        $versionFile = __DIR__ . '/../version.json';
+                        $currentVersion = 'v1.0.0'; // افتراضي
+                        
+                        if (file_exists($versionFile)) {
+                            try {
+                                $versionData = json_decode(file_get_contents($versionFile), true);
+                                if (isset($versionData['version']) && !empty($versionData['version'])) {
+                                    $version = trim($versionData['version']);
+                                    // إضافة v في البداية إذا لم تكن موجودة
+                                    if (strpos($version, 'v') !== 0) {
+                                        $version = 'v' . $version;
+                                    }
+                                    $currentVersion = $version;
+                                }
+                            } catch (Exception $e) {
+                                // في حالة الخطأ، استخدام الإصدار الافتراضي
+                            }
+                        }
+                        
                         echo htmlspecialchars($currentVersion);
                         ?>
                     </span>

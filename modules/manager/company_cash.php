@@ -427,10 +427,10 @@ $pageTitle = isset($lang['menu_financial']) ? $lang['menu_financial'] : 'خزن�
 <div class="page-header mb-4 d-flex justify-content-between align-items-center flex-wrap gap-2">
     <h2><i class="bi bi-safe me-2"></i><?php echo isset($lang['menu_financial']) ? $lang['menu_financial'] : 'خزنة الشركة'; ?></h2>
     <div class="d-flex gap-2">
-        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#generateReportModal">
+        <button type="button" class="btn btn-success" onclick="showGenerateReportModal()">
             <i class="bi bi-file-earmark-text me-1"></i>تقرير تفصيلي
         </button>
-        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#collectFromRepModal">
+        <button type="button" class="btn btn-primary" onclick="showCollectFromRepModal()">
             <i class="bi bi-cash-coin me-1"></i>تحصيل من مندوب
         </button>
     </div>
@@ -1175,8 +1175,8 @@ $typeColorMap = [
     </div>
 </div>
 
-<!-- Modal تحصيل من مندوب -->
-<div class="modal fade" id="collectFromRepModal" tabindex="-1" aria-labelledby="collectFromRepModalLabel" aria-hidden="true">
+<!-- Modal تحصيل من مندوب - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="collectFromRepModal" tabindex="-1" aria-labelledby="collectFromRepModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -1238,7 +1238,269 @@ $typeColorMap = [
     </div>
 </div>
 
+<!-- Card تحصيل من مندوب - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="collectFromRepCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-cash-coin me-2"></i>تحصيل من مندوب
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="collectFromRepCardForm">
+            <input type="hidden" name="action" value="collect_from_sales_rep">
+            <div class="mb-3">
+                <label for="collectFromRepCardSalesRepSelect" class="form-label">اختر المندوب <span class="text-danger">*</span></label>
+                <select class="form-select" id="collectFromRepCardSalesRepSelect" name="sales_rep_id" required>
+                    <option value="">-- اختر المندوب --</option>
+                    <?php
+                    $salesReps = $db->query("
+                        SELECT id, username, full_name 
+                        FROM users 
+                        WHERE role = 'sales' AND status = 'active'
+                        ORDER BY full_name ASC, username ASC
+                    ") ?: [];
+                    foreach ($salesReps as $rep):
+                    ?>
+                        <option value="<?php echo $rep['id']; ?>">
+                            <?php echo htmlspecialchars($rep['full_name'] ?? $rep['username'], ENT_QUOTES, 'UTF-8'); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            
+            <div class="mb-3">
+                <label for="collectFromRepCardRepBalanceAmount" class="form-label">رصيد المندوب</label>
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-wallet2 me-1"></i>رصيد المندوب</span>
+                    <input type="text" class="form-control" id="collectFromRepCardRepBalanceAmount" readonly value="-- اختر مندوب أولاً --" style="background-color: #f8f9fa; font-weight: bold;">
+                    <span class="input-group-text">ج.م</span>
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="collectFromRepCardAmount" class="form-label">مبلغ التحصيل <span class="text-danger">*</span></label>
+                <div class="input-group">
+                    <span class="input-group-text">ج.م</span>
+                    <input type="number" step="0.01" min="0.01" class="form-control" id="collectFromRepCardAmount" name="amount" required placeholder="أدخل المبلغ">
+                </div>
+                <small class="text-muted">يجب أن يكون المبلغ أقل من أو يساوي رصيد المندوب</small>
+            </div>
+            
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary" id="collectFromRepCardSubmitBtn">
+                    <i class="bi bi-check-circle me-1"></i>تحصيل
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeCollectFromRepCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
+// ===== دوال أساسية للـ Modal/Card Dual System =====
+
+// دالة التحقق من الموبايل
+function isMobile() {
+    return window.innerWidth <= 768;
+}
+
+// دالة للـ scroll تلقائي محسّنة
+function scrollToElement(element) {
+    if (!element) return;
+    
+    setTimeout(function() {
+        const rect = element.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const elementTop = rect.top + scrollTop;
+        const offset = 80; // مساحة للـ header
+        const targetPosition = elementTop - offset;
+        
+        requestAnimationFrame(function() {
+            window.scrollTo({
+                top: Math.max(0, targetPosition),
+                behavior: 'smooth'
+            });
+        });
+    }, 200);
+}
+
+// دالة لإغلاق جميع النماذج المفتوحة
+function closeAllForms() {
+    // إغلاق جميع Cards على الموبايل
+    const collectCard = document.getElementById('collectFromRepCard');
+    const reportCard = document.getElementById('generateReportCard');
+    
+    if (collectCard && collectCard.style.display !== 'none') {
+        collectCard.style.display = 'none';
+        const form = collectCard.querySelector('form');
+        if (form) form.reset();
+    }
+    
+    if (reportCard && reportCard.style.display !== 'none') {
+        reportCard.style.display = 'none';
+        const form = reportCard.querySelector('form');
+        if (form) form.reset();
+    }
+    
+    // إغلاق جميع Modals على الكمبيوتر
+    const modals = ['collectFromRepModal', 'generateReportModal'];
+    
+    modals.forEach(function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            if (modalInstance) modalInstance.hide();
+        }
+    });
+}
+
+// دالة فتح نموذج تحصيل من مندوب
+function showCollectFromRepModal() {
+    closeAllForms();
+    
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('collectFromRepCard');
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        const modal = document.getElementById('collectFromRepModal');
+        if (modal) {
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+// دالة فتح نموذج إنشاء تقرير
+function showGenerateReportModal() {
+    closeAllForms();
+    
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('generateReportCard');
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        const modal = document.getElementById('generateReportModal');
+        if (modal) {
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+// دوال إغلاق Cards
+function closeCollectFromRepCard() {
+    const card = document.getElementById('collectFromRepCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+        
+        // إعادة تعيين حقول الرصيد
+        const repBalanceAmount = document.getElementById('collectFromRepCardRepBalanceAmount');
+        if (repBalanceAmount) {
+            repBalanceAmount.value = '-- اختر مندوب أولاً --';
+            repBalanceAmount.style.color = '#6c757d';
+        }
+        
+        const collectAmount = document.getElementById('collectFromRepCardAmount');
+        if (collectAmount) {
+            collectAmount.max = '';
+            collectAmount.removeAttribute('data-max-balance');
+        }
+        
+        const submitBtn = document.getElementById('collectFromRepCardSubmitBtn');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i>تحصيل';
+        }
+    }
+}
+
+function closeGenerateReportCard() {
+    const card = document.getElementById('generateReportCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+// معالجة إرسال نموذج التقرير من Card
+function handleReportCardSubmit(event) {
+    event.preventDefault();
+    
+    const form = document.getElementById('generateReportCardForm');
+    if (!form) return false;
+    
+    const dateFrom = document.getElementById('generateReportCardDateFrom');
+    const dateTo = document.getElementById('generateReportCardDateTo');
+    
+    if (!dateFrom || !dateTo) return false;
+    
+    const fromDate = new Date(dateFrom.value);
+    const toDate = new Date(dateTo.value);
+    
+    if (fromDate > toDate) {
+        alert('تاريخ البداية يجب أن يكون قبل تاريخ النهاية');
+        dateFrom.focus();
+        return false;
+    }
+    
+    // بناء URL للتقرير
+    const origin = window.location.origin;
+    const currentPath = window.location.pathname;
+    
+    let basePath = currentPath;
+    basePath = basePath.replace(/\/dashboard\/[^\/]+\.php.*$/, '');
+    basePath = basePath.replace(/\/modules\/[^\/]+\/[^\/]+\.php.*$/, '');
+    basePath = basePath.replace(/\/$/, '');
+    if (!basePath) {
+        basePath = '';
+    }
+    
+    const reportUrl = origin + basePath + '/print_company_cash_report.php';
+    
+    // جمع معاملات النموذج
+    const formData = new FormData(form);
+    const params = new URLSearchParams();
+    
+    for (const [key, value] of formData.entries()) {
+        params.append(key, value);
+    }
+    
+    const includePending = document.getElementById('generateReportCardIncludePending');
+    const groupByType = document.getElementById('generateReportCardGroupByType');
+    
+    if (!includePending.checked) {
+        params.delete('include_pending');
+    }
+    if (!groupByType.checked) {
+        params.delete('group_by_type');
+    }
+    
+    // فتح التقرير في تبويب جديد
+    const fullUrl = reportUrl + '?' + params.toString();
+    window.open(fullUrl, '_blank');
+    
+    // إغلاق Card
+    closeGenerateReportCard();
+    
+    return false;
+}
+
 // معالجة إرسال نموذج التقرير (يجب أن تكون في النطاق العام)
 function handleReportSubmit(event) {
     event.preventDefault();
@@ -1317,140 +1579,177 @@ function handleReportSubmit(event) {
     return false;
 }
 
+// دالة مشتركة لجلب رصيد المندوب (تعمل مع Modal و Card)
+function loadSalesRepBalance(salesRepId, repBalanceElement, collectAmountElement) {
+    if (!salesRepId || salesRepId === '') {
+        if (repBalanceElement) {
+            repBalanceElement.value = '-- اختر مندوب أولاً --';
+            repBalanceElement.style.color = '#6c757d';
+        }
+        if (collectAmountElement) {
+            collectAmountElement.max = '';
+            collectAmountElement.removeAttribute('data-max-balance');
+        }
+        return;
+    }
+    
+    // إظهار loading state
+    if (repBalanceElement) {
+        repBalanceElement.value = 'جاري التحميل...';
+        repBalanceElement.style.color = '#6c757d';
+    }
+    
+    // جلب رصيد المندوب
+    const url = new URL(window.location.href);
+    url.searchParams.set('ajax', 'get_sales_rep_balance');
+    url.searchParams.set('sales_rep_id', salesRepId);
+    
+    fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        cache: 'no-cache'
+    })
+    .then(response => {
+        const contentType = response.headers.get('content-type') || '';
+        
+        return response.text().then(text => {
+            if (!contentType.includes('application/json')) {
+                console.error('Server response (first 500 chars):', text.substring(0, 500));
+                throw new Error('Invalid response type. Expected JSON but got: ' + contentType);
+            }
+            
+            if (!response.ok) {
+                throw new Error('HTTP error! status: ' + response.status);
+            }
+            
+            if (!text || text.trim() === '') {
+                throw new Error('Empty response from server');
+            }
+            
+            try {
+                return JSON.parse(text);
+            } catch (parseError) {
+                console.error('JSON Parse Error:', parseError);
+                console.error('Response text:', text.substring(0, 500));
+                throw new Error('Invalid JSON response: ' + parseError.message);
+            }
+        });
+    })
+    .then(data => {
+        if (!data || typeof data !== 'object') {
+            throw new Error('Invalid response format');
+        }
+        
+        if (data.success) {
+            const balance = parseFloat(data.balance) || 0;
+            const formattedBalance = balance.toLocaleString('ar-EG', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+            
+            if (repBalanceElement) {
+                repBalanceElement.value = formattedBalance;
+                repBalanceElement.style.color = balance > 0 ? '#198754' : '#6c757d';
+            }
+            
+            if (collectAmountElement) {
+                collectAmountElement.max = balance;
+                collectAmountElement.setAttribute('data-max-balance', balance);
+            }
+        } else {
+            const errorMsg = data.message || 'فشل جلب رصيد المندوب';
+            if (repBalanceElement) {
+                repBalanceElement.value = 'خطأ: ' + errorMsg;
+                repBalanceElement.style.color = '#dc3545';
+            }
+            console.error('Error:', errorMsg);
+        }
+    })
+    .catch(error => {
+        console.error('Fetch Error:', error);
+        const errorMsg = error.message || 'حدث خطأ أثناء جلب رصيد المندوب';
+        if (repBalanceElement) {
+            repBalanceElement.value = 'خطأ في الاتصال';
+            repBalanceElement.style.color = '#dc3545';
+        }
+    });
+}
+
 // معالجة تحصيل من مندوب
 document.addEventListener('DOMContentLoaded', function() {
+    // Modal elements
     const salesRepSelect = document.getElementById('salesRepSelect');
     const repBalanceAmount = document.getElementById('repBalanceAmount');
     const collectAmount = document.getElementById('collectAmount');
     const collectForm = document.getElementById('collectFromRepForm');
     const submitBtn = document.getElementById('submitCollectBtn');
     
+    // Card elements
+    const collectCardSalesRepSelect = document.getElementById('collectFromRepCardSalesRepSelect');
+    const collectCardRepBalanceAmount = document.getElementById('collectFromRepCardRepBalanceAmount');
+    const collectCardAmount = document.getElementById('collectFromRepCardAmount');
+    const collectCardForm = document.getElementById('collectFromRepCardForm');
+    const collectCardSubmitBtn = document.getElementById('collectFromRepCardSubmitBtn');
+    
+    // معالجة تغيير المندوب في Modal
     if (salesRepSelect) {
         salesRepSelect.addEventListener('change', function() {
-            const salesRepId = this.value;
-            
-            if (salesRepId && salesRepId !== '') {
-                // إظهار loading state
-                if (repBalanceAmount) {
-                    repBalanceAmount.value = 'جاري التحميل...';
-                    repBalanceAmount.style.color = '#6c757d';
-                }
-                
-                // جلب رصيد المندوب
-                // بناء URL بشكل صحيح
-                const url = new URL(window.location.href);
-                url.searchParams.set('ajax', 'get_sales_rep_balance');
-                url.searchParams.set('sales_rep_id', salesRepId);
-                
-                fetch(url.toString(), {
-                    method: 'GET',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    cache: 'no-cache'
-                })
-                .then(response => {
-                    // التحقق من content-type أولاً
-                    const contentType = response.headers.get('content-type') || '';
-                    
-                    return response.text().then(text => {
-                        // إذا لم يكن JSON، عرض الخطأ
-                        if (!contentType.includes('application/json')) {
-                            console.error('Server response (first 500 chars):', text.substring(0, 500));
-                            throw new Error('Invalid response type. Expected JSON but got: ' + contentType);
-                        }
-                        
-                        if (!response.ok) {
-                            throw new Error('HTTP error! status: ' + response.status);
-                        }
-                        
-                        if (!text || text.trim() === '') {
-                            throw new Error('Empty response from server');
-                        }
-                        
-                        try {
-                            return JSON.parse(text);
-                        } catch (parseError) {
-                            console.error('JSON Parse Error:', parseError);
-                            console.error('Response text:', text.substring(0, 500));
-                            throw new Error('Invalid JSON response: ' + parseError.message);
-                        }
-                    });
-                })
-                .then(data => {
-                    if (!data || typeof data !== 'object') {
-                        throw new Error('Invalid response format');
-                    }
-                    
-                    if (data.success) {
-                        const balance = parseFloat(data.balance) || 0;
-                        const formattedBalance = balance.toLocaleString('ar-EG', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2
-                        });
-                        
-                        if (repBalanceAmount) {
-                            repBalanceAmount.value = formattedBalance;
-                            repBalanceAmount.style.color = balance > 0 ? '#198754' : '#6c757d';
-                        }
-                        
-                        if (collectAmount) {
-                            collectAmount.max = balance;
-                            collectAmount.setAttribute('data-max-balance', balance);
-                        }
-                    } else {
-                        const errorMsg = data.message || 'فشل جلب رصيد المندوب';
-                        if (repBalanceAmount) {
-                            repBalanceAmount.value = 'خطأ: ' + errorMsg;
-                            repBalanceAmount.style.color = '#dc3545';
-                        }
-                        console.error('Error:', errorMsg);
-                    }
-                })
-                .catch(error => {
-                    console.error('Fetch Error:', error);
-                    const errorMsg = error.message || 'حدث خطأ أثناء جلب رصيد المندوب';
-                    if (repBalanceAmount) {
-                        repBalanceAmount.value = 'خطأ في الاتصال';
-                        repBalanceAmount.style.color = '#dc3545';
-                    }
-                });
-            } else {
-                if (repBalanceAmount) {
-                    repBalanceAmount.value = '-- اختر مندوب أولاً --';
-                    repBalanceAmount.style.color = '#6c757d';
-                }
-                if (collectAmount) {
-                    collectAmount.max = '';
-                    collectAmount.removeAttribute('data-max-balance');
-                }
+            loadSalesRepBalance(this.value, repBalanceAmount, collectAmount);
+        });
+    }
+    
+    // معالجة تغيير المندوب في Card
+    if (collectCardSalesRepSelect) {
+        collectCardSalesRepSelect.addEventListener('change', function() {
+            loadSalesRepBalance(this.value, collectCardRepBalanceAmount, collectCardAmount);
+        });
+    }
+    
+    // دالة مشتركة للتحقق من المبلغ قبل الإرسال
+    function validateCollectAmount(amountInput, maxBalance, submitButton) {
+        const amount = parseFloat(amountInput.value);
+        const maxBalanceValue = parseFloat(maxBalance || '0');
+        
+        if (amount <= 0) {
+            alert('يرجى إدخال مبلغ صحيح أكبر من الصفر');
+            amountInput.focus();
+            return false;
+        }
+        
+        if (maxBalanceValue > 0 && amount > maxBalanceValue) {
+            alert('المبلغ المطلوب (' + amount.toLocaleString('ar-EG') + ' ج.م) أكبر من رصيد المندوب (' + maxBalanceValue.toLocaleString('ar-EG') + ' ج.م)');
+            amountInput.focus();
+            return false;
+        }
+        
+        if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جاري التحصيل...';
+        }
+        
+        return true;
+    }
+    
+    // التحقق من المبلغ قبل الإرسال - Modal
+    if (collectForm) {
+        collectForm.addEventListener('submit', function(e) {
+            if (!validateCollectAmount(collectAmount, collectAmount.getAttribute('data-max-balance'), submitBtn)) {
+                e.preventDefault();
+                return false;
             }
         });
     }
     
-    // التحقق من المبلغ قبل الإرسال
-    if (collectForm) {
-        collectForm.addEventListener('submit', function(e) {
-            const amount = parseFloat(collectAmount.value);
-            const maxBalance = parseFloat(collectAmount.getAttribute('data-max-balance') || '0');
-            
-            if (amount <= 0) {
+    // التحقق من المبلغ قبل الإرسال - Card
+    if (collectCardForm) {
+        collectCardForm.addEventListener('submit', function(e) {
+            if (!validateCollectAmount(collectCardAmount, collectCardAmount.getAttribute('data-max-balance'), collectCardSubmitBtn)) {
                 e.preventDefault();
-                alert('يرجى إدخال مبلغ صحيح أكبر من الصفر');
-                collectAmount.focus();
                 return false;
             }
-            
-            if (maxBalance > 0 && amount > maxBalance) {
-                e.preventDefault();
-                alert('المبلغ المطلوب (' + amount.toLocaleString('ar-EG') + ' ج.م) أكبر من رصيد المندوب (' + maxBalance.toLocaleString('ar-EG') + ' ج.م)');
-                collectAmount.focus();
-                return false;
-            }
-            
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جاري التحصيل...';
         });
     }
     
@@ -1522,8 +1821,8 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
-<!-- Modal إنشاء تقرير تفصيلي -->
-<div class="modal fade" id="generateReportModal" tabindex="-1" aria-labelledby="generateReportModalLabel" aria-hidden="true">
+<!-- Modal إنشاء تقرير تفصيلي - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="generateReportModal" tabindex="-1" aria-labelledby="generateReportModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
@@ -1587,6 +1886,67 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             </form>
         </div>
+    </div>
+</div>
+
+<!-- Card إنشاء تقرير تفصيلي - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="generateReportCard" style="display: none;">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-file-earmark-text me-2"></i>إنشاء تقرير تفصيلي
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle me-2"></i>
+            <strong>ملاحظة:</strong> سيتم إنشاء تقرير تفصيلي لجميع حركات خزنة الشركة في الفترة المحددة.
+        </div>
+        <form method="GET" id="generateReportCardForm" onsubmit="return handleReportCardSubmit(event)">
+            <div class="mb-3">
+                <label for="generateReportCardDateFrom" class="form-label">
+                    <i class="bi bi-calendar-event me-1"></i>من تاريخ <span class="text-danger">*</span>
+                </label>
+                <input type="date" 
+                       class="form-control" 
+                       id="generateReportCardDateFrom" 
+                       name="date_from" 
+                       required
+                       value="<?php echo date('Y-m-01'); ?>">
+            </div>
+            <div class="mb-3">
+                <label for="generateReportCardDateTo" class="form-label">
+                    <i class="bi bi-calendar-event me-1"></i>إلى تاريخ <span class="text-danger">*</span>
+                </label>
+                <input type="date" 
+                       class="form-control" 
+                       id="generateReportCardDateTo" 
+                       name="date_to" 
+                       required
+                       value="<?php echo date('Y-m-d'); ?>">
+            </div>
+            <div class="mb-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="generateReportCardIncludePending" name="include_pending" value="1">
+                    <label class="form-check-label" for="generateReportCardIncludePending">
+                        تضمين المعاملات المعلقة
+                    </label>
+                </div>
+            </div>
+            <div class="mb-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="generateReportCardGroupByType" name="group_by_type" value="1" checked>
+                    <label class="form-check-label" for="generateReportCardGroupByType">
+                        تجميع الحركات حسب النوع
+                    </label>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-success">
+                    <i class="bi bi-file-earmark-pdf me-1"></i>إنشاء التقرير
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeGenerateReportCard()">إلغاء</button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -1701,6 +2061,52 @@ document.addEventListener('DOMContentLoaded', function() {
 .modal.fade:not(.show) .modal-dialog {
     transform: none !important;
     opacity: 0 !important;
+}
+
+/* ===== CSS مبسط - Modal للكمبيوتر فقط، Card للموبايل ===== */
+
+/* إخفاء Modal على الموبايل */
+@media (max-width: 768px) {
+    #collectFromRepModal,
+    #generateReportModal {
+        display: none !important;
+    }
+}
+
+/* إخفاء Card على الكمبيوتر */
+@media (min-width: 769px) {
+    #collectFromRepCard,
+    #generateReportCard {
+        display: none !important;
+    }
+}
+
+/* منع الملفات العامة من التأثير على Modals */
+#collectFromRepModal,
+#generateReportModal {
+    height: auto !important;
+    max-height: none !important;
+}
+
+#collectFromRepModal .modal-dialog,
+#generateReportModal .modal-dialog {
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 1.75rem auto !important;
+}
+
+#collectFromRepModal .modal-content,
+#generateReportModal .modal-content {
+    height: auto !important;
+    max-height: none !important;
+}
+
+#collectFromRepModal .modal-body,
+#generateReportModal .modal-body {
+    height: auto !important;
+    max-height: none !important;
+    overflow-y: visible !important;
 }
 
 /* Responsive rules are now handled by responsive-modals.css */

@@ -239,3 +239,33 @@ function triggerVersionUpdate(): bool {
     return @file_put_contents($deployTriggerFile, time(), LOCK_EX) !== false;
 }
 
+/**
+ * الحصول على الإصدار الحالي من version.json (عداد يدوي)
+ * لا يتأثر بأي تحديثات تلقائية
+ * @return string رقم الإصدار مع v في البداية (مثل: v1.9.3)
+ */
+function getCurrentVersion(): string {
+    $versionFile = __DIR__ . '/../version.json';
+    
+    // قراءة الإصدار من version.json فقط
+    if (file_exists($versionFile)) {
+        try {
+            $versionData = json_decode(file_get_contents($versionFile), true);
+            if (isset($versionData['version']) && !empty($versionData['version'])) {
+                $version = trim($versionData['version']);
+                // إضافة v في البداية إذا لم تكن موجودة
+                if (strpos($version, 'v') !== 0) {
+                    $version = 'v' . $version;
+                }
+                return $version;
+            }
+        } catch (Exception $e) {
+            // في حالة الخطأ، إرجاع إصدار افتراضي
+            error_log('Error reading version.json: ' . $e->getMessage());
+        }
+    }
+    
+    // إصدار افتراضي في حالة عدم وجود الملف
+    return 'v1.0.0';
+}
+

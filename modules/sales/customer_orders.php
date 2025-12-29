@@ -12,6 +12,7 @@ require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/audit_log.php';
 require_once __DIR__ . '/../../includes/notifications.php';
+require_once __DIR__ . '/../../includes/path_helper.php';
 
 require_once __DIR__ . '/table_styles.php';
 
@@ -1176,6 +1177,10 @@ if (isset($_GET['id'])) {
     }
 }
 ?>
+
+<!-- Responsive Modals CSS - يجب أن يكون في البداية قبل أي محتوى -->
+<link rel="stylesheet" href="<?php echo getRelativeUrl('assets/css/responsive-modals.css'); ?>">
+
 <style>
 /* ===== تصميم احترافي لعرض تفاصيل الطلب ===== */
 .order-details-card {
@@ -1699,137 +1704,66 @@ if (isset($_GET['id'])) {
     padding: 0 !important;
 }
 
-/* ===== إصلاح ظهور الأزرار في أسفل النموذج على الهاتف ===== */
-@media (max-width: 767.98px) {
-    /* إصلاح Modal إنشاء طلب مندوب */
-    #addOrderModal .modal-dialog {
-        margin: 0.5rem;
-        max-height: calc(100vh - 1rem);
-        height: calc(100vh - 1rem);
-        display: flex;
-        flex-direction: column;
-    }
-    
-    #addOrderModal .modal-dialog.modal-dialog-scrollable {
-        overflow: hidden; /* منع السكرول من modal-dialog */
-    }
-    
-    #addOrderModal .modal-content {
-        max-height: 100%;
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-    }
-    
-    #addOrderModal .modal-header {
-        flex-shrink: 0;
-    }
-    
-    #addOrderModal .modal-body {
-        flex: 1;
-        overflow-y: auto;
-        overflow-x: hidden;
-        -webkit-overflow-scrolling: touch;
-        padding-bottom: 1rem;
-    }
-    
-    #addOrderModal .modal-footer {
-        flex-shrink: 0;
-        background: rgba(255, 255, 255, 0.98);
-        backdrop-filter: blur(6px);
-        border-top: 1px solid rgba(0, 0, 0, 0.1);
-        display: flex;
-        flex-direction: column;
-        gap: 0.6rem;
-        padding: 1rem;
-        box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
-        margin-top: 0;
-    }
-    
-    #addOrderModal .modal-footer .btn {
-        width: 100%;
-        margin: 0;
-    }
-    
-    /* إصلاح Modal إنشاء طلب شركة */
-    #addCompanyOrderModal .modal-dialog {
-        margin: 0.5rem;
-        max-height: calc(100vh - 1rem);
-        height: calc(100vh - 1rem);
-        display: flex;
-        flex-direction: column;
-    }
-    
-    #addCompanyOrderModal .modal-dialog.modal-dialog-scrollable {
-        overflow: hidden; /* منع السكرول من modal-dialog */
-    }
-    
-    #addCompanyOrderModal .modal-content {
-        max-height: 100%;
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-    }
-    
-    #addCompanyOrderModal .modal-header {
-        flex-shrink: 0;
-    }
-    
-    #addCompanyOrderModal .modal-body {
-        flex: 1;
-        overflow-y: auto;
-        overflow-x: hidden;
-        -webkit-overflow-scrolling: touch;
-        padding-bottom: 1rem;
-    }
-    
-    #addCompanyOrderModal .modal-footer {
-        flex-shrink: 0;
-        background: rgba(255, 255, 255, 0.98);
-        backdrop-filter: blur(6px);
-        border-top: 1px solid rgba(0, 0, 0, 0.1);
-        display: flex;
-        flex-direction: column;
-        gap: 0.6rem;
-        padding: 1rem;
-        box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
-        margin-top: 0;
-    }
-    
-    #addCompanyOrderModal .modal-footer .btn {
-        width: 100%;
-        margin: 0;
+/* ===== CSS للـ Modal/Card Dual System ===== */
+
+/* إخفاء Modal على الموبايل */
+@media (max-width: 768px) {
+    #addOrderModal,
+    #addCompanyOrderModal,
+    #statusModal {
+        display: none !important;
     }
 }
 
-/* تحسينات إضافية للشاشات الصغيرة جداً */
-@media (max-width: 576px) {
-    #addOrderModal .modal-body,
-    #addCompanyOrderModal .modal-body {
-        padding: 1rem;
-        padding-bottom: 5rem;
+/* إخفاء Card على الكمبيوتر */
+@media (min-width: 769px) {
+    #addOrderCard,
+    #addCompanyOrderCard,
+    #statusCard {
+        display: none !important;
     }
-    
-    #addOrderModal .modal-footer,
-    #addCompanyOrderModal .modal-footer {
-        padding: 0.75rem;
-    }
-    
-    #addOrderModal .modal-footer .btn,
-    #addCompanyOrderModal .modal-footer .btn {
-        padding: 0.6rem 1rem;
-        font-size: 0.9rem;
-    }
+}
+
+/* منع الملفات العامة من التأثير على Modals */
+#addOrderModal,
+#addCompanyOrderModal,
+#statusModal {
+    height: auto !important;
+    max-height: none !important;
+}
+
+#addOrderModal .modal-dialog,
+#addCompanyOrderModal .modal-dialog,
+#statusModal .modal-dialog {
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 1.75rem auto !important;
+}
+
+#addOrderModal .modal-content,
+#addCompanyOrderModal .modal-content,
+#statusModal .modal-content {
+    height: auto !important;
+    max-height: none !important;
+}
+
+#addOrderModal .modal-body,
+#addCompanyOrderModal .modal-body,
+#statusModal .modal-body {
+    height: auto !important;
+    max-height: none !important;
+    overflow-y: visible !important;
 }
 </style>
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
     <h2 class="mb-0"><i class="bi bi-cart-check me-2"></i>إدارة طلبات العملاء</h2>
     <div class="d-flex flex-wrap gap-2">
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addOrderModal">
+        <button class="btn btn-primary" onclick="showAddOrderModal()">
             <i class="bi bi-plus-circle me-2"></i>طلب عميل مندوب
         </button>
         <?php if ($isManagerOrAccountant): ?>
-            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addCompanyOrderModal">
+            <button class="btn btn-success" onclick="showAddCompanyOrderModal()">
                 <i class="bi bi-building me-2"></i>طلب عميل شركة
             </button>
         <?php endif; ?>
@@ -2260,8 +2194,8 @@ if (isset($_GET['id'])) {
     </div>
 </div>
 
-<!-- Modal إنشاء طلب -->
-<div class="modal fade" id="addOrderModal" tabindex="-1">
+<!-- Modal إنشاء طلب (للكمبيوتر فقط) -->
+<div class="modal fade d-none d-md-block" id="addOrderModal" tabindex="-1">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -2400,9 +2334,147 @@ if (isset($_GET['id'])) {
     </div>
 </div>
 
-<!-- Modal إنشاء طلب شركة -->
+<!-- Card إنشاء طلب (للموبايل فقط) -->
+<div class="card shadow-sm mb-4 d-md-none" id="addOrderCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-plus-circle me-2"></i>إنشاء طلب جديد
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="orderCardForm">
+            <input type="hidden" name="action" value="create_order">
+            <?php if ($isSalesUser): ?>
+                <input type="hidden" name="sales_rep_id" value="<?php echo $currentUser['id']; ?>">
+            <?php endif; ?>
+            <div class="row mb-3">
+                <?php if (!$isSalesUser): ?>
+                <div class="col-md-3 mb-3">
+                    <label class="form-label">مندوب المبيعات <span class="text-danger">*</span></label>
+                    <select class="form-select" name="sales_rep_id" id="cardSalesRepSelect" required>
+                        <option value="">اختر مندوب</option>
+                        <?php foreach ($salesReps as $rep): ?>
+                            <option value="<?php echo $rep['id']; ?>" <?php echo $rep['id'] == $currentUser['id'] ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($rep['full_name'] ?? $rep['username']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <?php endif; ?>
+                <div class="col-md-<?php echo $isSalesUser ? '12' : '9'; ?> mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label class="form-label mb-0">العميل <span class="text-danger">*</span></label>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="cardToggleNewCustomer" name="create_new_customer" value="1">
+                            <label class="form-check-label small" for="cardToggleNewCustomer">عميل جديد</label>
+                        </div>
+                    </div>
+                    <select class="form-select" name="customer_id" id="cardExistingCustomerSelect" <?php echo $isSalesUser ? '' : 'disabled'; ?> required>
+                        <?php if ($isSalesUser): ?>
+                            <option value="">اختر العميل</option>
+                            <?php 
+                            // جلب عملاء المندوب الحالي مباشرة
+                            $currentUserCustomers = $db->query(
+                                "SELECT id, name FROM customers WHERE (created_by = ? OR rep_id = ?) AND status = 'active' ORDER BY name ASC",
+                                [$currentUser['id'], $currentUser['id']]
+                            );
+                            foreach ($currentUserCustomers as $customer): ?>
+                                <option value="<?php echo $customer['id']; ?>">
+                                    <?php echo htmlspecialchars($customer['name']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <option value="">اختر المندوب أولاً</option>
+                        <?php endif; ?>
+                    </select>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">تاريخ الطلب <span class="text-danger">*</span></label>
+                    <input type="date" class="form-control" name="order_date" value="<?php echo date('Y-m-d'); ?>" required>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">تاريخ التسليم</label>
+                    <input type="date" class="form-control" name="delivery_date">
+                </div>
+                <div class="col-md-12 mb-3">
+                    <label class="form-label">الأولوية</label>
+                    <select class="form-select" name="priority">
+                        <option value="normal">عادية</option>
+                        <option value="low">منخفضة</option>
+                        <option value="high">عالية</option>
+                        <option value="urgent">عاجلة</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div id="cardNewCustomerFields" class="row g-3 mb-3 d-none">
+                <div class="col-md-12 mb-3">
+                    <label class="form-label">اسم العميل الجديد <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control card-new-customer-required" name="new_customer_name" autocomplete="off">
+                </div>
+                <div class="col-md-12 mb-3">
+                    <label class="form-label">رقم الهاتف</label>
+                    <input type="text" class="form-control" name="new_customer_phone" autocomplete="off" placeholder="مثال: 01234567890">
+                </div>
+                <div class="col-md-12 mb-3">
+                    <label class="form-label">عنوان العميل</label>
+                    <textarea class="form-control" name="new_customer_address" rows="2" autocomplete="off" placeholder="اكتب العنوان بالتفصيل"></textarea>
+                </div>
+                <div class="col-12 mb-3">
+                    <label class="form-label">موقع العميل <span class="text-muted">(اختياري)</span></label>
+                    <div class="d-flex gap-2">
+                        <input type="text" class="form-control" name="new_customer_latitude" id="cardNewCustomerLatitude" placeholder="خط العرض" readonly>
+                        <input type="text" class="form-control" name="new_customer_longitude" id="cardNewCustomerLongitude" placeholder="خط الطول" readonly>
+                        <button type="button" class="btn btn-outline-primary" id="cardGetLocationBtn" title="الحصول على الموقع الحالي">
+                            <i class="bi bi-geo-alt"></i>
+                        </button>
+                    </div>
+                    <small class="text-muted">اضغط على زر الموقع للحصول على موقعك الحالي</small>
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">عناصر الطلب</label>
+                <div id="cardOrderItems">
+                    <div class="order-item row mb-2">
+                        <div class="col-md-9">
+                            <select class="form-select card-template-input" 
+                                   name="items[0][template_name]" required>
+                                <option value="">اختر قالب المنتج</option>
+                                <?php foreach ($productTemplatesForDropdown as $template): ?>
+                                    <option value="<?php echo htmlspecialchars($template['product_name'] ?? ''); ?>">
+                                        <?php echo htmlspecialchars($template['product_name'] ?? 'قالب #' . $template['id']); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <input type="text" class="form-control quantity" 
+                                   name="items[0][quantity]" placeholder="الكمية" required>
+                        </div>
+                        <div class="col-md-1">
+                            <button type="button" class="btn btn-danger w-100 card-remove-item">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="cardAddItemBtn">
+                    <i class="bi bi-plus-circle me-2"></i>إضافة عنصر
+                </button>
+            </div>
+            
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">إنشاء طلب</button>
+                <button type="button" class="btn btn-secondary" onclick="closeAddOrderCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal إنشاء طلب شركة (للكمبيوتر فقط) -->
 <?php if ($isManagerOrAccountant): ?>
-<div class="modal fade" id="addCompanyOrderModal" tabindex="-1">
+<div class="modal fade d-none d-md-block" id="addCompanyOrderModal" tabindex="-1">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -2514,10 +2586,122 @@ if (isset($_GET['id'])) {
         </div>
     </div>
 </div>
+
+<!-- Card إنشاء طلب شركة (للموبايل فقط) -->
+<div class="card shadow-sm mb-4 d-md-none" id="addCompanyOrderCard" style="display: none;">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-building me-2"></i>إنشاء طلب عميل شركة
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="companyOrderCardForm">
+            <input type="hidden" name="action" value="create_company_order">
+            <div class="row mb-3">
+                <div class="col-md-12 mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label class="form-label mb-0">العميل <span class="text-danger">*</span></label>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="cardToggleNewCompanyCustomer" name="create_new_customer" value="1">
+                            <label class="form-check-label small" for="cardToggleNewCompanyCustomer">عميل جديد</label>
+                        </div>
+                    </div>
+                    <select class="form-select" name="customer_id" id="cardCompanyCustomerSelect" required>
+                        <option value="">اختر العميل</option>
+                        <?php foreach ($companyCustomers as $customer): ?>
+                            <option value="<?php echo $customer['id']; ?>">
+                                <?php echo htmlspecialchars($customer['name']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">تاريخ الطلب <span class="text-danger">*</span></label>
+                    <input type="date" class="form-control" name="order_date" value="<?php echo date('Y-m-d'); ?>" required>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">تاريخ التسليم</label>
+                    <input type="date" class="form-control" name="delivery_date">
+                </div>
+                <div class="col-md-12 mb-3">
+                    <label class="form-label">الأولوية</label>
+                    <select class="form-select" name="priority">
+                        <option value="normal">عادية</option>
+                        <option value="low">منخفضة</option>
+                        <option value="high">عالية</option>
+                        <option value="urgent">عاجلة</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div id="cardNewCompanyCustomerFields" class="row g-3 mb-3 d-none">
+                <div class="col-md-12 mb-3">
+                    <label class="form-label">اسم العميل الجديد <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control card-new-company-customer-required" name="new_customer_name" autocomplete="off">
+                </div>
+                <div class="col-md-12 mb-3">
+                    <label class="form-label">رقم الهاتف</label>
+                    <input type="text" class="form-control" name="new_customer_phone" autocomplete="off" placeholder="مثال: 01234567890">
+                </div>
+                <div class="col-md-12 mb-3">
+                    <label class="form-label">عنوان العميل</label>
+                    <textarea class="form-control" name="new_customer_address" rows="2" autocomplete="off" placeholder="اكتب العنوان بالتفصيل"></textarea>
+                </div>
+                <div class="col-12 mb-3">
+                    <label class="form-label">موقع العميل <span class="text-muted">(اختياري)</span></label>
+                    <div class="d-flex gap-2">
+                        <input type="text" class="form-control" name="new_customer_latitude" id="cardCompanyNewCustomerLatitude" placeholder="خط العرض" readonly>
+                        <input type="text" class="form-control" name="new_customer_longitude" id="cardCompanyNewCustomerLongitude" placeholder="خط الطول" readonly>
+                        <button type="button" class="btn btn-outline-primary" id="cardCompanyGetLocationBtn" title="الحصول على الموقع الحالي">
+                            <i class="bi bi-geo-alt"></i>
+                        </button>
+                    </div>
+                    <small class="text-muted">اضغط على زر الموقع للحصول على موقعك الحالي</small>
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">عناصر الطلب</label>
+                <div id="cardCompanyOrderItems">
+                    <div class="order-item row mb-2">
+                        <div class="col-md-9">
+                            <select class="form-select card-company-template-input" 
+                                   name="items[0][template_name]" required>
+                                <option value="">اختر قالب المنتج</option>
+                                <?php foreach ($productTemplatesForDropdown as $template): ?>
+                                    <option value="<?php echo htmlspecialchars($template['product_name'] ?? ''); ?>">
+                                        <?php echo htmlspecialchars($template['product_name'] ?? 'قالب #' . $template['id']); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <input type="text" class="form-control quantity" 
+                                   name="items[0][quantity]" placeholder="الكمية" required>
+                        </div>
+                        <div class="col-md-1">
+                            <button type="button" class="btn btn-danger w-100 card-company-remove-item">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="cardAddCompanyItemBtn">
+                    <i class="bi bi-plus-circle me-2"></i>إضافة عنصر
+                </button>
+            </div>
+            
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-success">إنشاء طلب شركة</button>
+                <button type="button" class="btn btn-secondary" onclick="closeAddCompanyOrderCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
 <?php endif; ?>
 
-<!-- Modal تغيير الحالة -->
-<div class="modal fade" id="statusModal" tabindex="-1">
+<!-- Modal تغيير الحالة (للكمبيوتر فقط) -->
+<div class="modal fade d-none d-md-block" id="statusModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
@@ -2553,6 +2737,43 @@ if (isset($_GET['id'])) {
                 </div>
             </form>
         </div>
+    </div>
+</div>
+
+<!-- Card تغيير الحالة (للموبايل فقط) -->
+<div class="card shadow-sm mb-4 d-md-none" id="statusCard" style="display: none;">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0">
+            <i class="bi bi-pencil me-2"></i>تغيير حالة الطلب
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="action" value="update_status">
+            <input type="hidden" name="order_id" id="statusCardOrderId">
+            <div class="mb-3">
+                <label class="form-label">الحالة</label>
+                <select class="form-select" name="status" id="statusCardSelect" required>
+                    <?php if ($isSalesUser): ?>
+                        <!-- للمندوب: فقط حالتين -->
+                        <option value="delivered">تم التسليم</option>
+                        <option value="cancelled">ملغى</option>
+                    <?php else: ?>
+                        <!-- للمدير والمحاسب: جميع الحالات -->
+                        <option value="pending">معلق</option>
+                        <option value="confirmed">مؤكد</option>
+                        <option value="in_production">قيد الإنتاج</option>
+                        <option value="ready">جاهز</option>
+                        <option value="delivered">تم التسليم</option>
+                        <option value="cancelled">ملغى</option>
+                    <?php endif; ?>
+                </select>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">حفظ</button>
+                <button type="button" class="btn btn-secondary" onclick="closeStatusCard()">إلغاء</button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -2878,6 +3099,160 @@ function setupCompanyLocationButton() {
     }
 }
 
+// ===== دوال أساسية للـ Modal/Card Dual System =====
+
+// دالة التحقق من الموبايل
+function isMobile() {
+    return window.innerWidth <= 768;
+}
+
+// دالة Scroll تلقائي
+function scrollToElement(element) {
+    if (!element) return;
+    
+    setTimeout(function() {
+        const rect = element.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const elementTop = rect.top + scrollTop;
+        const offset = 80; // مساحة للـ header
+        
+        requestAnimationFrame(function() {
+            window.scrollTo({
+                top: Math.max(0, elementTop - offset),
+                behavior: 'smooth'
+            });
+        });
+    }, 200);
+}
+
+// دالة إغلاق جميع النماذج
+function closeAllForms() {
+    // إغلاق جميع Cards على الموبايل
+    const cards = ['addOrderCard', 'addCompanyOrderCard', 'statusCard'];
+    cards.forEach(function(cardId) {
+        const card = document.getElementById(cardId);
+        if (card && card.style.display !== 'none') {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    });
+    
+    // إغلاق جميع Modals على الكمبيوتر
+    const modals = ['addOrderModal', 'addCompanyOrderModal', 'statusModal'];
+    modals.forEach(function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            if (modalInstance) modalInstance.hide();
+        }
+    });
+}
+
+// ===== دوال فتح النماذج =====
+
+// دالة فتح نموذج إضافة طلب
+function showAddOrderModal() {
+    closeAllForms();
+    
+    if (isMobile()) {
+        const card = document.getElementById('addOrderCard');
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        const modal = document.getElementById('addOrderModal');
+        if (modal) {
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+// دالة فتح نموذج إضافة طلب شركة
+function showAddCompanyOrderModal() {
+    closeAllForms();
+    
+    if (isMobile()) {
+        const card = document.getElementById('addCompanyOrderCard');
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        const modal = document.getElementById('addCompanyOrderModal');
+        if (modal) {
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+// دالة فتح نموذج تغيير الحالة
+function showStatusModal(orderId, currentStatus) {
+    closeAllForms();
+    
+    if (isMobile()) {
+        const card = document.getElementById('statusCard');
+        if (card) {
+            const orderIdInput = card.querySelector('#statusCardOrderId');
+            const statusSelect = card.querySelector('#statusCardSelect');
+            
+            if (orderIdInput) orderIdInput.value = orderId;
+            if (statusSelect) statusSelect.value = currentStatus;
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        const modal = document.getElementById('statusModal');
+        if (modal) {
+            document.getElementById('statusOrderId').value = orderId;
+            document.getElementById('statusSelect').value = currentStatus;
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+// ===== دوال إغلاق Cards =====
+
+function closeAddOrderCard() {
+    const card = document.getElementById('addOrderCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closeAddCompanyOrderCard() {
+    const card = document.getElementById('addCompanyOrderCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closeStatusCard() {
+    const card = document.getElementById('statusCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+// ===== دوال أخرى =====
+
 // ربط أحداث العناصر
 function attachItemEvents(item) {
     // لا حاجة لحسابات السعر والإجمالي
@@ -2887,13 +3262,6 @@ function attachItemEvents(item) {
 document.querySelectorAll('.order-item').forEach(item => {
     attachItemEvents(item);
 });
-
-function showStatusModal(orderId, currentStatus) {
-    document.getElementById('statusOrderId').value = orderId;
-    document.getElementById('statusSelect').value = currentStatus;
-    const modal = new bootstrap.Modal(document.getElementById('statusModal'));
-    modal.show();
-}
 
 // دالة تحميل عملاء المندوب
 function loadSalesRepCustomers(salesRepId) {
@@ -3150,6 +3518,318 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                 `;
                 companyItemIndex = 1;
+            }
+        });
+    }
+});
+<?php endif; ?>
+
+// ===== JavaScript للتعامل مع Cards (للموبايل) =====
+
+// إضافة عنصر جديد لـ Card إضافة الطلب
+let cardItemIndex = 1;
+document.getElementById('cardAddItemBtn')?.addEventListener('click', function() {
+    const itemsDiv = document.getElementById('cardOrderItems');
+    if (!itemsDiv) return;
+    
+    const newItem = document.createElement('div');
+    newItem.className = 'order-item row mb-2';
+    const templateOptions = <?php echo json_encode(array_map(function($t) { 
+        return ['value' => htmlspecialchars($t['product_name'] ?? '', ENT_QUOTES, 'UTF-8'), 'text' => htmlspecialchars($t['product_name'] ?? 'قالب #' . $t['id'], ENT_QUOTES, 'UTF-8')]; 
+    }, $productTemplatesForDropdown), JSON_UNESCAPED_UNICODE | JSON_HEX_QUOT | JSON_HEX_APOS); ?>;
+    let optionsHtml = '<option value="">اختر قالب المنتج</option>';
+    if (templateOptions && Array.isArray(templateOptions)) {
+        templateOptions.forEach(function(template) {
+            const value = template.value || '';
+            const text = template.text || '';
+            optionsHtml += '<option value="' + value.replace(/"/g, '&quot;').replace(/'/g, '&#39;') + '">' + text.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</option>';
+        });
+    }
+    
+    newItem.innerHTML = `
+        <div class="col-md-9">
+            <select class="form-select card-template-input" 
+                   name="items[${cardItemIndex}][template_name]" required>
+                ${optionsHtml}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <input type="text" class="form-control quantity" 
+                   name="items[${cardItemIndex}][quantity]" placeholder="الكمية" required>
+        </div>
+        <div class="col-md-1">
+            <button type="button" class="btn btn-danger w-100 card-remove-item">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>
+    `;
+    itemsDiv.appendChild(newItem);
+    cardItemIndex++;
+});
+
+// حذف عنصر من Card إضافة الطلب
+document.addEventListener('click', function(e) {
+    if (e.target.closest('.card-remove-item')) {
+        e.target.closest('.order-item').remove();
+    }
+});
+
+// دالة تحديث حالة العميل الجديد في Card
+function updateCardNewCustomerState() {
+    const cardToggleNewCustomer = document.getElementById('cardToggleNewCustomer');
+    const cardExistingCustomerSelect = document.getElementById('cardExistingCustomerSelect');
+    const cardNewCustomerFields = document.getElementById('cardNewCustomerFields');
+    
+    if (!cardToggleNewCustomer || !cardExistingCustomerSelect || !cardNewCustomerFields) {
+        return;
+    }
+
+    const cardNewCustomerRequiredInputs = Array.from(cardNewCustomerFields.querySelectorAll('.card-new-customer-required'));
+
+    if (cardToggleNewCustomer.checked) {
+        cardNewCustomerFields.classList.remove('d-none');
+        cardNewCustomerFields.style.display = '';
+        cardExistingCustomerSelect.value = '';
+        cardExistingCustomerSelect.setAttribute('disabled', 'disabled');
+        cardExistingCustomerSelect.removeAttribute('required');
+        cardNewCustomerRequiredInputs.forEach(function(input) {
+            input.setAttribute('required', 'required');
+        });
+    } else {
+        cardNewCustomerFields.classList.add('d-none');
+        cardNewCustomerFields.style.display = 'none';
+        const cardSalesRepSelect = document.getElementById('cardSalesRepSelect');
+        if (!cardSalesRepSelect || cardSalesRepSelect.value) {
+            cardExistingCustomerSelect.removeAttribute('disabled');
+            cardExistingCustomerSelect.setAttribute('required', 'required');
+        } else {
+            cardExistingCustomerSelect.setAttribute('disabled', 'disabled');
+            cardExistingCustomerSelect.removeAttribute('required');
+        }
+        cardNewCustomerRequiredInputs.forEach(function(input) {
+            input.removeAttribute('required');
+        });
+    }
+}
+
+// ربط أحداث toggle للعميل الجديد في Card
+document.addEventListener('DOMContentLoaded', function() {
+    const cardToggleNewCustomer = document.getElementById('cardToggleNewCustomer');
+    if (cardToggleNewCustomer) {
+        cardToggleNewCustomer.addEventListener('change', function() {
+            setTimeout(function() {
+                updateCardNewCustomerState();
+            }, 10);
+        });
+    }
+    
+    // ربط حدث تحميل عملاء المندوب في Card
+    const cardSalesRepSelect = document.getElementById('cardSalesRepSelect');
+    if (cardSalesRepSelect) {
+        cardSalesRepSelect.addEventListener('change', function() {
+            const salesRepId = this.value;
+            loadCardSalesRepCustomers(salesRepId);
+        });
+    }
+    
+    // ربط حدث الحصول على الموقع في Card
+    const cardGetLocationBtn = document.getElementById('cardGetLocationBtn');
+    if (cardGetLocationBtn) {
+        cardGetLocationBtn.addEventListener('click', function() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function(position) {
+                    document.getElementById('cardNewCustomerLatitude').value = position.coords.latitude;
+                    document.getElementById('cardNewCustomerLongitude').value = position.coords.longitude;
+                }, function(error) {
+                    alert('فشل الحصول على الموقع: ' + error.message);
+                });
+            } else {
+                alert('المتصفح لا يدعم الحصول على الموقع');
+            }
+        });
+    }
+});
+
+// دالة تحميل عملاء المندوب في Card
+function loadCardSalesRepCustomers(salesRepId) {
+    const cardExistingCustomerSelect = document.getElementById('cardExistingCustomerSelect');
+    const cardToggleNewCustomer = document.getElementById('cardToggleNewCustomer');
+    
+    if (!cardExistingCustomerSelect) {
+        return;
+    }
+    
+    cardExistingCustomerSelect.innerHTML = '<option value="">جاري التحميل...</option>';
+    cardExistingCustomerSelect.disabled = true;
+    
+    if (!salesRepId || salesRepId === '') {
+        cardExistingCustomerSelect.innerHTML = '<option value="">اختر المندوب أولاً</option>';
+        cardExistingCustomerSelect.disabled = true;
+        if (cardToggleNewCustomer) {
+            cardToggleNewCustomer.checked = false;
+            updateCardNewCustomerState();
+        }
+        return;
+    }
+    
+    const currentUrl = window.location.href;
+    const url = new URL(currentUrl);
+    url.searchParams.set('page', 'orders');
+    url.searchParams.set('ajax', 'get_customers');
+    url.searchParams.set('sales_rep_id', salesRepId);
+    
+    fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        cache: 'no-cache'
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Network response was not ok: ' + response.status);
+        }
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            throw new Error('Expected JSON but got ' + contentType);
+        }
+        return response.json();
+    })
+    .then(data => {
+        cardExistingCustomerSelect.innerHTML = '<option value="">اختر العميل</option>';
+        
+        if (data.success && data.customers && data.customers.length > 0) {
+            data.customers.forEach(function(customer) {
+                const option = document.createElement('option');
+                option.value = customer.id;
+                option.textContent = customer.name;
+                cardExistingCustomerSelect.appendChild(option);
+            });
+            
+            cardExistingCustomerSelect.disabled = false;
+            cardExistingCustomerSelect.setAttribute('required', 'required');
+        } else {
+            cardExistingCustomerSelect.innerHTML = '<option value="">لا يوجد عملاء لهذا المندوب</option>';
+            cardExistingCustomerSelect.disabled = false;
+        }
+        updateCardNewCustomerState();
+    })
+    .catch(error => {
+        console.error('Error loading customers:', error);
+        cardExistingCustomerSelect.innerHTML = '<option value="">خطأ في تحميل العملاء</option>';
+        cardExistingCustomerSelect.disabled = false;
+        alert('حدث خطأ في تحميل العملاء: ' + error.message);
+    });
+}
+
+// JavaScript لمعالجة Card طلب الشركة
+<?php if ($isManagerOrAccountant): ?>
+let cardCompanyItemIndex = 1;
+
+// إضافة عنصر جديد لـ Card طلب الشركة
+document.getElementById('cardAddCompanyItemBtn')?.addEventListener('click', function() {
+    const itemsDiv = document.getElementById('cardCompanyOrderItems');
+    if (!itemsDiv) return;
+    
+    const newItem = document.createElement('div');
+    newItem.className = 'order-item row mb-2';
+    const templateOptions = <?php echo json_encode(array_map(function($t) { 
+        return ['value' => htmlspecialchars($t['product_name'] ?? '', ENT_QUOTES, 'UTF-8'), 'text' => htmlspecialchars($t['product_name'] ?? 'قالب #' . $t['id'], ENT_QUOTES, 'UTF-8')]; 
+    }, $productTemplatesForDropdown), JSON_UNESCAPED_UNICODE | JSON_HEX_QUOT | JSON_HEX_APOS); ?>;
+    let optionsHtml = '<option value="">اختر قالب المنتج</option>';
+    if (templateOptions && Array.isArray(templateOptions)) {
+        templateOptions.forEach(function(template) {
+            const value = template.value || '';
+            const text = template.text || '';
+            optionsHtml += '<option value="' + value.replace(/"/g, '&quot;').replace(/'/g, '&#39;') + '">' + text.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</option>';
+        });
+    }
+    
+    newItem.innerHTML = `
+        <div class="col-md-9">
+            <select class="form-select card-company-template-input" 
+                   name="items[${cardCompanyItemIndex}][template_name]" required>
+                ${optionsHtml}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <input type="text" class="form-control quantity" 
+                   name="items[${cardCompanyItemIndex}][quantity]" placeholder="الكمية" required>
+        </div>
+        <div class="col-md-1">
+            <button type="button" class="btn btn-danger w-100 card-company-remove-item">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>
+    `;
+    itemsDiv.appendChild(newItem);
+    cardCompanyItemIndex++;
+});
+
+// حذف عنصر من Card طلب الشركة
+document.addEventListener('click', function(e) {
+    if (e.target.closest('.card-company-remove-item')) {
+        e.target.closest('.order-item').remove();
+    }
+});
+
+// دالة تحديث حالة العميل الجديد في Card طلب الشركة
+function updateCardNewCompanyCustomerState() {
+    const cardToggleNewCompanyCustomer = document.getElementById('cardToggleNewCompanyCustomer');
+    const cardCompanyCustomerSelect = document.getElementById('cardCompanyCustomerSelect');
+    const cardNewCompanyCustomerFields = document.getElementById('cardNewCompanyCustomerFields');
+    
+    if (!cardToggleNewCompanyCustomer || !cardCompanyCustomerSelect || !cardNewCompanyCustomerFields) {
+        return;
+    }
+
+    const cardNewCompanyCustomerRequiredInputs = Array.from(cardNewCompanyCustomerFields.querySelectorAll('.card-new-company-customer-required'));
+
+    if (cardToggleNewCompanyCustomer.checked) {
+        cardNewCompanyCustomerFields.classList.remove('d-none');
+        cardNewCompanyCustomerFields.style.display = '';
+        cardCompanyCustomerSelect.value = '';
+        cardCompanyCustomerSelect.setAttribute('disabled', 'disabled');
+        cardCompanyCustomerSelect.removeAttribute('required');
+        cardNewCompanyCustomerRequiredInputs.forEach(function(input) {
+            input.setAttribute('required', 'required');
+        });
+    } else {
+        cardNewCompanyCustomerFields.classList.add('d-none');
+        cardNewCompanyCustomerFields.style.display = 'none';
+        cardCompanyCustomerSelect.removeAttribute('disabled');
+        cardCompanyCustomerSelect.setAttribute('required', 'required');
+        cardNewCompanyCustomerRequiredInputs.forEach(function(input) {
+            input.removeAttribute('required');
+        });
+    }
+}
+
+// ربط أحداث toggle للعميل الجديد في Card طلب الشركة
+document.addEventListener('DOMContentLoaded', function() {
+    const cardToggleNewCompanyCustomer = document.getElementById('cardToggleNewCompanyCustomer');
+    if (cardToggleNewCompanyCustomer) {
+        cardToggleNewCompanyCustomer.addEventListener('change', function() {
+            setTimeout(function() {
+                updateCardNewCompanyCustomerState();
+            }, 10);
+        });
+    }
+    
+    // ربط حدث الحصول على الموقع في Card طلب الشركة
+    const cardCompanyGetLocationBtn = document.getElementById('cardCompanyGetLocationBtn');
+    if (cardCompanyGetLocationBtn) {
+        cardCompanyGetLocationBtn.addEventListener('click', function() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function(position) {
+                    document.getElementById('cardCompanyNewCustomerLatitude').value = position.coords.latitude;
+                    document.getElementById('cardCompanyNewCustomerLongitude').value = position.coords.longitude;
+                }, function(error) {
+                    alert('فشل الحصول على الموقع: ' + error.message);
+                });
+            } else {
+                alert('المتصفح لا يدعم الحصول على الموقع');
             }
         });
     }

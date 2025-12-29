@@ -450,8 +450,7 @@ $lang = isset($translations) ? $translations : [];
                                 <td>
                                     <button type="button" 
                                             class="btn btn-sm btn-success settle-credit-btn" 
-                                            data-bs-toggle="modal" 
-                                            data-bs-target="#settleCreditModal"
+                                            onclick="showSettleCreditModal(this)"
                                             data-customer-id="<?php echo $customer['id']; ?>"
                                             data-customer-name="<?php echo htmlspecialchars($customer['name'] ?? ''); ?>"
                                             data-customer-type="<?php echo htmlspecialchars($customerType); ?>"
@@ -471,8 +470,8 @@ $lang = isset($translations) ? $translations : [];
     </div>
 <?php endif; ?>
 
-<!-- Modal تسوية الرصيد - نموذج موحد -->
-<div class="modal fade" id="settleCreditModal" tabindex="-1">
+<!-- Modal تسوية الرصيد - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="settleCreditModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -527,7 +526,217 @@ $lang = isset($translations) ? $translations : [];
     </div>
 </div>
 
+<!-- Card تسوية الرصيد - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="settleCreditCard" style="display: none;">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-cash-coin me-2"></i>تسوية رصيد دائن
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="settleCreditCardForm">
+            <input type="hidden" name="action" value="settle_credit_balance">
+            <input type="hidden" name="customer_id" id="settleCreditCardCustomerId">
+            <input type="hidden" name="customer_type" id="settleCreditCardCustomerType">
+            <div class="mb-3">
+                <label class="form-label">اسم العميل</label>
+                <input type="text" class="form-control" id="settleCreditCardCustomerName" readonly>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">نوع العميل</label>
+                <input type="text" class="form-control" id="settleCreditCardCustomerTypeLabel" readonly>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الرصيد الدائن الحالي</label>
+                <input type="text" class="form-control fw-bold text-primary" id="settleCreditCardCreditDisplay" readonly>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">مبلغ التسوية <span class="text-danger">*</span></label>
+                <div class="input-group">
+                    <span class="input-group-text">ج.م</span>
+                    <input type="number" step="0.01" min="0.01" class="form-control" 
+                           id="settleCreditCardAmount" name="settlement_amount" required>
+                </div>
+                <small class="text-muted" id="settleCreditCardMaxHint"></small>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">ملاحظات (اختياري)</label>
+                <textarea class="form-control" name="notes" rows="2" id="settleCreditCardNotes"></textarea>
+            </div>
+            <div class="alert alert-info mb-3">
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>ملاحظة:</strong> سيتم خصم مبلغ التسوية من خزنة الشركة.
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-success">
+                    <i class="bi bi-check-circle me-1"></i>تأكيد التسوية
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeSettleCreditCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
+// ===== دوال أساسية للـ Modal/Card Dual System =====
+
+// دالة التحقق من الموبايل
+function isMobile() {
+    return window.innerWidth <= 768;
+}
+
+// دالة للـ scroll تلقائي محسّنة
+function scrollToElement(element) {
+    if (!element) return;
+    
+    setTimeout(function() {
+        const rect = element.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const elementTop = rect.top + scrollTop;
+        const offset = 80; // مساحة للـ header
+        const targetPosition = elementTop - offset;
+        
+        requestAnimationFrame(function() {
+            window.scrollTo({
+                top: Math.max(0, targetPosition),
+                behavior: 'smooth'
+            });
+        });
+    }, 200);
+}
+
+// دالة لإغلاق جميع النماذج المفتوحة
+function closeAllForms() {
+    // إغلاق جميع Cards على الموبايل
+    const settleCard = document.getElementById('settleCreditCard');
+    
+    if (settleCard && settleCard.style.display !== 'none') {
+        settleCard.style.display = 'none';
+        const form = settleCard.querySelector('form');
+        if (form) form.reset();
+    }
+    
+    // إغلاق جميع Modals على الكمبيوتر
+    const modals = ['settleCreditModal'];
+    
+    modals.forEach(function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            if (modalInstance) modalInstance.hide();
+        }
+    });
+}
+
+// دالة فتح نموذج تسوية الرصيد
+function showSettleCreditModal(button) {
+    if (!button) return;
+    
+    closeAllForms();
+    
+    const customerId = button.getAttribute('data-customer-id') || '';
+    const customerName = button.getAttribute('data-customer-name') || '-';
+    const customerType = button.getAttribute('data-customer-type') || 'rep';
+    const customerTypeLabel = button.getAttribute('data-customer-type-label') || 'عميل مندوب';
+    const creditAmount = parseFloat(button.getAttribute('data-credit-amount')) || 0;
+    const creditFormatted = button.getAttribute('data-credit-formatted') || '0.00';
+    
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('settleCreditCard');
+        if (card) {
+            const customerIdInput = card.querySelector('#settleCreditCardCustomerId');
+            const customerTypeInput = card.querySelector('#settleCreditCardCustomerType');
+            const customerNameInput = card.querySelector('#settleCreditCardCustomerName');
+            const customerTypeLabelInput = card.querySelector('#settleCreditCardCustomerTypeLabel');
+            const creditDisplay = card.querySelector('#settleCreditCardCreditDisplay');
+            const amountInput = card.querySelector('#settleCreditCardAmount');
+            const maxHint = card.querySelector('#settleCreditCardMaxHint');
+            const notesInput = card.querySelector('#settleCreditCardNotes');
+            
+            if (customerIdInput) customerIdInput.value = customerId;
+            if (customerTypeInput) customerTypeInput.value = customerType;
+            if (customerNameInput) customerNameInput.value = customerName;
+            if (customerTypeLabelInput) customerTypeLabelInput.value = customerTypeLabel;
+            if (creditDisplay) creditDisplay.value = creditFormatted;
+            if (amountInput) {
+                amountInput.value = creditAmount.toFixed(2);
+                amountInput.max = creditAmount;
+                amountInput.setAttribute('data-max-amount', creditAmount);
+            }
+            if (maxHint) maxHint.textContent = 'الحد الأقصى: ' + creditFormatted;
+            if (notesInput) notesInput.value = '';
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        const modal = document.getElementById('settleCreditModal');
+        if (modal) {
+            const customerIdInput = modal.querySelector('#settleCustomerId');
+            const customerTypeInput = modal.querySelector('#settleCustomerType');
+            const customerNameInput = modal.querySelector('#settleCustomerName');
+            const customerTypeLabelInput = modal.querySelector('#settleCustomerTypeLabel');
+            const creditDisplay = modal.querySelector('#settleCreditDisplay');
+            const amountInput = modal.querySelector('#settleAmount');
+            const maxHint = modal.querySelector('#settleMaxHint');
+            const notesInput = modal.querySelector('#settleNotes');
+            
+            if (customerIdInput) customerIdInput.value = customerId;
+            if (customerTypeInput) customerTypeInput.value = customerType;
+            if (customerNameInput) customerNameInput.value = customerName;
+            if (customerTypeLabelInput) customerTypeLabelInput.value = customerTypeLabel;
+            if (creditDisplay) creditDisplay.value = creditFormatted;
+            if (amountInput) {
+                amountInput.value = creditAmount.toFixed(2);
+                amountInput.max = creditAmount;
+                amountInput.setAttribute('data-max-amount', creditAmount);
+            }
+            if (maxHint) maxHint.textContent = 'الحد الأقصى: ' + creditFormatted;
+            if (notesInput) notesInput.value = '';
+            
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+// دالة إغلاق Card تسوية الرصيد
+function closeSettleCreditCard() {
+    const card = document.getElementById('settleCreditCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+        
+        // إعادة تعيين الحقول
+        const customerIdInput = document.getElementById('settleCreditCardCustomerId');
+        const customerTypeInput = document.getElementById('settleCreditCardCustomerType');
+        const customerNameInput = document.getElementById('settleCreditCardCustomerName');
+        const customerTypeLabelInput = document.getElementById('settleCreditCardCustomerTypeLabel');
+        const creditDisplay = document.getElementById('settleCreditCardCreditDisplay');
+        const amountInput = document.getElementById('settleCreditCardAmount');
+        const maxHint = document.getElementById('settleCreditCardMaxHint');
+        const notesInput = document.getElementById('settleCreditCardNotes');
+        
+        if (customerIdInput) customerIdInput.value = '';
+        if (customerTypeInput) customerTypeInput.value = '';
+        if (customerNameInput) customerNameInput.value = '';
+        if (customerTypeLabelInput) customerTypeLabelInput.value = '';
+        if (creditDisplay) creditDisplay.value = '';
+        if (amountInput) {
+            amountInput.value = '';
+            amountInput.max = '';
+            amountInput.removeAttribute('data-max-amount');
+        }
+        if (maxHint) maxHint.textContent = '';
+        if (notesInput) notesInput.value = '';
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // ========== وظيفة البحث في الجدول ==========
     var searchInput = document.getElementById('customerSearchInput');
@@ -584,59 +793,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // ========== معالج نموذج التسوية الموحد ==========
-    var settleCreditModal = document.getElementById('settleCreditModal');
-    var currentMaxAmount = 0;
-    
-    if (settleCreditModal) {
-        // ملء بيانات النموذج عند فتحه
-        settleCreditModal.addEventListener('show.bs.modal', function(event) {
-            var button = event.relatedTarget;
-            if (!button) return;
-            
-            var customerId = button.getAttribute('data-customer-id');
-            var customerName = button.getAttribute('data-customer-name');
-            var customerType = button.getAttribute('data-customer-type');
-            var customerTypeLabel = button.getAttribute('data-customer-type-label');
-            var creditAmount = parseFloat(button.getAttribute('data-credit-amount')) || 0;
-            var creditFormatted = button.getAttribute('data-credit-formatted');
-            
-            currentMaxAmount = creditAmount;
-            
-            // ملء الحقول
-            document.getElementById('settleCustomerId').value = customerId;
-            document.getElementById('settleCustomerType').value = customerType;
-            document.getElementById('settleCustomerName').value = customerName;
-            document.getElementById('settleCustomerTypeLabel').value = customerTypeLabel;
-            document.getElementById('settleCreditDisplay').value = creditFormatted;
-            
-            var amountInput = document.getElementById('settleAmount');
-            amountInput.value = creditAmount.toFixed(2);
-            amountInput.max = creditAmount;
-            
-            document.getElementById('settleMaxHint').textContent = 'الحد الأقصى: ' + creditFormatted;
-            document.getElementById('settleNotes').value = '';
-        });
-        
-        // تنظيف عند الإغلاق
-        settleCreditModal.addEventListener('hidden.bs.modal', function() {
-            document.getElementById('settleCustomerId').value = '';
-            document.getElementById('settleCustomerType').value = '';
-            document.getElementById('settleCustomerName').value = '';
-            document.getElementById('settleCustomerTypeLabel').value = '';
-            document.getElementById('settleCreditDisplay').value = '';
-            document.getElementById('settleAmount').value = '';
-            document.getElementById('settleNotes').value = '';
-            currentMaxAmount = 0;
-        });
-    }
-    
-    // ========== التحقق من النموذج قبل الإرسال ==========
+    // ========== التحقق من النموذج قبل الإرسال - Modal ==========
     var settleForm = document.getElementById('settleCreditForm');
     if (settleForm) {
         settleForm.addEventListener('submit', function(e) {
             var amountInput = document.getElementById('settleAmount');
             var amount = parseFloat(amountInput.value) || 0;
+            var maxAmount = parseFloat(amountInput.getAttribute('data-max-amount')) || parseFloat(amountInput.max) || 0;
             
             if (amount <= 0) {
                 e.preventDefault();
@@ -645,7 +808,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 return false;
             }
             
-            if (amount > currentMaxAmount) {
+            if (maxAmount > 0 && amount > maxAmount) {
                 e.preventDefault();
                 alert('مبلغ التسوية يتجاوز الرصيد الدائن المتاح.');
                 amountInput.focus();
@@ -656,6 +819,58 @@ document.addEventListener('DOMContentLoaded', function() {
                 e.preventDefault();
                 return false;
             }
+        });
+    }
+    
+    // ========== التحقق من النموذج قبل الإرسال - Card ==========
+    var settleCardForm = document.getElementById('settleCreditCardForm');
+    if (settleCardForm) {
+        settleCardForm.addEventListener('submit', function(e) {
+            var amountInput = document.getElementById('settleCreditCardAmount');
+            var amount = parseFloat(amountInput.value) || 0;
+            var maxAmount = parseFloat(amountInput.getAttribute('data-max-amount')) || parseFloat(amountInput.max) || 0;
+            
+            if (amount <= 0) {
+                e.preventDefault();
+                alert('يجب إدخال مبلغ صحيح أكبر من الصفر.');
+                amountInput.focus();
+                return false;
+            }
+            
+            if (maxAmount > 0 && amount > maxAmount) {
+                e.preventDefault();
+                alert('مبلغ التسوية يتجاوز الرصيد الدائن المتاح.');
+                amountInput.focus();
+                return false;
+            }
+            
+            if (!confirm('هل أنت متأكد من تسوية الرصيد الدائن؟\nسيتم خصم المبلغ من خزنة الشركة.')) {
+                e.preventDefault();
+                return false;
+            }
+        });
+    }
+    
+    // تنظيف Modal عند الإغلاق (على الكمبيوتر فقط)
+    var settleCreditModal = document.getElementById('settleCreditModal');
+    if (settleCreditModal) {
+        settleCreditModal.addEventListener('hidden.bs.modal', function() {
+            const form = settleCreditModal.querySelector('form');
+            if (form) form.reset();
+            
+            document.getElementById('settleCustomerId').value = '';
+            document.getElementById('settleCustomerType').value = '';
+            document.getElementById('settleCustomerName').value = '';
+            document.getElementById('settleCustomerTypeLabel').value = '';
+            document.getElementById('settleCreditDisplay').value = '';
+            const amountInput = document.getElementById('settleAmount');
+            if (amountInput) {
+                amountInput.value = '';
+                amountInput.max = '';
+                amountInput.removeAttribute('data-max-amount');
+            }
+            document.getElementById('settleMaxHint').textContent = '';
+            document.getElementById('settleNotes').value = '';
         });
     }
 });
@@ -695,11 +910,43 @@ document.addEventListener('DOMContentLoaded', function() {
     background-color: #fff3cd !important;
 }
 
-/* تحسين النموذج على الموبايل */
-@media (max-width: 576px) {
-    #settleCreditModal .modal-dialog {
-        margin: 0.5rem;
-        max-width: calc(100% - 1rem);
+/* ===== CSS مبسط - Modal للكمبيوتر فقط، Card للموبايل ===== */
+
+/* إخفاء Modal على الموبايل */
+@media (max-width: 768px) {
+    #settleCreditModal {
+        display: none !important;
     }
+}
+
+/* إخفاء Card على الكمبيوتر */
+@media (min-width: 769px) {
+    #settleCreditCard {
+        display: none !important;
+    }
+}
+
+/* منع الملفات العامة من التأثير على Modals */
+#settleCreditModal {
+    height: auto !important;
+    max-height: none !important;
+}
+
+#settleCreditModal .modal-dialog {
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 1.75rem auto !important;
+}
+
+#settleCreditModal .modal-content {
+    height: auto !important;
+    max-height: none !important;
+}
+
+#settleCreditModal .modal-body {
+    height: auto !important;
+    max-height: none !important;
+    overflow-y: visible !important;
 }
 </style>
