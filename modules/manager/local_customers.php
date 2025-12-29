@@ -1112,9 +1112,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Pagination
+// Pagination - تقليل عدد العناصر على الموبايل لتحسين الأداء
 $pageNum = isset($_GET['p']) ? max(1, intval($_GET['p'])) : 1;
-$perPage = 20;
+// تحديد عدد العناصر حسب نوع الجهاز (10 للموبايل، 20 للديسكتوب)
+$isMobile = isset($_SERVER['HTTP_USER_AGENT']) && preg_match('/(android|iphone|ipad|mobile)/i', $_SERVER['HTTP_USER_AGENT']);
+$perPage = $isMobile ? 10 : 20;
 $offset = ($pageNum - 1) * $perPage;
 
 // البحث والفلترة
@@ -1242,35 +1244,48 @@ $params[] = $perPage;
 $params[] = $offset;
 
 $customers = $db->query($sql, $params);
+
+// تحسين الأداء: جلب جميع أرقام الهواتف في استعلام واحد بدلاً من N+1 queries
+$customerPhonesMap = [];
+if (!empty($customers)) {
+    $customerIds = array_column($customers, 'id');
+    if (!empty($customerIds)) {
+        $placeholders = implode(',', array_fill(0, count($customerIds), '?'));
+        $allPhones = $db->query(
+            "SELECT customer_id, phone, is_primary 
+             FROM local_customer_phones 
+             WHERE customer_id IN ($placeholders) 
+             ORDER BY customer_id, is_primary DESC, id ASC",
+            $customerIds
+        );
+        
+        // تجميع أرقام الهواتف حسب customer_id
+        foreach ($allPhones as $phoneRow) {
+            $customerId = (int)$phoneRow['customer_id'];
+            if (!isset($customerPhonesMap[$customerId])) {
+                $customerPhonesMap[$customerId] = [];
+            }
+            $customerPhonesMap[$customerId][] = $phoneRow['phone'];
+        }
+    }
+}
+
 // جلب الإحصائيات العامة (للمربعات - لا تتأثر بالفلاتر)
-// إجمالي الديون = إجمالي الرصيد المدين (balance > 0) من جدول local_customers فقط
+// تحسين الأداء: دمج جميع استعلامات الإحصائيات في استعلام واحد
 try {
-    // استخدام استعلام مباشر وبسيط لحساب الديون
-    // إجمالي الديون = مجموع جميع الأرصدة المدينة (balance > 0) من جدول local_customers
-    // أولاً: حساب إجمالي عدد العملاء
-    $totalCountResult = $db->queryOne("SELECT COUNT(*) AS total_count FROM local_customers");
-    $customerStats['total_count'] = (int)($totalCountResult['total_count'] ?? 0);
-    
-    // ثانياً: حساب عدد العملاء المدينين وإجمالي الديون
-    // استخدام استعلام مباشر وبسيط - نفس منطق الاستعلام الذي يستخدمه المستخدم
-    $debtResult = $db->queryOne(
+    // استعلام واحد محسّن لحساب جميع الإحصائيات
+    $statsResult = $db->queryOne(
         "SELECT 
-            COUNT(*) AS debtor_count,
-            SUM(balance) AS total_debt
-        FROM local_customers
-        WHERE balance > 0"
+            COUNT(*) AS total_count,
+            COUNT(CASE WHEN balance > 0 THEN 1 END) AS debtor_count,
+            COALESCE(SUM(CASE WHEN balance > 0 THEN balance ELSE 0 END), 0) AS total_debt
+        FROM local_customers"
     );
     
     // تعيين القيم مباشرة
-    $customerStats['debtor_count'] = (int)($debtResult['debtor_count'] ?? 0);
-    // إجمالي الديون = مجموع جميع الأرصدة المدينة (balance > 0)
-    // استخدام 0.0 كقيمة افتراضية إذا كان NULL
-    $rawTotalDebt = $debtResult['total_debt'] ?? null;
-    $customerStats['total_debt'] = $rawTotalDebt !== null ? (float)$rawTotalDebt : 0.0;
-    
-    // تسجيل للتحقق من القيم (يمكن حذفها لاحقاً)
-    error_log('Local customers debt calculation - raw result: ' . print_r($debtResult, true));
-    error_log('Local customers debt calculation - debtor_count: ' . $customerStats['debtor_count'] . ', total_debt: ' . $customerStats['total_debt']);
+    $customerStats['total_count'] = (int)($statsResult['total_count'] ?? 0);
+    $customerStats['debtor_count'] = (int)($statsResult['debtor_count'] ?? 0);
+    $customerStats['total_debt'] = (float)($statsResult['total_debt'] ?? 0.0);
 } catch (Throwable $statsError) {
     error_log('Error calculating local customers summary stats: ' . $statsError->getMessage());
     // في حالة الخطأ، نستخدم القيم الافتراضية
@@ -1350,16 +1365,10 @@ try {
     $totalCollectionsAmount = 0.0;
 }
 
-// التحقق من القيم قبل التعيين
-error_log('Before assignment - customerStats[total_debt]: ' . ($customerStats['total_debt'] ?? 'NOT SET'));
-
+// تعيين القيم النهائية
 $summaryDebtorCount = $customerStats['debtor_count'] ?? 0;
 $summaryTotalDebt = (float)($customerStats['total_debt'] ?? 0.0);
 $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
-
-// تسجيل للتحقق من القيم النهائية (يمكن حذفها لاحقاً)
-error_log('Local customers summary - total_count: ' . $summaryTotalCustomers . ', debtor_count: ' . $summaryDebtorCount . ', total_debt: ' . $summaryTotalDebt);
-error_log('summaryTotalDebt type: ' . gettype($summaryTotalDebt) . ', value: ' . var_export($summaryTotalDebt, true));
 ?>
 
 <!-- Responsive Modals CSS - يجب أن يكون في البداية قبل أي محتوى -->
@@ -1511,8 +1520,8 @@ error_log('summaryTotalDebt type: ' . gettype($summaryTotalDebt) . ', value: ' .
         <h5 class="mb-0">قائمة العملاء المحليين (<?php echo $totalCustomers; ?>)</h5>
     </div>
     <div class="card-body">
-        <div class="table-responsive dashboard-table-wrapper">
-            <table class="table dashboard-table align-middle">
+        <div class="table-responsive dashboard-table-wrapper" style="will-change: scroll-position;">
+            <table class="table dashboard-table align-middle" style="table-layout: auto;">
                 <thead>
                     <tr>
                         <th>الاسم</th>
@@ -1535,18 +1544,18 @@ error_log('summaryTotalDebt type: ' . gettype($summaryTotalDebt) . ', value: ' .
                                 <td><strong><?php echo htmlspecialchars($customer['name']); ?></strong></td>
                                 <td>
                                     <?php
-                                    // جلب أرقام الهواتف من جدول local_customer_phones
-                                    $customerPhones = $db->query(
-                                        "SELECT phone FROM local_customer_phones WHERE customer_id = ? ORDER BY is_primary DESC, id ASC",
-                                        [$customer['id']]
-                                    );
-                                    if (empty($customerPhones) && !empty($customer['phone'])) {
-                                        // إذا لم تكن هناك أرقام في local_customer_phones، استخدم الرقم القديم
-                                        $customerPhones = [['phone' => $customer['phone']]];
+                                    // استخدام البيانات المجمعة مسبقاً بدلاً من استعلام منفصل
+                                    $customerId = (int)$customer['id'];
+                                    $phones = $customerPhonesMap[$customerId] ?? [];
+                                    
+                                    // إذا لم تكن هناك أرقام في local_customer_phones، استخدم الرقم القديم
+                                    if (empty($phones) && !empty($customer['phone'])) {
+                                        $phones = [$customer['phone']];
                                     }
-                                    if (!empty($customerPhones)) {
-                                        foreach ($customerPhones as $phoneData) {
-                                            $phoneNumber = trim($phoneData['phone'] ?? '');
+                                    
+                                    if (!empty($phones)) {
+                                        foreach ($phones as $phoneNumber) {
+                                            $phoneNumber = trim($phoneNumber ?? '');
                                             if (!empty($phoneNumber)) {
                                                 echo '<a href="tel:' . htmlspecialchars($phoneNumber) . '" class="btn btn-sm btn-outline-primary me-1 mb-1" title="اتصل بـ ' . htmlspecialchars($phoneNumber) . '">';
                                                 echo '<i class="bi bi-telephone-fill"></i> ' ;
@@ -2119,7 +2128,8 @@ error_log('summaryTotalDebt type: ' . gettype($summaryTotalDebt) . ', value: ' .
                 <div class="ratio ratio-16x9">
                     <iframe
                         class="location-map-frame border rounded"
-                        src=""
+                        data-src=""
+                        src="about:blank"
                         title="معاينة موقع العميل"
                         allowfullscreen
                         loading="lazy"
@@ -2320,7 +2330,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 if (latitude && longitude && locationMapFrame) {
                     var mapUrl = 'https://www.google.com/maps?q=' + encodeURIComponent(latitude + ',' + longitude) + '&hl=ar&z=16&output=embed';
-                    locationMapFrame.src = mapUrl;
+                    // استخدام data-src للـ lazy loading
+                    locationMapFrame.setAttribute('data-src', mapUrl);
+                    // تحميل الخريطة فقط عند فتح الـ modal
+                    viewLocationModal.addEventListener('shown.bs.modal', function loadMap() {
+                        if (locationMapFrame.getAttribute('data-src')) {
+                            locationMapFrame.src = locationMapFrame.getAttribute('data-src');
+                            locationMapFrame.removeAttribute('data-src');
+                        }
+                        viewLocationModal.removeEventListener('shown.bs.modal', loadMap);
+                    }, { once: true });
 
                     if (locationExternalLink) {
                         locationExternalLink.href = 'https://www.google.com/maps?q=' + encodeURIComponent(latitude + ',' + longitude) + '&hl=ar&z=16';
@@ -3891,6 +3910,51 @@ document.addEventListener('DOMContentLoaded', function() {
         padding: 0.5rem 0.25rem;
     }
 }
+
+/* تحسينات الأداء على الموبايل */
+@media (max-width: 768px) {
+    /* تحسين الجدول على الموبايل */
+    .dashboard-table-wrapper {
+        -webkit-overflow-scrolling: touch;
+        overflow-x: auto;
+        transform: translateZ(0); /* تفعيل hardware acceleration */
+    }
+    
+    .dashboard-table {
+        min-width: 600px; /* عرض أدنى للجدول */
+    }
+    
+    .dashboard-table th,
+    .dashboard-table td {
+        padding: 0.5rem 0.25rem;
+        font-size: 0.875rem;
+    }
+    
+    /* تحسين الأزرار على الموبايل */
+    .btn-sm {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+    }
+    
+    /* تحسين الكروت */
+    .card {
+        will-change: transform;
+    }
+    
+    /* تحسين التمرير */
+    * {
+        -webkit-tap-highlight-color: transparent;
+    }
+}
+
+/* تحسين الأداء العام */
+.dashboard-table-wrapper {
+    contain: layout style paint;
+}
+
+.dashboard-table tbody tr {
+    contain: layout style;
+}
 </style>
 
 <!-- Customer Export Script -->
@@ -3901,7 +3965,7 @@ window.CUSTOMER_EXPORT_CONFIG = {
     apiBasePath: '<?php echo getRelativeUrl("api"); ?>'
 };
 </script>
-<script src="<?php echo ASSETS_URL; ?>js/customer_export.js?v=<?php echo time(); ?>"></script>
+<script src="<?php echo ASSETS_URL; ?>js/customer_export.js?v=<?php echo time(); ?>" defer></script>
 <?php endif; ?>
 
 <!-- Modal استيراد العملاء المحليين من CSV -->
