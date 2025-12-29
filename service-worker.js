@@ -65,15 +65,35 @@ self.addEventListener('fetch', (event) => {
   // Handle API requests - network only
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
-      fetch(request).catch(() =>
-        new Response(
-          JSON.stringify({ success: false, message: 'لا يوجد اتصال بالشبكة.' }),
-          {
-            status: 503,
-            headers: { 'Content-Type': 'application/json; charset=utf-8' }
+      fetch(request)
+        .then((response) => {
+          // Allow all server responses to pass through (even errors like 500, 404)
+          return response;
+        })
+        .catch((error) => {
+          // Only show network error for actual network failures
+          // Check if it's a real network error (TypeError, NetworkError, or failed fetch)
+          const isNetworkError = 
+            error.name === 'TypeError' ||
+            error.name === 'NetworkError' ||
+            error.message === 'Failed to fetch' ||
+            error.message?.includes('network') ||
+            error.message?.includes('fetch');
+          
+          // Only return network error message for actual network failures
+          if (isNetworkError) {
+            return new Response(
+              JSON.stringify({ success: false, message: 'لا يوجد اتصال بالشبكة.' }),
+              {
+                status: 503,
+                headers: { 'Content-Type': 'application/json; charset=utf-8' }
+              }
+            );
           }
-        )
-      )
+          
+          // For other errors, re-throw to let them propagate normally
+          throw error;
+        })
     );
     return;
   }

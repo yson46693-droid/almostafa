@@ -1589,52 +1589,87 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 
 <style>
-/* تحسينات المودالات على الهواتف */
-#generateReportModal .modal-dialog,
-#collectFromRepModal .modal-dialog {
-    margin: 0.5rem;
+/* إصلاح شامل للمساحة البيضاء في النماذج */
+
+/* إصلاح النماذج المركزية على جميع الأحجام */
+#generateReportModal .modal-dialog.modal-dialog-centered,
+#collectFromRepModal .modal-dialog.modal-dialog-centered {
+    margin: 0.5rem auto;
     display: flex;
     flex-direction: column;
+    max-height: calc(100vh - 1rem);
 }
 
 #generateReportModal .modal-content,
 #collectFromRepModal .modal-content {
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    max-height: none !important;
+    display: flex !important;
+    flex-direction: column !important;
     height: auto !important;
+    max-height: 100% !important;
+    overflow: hidden !important;
 }
 
-/* إصلاح المساحة البيضاء الفارغة - استخدام auto height بدلاً من flex: 1 */
+/* إصلاح المساحة البيضاء - منع modal-body من التمدد */
 #generateReportModal .modal-body,
 #collectFromRepModal .modal-body {
-    overflow-y: auto;
-    flex: 0 1 auto !important; /* تغيير من 1 1 auto إلى 0 1 auto لإزالة المساحة الفارغة */
-    min-height: 0;
-    padding-bottom: 1rem;
-    max-height: none !important;
+    flex: 0 1 auto !important; /* منع التمدد التلقائي */
+    flex-grow: 0 !important;
+    flex-shrink: 1 !important;
+    flex-basis: auto !important;
+    min-height: 0 !important;
     height: auto !important;
+    max-height: none !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    padding-bottom: 1rem !important;
+    margin-bottom: 0 !important;
+}
+
+#generateReportModal .modal-header,
+#collectFromRepModal .modal-header {
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
 }
 
 #generateReportModal .modal-footer,
 #collectFromRepModal .modal-footer {
     flex-shrink: 0 !important;
-    margin-top: 0 !important; /* إزالة margin-top: auto */
-    padding-top: 1rem;
-    padding-bottom: 1rem;
-    border-top: 1px solid #dee2e6;
+    flex-grow: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+    border-top: 1px solid #dee2e6 !important;
 }
 
-/* إصلاح الجزء الأبيض الفارغ */
+/* إزالة أي pseudo-elements قد تسبب مساحة فارغة */
 #generateReportModal .modal-content::after,
-#collectFromRepModal .modal-content::after {
-    display: none;
+#collectFromRepModal .modal-content::after,
+#generateReportModal .modal-content::before,
+#collectFromRepModal .modal-content::before {
+    display: none !important;
+    content: none !important;
+}
+
+/* إصلاح خاص لـ modal-dialog-scrollable */
+#generateReportModal .modal-dialog.modal-dialog-scrollable .modal-content,
+#collectFromRepModal .modal-dialog.modal-dialog-scrollable .modal-content {
+    max-height: 100% !important;
+    overflow: hidden !important;
+}
+
+#generateReportModal .modal-dialog.modal-dialog-scrollable .modal-body,
+#collectFromRepModal .modal-dialog.modal-dialog-scrollable .modal-body {
+    flex: 0 1 auto !important;
+    overflow-y: auto !important;
+    max-height: calc(100vh - 250px) !important;
 }
 
 /* تسريع إغلاق النماذج - إزالة جميع الـ transitions */
+#generateReportModal ~ .modal-backdrop,
+#collectFromRepModal ~ .modal-backdrop,
 .modal-backdrop {
-    transition: none !important; /* إزالة transition تماماً */
+    transition: none !important;
 }
 
 .modal-backdrop.fade {
@@ -1645,9 +1680,8 @@ document.addEventListener('DOMContentLoaded', function() {
     opacity: 0.5 !important;
 }
 
-/* إزالة animation الإغلاق تماماً */
 .modal.fade .modal-dialog {
-    transition: none !important; /* إزالة transition تماماً */
+    transition: none !important;
 }
 
 .modal.fade:not(.show) .modal-dialog {
@@ -1655,13 +1689,14 @@ document.addEventListener('DOMContentLoaded', function() {
     opacity: 0 !important;
 }
 
-/* تحسينات إضافية للهواتف */
+/* تحسينات خاصة للهواتف المحمولة */
 @media (max-width: 768px) {
     #generateReportModal .modal-dialog,
     #collectFromRepModal .modal-dialog {
-        margin: 0.5rem;
-        max-width: calc(100% - 1rem);
+        margin: 0.5rem !important;
+        max-width: calc(100% - 1rem) !important;
         max-height: calc(100vh - 1rem) !important;
+        height: auto !important;
     }
     
     #generateReportModal .modal-content,
@@ -1670,27 +1705,40 @@ document.addEventListener('DOMContentLoaded', function() {
         height: auto !important;
     }
     
-    /* للنماذج الصغيرة - إزالة المساحة الفارغة تماماً */
+    /* إصلاح شامل للمساحة البيضاء على الهواتف */
     #collectFromRepModal .modal-body {
         flex: 0 1 auto !important;
-        padding-bottom: 1rem;
+        flex-grow: 0 !important;
+        padding-bottom: 1rem !important;
         max-height: none !important;
         height: auto !important;
+        overflow-y: visible !important; /* لا حاجة للتمرير في النماذج الصغيرة */
     }
     
-    /* للنماذج الأطول - السماح بالتمرير عند الحاجة فقط */
     #generateReportModal .modal-body {
         flex: 0 1 auto !important;
-        padding-bottom: 1rem;
-        max-height: calc(100vh - 250px) !important; /* ارتفاع مناسب مع احتياطي للهيدر والفوتر */
-        overflow-y: auto;
+        flex-grow: 0 !important;
+        padding-bottom: 1rem !important;
+        max-height: calc(100vh - 250px) !important;
+        overflow-y: auto !important;
+        height: auto !important;
     }
     
     #generateReportModal .modal-footer,
     #collectFromRepModal .modal-footer {
-        padding-top: 1rem;
-        padding-bottom: 1rem;
+        flex-shrink: 0 !important;
+        flex-grow: 0 !important;
         margin-top: 0 !important;
+        padding-top: 1rem !important;
+        padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
+    }
+}
+
+/* إصلاح خاص للنماذج الصغيرة - إزالة التمرير غير الضروري */
+@media (max-width: 768px) {
+    #collectFromRepModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body {
+        overflow-y: visible !important;
+        max-height: none !important;
     }
 }
 </style>

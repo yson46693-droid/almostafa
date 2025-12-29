@@ -82,8 +82,11 @@
             modalBody.style.maxHeight = '';
             modalBody.style.height = '';
             
-            // تعيين خصائص flexbox
-            modalBody.style.flex = '1 1 auto';
+            // تعيين خصائص flexbox - استخدام 0 1 auto لمنع التمدد التلقائي
+            modalBody.style.flex = '0 1 auto';
+            modalBody.style.flexGrow = '0';
+            modalBody.style.flexShrink = '1';
+            modalBody.style.flexBasis = 'auto';
             modalBody.style.minHeight = '0';
             modalBody.style.overflowY = 'auto';
             modalBody.style.overflowX = 'hidden';

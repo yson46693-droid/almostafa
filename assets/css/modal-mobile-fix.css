@@ -143,6 +143,9 @@
     .modal.show .modal-dialog-scrollable .modal-body,
     .modal.showing .modal-dialog-scrollable .modal-body {
         flex: 0 1 auto !important; /* تغيير من 1 1 auto إلى 0 1 auto لإزالة المساحة الفارغة */
+        flex-grow: 0 !important; /* منع التمدد التلقائي */
+        flex-shrink: 1 !important;
+        flex-basis: auto !important;
         min-height: 0 !important;
         overflow-y: auto !important;
         overflow-x: hidden !important;
@@ -161,12 +164,23 @@
     .modal.show .modal-dialog-scrollable .modal-footer,
     .modal.showing .modal-dialog-scrollable .modal-footer {
         flex-shrink: 0 !important;
+        flex-grow: 0 !important; /* منع التمدد التلقائي */
         background-color: #fff !important;
         padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
         border-top: 1px solid #dee2e6 !important;
         margin-top: 0 !important; /* إزالة margin-top: auto لمنع المساحة الفارغة */
+        margin-bottom: 0 !important;
         position: relative !important;
         z-index: 10 !important;
+    }
+    
+    /* إزالة أي pseudo-elements قد تسبب مساحة فارغة */
+    .modal.show .modal-dialog-scrollable .modal-content::after,
+    .modal.showing .modal-dialog-scrollable .modal-content::after,
+    .modal.show .modal-dialog-scrollable .modal-content::before,
+    .modal.showing .modal-dialog-scrollable .modal-content::before {
+        display: none !important;
+        content: none !important;
     }
     
     /* تجاوز أي CSS متعارض من header.php */
