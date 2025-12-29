@@ -1790,15 +1790,16 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
             <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
                 <input type="hidden" name="action" value="add_customer">
                 <div class="modal-body">
+                    <!-- على الهاتف: 2 حقل في كل صف | على الشاشات الكبيرة: حقل واحد في كل صف -->
                     <div class="row g-2 g-md-3">
-                        <!-- اسم العميل - يأخذ الصف كاملاً على الهاتف -->
-                        <div class="col-12 mb-3 mb-md-0">
+                        <!-- اسم العميل - يأخذ الصف كاملاً على جميع الشاشات -->
+                        <div class="col-12 mb-2 mb-md-3">
                             <label class="form-label">اسم العميل <span class="text-danger">*</span></label>
                             <input type="text" class="form-control" name="name" required>
                         </div>
                         
-                        <!-- أرقام الهاتف - يأخذ الصف كاملاً على الهاتف -->
-                        <div class="col-12 mb-3 mb-md-0">
+                        <!-- أرقام الهاتف - يأخذ الصف كاملاً على جميع الشاشات -->
+                        <div class="col-12 mb-2 mb-md-3">
                             <label class="form-label">أرقام الهاتف</label>
                             <div id="phoneNumbersContainer">
                                 <div class="input-group mb-2">
@@ -1814,24 +1815,24 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                             <input type="hidden" name="phone" value=""> <!-- للحفاظ على التوافق مع الكود القديم -->
                         </div>
                         
-                        <!-- ديون العميل - يأخذ نصف الصف على الهاتف -->
-                        <div class="col-6 col-md-12 mb-3 mb-md-0">
+                        <!-- ديون العميل - يأخذ نصف الصف على الهاتف فقط -->
+                        <div class="col-6 col-md-12 mb-2 mb-md-3">
                             <label class="form-label">ديون العميل / رصيد العميل</label>
                             <input type="number" class="form-control" name="balance" step="0.01" value="0" placeholder="مثال: 0 أو -500">
-                            <small class="text-muted d-block mt-1">
+                            <small class="text-muted d-block mt-1 small">
                                 <strong>إدخال قيمة سالبة:</strong> يتم اعتبارها رصيد دائن للعميل (مبلغ متاح للعميل). 
                                 لا يتم تحصيل هذا الرصيد، ويمكن للعميل استخدامه عند شراء فواتير حيث يتم خصم قيمة الفاتورة من الرصيد تلقائياً دون تسجيلها كدين.
                             </small>
                         </div>
                         
-                        <!-- العنوان - يأخذ نصف الصف على الهاتف -->
-                        <div class="col-6 col-md-12 mb-3 mb-md-0">
+                        <!-- العنوان - يأخذ نصف الصف على الهاتف فقط -->
+                        <div class="col-6 col-md-12 mb-2 mb-md-3">
                             <label class="form-label">العنوان</label>
                             <textarea class="form-control" name="address" rows="2"></textarea>
                         </div>
                         
-                        <!-- المنطقة - يأخذ نصف الصف على الهاتف -->
-                        <div class="col-6 col-md-12 mb-3 mb-md-0">
+                        <!-- المنطقة - يأخذ نصف الصف على الهاتف فقط -->
+                        <div class="col-6 col-md-12 mb-2 mb-md-3">
                             <label class="form-label">المنطقة</label>
                             <div class="input-group">
                                 <select class="form-select" name="region_id" id="addLocalCustomerRegionId">
@@ -1851,8 +1852,8 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                             </div>
                         </div>
                         
-                        <!-- الموقع الجغرافي - يأخذ نصف الصف على الهاتف -->
-                        <div class="col-6 col-md-12 mb-3 mb-md-0">
+                        <!-- الموقع الجغرافي - يأخذ نصف الصف على الهاتف فقط -->
+                        <div class="col-6 col-md-12 mb-2 mb-md-3">
                             <label class="form-label">الموقع الجغرافي</label>
                             <div class="d-flex gap-2 mb-2">
                                 <button type="button" class="btn btn-sm btn-outline-primary" id="getLocationBtn">
@@ -1867,7 +1868,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                                     <input type="text" class="form-control" name="longitude" id="addCustomerLongitude" placeholder="خط الطول" readonly>
                                 </div>
                             </div>
-                            <small class="text-muted d-block mt-1">يمكنك الحصول على الموقع تلقائياً أو إدخاله يدوياً</small>
+                            <small class="text-muted d-block mt-1 small">يمكنك الحصول على الموقع تلقائياً أو إدخاله يدوياً</small>
                         </div>
                     </div>
                 </div>
@@ -4652,33 +4653,54 @@ window.CUSTOMER_EXPORT_CONFIG = {
         max-width: calc(100% - 1rem) !important;
         max-height: calc(100vh - 1rem) !important;
         height: auto !important;
+        display: flex !important;
+        flex-direction: column !important;
     }
     
     #addLocalCustomerModal .modal-content {
         max-height: calc(100vh - 1rem) !important;
         height: auto !important;
+        display: flex !important;
+        flex-direction: column !important;
     }
     
     #addLocalCustomerModal .modal-body {
-        flex: 0 1 auto !important;
-        flex-grow: 0 !important;
+        flex: 1 1 auto !important;
+        flex-grow: 1 !important;
+        flex-shrink: 1 !important;
         padding-bottom: 1rem !important;
         max-height: none !important;
         height: auto !important;
-        overflow-y: visible !important;
+        overflow-y: auto !important;
+        min-height: 0 !important;
     }
     
     #addLocalCustomerModal .modal-footer {
         flex-shrink: 0 !important;
         flex-grow: 0 !important;
-        margin-top: 0 !important;
+        margin-top: auto !important;
         padding-top: 1rem !important;
         padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
+        display: flex !important;
+        position: relative !important;
+        z-index: 10 !important;
+        background: white !important;
+        border-top: 1px solid #dee2e6 !important;
     }
     
     #addLocalCustomerModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body {
-        overflow-y: visible !important;
+        overflow-y: auto !important;
         max-height: none !important;
+    }
+    
+    /* تحسين عرض الحقول على الهاتف */
+    #addLocalCustomerModal .modal-body .row {
+        margin-bottom: 0 !important;
+    }
+    
+    #addLocalCustomerModal .modal-body .col-6 {
+        padding-left: 0.25rem !important;
+        padding-right: 0.25rem !important;
     }
 }
 </style>
