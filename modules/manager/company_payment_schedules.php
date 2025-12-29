@@ -1563,88 +1563,70 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 }
 
-/* ===== منع scroll و touch خارج النموذج عند فتحه ===== */
+/* ===== CSS مبسط للمودالات - بدون تعارضات ===== */
 /* منع scroll في body عند فتح النموذج */
 body.modal-open {
     overflow: hidden !important;
+    position: fixed !important;
+    width: 100% !important;
 }
 
-/* ضمان أن backdrop يمنع التفاعل */
+/* Backdrop بسيط */
 .modal-backdrop {
     z-index: 1040 !important;
     background-color: #000 !important;
-    pointer-events: auto !important;
-    touch-action: none !important;
-}
-
-.modal-backdrop.show {
     opacity: 0.5 !important;
 }
 
-/* منع touch events على المحتوى خلف النموذج */
+/* منع التفاعل مع المحتوى خلف النموذج - بدون touch-action: none */
 body.modal-open > *:not(.modal):not(.modal-backdrop) {
     pointer-events: none !important;
-    touch-action: none !important;
 }
 
-/* السماح بالتفاعل داخل النموذج فقط */
+/* السماح بالتفاعل داخل النموذج - بدون touch-action معقد */
 #editScheduleModal.modal.show,
 #reminderModal.modal.show {
     pointer-events: auto !important;
-    touch-action: auto !important;
 }
 
 #editScheduleModal .modal-dialog,
 #reminderModal .modal-dialog {
     pointer-events: auto !important;
-    touch-action: auto !important;
 }
 
 #editScheduleModal .modal-content,
 #reminderModal .modal-content {
     pointer-events: auto !important;
-    touch-action: auto !important;
 }
 
-/* السماح بالتمرير داخل modal-body فقط */
+/* السماح بالتمرير داخل modal-body */
 #editScheduleModal .modal-body,
 #reminderModal .modal-body {
     -webkit-overflow-scrolling: touch !important;
-    touch-action: pan-y !important;
     pointer-events: auto !important;
 }
 
-/* منع scroll على المحتوى خلف النموذج على الموبايل */
+/* تنسيقات الموبايل - مبسطة بدون تعارضات */
 @media (max-width: 768px) {
     body.modal-open {
         overflow: hidden !important;
-        /* إزالة touch-action: none - يسبب freeze على الموبايل */
         position: fixed !important;
         width: 100% !important;
     }
     
     body.modal-open > *:not(.modal):not(.modal-backdrop) {
         pointer-events: none !important;
-        /* إزالة touch-action: none - يسبب freeze */
-        -webkit-overflow-scrolling: none !important;
     }
     
-    /* السماح بالتمرير والتفاعل داخل النموذج فقط */
+    /* السماح بالتمرير والتفاعل الطبيعي داخل النموذج */
     #editScheduleModal .modal-body,
     #reminderModal .modal-body {
         -webkit-overflow-scrolling: touch !important;
-        touch-action: pan-y pinch-zoom !important; /* السماح بالتمرير والـ pinch-zoom */
         overflow-y: auto !important;
         max-height: calc(100vh - 180px) !important;
     }
     
-    /* السماح بالتفاعل الكامل داخل modal-content */
-    #editScheduleModal .modal-content,
-    #reminderModal .modal-content {
-        touch-action: auto !important; /* السماح بجميع touch actions */
-    }
-    
-    /* السماح بالتفاعل الكامل مع الحقول والأزرار */
+    /* تحسين التفاعل مع الحقول والأزرار */
     #editScheduleModal input,
     #editScheduleModal select,
     #editScheduleModal textarea,
@@ -1653,90 +1635,30 @@ body.modal-open > *:not(.modal):not(.modal-backdrop) {
     #reminderModal select,
     #reminderModal textarea,
     #reminderModal button {
-        touch-action: manipulation !important; /* السماح بالتفاعل الطبيعي */
         -webkit-tap-highlight-color: rgba(0, 123, 255, 0.2) !important;
     }
 }
 </style>
 
 <script>
-// ===== منع scroll و touch خارج النموذج =====
+// ===== كود مبسط للمودالات - بدون تعارضات =====
 document.addEventListener('DOMContentLoaded', function() {
+    // Bootstrap يتعامل مع المودالات تلقائياً - لا حاجة لكود إضافي معقد
+    // فقط تنظيف بسيط عند إغلاق المودالات
     const modals = ['editScheduleModal', 'reminderModal'];
     
     modals.forEach(function(modalId) {
         const modal = document.getElementById(modalId);
         if (!modal) return;
         
-        // عند فتح النموذج - لا حاجة لإضافة classes أو styles
-        modal.addEventListener('show.bs.modal', function() {
-            // لا شيء - Bootstrap يتعامل مع هذا تلقائياً
-        });
-        
-        // عند إغلاق النموذج - لا حاجة لتنظيف
+        // تنظيف النموذج عند إغلاق المودال فقط
         modal.addEventListener('hidden.bs.modal', function() {
-            // لا شيء - Bootstrap يتعامل مع هذا تلقائياً
+            const form = modal.querySelector('form');
+            if (form) {
+                form.reset();
+            }
         });
-        
-        // منع propagation للأحداث من النموذج إلى body - فقط للأحداث خارج modal-content
-        modal.addEventListener('touchstart', function(e) {
-            // السماح بالتفاعل داخل modal-content (الحقول والأزرار)
-            const modalContent = modal.querySelector('.modal-content');
-            if (modalContent && modalContent.contains(e.target)) {
-                return; // لا تمنع propagation داخل modal-content
-            }
-            e.stopPropagation();
-        }, { passive: true });
-        
-        modal.addEventListener('touchmove', function(e) {
-            // السماح بالتمرير والتفاعل داخل modal-content
-            const modalContent = modal.querySelector('.modal-content');
-            if (modalContent && modalContent.contains(e.target)) {
-                return; // لا تمنع propagation داخل modal-content
-            }
-            e.stopPropagation();
-        }, { passive: true });
-        
-        modal.addEventListener('touchend', function(e) {
-            // السماح بالتفاعل داخل modal-content
-            const modalContent = modal.querySelector('.modal-content');
-            if (modalContent && modalContent.contains(e.target)) {
-                return; // لا تمنع propagation داخل modal-content
-            }
-            e.stopPropagation();
-        }, { passive: true });
-        
-        // منع scroll على backdrop
-        modal.addEventListener('wheel', function(e) {
-            const modalContent = modal.querySelector('.modal-content');
-            if (modalContent && !modalContent.contains(e.target)) {
-                e.preventDefault();
-            }
-        }, { passive: false });
     });
-    
-    // منع scroll على backdrop مباشرة - فقط على backdrop نفسه
-    document.addEventListener('touchmove', function(e) {
-        // التحقق من أن الهدف هو backdrop وليس أي عنصر داخل modal
-        const target = e.target;
-        if (target && target.classList && target.classList.contains('modal-backdrop')) {
-            // التحقق من عدم وجود modal مفتوح يحتوي على العنصر
-            const openModal = document.querySelector('.modal.show');
-            if (!openModal || !openModal.contains(target)) {
-                e.preventDefault();
-            }
-        }
-    }, { passive: false });
-    
-    document.addEventListener('wheel', function(e) {
-        const target = e.target;
-        if (target && target.classList && target.classList.contains('modal-backdrop')) {
-            const openModal = document.querySelector('.modal.show');
-            if (!openModal || !openModal.contains(target)) {
-                e.preventDefault();
-            }
-        }
-    }, { passive: false });
 });
 </script>
 
