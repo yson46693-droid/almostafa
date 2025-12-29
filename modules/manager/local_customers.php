@@ -4646,12 +4646,13 @@ window.CUSTOMER_EXPORT_CONFIG = {
     }
 }
 
-/* ===== إصلاح نموذج إضافة عميل محلي جديد - ضمان ظهور الأزرار ===== */
+/* ===== إصلاح نموذج إضافة عميل محلي جديد - تمرير داخلي وإزالة backdrop ===== */
 #addLocalCustomerModal .modal-dialog {
     max-height: calc(100vh - 2rem) !important;
     margin: 1rem auto !important;
     display: flex !important;
     flex-direction: column !important;
+    height: auto !important;
 }
 
 #addLocalCustomerModal .modal-content {
@@ -4659,10 +4660,12 @@ window.CUSTOMER_EXPORT_CONFIG = {
     display: flex !important;
     flex-direction: column !important;
     overflow: hidden !important;
+    height: auto !important;
 }
 
 #addLocalCustomerModal .modal-header {
     flex-shrink: 0 !important;
+    flex-grow: 0 !important;
 }
 
 #addLocalCustomerModal .modal-body {
@@ -4670,11 +4673,14 @@ window.CUSTOMER_EXPORT_CONFIG = {
     overflow-y: auto !important;
     overflow-x: hidden !important;
     min-height: 0 !important;
+    -webkit-overflow-scrolling: touch !important;
+    max-height: calc(100vh - 200px) !important;
 }
 
 #addLocalCustomerModal .modal-footer {
     flex-shrink: 0 !important;
-    margin-top: auto !important;
+    flex-grow: 0 !important;
+    margin-top: 0 !important;
     border-top: 1px solid #dee2e6 !important;
 }
 
@@ -4684,19 +4690,86 @@ window.CUSTOMER_EXPORT_CONFIG = {
         max-height: calc(100vh - 1rem) !important;
         margin: 0.5rem !important;
         max-width: calc(100% - 1rem) !important;
+        height: calc(100vh - 1rem) !important;
     }
     
     #addLocalCustomerModal .modal-content {
         max-height: calc(100vh - 1rem) !important;
+        height: 100% !important;
+    }
+    
+    #addLocalCustomerModal .modal-body {
+        flex: 1 1 auto !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+        max-height: calc(100vh - 180px) !important;
+        padding-bottom: 1rem !important;
     }
     
     #addLocalCustomerModal .modal-footer {
         padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
         background: white !important;
-        position: sticky !important;
-        bottom: 0 !important;
-        z-index: 10 !important;
+        flex-shrink: 0 !important;
     }
+}
+
+/* إزالة أي backdrop يؤثر على النموذج */
+#addLocalCustomerModal.modal.show,
+#addLocalCustomerModal.modal.showing {
+    pointer-events: auto !important;
+    z-index: 1055 !important;
+}
+
+#addLocalCustomerModal .modal-dialog {
+    pointer-events: auto !important;
+    z-index: 1056 !important;
+    touch-action: manipulation !important;
+}
+
+#addLocalCustomerModal .modal-content {
+    pointer-events: auto !important;
+    z-index: 1057 !important;
+    touch-action: manipulation !important;
+}
+
+#addLocalCustomerModal .modal-body,
+#addLocalCustomerModal .modal-header,
+#addLocalCustomerModal .modal-footer {
+    pointer-events: auto !important;
+    touch-action: manipulation !important;
+}
+
+#addLocalCustomerModal button,
+#addLocalCustomerModal input,
+#addLocalCustomerModal select,
+#addLocalCustomerModal textarea,
+#addLocalCustomerModal a,
+#addLocalCustomerModal .btn,
+#addLocalCustomerModal .form-control,
+#addLocalCustomerModal .form-select {
+    pointer-events: auto !important;
+    touch-action: manipulation !important;
+    -webkit-tap-highlight-color: rgba(0, 123, 255, 0.2) !important;
+}
+
+/* إزالة backdrop الإضافي الذي يمنع التفاعل */
+#addLocalCustomerModal + .modal-backdrop,
+.modal-backdrop.show {
+    z-index: 1054 !important;
+}
+
+/* إزالة أي backdrop إضافي */
+body.modal-open #addLocalCustomerModal ~ .modal-backdrop,
+body.modal-open .modal-backdrop ~ .modal-backdrop {
+    display: none !important;
+    pointer-events: none !important;
+}
+
+/* ضمان أن backdrop واحد فقط موجود */
+body.modal-open .modal-backdrop:not(:first-of-type) {
+    display: none !important;
+    pointer-events: none !important;
 }
 
 </style>

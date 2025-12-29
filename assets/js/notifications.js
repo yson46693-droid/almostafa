@@ -388,7 +388,9 @@ function updateNotificationList(notifications) {
             'error': 'text-danger',
             'approval': 'text-primary',
             'attendance_checkin': 'text-warning',
-            'attendance_checkout': 'text-warning'
+            'attendance_checkout': 'text-warning',
+            'payment_due': 'text-info',
+            'payment_overdue': 'text-danger'
         }[notification.type] || 'text-info';
         
         const icon = {
@@ -398,7 +400,9 @@ function updateNotificationList(notifications) {
             'error': 'bi-x-circle',
             'approval': 'bi-check-square',
             'attendance_checkin': 'bi-alarm',
-            'attendance_checkout': 'bi-door-open'
+            'attendance_checkout': 'bi-door-open',
+            'payment_due': 'bi-calendar-check',
+            'payment_overdue': 'bi-calendar-x'
         }[notification.type] || 'bi-bell';
         
         const unread = isNotificationUnread(notification);
