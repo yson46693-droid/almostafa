@@ -196,6 +196,73 @@ if ($page === 'representatives_customers' &&
     }
 }
 
+// معالجة AJAX لجلب أرقام الهواتف من صفحة representatives_customers
+if ($page === 'representatives_customers' && 
+    $_SERVER['REQUEST_METHOD'] === 'GET' && 
+    isset($_GET['action']) && 
+    trim($_GET['action']) === 'get_customer_phones') {
+    
+    // تنظيف أي output buffer قبل أي شيء
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    
+    // إيقاف عرض الأخطاء على الشاشة
+    $oldErrorReporting = error_reporting(E_ALL);
+    $oldDisplayErrors = ini_set('display_errors', '0');
+    
+    try {
+        // تحميل الملفات الأساسية فقط
+        require_once __DIR__ . '/../includes/config.php';
+        require_once __DIR__ . '/../includes/db.php';
+        require_once __DIR__ . '/../includes/auth.php';
+        require_once __DIR__ . '/../includes/audit_log.php';
+        require_once __DIR__ . '/../includes/path_helper.php';
+        
+        // التحقق من الصلاحيات
+        requireRole(['accountant', 'manager', 'developer']);
+        
+        // تعريف ثابت لتجنب requireRole داخل الملف
+        define('COLLECTION_POST_PROCESSING', true);
+        
+        // تنظيف أي output buffer مرة أخرى بعد تحميل الملفات
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        
+        // تحميل ملف representatives_customers.php مباشرة للتعامل مع AJAX
+        $modulePath = __DIR__ . '/../modules/manager/representatives_customers.php';
+        if (file_exists($modulePath)) {
+            // الملف نفسه سيتعامل مع AJAX ويخرج JSON
+            include $modulePath;
+            exit; // إيقاف التنفيذ بعد معالجة AJAX
+        } else {
+            throw new Exception('Module file not found');
+        }
+        
+    } catch (Throwable $e) {
+        // تنظيف أي output buffer في حالة الخطأ
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'success' => false,
+            'message' => 'حدث خطأ: ' . $e->getMessage()
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    } finally {
+        // استعادة إعدادات الأخطاء
+        if (isset($oldErrorReporting)) {
+            error_reporting($oldErrorReporting);
+        }
+        if (isset($oldDisplayErrors)) {
+            ini_set('display_errors', $oldDisplayErrors);
+        }
+    }
+}
+
 // معالجة AJAX لجلب رصيد المندوب من صفحة company_cash
 if ($page === 'company_cash' && isset($_GET['ajax']) && $_GET['ajax'] === 'get_sales_rep_balance') {
     // تحميل الملفات الأساسية فقط
