@@ -756,9 +756,9 @@ if (isset($_GET['id'])) {
             تم إرسال <?php echo $sentReminders; ?> تذكير
         </div>
         <?php endif; ?>
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addScheduleModal">
+        <a href="?page=company_payment_schedules&action=show_add_form" class="btn btn-primary">
             <i class="bi bi-plus-circle me-2"></i>إضافة موعد تحصيل
-        </button>
+        </a>
     </div>
 </div>
 
@@ -1118,62 +1118,68 @@ if (isset($_GET['id'])) {
     </div>
 </div>
 
-<!-- Modal إضافة موعد تحصيل -->
-<div class="modal fade" id="addScheduleModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>إضافة موعد تحصيل</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+<!-- نموذج إضافة موعد تحصيل مبسط -->
+<?php 
+$showAddForm = isset($_GET['action']) && $_GET['action'] === 'show_add_form';
+if ($showAddForm): 
+?>
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>إضافة موعد تحصيل</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
+            <input type="hidden" name="action" value="create_schedule">
+            <?php if ($hasDebtorCustomers): ?>
+            <div class="mb-3">
+                <label class="form-label">العميل <span class="text-danger">*</span></label>
+                <select class="form-select" name="customer_id" required>
+                    <option value="">اختر العميل</option>
+                    <?php foreach ($debtorCustomers as $customer): ?>
+                        <option value="<?php echo (int) $customer['id']; ?>">
+                            <?php echo htmlspecialchars($customer['name']); ?> - رصيد مدين: <?php echo formatCurrency($customer['balance']); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <small class="text-muted">يتم عرض العملاء المحليين المدينين فقط.</small>
             </div>
-            <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>" id="addScheduleForm" onsubmit="return handleAddScheduleSubmit(event)">
-                <input type="hidden" name="action" value="create_schedule">
-                <div class="modal-body">
-                    <?php if ($hasDebtorCustomers): ?>
-                    <div class="mb-3">
-                        <label class="form-label">العميل <span class="text-danger">*</span></label>
-                        <select class="form-select" name="customer_id" id="addScheduleCustomerId" required>
-                            <option value="">اختر العميل</option>
-                            <?php foreach ($debtorCustomers as $customer): ?>
-                                <option value="<?php echo (int) $customer['id']; ?>">
-                                    <?php echo htmlspecialchars($customer['name']); ?> - رصيد مدين: <?php echo formatCurrency($customer['balance']); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                        <small class="text-muted">يتم عرض العملاء المحليين المدينين فقط.</small>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">مبلغ التحصيل <span class="text-danger">*</span></label>
-                        <input type="number" name="amount" class="form-control" step="0.01" min="0.01" id="addScheduleAmount" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">موعد التحصيل <span class="text-danger">*</span></label>
-                        <input type="date" name="due_date" class="form-control" id="addScheduleDueDate" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">عدد الأيام قبل الموعد للتذكير</label>
-                        <input type="number" name="days_before_due" class="form-control" id="addScheduleDaysBeforeDue"
-                               value="3" min="1" max="30" step="1">
-                        <small class="text-muted">سيتم إرسال التذكير قبل موعد الاستحقاق بهذا العدد من الأيام (اختياري - الافتراضي: 3 أيام)</small>
-                    </div>
-                    <?php else: ?>
-                    <div class="alert alert-warning mb-0">
-                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                        لا يوجد عملاء محليون مدينون (رصيد مدين أكبر من صفر) لإضافة موعد تحصيل. 
-                        <br><small class="text-muted">تأكد من وجود عملاء محليين نشطين برصيد مدين (balance > 0).</small>
-                    </div>
-                    <?php endif; ?>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-                    <button type="button" class="btn btn-primary" id="addScheduleSubmitBtn" <?php echo $hasDebtorCustomers ? '' : 'disabled'; ?>>
-                        <?php echo $hasDebtorCustomers ? 'حفظ' : 'لا يوجد عملاء مدينون'; ?>
-                    </button>
-                </div>
-            </form>
-        </div>
+            <div class="mb-3">
+                <label class="form-label">مبلغ التحصيل <span class="text-danger">*</span></label>
+                <input type="number" name="amount" class="form-control" step="0.01" min="0.01" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">موعد التحصيل <span class="text-danger">*</span></label>
+                <input type="date" name="due_date" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">عدد الأيام قبل الموعد للتذكير</label>
+                <input type="number" name="days_before_due" class="form-control" value="3" min="1" max="30" step="1">
+                <small class="text-muted">سيتم إرسال التذكير قبل موعد الاستحقاق بهذا العدد من الأيام (اختياري - الافتراضي: 3 أيام)</small>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle me-2"></i>حفظ
+                </button>
+                <a href="?page=company_payment_schedules" class="btn btn-secondary">
+                    <i class="bi bi-x-circle me-2"></i>إلغاء
+                </a>
+            </div>
+            <?php else: ?>
+            <div class="alert alert-warning mb-0">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                لا يوجد عملاء محليون مدينون (رصيد مدين أكبر من صفر) لإضافة موعد تحصيل. 
+                <br><small class="text-muted">تأكد من وجود عملاء محليين نشطين برصيد مدين (balance > 0).</small>
+            </div>
+            <div class="mt-3">
+                <a href="?page=company_payment_schedules" class="btn btn-secondary">
+                    <i class="bi bi-arrow-left me-2"></i>رجوع
+                </a>
+            </div>
+            <?php endif; ?>
+        </form>
     </div>
 </div>
+<?php endif; ?>
 
 <!-- Modal تعديل موعد تحصيل -->
 <div class="modal fade" id="editScheduleModal" tabindex="-1" aria-hidden="true">
@@ -1313,106 +1319,7 @@ function showEditScheduleModal(button) {
     modal.show();
 }
 
-// دالة submit يدوية للنموذج
-function submitAddScheduleForm() {
-    const form = document.getElementById('addScheduleForm');
-    if (!form) return;
-    
-    // التحقق من أن النموذج صحيح
-    const customerId = form.querySelector('#addScheduleCustomerId')?.value;
-    const amount = form.querySelector('#addScheduleAmount')?.value;
-    const dueDate = form.querySelector('#addScheduleDueDate')?.value;
-    
-    if (!customerId || !amount || !dueDate) {
-        alert('يرجى ملء جميع الحقول المطلوبة');
-        return;
-    }
-    
-    // submit يدوي
-    form.submit();
-}
-
-// دالة للتحقق من submit النموذج (خاصة للموبايل)
-function handleAddScheduleSubmit(event) {
-    // منع submit تلقائي على الموبايل
-    if (!event || !event.isTrusted) {
-        console.warn('Form submit blocked - not a trusted event');
-        return false;
-    }
-    
-    const form = event.target;
-    if (!form) {
-        return false;
-    }
-    
-    // التحقق من أن النموذج صحيح
-    const customerId = form.querySelector('#addScheduleCustomerId')?.value;
-    const amount = form.querySelector('#addScheduleAmount')?.value;
-    const dueDate = form.querySelector('#addScheduleDueDate')?.value;
-    
-    if (!customerId || !amount || !dueDate) {
-        event.preventDefault();
-        alert('يرجى ملء جميع الحقول المطلوبة');
-        return false;
-    }
-    
-    // السماح بالـ submit الطبيعي
-    return true;
-}
-
 document.addEventListener('DOMContentLoaded', function() {
-    const addScheduleModal = document.getElementById('addScheduleModal');
-    if (addScheduleModal) {
-        // إعادة تعيين النموذج عند فتح المودال (ليس عند إغلاقه) - مهم للموبايل
-        addScheduleModal.addEventListener('show.bs.modal', function () {
-            const form = addScheduleModal.querySelector('form');
-            if (form) {
-                // إعادة تعيين النموذج
-                form.reset();
-                
-                // تعيين القيم الافتراضية
-                const dueDateInput = form.querySelector('#addScheduleDueDate');
-                if (dueDateInput) {
-                    const today = new Date().toISOString().split('T')[0];
-                    dueDateInput.value = today;
-                }
-                
-                const daysInput = form.querySelector('#addScheduleDaysBeforeDue');
-                if (daysInput) {
-                    daysInput.value = '3';
-                }
-                
-                // إزالة أي classes أو attributes قد تسبب مشاكل
-                form.classList.remove('was-validated');
-                // إزالة classes من جميع inputs و selects مباشرة (بدون loop)
-                const invalidInputs = form.querySelectorAll('.is-invalid, .is-valid');
-                if (invalidInputs.length > 0) {
-                    // استخدام CSS classList API مباشرة
-                    invalidInputs.forEach(input => {
-                        input.classList.remove('is-invalid', 'is-valid');
-                    });
-                }
-            }
-        });
-        
-        // تنظيف النموذج عند إغلاق المودال
-        addScheduleModal.addEventListener('hidden.bs.modal', function () {
-            const form = addScheduleModal.querySelector('form');
-            if (form) {
-                form.reset();
-            }
-        });
-        
-        // ربط زر submit يدوي
-        const submitBtn = addScheduleModal.querySelector('#addScheduleSubmitBtn');
-        if (submitBtn) {
-            submitBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                submitAddScheduleForm();
-            });
-        }
-    }
 
     const editScheduleModal = document.getElementById('editScheduleModal');
     if (editScheduleModal) {
@@ -1526,11 +1433,10 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <style>
-/* ===== تنسيقات جميع النماذج - نفس أبعاد نموذج تحصيل من مندوب ===== */
-/* قائمة النماذج: addScheduleModal, editScheduleModal, reminderModal */
+/* ===== تنسيقات النماذج الأخرى ===== */
+/* قائمة النماذج: editScheduleModal, reminderModal */
 
 @media (min-width: 769px) {
-    #addScheduleModal .modal-dialog.modal-dialog-centered,
     #editScheduleModal .modal-dialog.modal-dialog-centered,
     #reminderModal .modal-dialog.modal-dialog-centered {
         margin: 0.5rem auto;
@@ -1539,7 +1445,6 @@ document.addEventListener('DOMContentLoaded', function() {
         max-height: calc(100vh - 1rem);
     }
 
-    #addScheduleModal .modal-content,
     #editScheduleModal .modal-content,
     #reminderModal .modal-content {
         display: flex !important;
@@ -1550,7 +1455,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     /* إصلاح المساحة البيضاء - منع modal-body من التمدد */
-    #addScheduleModal .modal-body,
     #editScheduleModal .modal-body,
     #reminderModal .modal-body {
         flex: 0 1 auto !important;
@@ -1568,14 +1472,12 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 /* قواعد عامة للـ header والـ footer */
-#addScheduleModal .modal-header,
 #editScheduleModal .modal-header,
 #reminderModal .modal-header {
     flex-shrink: 0 !important;
     flex-grow: 0 !important;
 }
 
-#addScheduleModal .modal-footer,
 #editScheduleModal .modal-footer,
 #reminderModal .modal-footer {
     flex-shrink: 0 !important;
@@ -1587,7 +1489,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
 /* padding للـ header والـ footer على الشاشات الكبيرة فقط */
 @media (min-width: 769px) {
-    #addScheduleModal .modal-footer,
     #editScheduleModal .modal-footer,
     #reminderModal .modal-footer {
         padding-top: 1rem !important;
@@ -1596,8 +1497,6 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 /* إزالة أي pseudo-elements قد تسبب مساحة فارغة */
-#addScheduleModal .modal-content::after,
-#addScheduleModal .modal-content::before,
 #editScheduleModal .modal-content::after,
 #editScheduleModal .modal-content::before,
 #reminderModal .modal-content::after,
@@ -1608,14 +1507,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
 /* إصلاح خاص لـ modal-dialog-scrollable (للشاشات الكبيرة فقط) */
 @media (min-width: 769px) {
-    #addScheduleModal .modal-dialog.modal-dialog-scrollable .modal-content,
     #editScheduleModal .modal-dialog.modal-dialog-scrollable .modal-content,
     #reminderModal .modal-dialog.modal-dialog-scrollable .modal-content {
         max-height: 100% !important;
         overflow: hidden !important;
     }
 
-    #addScheduleModal .modal-dialog.modal-dialog-scrollable .modal-body,
     #editScheduleModal .modal-dialog.modal-dialog-scrollable .modal-body,
     #reminderModal .modal-dialog.modal-dialog-scrollable .modal-body {
         flex: 0 1 auto !important;
@@ -1626,7 +1523,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
 /* تنسيقات للشاشات الصغيرة */
 @media (max-width: 768px) {
-    #addScheduleModal .modal-dialog,
     #editScheduleModal .modal-dialog,
     #reminderModal .modal-dialog {
         margin: 0.5rem !important;
@@ -1635,14 +1531,12 @@ document.addEventListener('DOMContentLoaded', function() {
         height: auto !important;
     }
     
-    #addScheduleModal .modal-content,
     #editScheduleModal .modal-content,
     #reminderModal .modal-content {
         max-height: calc(100vh - 1rem) !important;
         height: auto !important;
     }
     
-    #addScheduleModal .modal-body,
     #editScheduleModal .modal-body,
     #reminderModal .modal-body {
         flex: 0 1 auto !important;
@@ -1653,7 +1547,6 @@ document.addEventListener('DOMContentLoaded', function() {
         overflow-y: visible !important;
     }
     
-    #addScheduleModal .modal-footer,
     #editScheduleModal .modal-footer,
     #reminderModal .modal-footer {
         flex-shrink: 0 !important;
@@ -1663,7 +1556,6 @@ document.addEventListener('DOMContentLoaded', function() {
         padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
     }
     
-    #addScheduleModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body,
     #editScheduleModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body,
     #reminderModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body {
         overflow-y: visible !important;
@@ -1696,21 +1588,18 @@ body.modal-open > *:not(.modal):not(.modal-backdrop) {
 }
 
 /* السماح بالتفاعل داخل النموذج فقط */
-#addScheduleModal.modal.show,
 #editScheduleModal.modal.show,
 #reminderModal.modal.show {
     pointer-events: auto !important;
     touch-action: auto !important;
 }
 
-#addScheduleModal .modal-dialog,
 #editScheduleModal .modal-dialog,
 #reminderModal .modal-dialog {
     pointer-events: auto !important;
     touch-action: auto !important;
 }
 
-#addScheduleModal .modal-content,
 #editScheduleModal .modal-content,
 #reminderModal .modal-content {
     pointer-events: auto !important;
@@ -1718,7 +1607,6 @@ body.modal-open > *:not(.modal):not(.modal-backdrop) {
 }
 
 /* السماح بالتمرير داخل modal-body فقط */
-#addScheduleModal .modal-body,
 #editScheduleModal .modal-body,
 #reminderModal .modal-body {
     -webkit-overflow-scrolling: touch !important;
@@ -1742,7 +1630,6 @@ body.modal-open > *:not(.modal):not(.modal-backdrop) {
     }
     
     /* السماح بالتمرير والتفاعل داخل النموذج فقط */
-    #addScheduleModal .modal-body,
     #editScheduleModal .modal-body,
     #reminderModal .modal-body {
         -webkit-overflow-scrolling: touch !important;
@@ -1752,17 +1639,12 @@ body.modal-open > *:not(.modal):not(.modal-backdrop) {
     }
     
     /* السماح بالتفاعل الكامل داخل modal-content */
-    #addScheduleModal .modal-content,
     #editScheduleModal .modal-content,
     #reminderModal .modal-content {
         touch-action: auto !important; /* السماح بجميع touch actions */
     }
     
     /* السماح بالتفاعل الكامل مع الحقول والأزرار */
-    #addScheduleModal input,
-    #addScheduleModal select,
-    #addScheduleModal textarea,
-    #addScheduleModal button,
     #editScheduleModal input,
     #editScheduleModal select,
     #editScheduleModal textarea,
@@ -1780,7 +1662,7 @@ body.modal-open > *:not(.modal):not(.modal-backdrop) {
 <script>
 // ===== منع scroll و touch خارج النموذج =====
 document.addEventListener('DOMContentLoaded', function() {
-    const modals = ['addScheduleModal', 'editScheduleModal', 'reminderModal'];
+    const modals = ['editScheduleModal', 'reminderModal'];
     
     modals.forEach(function(modalId) {
         const modal = document.getElementById(modalId);
