@@ -27,7 +27,12 @@ self.addEventListener('install', (event) => {
           })
         )
       )
-    )
+    ).catch((error) => {
+      // Handle CacheStorage errors gracefully
+      console.error('CacheStorage error during install:', error);
+      // Don't fail the install if caching fails
+      return Promise.resolve();
+    })
   );
   self.skipWaiting();
 });
@@ -39,9 +44,16 @@ self.addEventListener('activate', (event) => {
       Promise.all(
         keys
           .filter((key) => key !== PRECACHE_NAME && key !== RUNTIME_CACHE_NAME)
-          .map((key) => caches.delete(key))
+          .map((key) => caches.delete(key).catch((error) => {
+            console.error(`Failed to delete cache ${key}:`, error);
+            return false;
+          }))
       )
-    )
+    ).catch((error) => {
+      // Handle CacheStorage errors gracefully
+      console.error('CacheStorage error during activate:', error);
+      return Promise.resolve();
+    })
   );
   self.clients.claim();
 });

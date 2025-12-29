@@ -1682,7 +1682,7 @@ function loadRepDetails(repId, repName) {
     if (contentEl) contentEl.style.display = 'none';
     
     // تعريف baseUrl لاستخدامه في الدالة
-    const baseUrl = '<?php echo getRelativeUrl($dashboardScript); ?>';
+    const baseUrl = <?php echo json_encode(getRelativeUrl($dashboardScript), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
     
     // تحديث رابط عرض جميع العملاء
     const viewCustomersLink = document.getElementById('repViewCustomersLink');
@@ -1693,12 +1693,12 @@ function loadRepDetails(repId, repName) {
     // تحديث رابط زر طباعة كشف الحساب الشامل
     const printStatementBtn = document.getElementById('repPrintStatementBtn');
     if (printStatementBtn) {
-        const printUrl = '<?php echo getRelativeUrl("print_cash_register_statement.php"); ?>?sales_rep_id=' + repId;
+        const printUrl = <?php echo json_encode(getRelativeUrl("print_cash_register_statement.php"), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?> + '?sales_rep_id=' + repId;
         printStatementBtn.href = printUrl;
     }
     
     // جلب البيانات من API
-    const apiUrl = '<?php echo getRelativeUrl("api/get_rep_details.php"); ?>';
+    const apiUrl = <?php echo json_encode(getRelativeUrl("api/get_rep_details.php"), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
     fetch(apiUrl + '?rep_id=' + repId, {
         signal: currentRepDetailsAbortController.signal,
         credentials: 'same-origin',
@@ -2404,7 +2404,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             } else {
                 // Fallback: فتح في نافذة جديدة
-                const baseUrl = '<?php echo getRelativeUrl($dashboardScript); ?>';
+                const baseUrl = <?php echo json_encode(getRelativeUrl($dashboardScript), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
                 const historyUrl = baseUrl + (baseUrl.includes('?') ? '&' : '?') + 'page=customers&section=company&action=purchase_history&customer_id=' + encodeURIComponent(customerId);
                 window.open(historyUrl, '_blank');
             }
@@ -2475,7 +2475,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             } else {
                 // Fallback: فتح في نافذة جديدة
-                const baseUrl = '<?php echo getRelativeUrl($dashboardScript); ?>';
+                const baseUrl = <?php echo json_encode(getRelativeUrl($dashboardScript), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
                 const returnUrl = baseUrl + (baseUrl.includes('?') ? '&' : '?') + 'page=customers&section=company&action=purchase_history&ajax=purchase_history&customer_id=' + encodeURIComponent(customerId);
                 window.open(returnUrl, '_blank');
             }
@@ -2551,7 +2551,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 function (position) {
                     const latitude = position.coords.latitude.toFixed(8);
                     const longitude = position.coords.longitude.toFixed(8);
-                    const baseUrl = '<?php echo getRelativeUrl($dashboardScript); ?>';
+                    const baseUrl = <?php echo json_encode(getRelativeUrl($dashboardScript), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
                     const requestUrl = baseUrl + (baseUrl.includes('?') ? '&' : '?') + 'page=representatives_customers';
                     
                     const formData = new URLSearchParams();

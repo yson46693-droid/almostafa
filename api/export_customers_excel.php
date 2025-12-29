@@ -325,8 +325,9 @@ try {
             $relativePath = 'reports/' . ltrim($relativePath, '/');
         }
         
-        // استخدام getAbsoluteUrl لإنشاء رابط الملف بشكل صحيح
-        $fileUrl = getAbsoluteUrl($relativePath);
+        // استخدام endpoint التحميل لإنشاء رابط الملف بشكل صحيح
+        $downloadPath = 'api/download_csv.php?file=' . urlencode($relativePath);
+        $fileUrl = getAbsoluteUrl($downloadPath);
         
         // مسار نسبي للاستخدام في view_csv_for_print.php
         $filePathForView = $relativePath;
