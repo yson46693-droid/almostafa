@@ -107,16 +107,19 @@ if (isset($json['shortcuts'])) {
         }
         
         // معالجة url في shortcuts - يجب أن تكون ضمن scope
-        // التأكد من أن كل shortcut لديه url
-        if (!isset($shortcut['url'])) {
-            // إذا لم يكن هناك url، استخدم start_url
-            if (isset($json['start_url'])) {
-                $shortcut['url'] = $json['start_url'];
+        // التأكد من أن كل shortcut لديه url صحيح
+        if (!isset($shortcut['url']) || empty(trim($shortcut['url']))) {
+            // إذا لم يكن هناك url أو كان فارغاً، استخدم start_url
+            if (isset($json['start_url']) && !empty(trim($json['start_url']))) {
+                $shortcut['url'] = trim($json['start_url']);
             } else {
                 // إذا لم يكن هناك start_url، تخطى هذا shortcut
                 continue;
             }
         }
+        
+        // تنظيف URL من المسافات
+        $shortcut['url'] = trim($shortcut['url']);
         
         $shortcutUrl = $shortcut['url'];
         
@@ -152,7 +155,15 @@ if (isset($json['shortcuts'])) {
         $validShortcuts[] = $shortcut;
     }
     // استبدال shortcuts بالقائمة الصالحة فقط
-    $json['shortcuts'] = $validShortcuts;
+    // التأكد من أن جميع shortcuts لديها url صحيح قبل الإضافة
+    $json['shortcuts'] = array_values(array_filter($validShortcuts, function($shortcut) {
+        return isset($shortcut['url']) && !empty(trim($shortcut['url']));
+    }));
+    
+    // إذا كانت shortcuts فارغة، احذفها تماماً لتجنب التحذيرات
+    if (empty($json['shortcuts'])) {
+        unset($json['shortcuts']);
+    }
 }
 
 // تحديث id و start_url و scope

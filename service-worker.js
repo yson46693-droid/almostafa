@@ -18,20 +18,41 @@ const CDN_ASSETS = [
 // Install event - cache essential assets
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(PRECACHE_NAME).then((cache) =>
-      Promise.allSettled(
-        PRECACHE_ASSETS.map((asset) => 
-          cache.add(asset).catch((error) => {
+    Promise.resolve().then(async () => {
+      try {
+        // Check if CacheStorage is available
+        if (!('caches' in self)) {
+          console.warn('CacheStorage API not available');
+          return;
+        }
+
+        const cache = await caches.open(PRECACHE_NAME).catch((error) => {
+          console.error('Failed to open cache:', error);
+          // Return null to skip caching, but don't fail install
+          return null;
+        });
+
+        if (!cache) {
+          console.warn('Cache not available, skipping precaching');
+          return;
+        }
+
+        // Cache assets with individual error handling
+        const cachePromises = PRECACHE_ASSETS.map(async (asset) => {
+          try {
+            await cache.add(asset);
+          } catch (error) {
             console.error(`Failed to cache ${asset}:`, error);
-            return null;
-          })
-        )
-      )
-    ).catch((error) => {
-      // Handle CacheStorage errors gracefully
-      console.error('CacheStorage error during install:', error);
-      // Don't fail the install if caching fails
-      return Promise.resolve();
+            // Continue with other assets even if one fails
+          }
+        });
+
+        await Promise.allSettled(cachePromises);
+      } catch (error) {
+        // Handle any unexpected errors gracefully
+        console.error('Unexpected error during install:', error);
+        // Don't fail the install
+      }
     })
   );
   self.skipWaiting();
@@ -40,19 +61,35 @@ self.addEventListener('install', (event) => {
 // Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys
+    Promise.resolve().then(async () => {
+      try {
+        // Check if CacheStorage is available
+        if (!('caches' in self)) {
+          console.warn('CacheStorage API not available');
+          return;
+        }
+
+        const keys = await caches.keys().catch((error) => {
+          console.error('Failed to get cache keys:', error);
+          return [];
+        });
+
+        const deletePromises = keys
           .filter((key) => key !== PRECACHE_NAME && key !== RUNTIME_CACHE_NAME)
-          .map((key) => caches.delete(key).catch((error) => {
-            console.error(`Failed to delete cache ${key}:`, error);
-            return false;
-          }))
-      )
-    ).catch((error) => {
-      // Handle CacheStorage errors gracefully
-      console.error('CacheStorage error during activate:', error);
-      return Promise.resolve();
+          .map(async (key) => {
+            try {
+              await caches.delete(key);
+            } catch (error) {
+              console.error(`Failed to delete cache ${key}:`, error);
+            }
+          });
+
+        await Promise.allSettled(deletePromises);
+      } catch (error) {
+        // Handle any unexpected errors gracefully
+        console.error('Unexpected error during activate:', error);
+        // Don't fail activation
+      }
     })
   );
   self.clients.claim();
@@ -118,7 +155,13 @@ self.addEventListener('fetch', (event) => {
 
   if (isPrecached) {
     event.respondWith(
-      caches.match(request).then((cached) => cached || fetch(request))
+      caches.match(request)
+        .then((cached) => cached || fetch(request))
+        .catch((error) => {
+          console.error('CacheStorage error for precached asset:', error);
+          // Fallback to network fetch
+          return fetch(request);
+        })
     );
     return;
   }
@@ -142,6 +185,8 @@ self.addEventListener('fetch', (event) => {
           const responseClone = networkResponse.clone();
           caches.open(RUNTIME_CACHE_NAME).then((cache) => {
             cache.put(request, responseClone);
+          }).catch((error) => {
+            console.error('Failed to cache PHP response:', error);
           });
         }
         return networkResponse;
@@ -149,25 +194,44 @@ self.addEventListener('fetch', (event) => {
       .catch((error) => {
         console.error('Network fetch failed for PHP page:', error);
         // Try cache as fallback
-        return caches.match(request).then((cached) => {
-          if (cached) {
-            return cached;
-          }
-          // If no cache and network failed, return offline page for navigation
-          if (request.mode === 'navigate') {
-            return caches.match('/offline.html').then((offlinePage) => {
-              if (offlinePage) {
-                return offlinePage;
-              }
-              // Last resort: return error response
+        return caches.match(request)
+          .then((cached) => {
+            if (cached) {
+              return cached;
+            }
+            // If no cache and network failed, return offline page for navigation
+            if (request.mode === 'navigate') {
+              return caches.match('/offline.html')
+                .then((offlinePage) => {
+                  if (offlinePage) {
+                    return offlinePage;
+                  }
+                  // Last resort: return error response
+                  return new Response('لا يوجد اتصال بالشبكة', {
+                    status: 503,
+                    headers: { 'Content-Type': 'text/html; charset=utf-8' }
+                  });
+                })
+                .catch(() => {
+                  // If cache lookup fails, return error response
+                  return new Response('لا يوجد اتصال بالشبكة', {
+                    status: 503,
+                    headers: { 'Content-Type': 'text/html; charset=utf-8' }
+                  });
+                });
+            }
+            throw error;
+          })
+          .catch(() => {
+            // If cache operations fail, return error response for navigation requests
+            if (request.mode === 'navigate') {
               return new Response('لا يوجد اتصال بالشبكة', {
                 status: 503,
                 headers: { 'Content-Type': 'text/html; charset=utf-8' }
               });
-            });
-          }
-          throw error;
-        });
+            }
+            throw error;
+          });
       })
     );
     return;
@@ -176,19 +240,27 @@ self.addEventListener('fetch', (event) => {
   // Handle CDN assets - cache first, then network
   if (CDN_ASSETS.some((cdn) => url.href.includes(cdn))) {
     event.respondWith(
-      caches.open(PRECACHE_NAME).then((cache) =>
-        cache.match(request).then((cached) => {
-          const networkFetch = fetch(request)
-            .then((response) => {
-              if (response.status === 200) {
-                cache.put(request, response.clone());
-              }
-              return response;
-            })
-            .catch(() => cached);
-          return cached || networkFetch;
+      caches.open(PRECACHE_NAME)
+        .then((cache) =>
+          cache.match(request).then((cached) => {
+            const networkFetch = fetch(request)
+              .then((response) => {
+                if (response.status === 200) {
+                  cache.put(request, response.clone()).catch((error) => {
+                    console.error('Failed to cache CDN asset:', error);
+                  });
+                }
+                return response;
+              })
+              .catch(() => cached);
+            return cached || networkFetch;
+          })
+        )
+        .catch((error) => {
+          console.error('CacheStorage error for CDN assets:', error);
+          // Fallback to network fetch
+          return fetch(request);
         })
-      )
     );
     return;
   }
@@ -196,17 +268,25 @@ self.addEventListener('fetch', (event) => {
   // Handle static assets (scripts, styles, fonts) - cache first
   if (request.destination === 'script' || request.destination === 'style' || request.destination === 'font') {
     event.respondWith(
-      caches.open(RUNTIME_CACHE_NAME).then((cache) =>
-        cache.match(request).then((cached) => {
-          const networkFetch = fetch(request).then((response) => {
-            if (response.status === 200) {
-              cache.put(request, response.clone());
-            }
-            return response;
-          }).catch(() => cached);
-          return cached || networkFetch;
+      caches.open(RUNTIME_CACHE_NAME)
+        .then((cache) =>
+          cache.match(request).then((cached) => {
+            const networkFetch = fetch(request).then((response) => {
+              if (response.status === 200) {
+                cache.put(request, response.clone()).catch((error) => {
+                  console.error('Failed to cache static asset:', error);
+                });
+              }
+              return response;
+            }).catch(() => cached);
+            return cached || networkFetch;
+          })
+        )
+        .catch((error) => {
+          console.error('CacheStorage error for static assets:', error);
+          // Fallback to network fetch
+          return fetch(request);
         })
-      )
     );
     return;
   }
@@ -214,21 +294,29 @@ self.addEventListener('fetch', (event) => {
   // Handle images - cache first
   if (request.destination === 'image') {
     event.respondWith(
-      caches.open(RUNTIME_CACHE_NAME).then((cache) =>
-        cache.match(request).then((cached) => {
-          if (cached) {
-            return cached;
-          }
-          return fetch(request)
-            .then((response) => {
-              if (response.status === 200) {
-                cache.put(request, response.clone());
-              }
-              return response;
-            })
-            .catch(() => null);
+      caches.open(RUNTIME_CACHE_NAME)
+        .then((cache) =>
+          cache.match(request).then((cached) => {
+            if (cached) {
+              return cached;
+            }
+            return fetch(request)
+              .then((response) => {
+                if (response.status === 200) {
+                  cache.put(request, response.clone()).catch((error) => {
+                    console.error('Failed to cache image:', error);
+                  });
+                }
+                return response;
+              })
+              .catch(() => null);
+          })
+        )
+        .catch((error) => {
+          console.error('CacheStorage error for images:', error);
+          // Fallback to network fetch
+          return fetch(request).catch(() => null);
         })
-      )
     );
     return;
   }
@@ -250,33 +338,58 @@ self.addEventListener('fetch', (event) => {
       .then((networkResponse) => {
         if (networkResponse.status === 200 && networkResponse.ok) {
           const responseClone = networkResponse.clone();
-          caches.open(RUNTIME_CACHE_NAME).then((cache) => cache.put(request, responseClone));
+          caches.open(RUNTIME_CACHE_NAME)
+            .then((cache) => cache.put(request, responseClone))
+            .catch((error) => {
+              console.error('Failed to cache HTML response:', error);
+            });
         }
         return networkResponse;
       })
       .catch((error) => {
         console.error('Network fetch failed for HTML page:', error);
-        return caches.match(request).then((cached) => {
-          if (cached) {
-            return cached;
-          }
-          // Fallback to offline page for navigation requests
-          if (request.mode === 'navigate') {
-            return caches.match('/offline.html').then((offlinePage) => {
-              if (offlinePage) {
-                return offlinePage;
-              }
+        return caches.match(request)
+          .then((cached) => {
+            if (cached) {
+              return cached;
+            }
+            // Fallback to offline page for navigation requests
+            if (request.mode === 'navigate') {
+              return caches.match('/offline.html')
+                .then((offlinePage) => {
+                  if (offlinePage) {
+                    return offlinePage;
+                  }
+                  return new Response('لا يوجد اتصال بالشبكة', {
+                    status: 503,
+                    headers: { 'Content-Type': 'text/html; charset=utf-8' }
+                  });
+                })
+                .catch(() => {
+                  return new Response('لا يوجد اتصال بالشبكة', {
+                    status: 503,
+                    headers: { 'Content-Type': 'text/html; charset=utf-8' }
+                  });
+                });
+            }
+            return new Response('لا يوجد اتصال بالشبكة', {
+              status: 503,
+              headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+            });
+          })
+          .catch(() => {
+            // If cache operations fail, return error response
+            if (request.mode === 'navigate') {
               return new Response('لا يوجد اتصال بالشبكة', {
                 status: 503,
                 headers: { 'Content-Type': 'text/html; charset=utf-8' }
               });
+            }
+            return new Response('لا يوجد اتصال بالشبكة', {
+              status: 503,
+              headers: { 'Content-Type': 'text/plain; charset=utf-8' }
             });
-          }
-          return new Response('لا يوجد اتصال بالشبكة', {
-            status: 503,
-            headers: { 'Content-Type': 'text/plain; charset=utf-8' }
           });
-        });
       })
     );
     return;
@@ -296,18 +409,27 @@ self.addEventListener('fetch', (event) => {
     .then((networkResponse) => {
       if (networkResponse.status === 200 && networkResponse.ok) {
         const responseClone = networkResponse.clone();
-        caches.open(RUNTIME_CACHE_NAME).then((cache) => cache.put(request, responseClone));
+        caches.open(RUNTIME_CACHE_NAME)
+          .then((cache) => cache.put(request, responseClone))
+          .catch((error) => {
+            console.error('Failed to cache default response:', error);
+          });
       }
       return networkResponse;
     })
     .catch((error) => {
       console.error('Network fetch failed:', error);
-      return caches.match(request).then((cached) => {
-        if (cached) {
-          return cached;
-        }
-        throw error;
-      });
+      return caches.match(request)
+        .then((cached) => {
+          if (cached) {
+            return cached;
+          }
+          throw error;
+        })
+        .catch(() => {
+          // If cache operations fail, re-throw original error
+          throw error;
+        });
     })
   );
 });
