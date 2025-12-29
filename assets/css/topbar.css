@@ -438,6 +438,16 @@
     max-width: 360px;
     max-height: 400px;
     overflow-y: auto;
+    overflow-x: visible;
+}
+
+/* على الموبايل: زيادة العرض لضمان ظهور الأزرار */
+@media (max-width: 768px) {
+    .notifications-dropdown {
+        max-width: 100vw;
+        width: 100%;
+        min-width: 280px;
+    }
 }
 
 .notifications-dropdown::-webkit-scrollbar {
@@ -467,6 +477,9 @@
     flex-shrink: 0;
     visibility: visible !important;
     opacity: 1 !important;
+    overflow: visible !important;
+    position: relative !important;
+    z-index: 10 !important;
 }
 
 .notification-item .notification-actions .btn {
@@ -564,6 +577,26 @@
     display: inline-block !important;
     visibility: visible !important;
     opacity: 1 !important;
+    cursor: pointer !important;
+    background: transparent !important;
+    border: none !important;
+}
+
+#clearAllNotificationsBtn:hover {
+    opacity: 0.8 !important;
+}
+
+/* على الموبايل: تحسين زر مسح الكل */
+@media (max-width: 768px) {
+    #clearAllNotificationsBtn {
+        font-size: 0.75rem !important;
+        padding: 0.25rem 0.5rem !important;
+        min-width: 60px !important;
+    }
+    
+    #clearAllNotificationsBtn i {
+        font-size: 0.9rem !important;
+    }
 }
 
 /* ضمان ظهور جميع أزرار الإشعارات */
