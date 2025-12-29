@@ -39,7 +39,10 @@
         margin: 0.5rem auto;
         max-width: 95% !important;
         width: 95% !important;
-        height: auto;
+        height: auto !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
     }
     
     /* دعم خاص لـ modal-xl على الموبايل */
@@ -47,6 +50,10 @@
         max-width: calc(100% - 1rem) !important;
         width: calc(100% - 1rem) !important;
         margin: 0.5rem !important;
+        height: auto !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
     }
 
     .modal-content {
@@ -55,41 +62,52 @@
         overflow: hidden !important;
         display: flex !important;
         flex-direction: column !important;
+        height: auto !important; /* ارتفاع تلقائي حسب المحتوى */
+        align-items: stretch !important; /* منع التمدد الأفقي */
+        flex: 0 0 auto !important; /* لا يتمدد - لا ينكمش - حجم تلقائي */
+        min-height: 0 !important;
     }
     
     /* تحسين modal-xl content */
     .modal-dialog.modal-xl .modal-content {
         max-height: calc(100vh - 1rem) !important;
+        height: auto !important; /* ارتفاع تلقائي حسب المحتوى */
+        flex: 0 0 auto !important; /* لا يتمدد - لا ينكمش - حجم تلقائي */
+        min-height: 0 !important;
     }
 
     .modal-body {
         overflow-y: auto !important;
-        flex: 0 1 auto !important; /* لا يتمدد تلقائياً */
+        flex: 0 0 auto !important; /* لا يتمدد تلقائياً - لا ينكمش - حجم تلقائي */
         min-height: 0 !important;
         max-height: calc(90vh - 120px) !important; /* header + footer */
         padding: 1rem !important;
         height: auto !important; /* ارتفاع تلقائي حسب المحتوى */
+        width: 100% !important; /* عرض كامل */
     }
     
     /* تحسين modal-xl body */
     .modal-dialog.modal-xl .modal-body {
-        flex: 0 1 auto !important; /* لا يتمدد تلقائياً */
+        flex: 0 0 auto !important; /* لا يتمدد تلقائياً - لا ينكمش - حجم تلقائي */
         min-height: 0 !important;
         max-height: calc(100vh - 200px) !important; /* header + footer + margins */
         overflow-y: auto !important;
         height: auto !important; /* ارتفاع تلقائي حسب المحتوى */
+        width: 100% !important; /* عرض كامل */
     }
 
     .modal-header,
     .modal-footer {
         padding: 0.75rem 1rem !important;
-        flex-shrink: 0 !important;
+        flex: 0 0 auto !important; /* لا يتمدد - لا ينكمش - حجم تلقائي */
+        width: 100% !important;
     }
     
     /* تحسين modal-xl header و footer */
     .modal-dialog.modal-xl .modal-header,
     .modal-dialog.modal-xl .modal-footer {
-        flex-shrink: 0 !important;
+        flex: 0 0 auto !important; /* لا يتمدد - لا ينكمش - حجم تلقائي */
+        width: 100% !important;
     }
     
     .modal-dialog.modal-xl .modal-footer {
@@ -106,7 +124,11 @@
     .modal-dialog {
         max-width: 100% !important;
         width: 100% !important;
-        margin: 0;
+        margin: 0 !important;
+        height: auto !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
     }
     
     /* دعم خاص لـ modal-xl على الهواتف الصغيرة */
@@ -114,6 +136,10 @@
         max-width: 100% !important;
         width: 100% !important;
         margin: 0 !important;
+        height: auto !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
     }
 
     .modal-content {
@@ -121,31 +147,40 @@
         border-radius: 0 !important;
         display: flex !important;
         flex-direction: column !important;
+        height: auto !important; /* ارتفاع تلقائي حسب المحتوى */
+        align-items: stretch !important; /* منع التمدد الأفقي */
+        flex: 0 0 auto !important; /* لا يتمدد - لا ينكمش - حجم تلقائي */
+        min-height: 0 !important;
     }
     
     /* تحسين modal-xl content على الهواتف الصغيرة */
     .modal-dialog.modal-xl .modal-content {
         max-height: 100vh !important;
         border-radius: 0 !important;
+        height: auto !important; /* ارتفاع تلقائي حسب المحتوى */
+        flex: 0 0 auto !important; /* لا يتمدد - لا ينكمش - حجم تلقائي */
+        min-height: 0 !important;
     }
 
     .modal-body {
-        flex: 0 1 auto !important; /* لا يتمدد تلقائياً */
+        flex: 0 0 auto !important; /* لا يتمدد تلقائياً - لا ينكمش - حجم تلقائي */
         min-height: 0 !important;
         max-height: calc(100vh - 110px) !important;
         padding: 0.75rem !important;
         height: auto !important; /* ارتفاع تلقائي حسب المحتوى */
         overflow-y: auto !important;
+        width: 100% !important; /* عرض كامل */
     }
     
     /* تحسين modal-xl body على الهواتف الصغيرة */
     .modal-dialog.modal-xl .modal-body {
-        flex: 0 1 auto !important; /* لا يتمدد تلقائياً */
+        flex: 0 0 auto !important; /* لا يتمدد تلقائياً - لا ينكمش - حجم تلقائي */
         min-height: 0 !important;
         max-height: calc(100vh - 180px) !important;
         padding: 0.75rem !important;
         height: auto !important; /* ارتفاع تلقائي حسب المحتوى */
         overflow-y: auto !important;
+        width: 100% !important; /* عرض كامل */
     }
 }
 
