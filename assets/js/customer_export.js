@@ -171,7 +171,7 @@
             }
         });
         
-        // ربط حدث اختيار المندوب مع debouncing
+        // ربط حدث اختيار المندوب مع debouncing محسّن
         const repSelect = document.getElementById('exportRepSelect');
         let repSelectTimeout = null;
         if (repSelect && repSelect.tagName === 'SELECT') {
@@ -183,12 +183,27 @@
                 
                 // تعطيل الـ select أثناء التحميل
                 const selectEl = this;
+                const originalValue = selectEl.value;
                 selectEl.disabled = true;
                 
-                // debounce الطلب
+                // إظهار loading فوراً
+                const selectRepMessage = document.getElementById('selectRepMessage');
+                const customersSection = document.getElementById('customersSection');
+                if (selectRepMessage) {
+                    selectRepMessage.style.display = 'block';
+                    selectRepMessage.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>جاري تحميل عملاء المندوب...';
+                }
+                if (customersSection) {
+                    customersSection.style.display = 'none';
+                }
+                
+                // debounce الطلب - تقليل الوقت على الهواتف
+                const isMobile = window.innerWidth <= 768;
+                const debounceTime = isMobile ? 50 : 100;
+                
                 repSelectTimeout = setTimeout(() => {
                     const repId = parseInt(selectEl.value, 10);
-                    if (repId > 0) {
+                    if (repId > 0 && repId === parseInt(originalValue, 10)) {
                         loadCustomersByRep(repId).finally(() => {
                             selectEl.disabled = false;
                         });
@@ -196,7 +211,7 @@
                         showSelectRepMessage();
                         selectEl.disabled = false;
                     }
-                }, 150);
+                }, debounceTime);
             });
         }
         
@@ -479,15 +494,31 @@
             customersSection.style.display = 'none';
         }
         
+        // مسح قائمة العملاء السابقة
+        if (customersList) {
+            customersList.innerHTML = '';
+        }
+        
         try {
-            const response = await fetch(`${getApiPath('get_rep_customers_for_export.php')}?rep_id=${repId}&page=${page}`, {
+            const apiUrl = `${getApiPath('get_rep_customers_for_export.php')}?rep_id=${repId}&page=${page}&_t=${Date.now()}`;
+            const response = await fetch(apiUrl, {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Cache-Control': 'no-cache'
                 },
-                signal: currentLoadAbortController.signal
+                signal: currentLoadAbortController.signal,
+                cache: 'no-store'
             });
+            
+            // التحقق من نوع الاستجابة
+            const contentType = response.headers.get('content-type') || '';
+            if (!contentType.includes('application/json')) {
+                const text = await response.text();
+                console.error('Non-JSON response:', text.substring(0, 500));
+                throw new Error('استجابة غير صحيحة من الخادم');
+            }
             
             const result = await response.json();
             
@@ -527,7 +558,7 @@
                        customer.name.trim() !== '';
             });
             
-            // عرض قائمة العملاء مع pagination
+            // عرض قائمة العملاء مع pagination مباشرة
             displayCustomersList(validCustomers, {
                 hasPagination: true,
                 currentPage: repCustomersPage,
@@ -608,14 +639,16 @@
             return;
         }
         
-        // إظهار قسم العملاء
-        if (customersSection) {
-            customersSection.style.display = 'block';
-        }
-        
-        // إخفاء رسالة اختيار المندوب
+        // إخفاء رسالة اختيار المندوب أولاً
         if (selectRepMessage) {
             selectRepMessage.style.display = 'none';
+        }
+        
+        // إظهار قسم العملاء - استخدام force reflow لضمان العرض
+        if (customersSection) {
+            customersSection.style.display = 'block';
+            // Force reflow لضمان العرض على الهواتف
+            customersSection.offsetHeight;
         }
         
         // إنشاء جدول العملاء
@@ -712,7 +745,21 @@
             html += '</nav>';
         }
         
+        // تحديث HTML مباشرة
         customersList.innerHTML = html;
+        
+        // Force reflow لضمان العرض على الهواتف
+        const hasContent = customersList.querySelector('table');
+        if (hasContent) {
+            // Force reflow
+            customersList.offsetHeight;
+            
+            // التأكد من إظهار القسم
+            if (customersSection) {
+                customersSection.style.display = 'block';
+                customersSection.offsetHeight; // Force reflow
+            }
+        }
         
         // ربط أحداث pagination
         if (paginationOptions && paginationOptions.hasPagination && paginationOptions.onPageChange) {
