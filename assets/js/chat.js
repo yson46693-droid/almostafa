@@ -1337,13 +1337,36 @@
           
           // Add error handler for image load failures (404, etc.)
           // This prevents console errors when images fail to load
+          // Show placeholder instead of hiding the image
           requestAnimationFrame(() => {
             const imgElement = document.querySelector(`[data-media-id="${mediaId}"]`);
             if (imgElement && imgElement.tagName === 'IMG') {
               imgElement.addEventListener('error', function() {
                 // Silently handle image load errors - don't log to console
-                // Optionally show a placeholder or hide the broken image
-                this.style.display = 'none';
+                // Show placeholder instead of hiding
+                this.onerror = null; // Prevent infinite loop
+                
+                // Try to use a placeholder icon if available
+                const placeholderUrl = '/assets/icons/icon-192x192.png';
+                
+                // Create a data URI for a simple placeholder if icon doesn't exist
+                const placeholderDataUri = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2U1ZTdlYiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5OTk5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj7Yp9mE2YXYsSDYp9mE2YXYsSDYp9mE2YXYsTwvdGV4dD48L3N2Zz4=';
+                
+                // Try placeholder icon first, fallback to data URI
+                const tempImg = new Image();
+                tempImg.onload = () => {
+                  this.src = placeholderUrl;
+                  this.style.opacity = '0.6';
+                  this.style.cursor = 'default';
+                  this.title = 'الملف غير متوفر';
+                };
+                tempImg.onerror = () => {
+                  this.src = placeholderDataUri;
+                  this.style.opacity = '0.6';
+                  this.style.cursor = 'default';
+                  this.title = 'الملف غير متوفر';
+                };
+                tempImg.src = placeholderUrl;
               }, { once: true });
             }
           });

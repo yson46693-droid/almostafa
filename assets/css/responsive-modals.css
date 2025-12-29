@@ -47,6 +47,13 @@
         flex: 0 1 auto !important; /* لا يتمدد - ينكمش - حجم تلقائي */
     }
     
+    /* تجاوز قواعد modal-mobile-fix.css - منع المساحة البيضاء */
+    .modal.show .modal-dialog,
+    .modal.showing .modal-dialog {
+        height: auto !important; /* تجاوز height: calc(100vh - 1rem) من modal-mobile-fix.css */
+        max-height: calc(100vh - 1rem) !important;
+    }
+    
     /* دعم خاص لـ modal-xl على الموبايل */
     .modal-dialog.modal-xl {
         max-width: calc(100% - 1rem) !important;
@@ -66,6 +73,14 @@
         min-height: 0 !important;
         align-items: stretch !important;
         justify-content: flex-start !important; /* محاذاة المحتوى من الأعلى */
+        height: auto !important; /* إضافة هذا لتجاوز height: 100% من modal-mobile-fix.css */
+    }
+    
+    /* تجاوز قواعد modal-mobile-fix.css للـ modal-content */
+    .modal.show .modal-content,
+    .modal.showing .modal-content {
+        height: auto !important; /* تجاوز height: 100% من modal-mobile-fix.css */
+        max-height: 90vh !important;
     }
     
     /* تحسين modal-xl content */
@@ -89,6 +104,14 @@
         -webkit-overflow-scrolling: touch !important;
         align-self: stretch !important;
         width: 100% !important;
+        height: auto !important; /* إضافة هذا لتجاوز أي height محدد */
+    }
+    
+    /* تجاوز قواعد modal-mobile-fix.css للـ modal-body */
+    .modal.show .modal-body,
+    .modal.showing .modal-body {
+        height: auto !important; /* تجاوز أي height محدد من modal-mobile-fix.css */
+        flex: 0 1 auto !important;
     }
     
     /* دعم خاص لـ modal-dialog-scrollable */
@@ -96,6 +119,20 @@
         overflow-y: auto !important;
         max-height: calc(90vh - 120px) !important;
         -webkit-overflow-scrolling: touch !important;
+    }
+    
+    /* تجاوز خاص لـ modal-dialog-scrollable من modal-mobile-fix.css */
+    .modal.show .modal-dialog-scrollable .modal-content,
+    .modal.showing .modal-dialog-scrollable .modal-content {
+        height: auto !important; /* تجاوز height: 100% من modal-mobile-fix.css */
+        max-height: 90vh !important;
+    }
+
+    .modal.show .modal-dialog-scrollable .modal-body,
+    .modal.showing .modal-dialog-scrollable .modal-body {
+        height: auto !important; /* تجاوز أي height محدد من modal-mobile-fix.css */
+        flex: 0 1 auto !important;
+        max-height: calc(90vh - 120px) !important;
     }
     
     /* تحسين modal-xl body */
@@ -138,6 +175,13 @@
         flex: 0 1 auto !important; /* لا يتمدد - ينكمش - حجم تلقائي */
     }
     
+    /* تجاوز قواعد modal-mobile-fix.css - منع المساحة البيضاء */
+    .modal.show .modal-dialog,
+    .modal.showing .modal-dialog {
+        height: auto !important; /* تجاوز height: calc(100vh - 1rem) من modal-mobile-fix.css */
+        max-height: 100vh !important;
+    }
+    
     /* دعم خاص لـ modal-xl على الهواتف الصغيرة */
     .modal-dialog.modal-xl {
         max-width: 100% !important;
@@ -156,6 +200,14 @@
         min-height: 0 !important;
         align-items: stretch !important;
         justify-content: flex-start !important; /* محاذاة المحتوى من الأعلى */
+        height: auto !important; /* إضافة هذا لتجاوز height: 100% من modal-mobile-fix.css */
+    }
+    
+    /* تجاوز قواعد modal-mobile-fix.css للـ modal-content */
+    .modal.show .modal-content,
+    .modal.showing .modal-content {
+        height: auto !important; /* تجاوز height: 100% من modal-mobile-fix.css */
+        max-height: 100vh !important;
     }
     
     /* تحسين modal-xl content على الهواتف الصغيرة */
@@ -180,6 +232,14 @@
         -webkit-overflow-scrolling: touch !important;
         align-self: stretch !important;
         width: 100% !important;
+        height: auto !important; /* إضافة هذا لتجاوز أي height محدد */
+    }
+    
+    /* تجاوز قواعد modal-mobile-fix.css للـ modal-body */
+    .modal.show .modal-body,
+    .modal.showing .modal-body {
+        height: auto !important; /* تجاوز أي height محدد من modal-mobile-fix.css */
+        flex: 0 1 auto !important;
     }
     
     /* دعم خاص لـ modal-dialog-scrollable على الهواتف الصغيرة */
@@ -187,6 +247,20 @@
         overflow-y: auto !important;
         max-height: calc(100vh - 110px) !important;
         -webkit-overflow-scrolling: touch !important;
+    }
+    
+    /* تجاوز خاص لـ modal-dialog-scrollable من modal-mobile-fix.css */
+    .modal.show .modal-dialog-scrollable .modal-content,
+    .modal.showing .modal-dialog-scrollable .modal-content {
+        height: auto !important; /* تجاوز height: 100% من modal-mobile-fix.css */
+        max-height: 100vh !important;
+    }
+
+    .modal.show .modal-dialog-scrollable .modal-body,
+    .modal.showing .modal-dialog-scrollable .modal-body {
+        height: auto !important; /* تجاوز أي height محدد من modal-mobile-fix.css */
+        flex: 0 1 auto !important;
+        max-height: calc(100vh - 110px) !important;
     }
     
     /* تحسين modal-xl body على الهواتف الصغيرة */
