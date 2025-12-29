@@ -2255,7 +2255,8 @@ if (!$error) {
 
 <?php if (!empty($posInvoiceLinks['absolute_report_url'])): ?>
 <!-- Modal عرض الفاتورة بعد البيع -->
-<div class="modal fade" id="posInvoiceModal" tabindex="-1" aria-labelledby="posInvoiceModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+<!-- للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="posInvoiceModal" tabindex="-1" aria-labelledby="posInvoiceModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog modal-fullscreen">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">

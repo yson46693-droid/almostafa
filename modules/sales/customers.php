@@ -4211,6 +4211,33 @@ document.addEventListener('DOMContentLoaded', function () {
 <?php if ($section === 'company'): ?>
 
 <style>
+/* ===== CSS مبسط - Modal للكمبيوتر فقط، Card للموبايل ===== */
+/* إخفاء Modal على الموبايل */
+@media (max-width: 768px) {
+    #collectPaymentModal,
+    #addCustomerModal,
+    #editCustomerModal,
+    #importCustomersModal,
+    #customerExportModal,
+    #addRegionFromCustomerModal,
+    #viewLocationModal,
+    #customerHistoryModal,
+    #customerPurchaseHistoryModal,
+    #createReturnModal,
+    #delegateCustomersModal {
+        display: none !important;
+    }
+}
+
+/* إخفاء Card على الكمبيوتر */
+@media (min-width: 769px) {
+    #collectPaymentCard,
+    #addCustomerCard,
+    #editCustomerCard {
+        display: none !important;
+    }
+}
+
     .customers-search-card .card-body {
         padding: 1.25rem 1.5rem;
         background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(59, 130, 246, 0));

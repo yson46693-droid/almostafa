@@ -225,7 +225,7 @@ $specificationsCount = is_countable($productSpecifications) ? count($productSpec
         <span class="badge bg-secondary-subtle text-dark px-3 py-2">
             <i class="bi bi-collection me-1"></i><?php echo number_format($specificationsCount); ?> مواصفة
         </span>
-        <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#addSpecificationModal">
+        <button class="btn btn-primary" type="button" onclick="showAddSpecificationModal()">
             <i class="bi bi-plus-circle me-1"></i>إضافة مواصفة جديدة
         </button>
     </div>
@@ -250,7 +250,7 @@ $specificationsCount = is_countable($productSpecifications) ? count($productSpec
 <div class="card shadow-sm">
     <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center flex-wrap gap-2">
         <h5 class="mb-0"><i class="bi bi-journal-text me-2"></i>الوصفات المرجعية</h5>
-        <button class="btn btn-light btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#addSpecificationModal">
+        <button class="btn btn-light btn-sm" type="button" onclick="showAddSpecificationModal()">
             <i class="bi bi-plus-circle me-1"></i>إضافة مواصفة
         </button>
     </div>
@@ -316,8 +316,7 @@ $specificationsCount = is_countable($productSpecifications) ? count($productSpec
                                     <button
                                         type="button"
                                         class="btn btn-outline-primary btn-sm"
-                                        data-bs-toggle="modal"
-                                        data-bs-target="#editSpecificationModal"
+                                        onclick="showEditSpecificationModal(this)"
                                         data-id="<?php echo (int) $specification['id']; ?>"
                                         data-name="<?php echo htmlspecialchars($specification['product_name'], ENT_QUOTES, 'UTF-8'); ?>"
                                         data-raw="<?php echo htmlspecialchars($specification['raw_materials'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
@@ -336,7 +335,8 @@ $specificationsCount = is_countable($productSpecifications) ? count($productSpec
     </div>
 </div>
 
-<div class="modal fade" id="addSpecificationModal" tabindex="-1" aria-hidden="true">
+<!-- Modal للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="addSpecificationModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <form class="modal-content" method="POST">
             <input type="hidden" name="form_token" value="<?php echo htmlspecialchars($formToken); ?>">
@@ -380,7 +380,8 @@ $specificationsCount = is_countable($productSpecifications) ? count($productSpec
     </div>
 </div>
 
-<div class="modal fade" id="editSpecificationModal" tabindex="-1" aria-hidden="true">
+<!-- Modal للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="editSpecificationModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <form class="modal-content" method="POST">
             <input type="hidden" name="form_token" value="<?php echo htmlspecialchars($formToken); ?>">
@@ -418,7 +419,243 @@ $specificationsCount = is_countable($productSpecifications) ? count($productSpec
     </div>
 </div>
 
+<!-- Card للموبايل - إضافة مواصفة -->
+<div class="card shadow-sm mb-4 d-md-none" id="addSpecificationCard" style="display: none;">
+    <div class="card-header bg-secondary text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-plus-circle me-2"></i>إضافة مواصفة منتج جديدة
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="form_token" value="<?php echo htmlspecialchars($formToken); ?>">
+            <input type="hidden" name="action" value="add_specification">
+            <div class="mb-3">
+                <label class="form-label">اسم المنتج <span class="text-danger">*</span></label>
+                <input type="text" name="product_name" class="form-control" required maxlength="255" placeholder="مثال: عسل باللوز 500 جم">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">المواد الخام والأوزان</label>
+                <textarea name="raw_materials" rows="4" class="form-control" placeholder="مثال:
+- عسل نقي: 450 جرام
+- لوز مجروش: 50 جرام"></textarea>
+                <small class="text-muted">اكتب كل مادة في سطر مع ذكر الوزن أو النسبة.</small>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">أدوات التعبئة والأعداد</label>
+                <textarea name="packaging" rows="4" class="form-control" placeholder="مثال:
+- برطمان زجاجي 500 جم: 1
+- غطاء معدني: 1
+- ملصق خارجي: 1"></textarea>
+                <small class="text-muted">اذكر الأدوات المطلوبة وعدد كل منها لكل منتج.</small>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">ملاحظات الإنشاء</label>
+                <textarea name="notes" rows="3" class="form-control" placeholder="خطوات خاصة بالإنتاج، درجة حرارة، وقت تبريد، ..."></textarea>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle me-1"></i>حفظ المواصفة
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeAddSpecificationCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card للموبايل - تعديل مواصفة -->
+<div class="card shadow-sm mb-4 d-md-none" id="editSpecificationCard" style="display: none;">
+    <div class="card-header bg-secondary text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-pencil-square me-2"></i>تعديل مواصفة المنتج
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="form_token" value="<?php echo htmlspecialchars($formToken); ?>">
+            <input type="hidden" name="action" value="edit_specification">
+            <input type="hidden" name="spec_id" id="editSpecCardId" value="">
+            <div class="mb-3">
+                <label class="form-label">اسم المنتج <span class="text-danger">*</span></label>
+                <input type="text" name="product_name" id="editSpecCardProductName" class="form-control" required maxlength="255">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">المواد الخام والأوزان</label>
+                <textarea name="raw_materials" id="editSpecCardRawMaterials" rows="4" class="form-control"></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">أدوات التعبئة والأعداد</label>
+                <textarea name="packaging" id="editSpecCardPackaging" rows="4" class="form-control"></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">ملاحظات الإنشاء</label>
+                <textarea name="notes" id="editSpecCardNotes" rows="3" class="form-control"></textarea>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save me-1"></i>حفظ التعديلات
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeEditSpecificationCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
+// ===== دوال أساسية =====
+
+// التحقق من الموبايل
+function isMobile() {
+    return window.innerWidth <= 768;
+}
+
+// Scroll تلقائي للعنصر
+function scrollToElement(element) {
+    if (!element) return;
+    
+    setTimeout(function() {
+        const rect = element.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const elementTop = rect.top + scrollTop;
+        const offset = 80; // مساحة للـ header
+        
+        requestAnimationFrame(function() {
+            window.scrollTo({
+                top: Math.max(0, elementTop - offset),
+                behavior: 'smooth'
+            });
+        });
+    }, 200);
+}
+
+// إغلاق جميع النماذج
+function closeAllForms() {
+    // إغلاق جميع Cards على الموبايل
+    const cards = ['addSpecificationCard', 'editSpecificationCard'];
+    cards.forEach(function(cardId) {
+        const card = document.getElementById(cardId);
+        if (card && card.style.display !== 'none') {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    });
+    
+    // إغلاق جميع Modals على الكمبيوتر
+    const modals = ['addSpecificationModal', 'editSpecificationModal'];
+    modals.forEach(function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            if (modalInstance) modalInstance.hide();
+        }
+    });
+}
+
+// ===== دوال فتح النماذج =====
+
+// فتح نموذج إضافة مواصفة
+function showAddSpecificationModal() {
+    closeAllForms();
+    
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('addSpecificationCard');
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        const modal = document.getElementById('addSpecificationModal');
+        if (modal) {
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+// فتح نموذج تعديل مواصفة
+function showEditSpecificationModal(button) {
+    if (!button) return;
+    
+    closeAllForms();
+    
+    const specId = button.getAttribute('data-id') || '';
+    const productName = button.getAttribute('data-name') || '';
+    const rawMaterials = button.getAttribute('data-raw') || '';
+    const packaging = button.getAttribute('data-packaging') || '';
+    const notes = button.getAttribute('data-notes') || '';
+    
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('editSpecificationCard');
+        if (card) {
+            const specIdInput = card.querySelector('#editSpecCardId');
+            const productNameInput = card.querySelector('#editSpecCardProductName');
+            const rawMaterialsInput = card.querySelector('#editSpecCardRawMaterials');
+            const packagingInput = card.querySelector('#editSpecCardPackaging');
+            const notesInput = card.querySelector('#editSpecCardNotes');
+            
+            if (specIdInput) specIdInput.value = specId;
+            if (productNameInput) productNameInput.value = productName;
+            if (rawMaterialsInput) rawMaterialsInput.value = rawMaterials;
+            if (packagingInput) packagingInput.value = packaging;
+            if (notesInput) notesInput.value = notes;
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        const modal = document.getElementById('editSpecificationModal');
+        if (modal) {
+            const specIdInput = modal.querySelector('#editSpecId');
+            const productNameInput = modal.querySelector('#editProductName');
+            const rawMaterialsInput = modal.querySelector('#editRawMaterials');
+            const packagingInput = modal.querySelector('#editPackaging');
+            const notesInput = modal.querySelector('#editNotes');
+            
+            if (specIdInput) specIdInput.value = specId;
+            if (productNameInput) productNameInput.value = productName;
+            if (rawMaterialsInput) rawMaterialsInput.value = rawMaterials;
+            if (packagingInput) packagingInput.value = packaging;
+            if (notesInput) notesInput.value = notes;
+            
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+// ===== دوال إغلاق Cards =====
+
+// إغلاق Card إضافة مواصفة
+function closeAddSpecificationCard() {
+    const card = document.getElementById('addSpecificationCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+// إغلاق Card تعديل مواصفة
+function closeEditSpecificationCard() {
+    const card = document.getElementById('editSpecificationCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+// ===== Event Listeners =====
+
 document.addEventListener('DOMContentLoaded', () => {
     const addSpecModal = document.getElementById('addSpecificationModal');
     if (addSpecModal) {
@@ -432,38 +669,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const editSpecModal = document.getElementById('editSpecificationModal');
     if (editSpecModal) {
-        const editForm = editSpecModal.querySelector('form');
-        const specIdInput = document.getElementById('editSpecId');
-        const productNameInput = document.getElementById('editProductName');
-        const rawMaterialsInput = document.getElementById('editRawMaterials');
-        const packagingInput = document.getElementById('editPackaging');
-        const notesInput = document.getElementById('editNotes');
-
-        editSpecModal.addEventListener('show.bs.modal', (event) => {
-            const button = event.relatedTarget;
-            if (!button) {
-                return;
-            }
-            if (specIdInput) {
-                specIdInput.value = button.getAttribute('data-id') || '';
-            }
-            if (productNameInput) {
-                productNameInput.value = button.getAttribute('data-name') || '';
-            }
-            if (rawMaterialsInput) {
-                rawMaterialsInput.value = button.getAttribute('data-raw') || '';
-            }
-            if (packagingInput) {
-                packagingInput.value = button.getAttribute('data-packaging') || '';
-            }
-            if (notesInput) {
-                notesInput.value = button.getAttribute('data-notes') || '';
-            }
-        });
-
         editSpecModal.addEventListener('hidden.bs.modal', () => {
-            if (editForm) {
-                editForm.reset();
+            const form = editSpecModal.querySelector('form');
+            if (form) {
+                form.reset();
             }
         });
     }

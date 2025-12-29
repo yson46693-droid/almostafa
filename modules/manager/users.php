@@ -611,8 +611,8 @@ $users = $db->query($sql, $params);
     </div>
 </div>
 
-<!-- Modal إضافة مستخدم -->
-<div class="modal fade" id="addUserModal" tabindex="-1">
+<!-- Modal للكمبيوتر فقط - إضافة مستخدم -->
+<div class="modal fade d-none d-md-block" id="addUserModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -671,8 +671,8 @@ $users = $db->query($sql, $params);
     </div>
 </div>
 
-<!-- Modal تعديل مستخدم -->
-<div class="modal fade" id="editUserModal" tabindex="-1">
+<!-- Modal للكمبيوتر فقط - تعديل مستخدم -->
+<div class="modal fade d-none d-md-block" id="editUserModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -728,8 +728,8 @@ $users = $db->query($sql, $params);
     </div>
 </div>
 
-<!-- Modal إعادة تعيين كلمة المرور -->
-<div class="modal fade" id="resetPasswordModal" tabindex="-1">
+<!-- Modal للكمبيوتر فقط - إعادة تعيين كلمة المرور -->
+<div class="modal fade d-none d-md-block" id="resetPasswordModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">

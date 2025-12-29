@@ -7579,7 +7579,7 @@ $lang = isset($translations) ? $translations : [];
 </div>
 
 <!-- Modal إنشاء إنتاج من قالب -->
-<div class="modal fade" id="createFromTemplateModal" tabindex="-1">
+<div class="modal fade d-none d-md-block" id="createFromTemplateModal" tabindex="-1">
     <div class="modal-dialog modal-xl modal-dialog-scrollable production-template-dialog">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
@@ -7679,7 +7679,7 @@ $lang = isset($translations) ? $translations : [];
 </div>
 
 <!-- Modal طباعة الباركودات -->
-<div class="modal fade" id="printBarcodesModal" tabindex="-1">
+<div class="modal fade d-none d-md-block" id="printBarcodesModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
@@ -7722,7 +7722,7 @@ $lang = isset($translations) ? $translations : [];
 </div>
 
 <!-- Modal إضافة إنتاج -->
-<div class="modal fade" id="addProductionModal" tabindex="-1">
+<div class="modal fade d-none d-md-block" id="addProductionModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -7794,7 +7794,7 @@ $lang = isset($translations) ? $translations : [];
 </div>
 
 <!-- Modal تعديل إنتاج -->
-<div class="modal fade" id="editProductionModal" tabindex="-1">
+<div class="modal fade d-none d-md-block" id="editProductionModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -7861,6 +7861,263 @@ $lang = isset($translations) ? $translations : [];
                 </div>
             </form>
         </div>
+    </div>
+</div>
+
+<!-- ===== Cards للموبايل ===== -->
+
+<!-- Card إنشاء إنتاج من قالب للموبايل -->
+<div class="card shadow-sm mb-4 d-md-none" id="createFromTemplateCard" style="display: none;">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-file-earmark-text me-2"></i>إنشاء تشغيلة إنتاج
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="createFromTemplateFormCard">
+            <input type="hidden" name="action" value="create_from_template">
+            <input type="hidden" name="template_id" id="template_id_card">
+            <input type="hidden" name="template_mode" id="template_mode_card" value="advanced">
+            <input type="hidden" name="template_type" id="template_type_card" value="">
+            <div class="mb-3 section-block">
+                <h6 class="text-primary section-heading"><i class="bi bi-box-seam me-2"></i>معلومات المنتج والتشغيلة</h6>
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label fw-bold">اسم المنتج</label>
+                        <input type="text" class="form-control" id="template_product_name_card" readonly>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-bold">الكمية المراد إنتاجها <span class="text-danger">*</span></label>
+                        <input type="number" name="quantity" class="form-control" min="1" required value="1">
+                        <small class="text-muted d-block mt-1">سيتم إنشاء رقم تشغيلة واحد (LOT) لجميع المنتجات، مع استخدام تاريخ اليوم تلقائياً.</small>
+                    </div>
+                </div>
+                <input type="hidden" name="production_date" value="<?php echo date('Y-m-d'); ?>">
+            </div>
+            
+            <div class="mb-3 section-block d-none" id="templateSuppliersWrapperCard">
+                <h6 class="text-primary section-heading">
+                    <i class="bi bi-truck me-2"></i>الموردون لكل مادة <span class="text-danger">*</span>
+                </h6>
+                <p class="text-muted small mb-3" id="templateSuppliersHintCard">يرجى اختيار المورد المناسب لكل مادة سيتم استخدامها في هذه التشغيلة.</p>
+                <div class="row g-3" id="templateSuppliersContainerCard"></div>
+            </div>
+
+            <div class="mb-3 section-block">
+                <h6 class="text-primary section-heading"><i class="bi bi-people me-2"></i>عمال الإنتاج الحاضرون</h6>
+                <?php
+                $presentWorkersToday = [];
+                $attendanceTableCheck = $db->queryOne("SHOW TABLES LIKE 'attendance_records'");
+                if (!empty($attendanceTableCheck)) {
+                    $presentWorkersToday = $db->query(
+                        "SELECT DISTINCT u.id, u.username, u.full_name 
+                         FROM attendance_records ar
+                         JOIN users u ON ar.user_id = u.id
+                         WHERE ar.date = ? 
+                         AND ar.check_in_time IS NOT NULL 
+                         AND u.role = 'production' 
+                         AND u.status = 'active'
+                         ORDER BY ar.check_in_time DESC",
+                        [date('Y-m-d')]
+                    );
+                }
+                ?>
+                <?php if (!empty($presentWorkersToday)): ?>
+                    <div class="alert alert-success">
+                        <i class="bi bi-check-circle me-2"></i>
+                        <strong>عمال الإنتاج الحاضرون حاليا:</strong>
+                        <ul class="mb-0 mt-2">
+                            <?php foreach ($presentWorkersToday as $worker): ?>
+                                <li><?php echo htmlspecialchars($worker['full_name'] ?? $worker['username']); ?></li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
+                    <small class="text-muted">سيتم ربط التشغيلة تلقائياً بجميع عمال الإنتاج الحاضرين حالياً.</small>
+                <?php else: ?>
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        لا يوجد عمال إنتاج حاضرون حالياً. سيتم ربط التشغيلة بالعامل الحالي فقط.
+                    </div>
+                <?php endif; ?>
+            </div>
+            
+            <?php if ($currentUser['role'] !== 'production' && $userIdColumn): ?>
+                <input type="hidden" name="user_id" value="<?php echo $currentUser['id']; ?>">
+            <?php else: ?>
+                <input type="hidden" name="user_id" value="<?php echo $currentUser['id']; ?>">
+            <?php endif; ?>
+            
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle me-2"></i>إنشاء التشغيلة
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeCreateFromTemplateCard()">
+                    <i class="bi bi-x-circle me-2"></i>إلغاء
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card طباعة الباركودات للموبايل -->
+<div class="card shadow-sm mb-4 d-md-none" id="printBarcodesCard" style="display: none;">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-printer me-2"></i>طباعة الباركودات
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-success">
+            <i class="bi bi-check-circle me-2"></i>
+            تم إنشاء <strong id="barcode_quantity_card">0</strong> سجل إنتاج بنجاح مع أرقام التشغيلة
+        </div>
+        <div class="mb-3">
+            <label class="form-label">اسم المنتج</label>
+            <input type="text" class="form-control" id="barcode_product_name_card" readonly>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">عدد الباركودات المراد طباعتها</label>
+            <input type="number" class="form-control" id="barcode_print_quantity_card" min="1" value="1">
+            <small class="text-muted">سيتم طباعة نفس رقم التشغيلة بعدد المرات المحدد</small>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">أرقام التشغيلة</label>
+            <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;">
+                <div id="batch_numbers_list_card"></div>
+            </div>
+            <div id="barcodeFallbackMessagesCard" class="d-none mt-3"></div>
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-primary" id="sendBarcodeToTelegramBtnCard" onclick="printBarcodesCard()">
+                <i class="bi bi-send-check me-2"></i>إرسال رابط الطباعة
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="closePrintBarcodesCard()">إغلاق</button>
+        </div>
+    </div>
+</div>
+
+<!-- Card إضافة إنتاج للموبايل -->
+<div class="card shadow-sm mb-4 d-md-none" id="addProductionCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-plus-circle me-2"></i><?php echo isset($lang['add_production']) ? $lang['add_production'] : 'إضافة إنتاج'; ?>
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="addProductionFormCard">
+            <input type="hidden" name="action" value="add_production">
+            <div class="mb-3">
+                <label class="form-label"><?php echo isset($lang['product']) ? $lang['product'] : 'المنتج'; ?> <span class="text-danger">*</span></label>
+                <select name="product_id" class="form-select" required>
+                    <option value=""><?php echo isset($lang['select_product']) ? $lang['select_product'] : 'اختر المنتج'; ?></option>
+                    <?php foreach ($products as $product): ?>
+                        <option value="<?php echo $product['id']; ?>">
+                            <?php echo htmlspecialchars($product['name']); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label"><?php echo isset($lang['quantity']) ? $lang['quantity'] : 'الكمية'; ?> <span class="text-danger">*</span></label>
+                <input type="number" step="0.01" name="quantity" class="form-control" required min="0.01">
+            </div>
+            <div class="mb-3">
+                <label class="form-label d-block">الوحدة</label>
+                <div class="form-control-plaintext fw-semibold">كجم</div>
+                <input type="hidden" name="unit" value="kg">
+            </div>
+            <div class="mb-3">
+                <label class="form-label"><?php echo isset($lang['date']) ? $lang['date'] : 'تاريخ الإنتاج'; ?> <span class="text-danger">*</span></label>
+                <input type="date" name="production_date" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
+            </div>
+            <?php if ($currentUser['role'] !== 'production' && $userIdColumn): ?>
+            <div class="mb-3">
+                <label class="form-label"><?php echo isset($lang['worker']) ? $lang['worker'] : 'العامل'; ?> <span class="text-danger">*</span></label>
+                <select name="user_id" class="form-select" required>
+                    <option value=""><?php echo isset($lang['select_worker']) ? $lang['select_worker'] : 'اختر العامل'; ?></option>
+                    <?php foreach ($workers as $worker): ?>
+                        <option value="<?php echo $worker['id']; ?>">
+                            <?php echo htmlspecialchars($worker['full_name'] ?? $worker['username']); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <?php endif; ?>
+            <div class="mb-3">
+                <label class="form-label"><?php echo isset($lang['materials_used']) ? $lang['materials_used'] : 'المواد المستخدمة'; ?></label>
+                <textarea name="materials_used" class="form-control" rows="3" placeholder="<?php echo isset($lang['materials_used_placeholder']) ? $lang['materials_used_placeholder'] : 'أدرج المواد المستخدمة في العملية...'; ?>"></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label"><?php echo isset($lang['notes']) ? $lang['notes'] : 'ملاحظات'; ?></label>
+                <textarea name="notes" class="form-control" rows="3" placeholder="<?php echo isset($lang['notes_placeholder']) ? $lang['notes_placeholder'] : 'ملاحظات إضافية...'; ?>"></textarea>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary"><?php echo isset($lang['add']) ? $lang['add'] : 'إضافة'; ?></button>
+                <button type="button" class="btn btn-secondary" onclick="closeAddProductionCard()"><?php echo isset($lang['cancel']) ? $lang['cancel'] : 'إلغاء'; ?></button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card تعديل إنتاج للموبايل -->
+<div class="card shadow-sm mb-4 d-md-none" id="editProductionCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-pencil me-2"></i><?php echo isset($lang['edit_production']) ? $lang['edit_production'] : 'تعديل إنتاج'; ?>
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="editProductionFormCard">
+            <input type="hidden" name="action" value="update_production">
+            <input type="hidden" name="production_id" id="edit_production_id_card">
+            <div class="mb-3">
+                <label class="form-label"><?php echo isset($lang['product']) ? $lang['product'] : 'المنتج'; ?> <span class="text-danger">*</span></label>
+                <select name="product_id" id="edit_product_id_card" class="form-select" required>
+                    <option value=""><?php echo isset($lang['select_product']) ? $lang['select_product'] : 'اختر المنتج'; ?></option>
+                    <?php foreach ($products as $product): ?>
+                        <option value="<?php echo $product['id']; ?>">
+                            <?php echo htmlspecialchars($product['name']); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label"><?php echo isset($lang['quantity']) ? $lang['quantity'] : 'الكمية'; ?> <span class="text-danger">*</span></label>
+                <input type="number" step="0.01" name="quantity" id="edit_quantity_card" class="form-control" required min="0.01">
+            </div>
+            <div class="mb-3">
+                <label class="form-label d-block">الوحدة</label>
+                <div class="form-control-plaintext fw-semibold" id="edit_unit_display_card">كجم</div>
+                <input type="hidden" name="unit" id="edit_unit_card" value="kg">
+            </div>
+            <div class="mb-3">
+                <label class="form-label"><?php echo isset($lang['date']) ? $lang['date'] : 'تاريخ الإنتاج'; ?> <span class="text-danger">*</span></label>
+                <input type="date" name="production_date" id="edit_production_date_card" class="form-control" required>
+            </div>
+            <?php if (in_array($currentUser['role'], ['accountant', 'manager'])): ?>
+            <div class="mb-3">
+                <label class="form-label"><?php echo isset($lang['status']) ? $lang['status'] : 'الحالة'; ?></label>
+                <select name="status" id="edit_status_card" class="form-select">
+                    <option value="pending"><?php echo isset($lang['pending']) ? $lang['pending'] : 'معلق'; ?></option>
+                    <option value="approved"><?php echo isset($lang['approved']) ? $lang['approved'] : 'معتمد'; ?></option>
+                    <option value="rejected"><?php echo isset($lang['rejected']) ? $lang['rejected'] : 'مرفوض'; ?></option>
+                    <option value="completed"><?php echo isset($lang['completed']) ? $lang['completed'] : 'مكتمل'; ?></option>
+                </select>
+            </div>
+            <?php endif; ?>
+            <div class="mb-3">
+                <label class="form-label"><?php echo isset($lang['materials_used']) ? $lang['materials_used'] : 'المواد المستخدمة'; ?></label>
+                <textarea name="materials_used" id="edit_materials_used_card" class="form-control" rows="3"></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label"><?php echo isset($lang['notes']) ? $lang['notes'] : 'ملاحظات'; ?></label>
+                <textarea name="notes" id="edit_notes_card" class="form-control" rows="3"></textarea>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary"><?php echo isset($lang['update']) ? $lang['update'] : 'تحديث'; ?></button>
+                <button type="button" class="btn btn-secondary" onclick="closeEditProductionCard()"><?php echo isset($lang['cancel']) ? $lang['cancel'] : 'إلغاء'; ?></button>
+            </div>
+        </form>
     </div>
 </div>
 

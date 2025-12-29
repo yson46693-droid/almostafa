@@ -793,7 +793,8 @@ if (isset($_GET['id'])) {
 </div>
 
 <!-- Modal إضافة موعد تحصيل -->
-<div class="modal fade" id="addScheduleModal" tabindex="-1" aria-hidden="true">
+<!-- للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="addScheduleModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -844,7 +845,8 @@ if (isset($_GET['id'])) {
 </div>
 
 <!-- Modal تعديل موعد تحصيل -->
-<div class="modal fade" id="editScheduleModal" tabindex="-1" aria-hidden="true">
+<!-- للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="editScheduleModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
@@ -883,7 +885,8 @@ if (isset($_GET['id'])) {
 </div>
 
 <!-- Modal تحديد عدد أيام التنبيه -->
-<div class="modal fade" id="reminderModal" tabindex="-1">
+<!-- للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="reminderModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-warning text-dark">
@@ -1092,5 +1095,242 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 3000);
     }
 })();
+
+// ========== دوال Modal/Card Dual System لجداول التحصيل ==========
+function isMobile() {
+    return window.innerWidth <= 768;
+}
+
+function scrollToElement(element) {
+    if (!element) return;
+    setTimeout(function() {
+        const rect = element.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const elementTop = rect.top + scrollTop;
+        const offset = 80;
+        requestAnimationFrame(function() {
+            window.scrollTo({
+                top: Math.max(0, elementTop - offset),
+                behavior: 'smooth'
+            });
+        });
+    }, 200);
+}
+
+function showAddScheduleModal() {
+    if (isMobile()) {
+        const card = document.getElementById('addScheduleCard');
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        const modal = document.getElementById('addScheduleModal');
+        if (modal) {
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+function closeAddScheduleCard() {
+    const card = document.getElementById('addScheduleCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+// تعديل showEditScheduleModal لدعم الموبايل
+const originalShowEditScheduleModal = window.showEditScheduleModal;
+window.showEditScheduleModal = function(button) {
+    if (isMobile()) {
+        const scheduleId = button.getAttribute('data-schedule-id');
+        const customer = button.getAttribute('data-customer');
+        const amount = button.getAttribute('data-amount');
+        const dueDate = button.getAttribute('data-due-date');
+        
+        const card = document.getElementById('editScheduleCard');
+        if (card) {
+            const idInput = card.querySelector('#editScheduleCardId');
+            const customerInput = card.querySelector('#editScheduleCardCustomer');
+            const amountInput = card.querySelector('#editScheduleCardAmount');
+            const dueDateInput = card.querySelector('#editScheduleCardDueDate');
+            
+            if (idInput) idInput.value = scheduleId;
+            if (customerInput) customerInput.value = customer;
+            if (amountInput) amountInput.value = amount;
+            if (dueDateInput) dueDateInput.value = dueDate;
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        if (originalShowEditScheduleModal) {
+            originalShowEditScheduleModal(button);
+        }
+    }
+};
+
+function closeEditScheduleCard() {
+    const card = document.getElementById('editScheduleCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+// تعديل showReminderModal لدعم الموبايل
+const originalShowReminderModal = window.showReminderModal;
+window.showReminderModal = function(scheduleId) {
+    if (isMobile()) {
+        const card = document.getElementById('reminderCard');
+        if (card) {
+            const scheduleIdInput = card.querySelector('#reminderCardScheduleId');
+            if (scheduleIdInput) scheduleIdInput.value = scheduleId;
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        if (originalShowReminderModal) {
+            originalShowReminderModal(scheduleId);
+        }
+    }
+};
+
+function closeReminderCard() {
+    const card = document.getElementById('reminderCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+</script>
+
+<!-- Card إضافة موعد تحصيل - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="addScheduleCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>إضافة موعد تحصيل</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="action" value="create_schedule">
+            <?php if ($hasDebtorCustomers): ?>
+            <div class="mb-3">
+                <label class="form-label">العميل <span class="text-danger">*</span></label>
+                <select class="form-select" name="customer_id" id="addScheduleCardCustomerId" required>
+                    <option value="">اختر العميل</option>
+                    <?php foreach ($debtorCustomers as $customer): ?>
+                        <option value="<?php echo (int) $customer['id']; ?>">
+                            <?php echo htmlspecialchars($customer['name']); ?> - رصيد مدين: <?php echo formatCurrency($customer['balance']); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <small class="text-muted">يتم عرض العملاء المدينين فقط من قائمة عملائي.</small>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">مبلغ التحصيل <span class="text-danger">*</span></label>
+                <input type="number" name="amount" class="form-control" id="addScheduleCardAmount" step="0.01" min="0.01" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">موعد التحصيل <span class="text-danger">*</span></label>
+                <input type="date" name="due_date" class="form-control" id="addScheduleCardDueDate" value="<?php echo date('Y-m-d'); ?>" required>
+            </div>
+            <?php else: ?>
+            <div class="alert alert-warning mb-0">
+                لا يوجد عملاء مدينون لإضافة موعد تحصيل. يرجى إضافة عميل مدين أولاً.
+            </div>
+            <?php endif; ?>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary" <?php echo $hasDebtorCustomers ? '' : 'disabled'; ?>>حفظ</button>
+                <button type="button" class="btn btn-secondary" onclick="closeAddScheduleCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card تعديل موعد تحصيل - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="editScheduleCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-pencil-fill me-2"></i>تعديل موعد التحصيل</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="action" value="update_schedule">
+            <input type="hidden" name="schedule_id" id="editScheduleCardId">
+            <div class="mb-3">
+                <label class="form-label">العميل</label>
+                <input type="text" class="form-control" id="editScheduleCardCustomer" readonly>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">مبلغ التحصيل <span class="text-danger">*</span></label>
+                <input type="number" name="amount" class="form-control" step="0.01" min="0.01" id="editScheduleCardAmount" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">موعد التحصيل <span class="text-danger">*</span></label>
+                <input type="date" name="due_date" class="form-control" id="editScheduleCardDueDate" required>
+            </div>
+            <div class="alert alert-info mb-3">
+                تعديل التاريخ سيُحدّث حالة الجدول تلقائياً ليتناسب مع الموعد الجديد.
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">حفظ التعديلات</button>
+                <button type="button" class="btn btn-secondary" onclick="closeEditScheduleCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card تحديد عدد أيام التنبيه - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="reminderCard" style="display: none;">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0"><i class="bi bi-bell-fill me-2"></i>تحديد عدد أيام التنبيه</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="reminderCardForm" onsubmit="return validateReminderForm(this)">
+            <input type="hidden" name="action" value="create_reminder">
+            <input type="hidden" name="schedule_id" id="reminderCardScheduleId">
+            <div class="mb-3">
+                <label class="form-label">عدد الأيام قبل موعد الاستحقاق <span class="text-danger">*</span></label>
+                <input type="number" class="form-control" name="days_before_due" id="reminderCardDaysBeforeDue" value="3" min="1" max="30" required>
+                <small class="text-muted">سيتم إرسال التذكير قبل موعد الاستحقاق بهذا العدد من الأيام</small>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-warning">حفظ</button>
+                <button type="button" class="btn btn-secondary" onclick="closeReminderCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+/* إخفاء Modal على الموبايل */
+@media (max-width: 768px) {
+    #addScheduleModal,
+    #editScheduleModal,
+    #reminderModal {
+        display: none !important;
+    }
+}
+
+/* إخفاء Card على الكمبيوتر */
+@media (min-width: 769px) {
+    #addScheduleCard,
+    #editScheduleCard,
+    #reminderCard {
+        display: none !important;
+    }
+}
+</style>
 </script>
 

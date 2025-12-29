@@ -399,7 +399,7 @@ if ($hasNoVehicle && $currentUser['role'] === 'sales'): ?>
     <h2 class="mb-0"><i class="bi bi-truck me-2"></i>مخازن سيارات المندوبين</h2>
     <div class="d-flex flex-wrap gap-2 w-100 w-md-auto">
         <?php if ($canManageVehicles): ?>
-        <button class="btn btn-success flex-fill flex-md-grow-0" data-bs-toggle="modal" data-bs-target="#addVehicleModal">
+        <button class="btn btn-success flex-fill flex-md-grow-0" onclick="showAddVehicleModal()">
             <i class="bi bi-plus-circle me-2"></i><span class="d-none d-sm-inline">إضافة سيارة جديدة</span><span class="d-sm-none">إضافة</span>
         </button>
         <?php endif; ?>
@@ -413,7 +413,7 @@ if ($hasNoVehicle && $currentUser['role'] === 'sales'): ?>
                 <i class="bi bi-arrow-right me-2"></i><span class="d-none d-sm-inline">الرجوع للخلف</span><span class="d-sm-none">رجوع</span>
             </a>
         <?php else: ?>
-            <button class="btn btn-primary flex-fill flex-md-grow-0" data-bs-toggle="modal" data-bs-target="#createTransferModal">
+            <button class="btn btn-primary flex-fill flex-md-grow-0" onclick="showCreateTransferModal()">
                 <i class="bi bi-arrow-left-right me-2"></i><span class="d-none d-sm-inline">طلب نقل منتجات</span><span class="d-sm-none">نقل</span>
             </button>
         <?php endif; ?>
@@ -1153,7 +1153,8 @@ if ($hasNoVehicle && $currentUser['role'] === 'sales'): ?>
 
 <?php if ($canManageVehicles): ?>
 <!-- Modal إضافة سيارة جديدة -->
-<div class="modal fade" id="addVehicleModal" tabindex="-1">
+<!-- للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="addVehicleModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
@@ -1216,7 +1217,8 @@ if ($hasNoVehicle && $currentUser['role'] === 'sales'): ?>
 <?php endif; ?>
 
 <!-- Modal إنشاء طلب نقل -->
-<div class="modal fade" id="createTransferModal" tabindex="-1">
+<!-- للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="createTransferModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
