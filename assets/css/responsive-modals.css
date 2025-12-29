@@ -41,11 +41,25 @@
         width: 95% !important;
         height: auto;
     }
+    
+    /* دعم خاص لـ modal-xl على الموبايل */
+    .modal-dialog.modal-xl {
+        max-width: calc(100% - 1rem) !important;
+        width: calc(100% - 1rem) !important;
+        margin: 0.5rem !important;
+    }
 
     .modal-content {
         max-height: 90vh !important;
         border-radius: 12px !important;
         overflow: hidden !important;
+    }
+    
+    /* تحسين modal-xl content */
+    .modal-dialog.modal-xl .modal-content {
+        max-height: calc(100vh - 1rem) !important;
+        display: flex !important;
+        flex-direction: column !important;
     }
 
     .modal-body {
@@ -53,10 +67,33 @@
         max-height: calc(90vh - 120px) !important; /* header + footer */
         padding: 1rem !important;
     }
+    
+    /* تحسين modal-xl body */
+    .modal-dialog.modal-xl .modal-body {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        max-height: calc(100vh - 200px) !important; /* header + footer + margins */
+        overflow-y: auto !important;
+    }
 
     .modal-header,
     .modal-footer {
         padding: 0.75rem 1rem !important;
+        flex-shrink: 0 !important;
+    }
+    
+    /* تحسين modal-xl header و footer */
+    .modal-dialog.modal-xl .modal-header,
+    .modal-dialog.modal-xl .modal-footer {
+        flex-shrink: 0 !important;
+    }
+    
+    .modal-dialog.modal-xl .modal-footer {
+        position: sticky !important;
+        bottom: 0 !important;
+        background-color: #fff !important;
+        border-top: 1px solid #dee2e6 !important;
+        z-index: 10 !important;
     }
 }
 
@@ -67,8 +104,21 @@
         width: 100% !important;
         margin: 0;
     }
+    
+    /* دعم خاص لـ modal-xl على الهواتف الصغيرة */
+    .modal-dialog.modal-xl {
+        max-width: 100% !important;
+        width: 100% !important;
+        margin: 0 !important;
+    }
 
     .modal-content {
+        max-height: 100vh !important;
+        border-radius: 0 !important;
+    }
+    
+    /* تحسين modal-xl content على الهواتف الصغيرة */
+    .modal-dialog.modal-xl .modal-content {
         max-height: 100vh !important;
         border-radius: 0 !important;
     }
@@ -76,6 +126,28 @@
     .modal-body {
         max-height: calc(100vh - 110px) !important;
         padding: 0.75rem !important;
+    }
+    
+    /* تحسين modal-xl body على الهواتف الصغيرة */
+    .modal-dialog.modal-xl .modal-body {
+        max-height: calc(100vh - 180px) !important;
+        padding: 0.75rem !important;
+    }
+}
+
+/* ===== Tablet Support ===== */
+@media (min-width: 769px) and (max-width: 1024px) {
+    .modal-dialog.modal-xl {
+        max-width: 90% !important;
+        width: 90% !important;
+    }
+    
+    .modal-dialog.modal-xl .modal-content {
+        max-height: calc(100vh - 2rem) !important;
+    }
+    
+    .modal-dialog.modal-xl .modal-body {
+        max-height: calc(100vh - 250px) !important;
     }
 }
 
