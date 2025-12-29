@@ -1396,7 +1396,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <!-- Print Supplier Report Modal -->
 <div class="modal fade" id="printSupplierReportModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title"><i class="bi bi-printer me-2"></i>طباعة تقرير التوريدات</h5>
