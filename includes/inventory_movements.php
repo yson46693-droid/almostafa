@@ -1,0 +1,555 @@
+<?php
+/**
+ * نظام حركات المخزون
+ */
+
+if (!defined('ACCESS_ALLOWED')) {
+    die('Direct access not allowed');
+}
+
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/audit_log.php';
+
+/**
+ * تسجيل حركة مخزون
+ */
+function recordInventoryMovement($productId, $warehouseId, $type, $quantity, $referenceType = null, $referenceId = null, $notes = null, $createdBy = null, $batchId = null) {
+    try {
+        // تسجيل معلومات التشخيص في بداية الدالة
+        error_log("recordInventoryMovement: Called with product_id: $productId, warehouse_id: " . ($warehouseId ?? 'NULL') . ", type: $type, quantity: $quantity, batch_id: " . ($batchId ?? 'NULL') . ", reference_type: " . ($referenceType ?? 'NULL'));
+        
+        $db = db();
+        
+        if ($createdBy === null) {
+            require_once __DIR__ . '/auth.php';
+            $currentUser = getCurrentUser();
+            $createdBy = $currentUser['id'] ?? null;
+        }
+        
+        if (!$createdBy) {
+            return ['success' => false, 'message' => 'يجب تسجيل الدخول'];
+        }
+        
+        // إذا كان هناك batch_id و referenceType = warehouse_transfer، نحاول الحصول على batch_id من warehouse_transfer_items
+        if (!$batchId && $referenceType === 'warehouse_transfer' && $referenceId) {
+            $transferItem = $db->queryOne(
+                "SELECT batch_id FROM warehouse_transfer_items 
+                 WHERE transfer_id = ? AND product_id = ? 
+                 LIMIT 1",
+                [$referenceId, $productId]
+            );
+            if ($transferItem && !empty($transferItem['batch_id'])) {
+                $batchId = (int)$transferItem['batch_id'];
+            }
+        }
+        
+        // التحقق من نوع المخزن - إذا كان مخزن سيارة، نستخدم vehicle_inventory
+        $warehouse = null;
+        $isVehicleWarehouse = false;
+        $vehicleId = null;
+        $usingVehicleInventory = false;
+        
+        if ($warehouseId) {
+            // جلب warehouse_type و vehicle_id في استعلام واحد
+            $warehouse = $db->queryOne("SELECT id, warehouse_type, vehicle_id FROM warehouses WHERE id = ?", [$warehouseId]);
+        }
+        
+        if ($warehouse && ($warehouse['warehouse_type'] ?? '') === 'vehicle') {
+            $isVehicleWarehouse = true;
+            // الحصول على vehicle_id مباشرة من warehouses (لأن warehouses.vehicle_id يشير إلى vehicles.id)
+            if (!empty($warehouse['vehicle_id'])) {
+                $vehicleId = (int)$warehouse['vehicle_id'];
+                $usingVehicleInventory = true;
+            }
+        }
+        
+        // إذا كان مخزن سيارة ونوع الحركة خروج (بيع أو نقل)، نستخدم vehicle_inventory مباشرة
+        // لأن الكميات الفعلية المتاحة للمندوبين محفوظة هناك وليس في جدول products
+        if ($usingVehicleInventory && in_array($type, ['out', 'transfer'], true)) {
+            // الحصول على الكمية من vehicle_inventory
+            // ملاحظة: نستخدم FOR UPDATE لأن vehicle_inventory قد يتم تحديثه قبل استدعاء recordInventoryMovement
+            // إذا كان هناك batchId، نستخدمه في الاستعلام لضمان قراءة نفس السجل الذي تم التحقق منه في approveWarehouseTransfer
+            if ($batchId) {
+                $vehicleInventory = $db->queryOne(
+                    "SELECT quantity, finished_batch_id FROM vehicle_inventory 
+                     WHERE vehicle_id = ? AND product_id = ? AND finished_batch_id = ? FOR UPDATE",
+                    [$vehicleId, $productId, $batchId]
+                );
+                
+                // إذا لم نجد سجل مع finished_batch_id = batchId، نبحث عن أي سجل بنفس product_id
+                // (للتوافق مع الحالات القديمة أو السجلات التي لم يتم تحديثها)
+                if (!$vehicleInventory) {
+                    $vehicleInventory = $db->queryOne(
+                        "SELECT quantity, finished_batch_id FROM vehicle_inventory 
+                         WHERE vehicle_id = ? AND product_id = ? 
+                         AND (finished_batch_id IS NULL OR finished_batch_id = 0) FOR UPDATE",
+                        [$vehicleId, $productId]
+                    );
+                }
+            } else {
+                // إذا لم يكن هناك batchId، نبحث عن السجلات التي لا تحتوي على finished_batch_id
+                $vehicleInventory = $db->queryOne(
+                    "SELECT quantity, finished_batch_id FROM vehicle_inventory 
+                     WHERE vehicle_id = ? AND product_id = ? 
+                     AND (finished_batch_id IS NULL OR finished_batch_id = 0) FOR UPDATE",
+                    [$vehicleId, $productId]
+                );
+            }
+            
+            if (!$vehicleInventory) {
+                return ['success' => false, 'message' => 'المنتج غير موجود في مخزون السيارة'];
+            }
+            
+            $quantityBefore = (float)($vehicleInventory['quantity'] ?? 0);
+            
+            // إذا كان هناك finished_batch_id، نستخدمه فقط لتسجيله في الحركة
+            // لكن الكمية الفعلية نستخدمها من vehicle_inventory لأنها الكمية الحقيقية المتاحة
+            if (!empty($vehicleInventory['finished_batch_id']) && !$batchId) {
+                $batchId = (int)$vehicleInventory['finished_batch_id'];
+            }
+            
+            // ملاحظة: لا نتحقق من finished_products.quantity_produced عند البيع من vehicle_inventory
+            // لأن vehicle_inventory.quantity هو الكمية الفعلية المتاحة في السيارة
+            // و quantity_produced قد يكون أقل بسبب عمليات بيع سابقة من مخازن أخرى
+            
+            // إنشاء كائن product وهمي للتوافق مع باقي الكود
+            $product = ['quantity' => $quantityBefore, 'warehouse_id' => $warehouseId];
+        } else {
+            // الحصول على الكمية الحالية - منطق مبسط لضمان الخصم من مكان واحد فقط
+            $product = null;
+            $usingFinishedProductQuantity = false;
+            
+            // قاعدة بسيطة: إذا كان batch_id موجوداً ونوع الحركة 'out' أو 'transfer'، نستخدم finished_products فقط
+            // وإلا نستخدم products فقط
+            if ($batchId && ($type === 'out' || $type === 'transfer') && !$usingVehicleInventory) {
+                // للمنتجات المصنعة: نتجاهل products.quantity تماماً ونستخدم finished_products.quantity_produced فقط
+                // لا نقرأ من products على الإطلاق
+            } else {
+                // للمنتجات الخارجية: نقرأ من products فقط
+                $product = $db->queryOne(
+                    "SELECT quantity, warehouse_id FROM products WHERE id = ?",
+                    [$productId]
+                );
+                
+                if (!$product) {
+                    // إذا لم نجد المنتج في products، نحاول البحث في finished_products (للمنتجات المصنعة)
+                    if ($productId) {
+                        $finishedProductCheck = $db->queryOne(
+                            "SELECT id, quantity_produced FROM finished_products 
+                             WHERE product_id = ? AND (quantity_produced IS NULL OR quantity_produced > 0)
+                             ORDER BY production_date DESC, id DESC LIMIT 1",
+                            [$productId]
+                        );
+                        if ($finishedProductCheck) {
+                            error_log("recordInventoryMovement: Product not found in products table, but found in finished_products with id=" . ($finishedProductCheck['id'] ?? 'N/A') . ", quantity_produced=" . ($finishedProductCheck['quantity_produced'] ?? 0));
+                            // إنشاء product وهمي للتوافق مع باقي الكود
+                            $product = ['quantity' => (float)($finishedProductCheck['quantity_produced'] ?? 0), 'warehouse_id' => $warehouseId];
+                            // إذا كان batchId غير موجود، نستخدم finished_products.id
+                            if (!$batchId && isset($finishedProductCheck['id'])) {
+                                $batchId = (int)$finishedProductCheck['id'];
+                                error_log("recordInventoryMovement: Setting batch_id to " . $batchId . " from finished_products");
+                            }
+                        } else {
+                            return ['success' => false, 'message' => 'المنتج غير موجود'];
+                        }
+                    } else {
+                        return ['success' => false, 'message' => 'المنتج غير موجود'];
+                    }
+                }
+            }
+        }
+        
+        // تحديد الكمية الأولية والجدول المستخدم للخصم - منطق مبسط
+        $quantityBefore = 0.0;
+        $usingFinishedProductQuantity = false;
+        
+        // إذا كان batch_id موجوداً ونوع الحركة 'out' أو 'transfer' أو 'in'، نستخدم finished_products مباشرة
+        // هذا يضمن الخصم/الإضافة من/إلى مكان واحد فقط - لا نقرأ أو نحدث products.quantity أبداً
+        error_log("recordInventoryMovement: Checking conditions - batchId: " . ($batchId ?? 'NULL') . ", type: $type, usingVehicleInventory: " . ($usingVehicleInventory ? 'true' : 'false'));
+        if ($batchId && ($type === 'out' || $type === 'transfer' || $type === 'in') && !$usingVehicleInventory) {
+            // استخدام FOR UPDATE لضمان قراءة الكمية الصحيحة ومنع race conditions
+            // محاولة البحث باستخدام id أولاً
+            $finishedProduct = $db->queryOne(
+                "SELECT id, quantity_produced, product_id FROM finished_products WHERE id = ? FOR UPDATE",
+                [$batchId]
+            );
+            
+            error_log("recordInventoryMovement: Searching for finished_products with batch_id: $batchId, product_id: $productId, type: $type, reference_type: " . ($referenceType ?? 'null'));
+            
+            // إذا لم نجد باستخدام id، نحاول البحث باستخدام product_id (للمنتجات المصنعة)
+            if (!$finishedProduct && $productId) {
+                error_log("recordInventoryMovement: finished_products not found with id=$batchId, trying to find by product_id=$productId");
+                $finishedProduct = $db->queryOne(
+                    "SELECT id, quantity_produced, product_id FROM finished_products 
+                     WHERE product_id = ? AND (quantity_produced IS NULL OR quantity_produced > 0)
+                     ORDER BY production_date DESC, id DESC LIMIT 1 FOR UPDATE",
+                    [$productId]
+                );
+                // إذا وجدنا سجل، نستخدم id الجديد
+                if ($finishedProduct) {
+                    $newBatchId = (int)$finishedProduct['id'];
+                    error_log("recordInventoryMovement: Found finished_products with id=$newBatchId for product_id=$productId, updating batch_id from $batchId to $newBatchId");
+                    $batchId = $newBatchId;
+                }
+            }
+            
+            if ($finishedProduct && isset($finishedProduct['quantity_produced'])) {
+                $quantityProducedRaw = (float)($finishedProduct['quantity_produced'] ?? 0);
+                $usingFinishedProductQuantity = true;
+                
+                error_log("recordInventoryMovement: Found finished_products with id=" . ($finishedProduct['id'] ?? 'N/A') . ", quantity_produced=$quantityProducedRaw");
+                
+                // إذا كان referenceType = 'warehouse_transfer'، نخصم الكميات المحجوزة في pending transfers الأخرى
+                // لأن quantity_produced نفسه هو الكمية المتبقية بعد خصم approved/completed transfers
+                // لكن يجب خصم pending transfers الأخرى أيضاً (غير النقل الحالي)
+                if ($referenceType === 'warehouse_transfer' && $referenceId && $warehouseId) {
+                    $pendingTransfers = $db->queryOne(
+                        "SELECT COALESCE(SUM(wti.quantity), 0) AS pending_quantity
+                         FROM warehouse_transfer_items wti
+                         INNER JOIN warehouse_transfers wt ON wt.id = wti.transfer_id
+                         WHERE wti.batch_id = ? AND wt.from_warehouse_id = ? AND wt.status = 'pending' AND wt.id != ?",
+                        [$batchId, $warehouseId, $referenceId]
+                    );
+                    $pendingQuantity = (float)($pendingTransfers['pending_quantity'] ?? 0);
+                    $quantityBefore = $quantityProducedRaw - $pendingQuantity;
+                    error_log("recordInventoryMovement: Using finished_products.quantity_produced = $quantityProducedRaw, pending (excluding current): $pendingQuantity, available: $quantityBefore for batch_id: $batchId, product_id: $productId, transfer_id: $referenceId");
+                } else {
+                    // إذا لم يكن warehouse_transfer (مثل 'sales')، نستخدم quantity_produced مباشرة
+                    $quantityBefore = $quantityProducedRaw;
+                    error_log("recordInventoryMovement: Using finished_products.quantity_produced = $quantityBefore for batch_id: $batchId, product_id: $productId, reference_type: " . ($referenceType ?? 'null'));
+                }
+            } else {
+                // إذا كان batch_id موجوداً ولم نجد finished_product، هذا خطأ يجب إيقافه
+                if ($batchId) {
+                    error_log("recordInventoryMovement: ERROR - finished_products not found for batch_id: $batchId, product_id: $productId. Cannot proceed with factory product.");
+                    return ['success' => false, 'message' => 'رقم التشغيلة غير موجود أو غير صحيح'];
+                }
+                // إذا لم يكن batch_id موجوداً، سنستخدم products.quantity لاحقاً
+                error_log("recordInventoryMovement: No batch_id provided for product_id: $productId, type: $type. Will use products.quantity.");
+            }
+        } else {
+            // إذا لم يكن batch_id موجوداً أو نوع الحركة ليس 'out' أو 'transfer' أو 'in'، نستخدم products.quantity
+            if (!$batchId || ($batchId && ($type !== 'out' && $type !== 'transfer' && $type !== 'in'))) {
+                if (!$usingVehicleInventory) {
+                    if (!$product) {
+                        // نحاول قراءة products مرة أخرى إذا لم نكن قد قرأناها
+                        $product = $db->queryOne(
+                            "SELECT quantity, warehouse_id FROM products WHERE id = ?",
+                            [$productId]
+                        );
+                        if (!$product) {
+                            return ['success' => false, 'message' => 'المنتج غير موجود'];
+                        }
+                    }
+                    $quantityBefore = (float)($product['quantity'] ?? 0);
+                    error_log("recordInventoryMovement: Using products.quantity = $quantityBefore for product_id: $productId");
+                }
+            } else {
+                error_log("recordInventoryMovement: Skipping finished_products lookup - usingVehicleInventory: " . ($usingVehicleInventory ? 'true' : 'false') . ", type: $type, batch_id: $batchId");
+            }
+        }
+        
+        // حساب الكمية الجديدة
+        $quantityAfter = $quantityBefore;
+        switch ($type) {
+            case 'in':
+                $quantityAfter = $quantityBefore + $quantity;
+                break;
+            case 'out':
+                // التحقق الصارم من الكمية قبل الحساب
+                if ($quantityBefore < $quantity) {
+                    if ($usingVehicleInventory) {
+                        // للـ vehicle_inventory، قد تكون الكمية تم تحديثها مسبقاً
+                        error_log("recordInventoryMovement: Warning - quantity_before ($quantityBefore) < requested ($quantity) for vehicle_inventory. batch_id: $batchId, product_id: $productId");
+                    } elseif ($usingFinishedProductQuantity) {
+                        error_log("recordInventoryMovement: Insufficient quantity in finished_products. batch_id: $batchId, quantity_produced: $quantityBefore, requested: $quantity");
+                        return ['success' => false, 'message' => 'الكمية غير كافية في المخزون. المتاح: ' . number_format($quantityBefore, 2) . '، المطلوب: ' . number_format($quantity, 2)];
+                    } else {
+                        error_log("recordInventoryMovement: Insufficient quantity in products. product_id: $productId, quantity: $quantityBefore, requested: $quantity");
+                        return ['success' => false, 'message' => 'الكمية غير كافية في المخزون. المتاح: ' . number_format($quantityBefore, 2) . '، المطلوب: ' . number_format($quantity, 2)];
+                    }
+                }
+                
+                $quantityAfter = $quantityBefore - $quantity;
+                if ($quantityAfter < 0) {
+                    // إذا كنا نستخدم vehicle_inventory، لا نفحص لأن الكمية تم التحقق منها مسبقاً في approveWarehouseTransfer
+                    // و vehicle_inventory يتم تحديثه قبل استدعاء recordInventoryMovement
+                    if ($usingVehicleInventory) {
+                        // الكمية تم التحقق منها بالفعل، فقط نسجل الحركة
+                        error_log("recordInventoryMovement: Using vehicle_inventory for 'out' movement. quantity_before: $quantityBefore, quantity: $quantity, quantity_after: $quantityAfter (may be negative if already updated)");
+                    } elseif ($usingFinishedProductQuantity) {
+                        // التحقق من quantity_produced فقط
+                        error_log("recordInventoryMovement: Insufficient quantity in finished_products. batch_id: $batchId, quantity_produced: $quantityBefore, requested: $quantity");
+                        return ['success' => false, 'message' => 'الكمية غير كافية في المخزون. المتاح: ' . number_format($quantityBefore, 2) . '، المطلوب: ' . number_format($quantity, 2)];
+                    } else {
+                        error_log("recordInventoryMovement: Insufficient quantity in products. product_id: $productId, quantity: $quantityBefore, requested: $quantity");
+                        return ['success' => false, 'message' => 'الكمية غير كافية في المخزون. المتاح: ' . number_format($quantityBefore, 2) . '، المطلوب: ' . number_format($quantity, 2)];
+                    }
+                }
+                break;
+            case 'adjustment':
+                $quantityAfter = $quantity;
+                break;
+            case 'transfer':
+                // للتحويل، نحتاج معالجة خاصة
+                $quantityAfter = $quantityBefore - $quantity;
+                if ($quantityAfter < 0) {
+                    // إذا كنا نستخدم vehicle_inventory، لا نفحص لأن الكمية تم التحقق منها مسبقاً في approveWarehouseTransfer
+                    // و vehicle_inventory يتم تحديثه قبل استدعاء recordInventoryMovement
+                    if ($usingVehicleInventory) {
+                        // الكمية تم التحقق منها بالفعل، فقط نسجل الحركة
+                        error_log("recordInventoryMovement: Using vehicle_inventory for 'transfer' movement. quantity_before: $quantityBefore, quantity: $quantity, quantity_after: $quantityAfter (may be negative if already updated)");
+                    } elseif ($usingFinishedProductQuantity) {
+                        // التحقق من quantity_produced فقط
+                        if ($quantityAfter < 0) {
+                            error_log("recordInventoryMovement: Insufficient quantity in finished_products for transfer. batch_id: $batchId, quantity_produced: $quantityBefore, requested: $quantity");
+                            return ['success' => false, 'message' => 'الكمية غير كافية في المخزون'];
+                        }
+                    } else {
+                        if ($quantityAfter < 0) {
+                            return ['success' => false, 'message' => 'الكمية غير كافية في المخزون'];
+                        }
+                    }
+                }
+                break;
+        }
+        
+        // تحديث كمية المنتج
+        // إذا كنا نستخدم vehicle_inventory، لا نحدث products.quantity لأن الكمية الفعلية في vehicle_inventory
+        // إذا كنا نستخدم finished_products.quantity_produced، لا نحدث products.quantity
+        // لأن الكمية الفعلية موجودة في finished_products وليس في products
+        
+        // تحديث finished_products.quantity_produced إذا كان batchId موجوداً ونوع الحركة 'in'
+        // ملاحظة: يتم تحديث finished_products.quantity_produced مباشرة في api/invoice_returns.php و includes/returns_system.php
+        // لذلك لا نحتاج لتحديثه هنا مرة أخرى لتجنب التحديث المزدوج
+        // نتحقق من referenceType - إذا كان 'return' أو 'warehouse_transfer'، نتخطى التحديث
+        // لأن returnProductsToMainWarehouse أو createWarehouseTransfer/approveWarehouseTransfer قام به بالفعل
+        if ($batchId && $type === 'in' && !$usingVehicleInventory && $referenceType !== 'return' && $referenceType !== 'warehouse_transfer') {
+            error_log("recordInventoryMovement: Processing return (non-vehicle, non-return reference) - batchId: $batchId, productId: $productId, quantity: $quantity, referenceType: " . ($referenceType ?? 'NULL'));
+            
+            // البحث عن finished_products باستخدام batchId (finished_products.id)
+            $finishedProductCheck = $db->queryOne(
+                "SELECT id, quantity_produced FROM finished_products WHERE id = ? FOR UPDATE",
+                [$batchId]
+            );
+            
+            if ($finishedProductCheck) {
+                $currentQuantityProduced = (float)($finishedProductCheck['quantity_produced'] ?? 0);
+                $newQuantityProduced = $currentQuantityProduced + $quantity;
+                
+                // تحديث finished_products.quantity_produced
+                $db->execute(
+                    "UPDATE finished_products SET quantity_produced = ? WHERE id = ?",
+                    [$newQuantityProduced, $batchId]
+                );
+                
+                error_log("recordInventoryMovement: Updated finished_products.quantity_produced (non-return, non-vehicle) - batch_id: $batchId, type: $type, current: $currentQuantityProduced, added: $quantity, new: $newQuantityProduced");
+            } else {
+                error_log("recordInventoryMovement: WARNING - finished_products not found for batch_id: $batchId when returning product (productId: $productId, quantity: $quantity)");
+            }
+        } else if ($batchId && $type === 'in' && $referenceType === 'return') {
+            // عند referenceType === 'return'، يتم تحديث finished_products.quantity_produced مباشرة في returnProductsToMainWarehouse
+            error_log("recordInventoryMovement: Skipping finished_products.quantity_produced update (return reference) - batchId: $batchId, productId: $productId, quantity: $quantity. Update already done in returnProductsToMainWarehouse.");
+        } else if ($batchId && $type === 'in' && $referenceType === 'warehouse_transfer') {
+            // عند referenceType === 'warehouse_transfer'، يتم تحديث finished_products.quantity_produced مباشرة في createWarehouseTransfer/approveWarehouseTransfer
+            error_log("recordInventoryMovement: Skipping finished_products.quantity_produced update (warehouse_transfer reference) - batchId: $batchId, productId: $productId, quantity: $quantity. Update already done in createWarehouseTransfer/approveWarehouseTransfer.");
+        } else if ($batchId && $type === 'in' && $usingVehicleInventory) {
+            // عند usingVehicleInventory=true، يتم تحديث finished_products.quantity_produced مباشرة في api/invoice_returns.php و includes/returns_system.php
+            error_log("recordInventoryMovement: Skipping finished_products.quantity_produced update (vehicle inventory) - batchId: $batchId, productId: $productId, quantity: $quantity. Update should be done directly in return functions.");
+        } else if ($type === 'in' && !$batchId) {
+            error_log("recordInventoryMovement: WARNING - type='in' but batchId is NULL (productId: $productId, quantity: $quantity). Cannot update finished_products.quantity_produced.");
+        }
+        
+        if ($usingVehicleInventory) {
+            // لا نحدث products.quantity لأن الكمية الفعلية في vehicle_inventory
+            // vehicle_inventory يتم تحديثه في updateVehicleInventory قبل استدعاء recordInventoryMovement
+            error_log("recordInventoryMovement: Skipping products.quantity update for vehicle warehouse, using vehicle_inventory instead");
+        } elseif (!$usingFinishedProductQuantity) {
+            $updateSql = "UPDATE products SET quantity = ?, warehouse_id = ? WHERE id = ?";
+            $db->execute($updateSql, [$quantityAfter, $warehouseId ?? $product['warehouse_id'], $productId]);
+        } else {
+            // إذا كنا نستخدم finished_products، نحتاج تحديث quantity_produced
+            if ($usingFinishedProductQuantity && ($type === 'out' || $type === 'transfer')) {
+                // التحقق من الكمية الحالية قبل التحديث (للتشخيص)
+                $currentCheck = $db->queryOne(
+                    "SELECT quantity_produced FROM finished_products WHERE id = ?",
+                    [$batchId]
+                );
+                $currentQuantity = $currentCheck ? (float)($currentCheck['quantity_produced'] ?? 0) : 0;
+                
+                // تحديث finished_products.quantity_produced
+                $db->execute(
+                    "UPDATE finished_products SET quantity_produced = ? WHERE id = ?",
+                    [$quantityAfter, $batchId]
+                );
+                
+                // التحقق من الكمية بعد التحديث (للتشخيص)
+                $afterCheck = $db->queryOne(
+                    "SELECT quantity_produced FROM finished_products WHERE id = ?",
+                    [$batchId]
+                );
+                $afterQuantity = $afterCheck ? (float)($afterCheck['quantity_produced'] ?? 0) : 0;
+                
+                error_log("recordInventoryMovement: Updated finished_products.quantity_produced - batch_id: $batchId, type: $type, quantity_before: $quantityBefore, quantity_requested: $quantity, quantity_after_calculated: $quantityAfter, current_before_update: $currentQuantity, current_after_update: $afterQuantity");
+            } else {
+                error_log("recordInventoryMovement: Skipping products.quantity update for batch_id: $batchId, using finished_products.quantity_produced instead");
+            }
+        }
+        
+        // تسجيل الحركة
+        // إذا كنا نستخدم finished_products، نسجل quantity_produced في quantity_before/quantity_after
+        $sql = "INSERT INTO inventory_movements 
+                (product_id, warehouse_id, type, quantity, quantity_before, quantity_after, reference_type, reference_id, notes, created_by) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        
+        $result = $db->execute($sql, [
+            $productId,
+            $warehouseId ?? $product['warehouse_id'],
+            $type,
+            $quantity,
+            $quantityBefore, // هذا سيكون quantity_produced إذا كان usingFinishedProductQuantity
+            $quantityAfter,  // هذا سيكون quantity_produced - quantity إذا كان usingFinishedProductQuantity
+            $referenceType,
+            $referenceId,
+            $notes,
+            $createdBy
+        ]);
+        
+        // تسجيل سجل التدقيق
+        logAudit($createdBy, 'inventory_movement', 'product', $productId, 
+                 ['quantity_before' => $quantityBefore], 
+                 ['quantity_after' => $quantityAfter, 'type' => $type]);
+        
+        return ['success' => true, 'movement_id' => $result['insert_id']];
+        
+    } catch (Exception $e) {
+        error_log("Inventory Movement Error: " . $e->getMessage() . " | Product ID: $productId | Warehouse ID: $warehouseId | Type: $type | Quantity: $quantity");
+        return ['success' => false, 'message' => 'حدث خطأ في تسجيل الحركة: ' . $e->getMessage()];
+    }
+}
+
+/**
+ * الحصول على حركات المخزون
+ */
+function getInventoryMovements($filters = [], $limit = 100, $offset = 0) {
+    $db = db();
+    
+    $sql = "SELECT im.*, p.name as product_name, w.name as warehouse_name, 
+                   u.username as created_by_name
+            FROM inventory_movements im
+            LEFT JOIN products p ON im.product_id = p.id
+            LEFT JOIN warehouses w ON im.warehouse_id = w.id
+            LEFT JOIN users u ON im.created_by = u.id
+            WHERE 1=1";
+    
+    $params = [];
+    
+    if (!empty($filters['product_id'])) {
+        $sql .= " AND im.product_id = ?";
+        $params[] = $filters['product_id'];
+    }
+    
+    if (!empty($filters['warehouse_id'])) {
+        $sql .= " AND im.warehouse_id = ?";
+        $params[] = $filters['warehouse_id'];
+    }
+    
+    if (!empty($filters['type'])) {
+        $sql .= " AND im.type = ?";
+        $params[] = $filters['type'];
+    }
+    
+    if (!empty($filters['date_from'])) {
+        $sql .= " AND DATE(im.created_at) >= ?";
+        $params[] = $filters['date_from'];
+    }
+    
+    if (!empty($filters['date_to'])) {
+        $sql .= " AND DATE(im.created_at) <= ?";
+        $params[] = $filters['date_to'];
+    }
+    
+    $sql .= " ORDER BY im.created_at DESC LIMIT ? OFFSET ?";
+    $params[] = $limit;
+    $params[] = $offset;
+    
+    return $db->query($sql, $params);
+}
+
+/**
+ * الحصول على عدد حركات المخزون
+ */
+function getInventoryMovementsCount($filters = []) {
+    $db = db();
+    
+    $sql = "SELECT COUNT(*) as count FROM inventory_movements WHERE 1=1";
+    $params = [];
+    
+    if (!empty($filters['product_id'])) {
+        $sql .= " AND product_id = ?";
+        $params[] = $filters['product_id'];
+    }
+    
+    if (!empty($filters['warehouse_id'])) {
+        $sql .= " AND warehouse_id = ?";
+        $params[] = $filters['warehouse_id'];
+    }
+    
+    if (!empty($filters['type'])) {
+        $sql .= " AND type = ?";
+        $params[] = $filters['type'];
+    }
+    
+    if (!empty($filters['date_from'])) {
+        $sql .= " AND DATE(created_at) >= ?";
+        $params[] = $filters['date_from'];
+    }
+    
+    if (!empty($filters['date_to'])) {
+        $sql .= " AND DATE(created_at) <= ?";
+        $params[] = $filters['date_to'];
+    }
+    
+    $result = $db->queryOne($sql, $params);
+    return $result['count'] ?? 0;
+}
+
+/**
+ * الحصول على تقرير استهلاك المواد
+ */
+function getMaterialConsumptionReport($productId = null, $dateFrom = null, $dateTo = null) {
+    $db = db();
+    
+    $sql = "SELECT im.product_id, p.name as product_name, 
+                   SUM(CASE WHEN im.type = 'out' THEN im.quantity ELSE 0 END) as total_out,
+                   SUM(CASE WHEN im.type = 'in' THEN im.quantity ELSE 0 END) as total_in,
+                   (SUM(CASE WHEN im.type = 'in' THEN im.quantity ELSE 0 END) - 
+                    SUM(CASE WHEN im.type = 'out' THEN im.quantity ELSE 0 END)) as net_consumption
+            FROM inventory_movements im
+            LEFT JOIN products p ON im.product_id = p.id
+            WHERE 1=1";
+    
+    $params = [];
+    
+    if ($productId) {
+        $sql .= " AND im.product_id = ?";
+        $params[] = $productId;
+    }
+    
+    if ($dateFrom) {
+        $sql .= " AND DATE(im.created_at) >= ?";
+        $params[] = $dateFrom;
+    }
+    
+    if ($dateTo) {
+        $sql .= " AND DATE(im.created_at) <= ?";
+        $params[] = $dateTo;
+    }
+    
+    $sql .= " GROUP BY im.product_id, p.name
+              ORDER BY net_consumption DESC";
+    
+    return $db->query($sql, $params);
+}
+

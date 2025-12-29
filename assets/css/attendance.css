@@ -1,0 +1,562 @@
+/**
+ * Attendance Page Styles
+ * أنماط صفحة تسجيل الحضور
+ * ضمان التمرير العمودي على الهواتف
+ */
+
+/* ===== Global Scroll Fix for Attendance Page ===== */
+body.attendance-page,
+body.attendance-page.modal-open {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    position: relative !important;
+    height: auto !important;
+    padding-right: 0 !important;
+}
+
+/* إزالة أي تأثيرات Bootstrap modal على التمرير */
+body.attendance-page.modal-open .dashboard-wrapper,
+body.attendance-page.modal-open .dashboard-main {
+    overflow-y: visible !important;
+    padding-right: 0 !important;
+}
+
+/* ===== Mobile Scroll Fix ===== */
+@media (max-width: 768px) {
+    /* ضمان أن body و html قابلان للتمرير - حتى عند فتح modal */
+    html,
+    body,
+    body.modal-open,
+    body.attendance-page,
+    body.attendance-page.modal-open {
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        height: auto !important;
+        min-height: 100vh;
+        position: relative !important;
+        padding-right: 0 !important;
+    }
+    
+    /* ضمان أن dashboard-wrapper قابل للتمرير */
+    .dashboard-wrapper {
+        overflow-x: hidden !important;
+        overflow-y: visible !important;
+        min-height: 100vh;
+        height: auto !important;
+    }
+    
+    /* ضمان أن dashboard-main قابل للتمرير */
+    .dashboard-main {
+        overflow-x: hidden !important;
+        overflow-y: visible !important;
+        height: auto !important;
+        min-height: auto;
+        padding-bottom: 2rem !important;
+    }
+    
+    /* ضمان أن container-fluid قابل للتمرير */
+    .container-fluid {
+        overflow-x: hidden !important;
+        overflow-y: visible !important;
+        height: auto !important;
+        min-height: auto;
+        padding-bottom: 1rem;
+    }
+    
+    /* تحسين عرض البطاقات على الموبايل */
+    .card {
+        margin-bottom: 1rem;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+    
+    /* تحسين المسافات بين العناصر */
+    .row {
+        margin-left: 0;
+        margin-right: 0;
+    }
+    
+    .row > * {
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+    
+    /* تحسين عرض الإحصائيات على الموبايل */
+    .col-md-3,
+    .col-sm-6 {
+        margin-bottom: 1rem;
+    }
+    
+    /* تحسين عرض الأزرار */
+    .btn-lg {
+        padding: 0.75rem 1rem;
+        font-size: 1rem;
+    }
+    
+    /* تحسين Modal الكاميرا على الموبايل */
+    #cameraModal .modal-dialog {
+        margin: 0.5rem;
+        max-width: calc(100% - 1rem);
+        width: calc(100% - 1rem);
+    }
+    
+    #cameraModal .modal-content {
+        max-height: calc(100vh - 1rem);
+        overflow-y: auto;
+    }
+    
+    #cameraModal .modal-header {
+        padding: 0.5rem 0.75rem;
+        border-bottom: 1px solid #dee2e6;
+    }
+    
+    #cameraModal .modal-header .modal-title {
+        font-size: 1rem;
+        margin: 0;
+    }
+    
+    #cameraModal .modal-body {
+        padding: 0.75rem;
+        max-height: none;
+        overflow-y: visible;
+    }
+    
+    #cameraModal .modal-footer {
+        padding: 0.5rem 0.75rem;
+        border-top: 1px solid #dee2e6;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        justify-content: center;
+    }
+    
+    #cameraModal .modal-footer .btn {
+        flex: 1;
+        min-width: calc(50% - 0.25rem);
+        font-size: 0.95rem;
+        padding: 0.6rem 0.75rem;
+        font-weight: 600;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+    }
+    
+    /* جعل أزرار الإجراءات الرئيسية أكثر بروزاً */
+    #cameraModal .modal-footer #captureBtn,
+    #cameraModal .modal-footer #submitBtn {
+        font-size: 1rem;
+        padding: 0.75rem 1rem;
+        min-height: 48px;
+    }
+    
+    /* تحسين ترتيب الأزرار */
+    #cameraModal .modal-footer {
+        flex-direction: row;
+    }
+    
+    /* عند وجود زرين فقط، اجعلهما بجانب بعض */
+    #cameraModal .modal-footer .btn:only-child {
+        min-width: auto;
+        flex: 0 1 auto;
+    }
+    
+    /* جعل الفيديو مربع الشكل على الموبايل */
+    #cameraModal #video {
+        width: 100%;
+        max-width: 100%;
+        aspect-ratio: 1 / 1;
+        object-fit: cover;
+        border-radius: 8px;
+        background: #000;
+    }
+    
+    /* جعل الصورة الملتقطة مربعة أيضاً */
+    #cameraModal #capturedImage {
+        width: 100%;
+        max-width: 100%;
+        aspect-ratio: 1 / 1;
+        object-fit: cover;
+        border-radius: 8px;
+    }
+    
+    /* تقليل حجم container الكاميرا */
+    #cameraModal #cameraContainer {
+        margin: 0;
+        padding: 0;
+    }
+    
+    #cameraModal #cameraLoading {
+        padding: 1rem;
+    }
+    
+    #cameraModal #cameraError {
+        margin-top: 0.5rem;
+        padding: 0.5rem;
+        font-size: 0.85rem;
+    }
+    
+    /* تحسين الجداول */
+    .table-responsive {
+        overflow-x: auto !important;
+        overflow-y: visible !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    /* ضمان أن page-header لا يمنع التمرير */
+    .page-header {
+        position: relative;
+        z-index: 1;
+        margin-bottom: 1rem;
+    }
+    
+    /* إزالة أي قيود على التمرير من Bootstrap modal */
+    body.attendance-page.modal-open {
+        padding-right: 0 !important;
+    }
+    
+    /* ضمان أن جميع العناصر قابلة للتمرير */
+    .attendance-page .container-fluid > * {
+        position: relative;
+    }
+    
+    /* إزالة أي max-height يمنع التمرير */
+    .attendance-page .dashboard-main,
+    .attendance-page .container-fluid {
+        max-height: none !important;
+    }
+    
+    /* ضمان أن html قابل للتمرير أيضاً */
+    html {
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        height: auto !important;
+    }
+    
+    /* إزالة أي fixed positioning يمنع التمرير */
+    .attendance-page .container-fluid,
+    .attendance-page .dashboard-main,
+    .attendance-page .dashboard-wrapper {
+        position: relative !important;
+    }
+}
+
+/* ===== Extra Small Devices ===== */
+@media (max-width: 576px) {
+    /* تحسين المسافات على الشاشات الصغيرة جداً */
+    .container-fluid {
+        padding-left: 0.75rem !important;
+        padding-right: 0.75rem !important;
+    }
+    
+    .card-body {
+        padding: 0.75rem !important;
+    }
+    
+    .card-header {
+        padding: 0.5rem 0.75rem !important;
+    }
+    
+    /* تحسين حجم النصوص */
+    .h4 {
+        font-size: 1.25rem;
+    }
+    
+    .h5 {
+        font-size: 1rem;
+    }
+    
+    /* تحسين الأزرار */
+    .btn-lg {
+        padding: 0.625rem 0.875rem;
+        font-size: 0.9375rem;
+    }
+    
+    /* تحسين Modal الكاميرا على الشاشات الصغيرة جداً */
+    #cameraModal .modal-dialog {
+        margin: 0.25rem;
+        max-width: calc(100% - 0.5rem);
+        width: calc(100% - 0.5rem);
+    }
+    
+    #cameraModal .modal-header {
+        padding: 0.4rem 0.5rem;
+    }
+    
+    #cameraModal .modal-header .modal-title {
+        font-size: 0.9rem;
+    }
+    
+    #cameraModal .modal-body {
+        padding: 0.5rem;
+    }
+    
+    #cameraModal .modal-footer {
+        padding: 0.4rem 0.5rem;
+        gap: 0.4rem;
+    }
+    
+    #cameraModal .modal-footer .btn {
+        font-size: 0.85rem;
+        padding: 0.5rem 0.6rem;
+        min-height: 42px;
+    }
+    
+    #cameraModal .modal-footer #captureBtn,
+    #cameraModal .modal-footer #submitBtn {
+        font-size: 0.9rem;
+        padding: 0.6rem 0.8rem;
+        min-height: 44px;
+    }
+}
+
+/* ===== Landscape Orientation Fix ===== */
+@media (max-width: 768px) and (orientation: landscape) {
+    /* تحسين العرض في الوضع الأفقي */
+    .dashboard-main {
+        padding-top: calc(var(--topbar-height) + var(--spacing-sm));
+    }
+    
+    #cameraModal .modal-dialog {
+        margin: 0.25rem;
+        max-width: calc(100% - 0.5rem);
+    }
+    
+    #cameraModal .modal-body {
+        padding: 0.5rem;
+    }
+    
+    #cameraModal .modal-header,
+    #cameraModal .modal-footer {
+        padding: 0.4rem 0.5rem;
+    }
+    
+    #cameraModal #video {
+        aspect-ratio: 4 / 3;
+    }
+    
+    #cameraModal #capturedImage {
+        aspect-ratio: 4 / 3;
+    }
+}
+
+/* ===== إزالة Shadow والتأثيرات ===== */
+.attendance-page .card {
+    box-shadow: none !important;
+    border: 1px solid #dee2e6;
+}
+
+.attendance-page .card:hover {
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+.attendance-page .btn {
+    box-shadow: none !important;
+    transition: none !important;
+}
+
+.attendance-page .btn:hover,
+.attendance-page .btn:focus,
+.attendance-page .btn:active {
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+.attendance-page .btn:active {
+    transform: none !important;
+}
+
+/* إزالة أي تأثيرات انبثاق */
+.attendance-page * {
+    pointer-events: auto !important;
+    touch-action: manipulation !important;
+}
+
+/* ضمان أن جميع العناصر قابلة للنقر */
+.attendance-page .card,
+.attendance-page .btn,
+.attendance-page .card-body,
+.attendance-page .card-header {
+    pointer-events: auto !important;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* إزالة shadow من Modal الكاميرا */
+.attendance-page #cameraModal .modal-content {
+    box-shadow: none !important;
+    border: 1px solid #dee2e6;
+}
+
+.attendance-page #cameraModal .modal-header,
+.attendance-page #cameraModal .modal-footer {
+    box-shadow: none !important;
+}
+
+/* إزالة الحاجز (backdrop) الذي يمنع التفاعل */
+.attendance-page .modal-backdrop {
+    display: none !important;
+    opacity: 0 !important;
+    background-color: transparent !important;
+    pointer-events: none !important;
+    z-index: -1 !important;
+}
+
+.attendance-page .modal-backdrop.show,
+.attendance-page .modal-backdrop.fade {
+    display: none !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+/* ضمان أن Modal نفسه قابل للتفاعل */
+.attendance-page #cameraModal {
+    pointer-events: auto !important;
+}
+
+.attendance-page #cameraModal .modal-dialog {
+    pointer-events: auto !important;
+    z-index: 1055 !important;
+}
+
+.attendance-page #cameraModal .modal-content {
+    pointer-events: auto !important;
+    z-index: 1056 !important;
+}
+
+.attendance-page #cameraModal .modal-body,
+.attendance-page #cameraModal .modal-header,
+.attendance-page #cameraModal .modal-footer {
+    pointer-events: auto !important;
+}
+
+.attendance-page #cameraModal .btn,
+.attendance-page #cameraModal button,
+.attendance-page #cameraModal video,
+.attendance-page #cameraModal img,
+.attendance-page #cameraModal canvas,
+.attendance-page #cameraModal .btn-close {
+    pointer-events: auto !important;
+    touch-action: manipulation !important;
+    z-index: 1057 !important;
+    position: relative;
+}
+
+/* إزالة أي overlay أو طبقات إضافية */
+.attendance-page .modal-backdrop ~ .modal-backdrop {
+    display: none !important;
+}
+
+/* ضمان أن body لا يمنع التفاعل عند فتح Modal */
+body.attendance-page.modal-open {
+    overflow: visible !important;
+    padding-right: 0 !important;
+}
+
+body.attendance-page.modal-open .modal-backdrop {
+    display: none !important;
+    pointer-events: none !important;
+}
+
+/* على الموبايل - إزالة backdrop تماماً */
+@media (max-width: 768px) {
+    .attendance-page .modal-backdrop,
+    .attendance-page .modal-backdrop.show,
+    .attendance-page .modal-backdrop.fade {
+        display: none !important;
+        opacity: 0 !important;
+        background: transparent !important;
+        pointer-events: none !important;
+        z-index: -999 !important;
+    }
+    
+    .attendance-page #cameraModal {
+        z-index: 9999 !important;
+    }
+    
+    .attendance-page #cameraModal .modal-dialog {
+        z-index: 10000 !important;
+        margin: 0.5rem !important;
+        max-width: calc(100% - 1rem) !important;
+        width: calc(100% - 1rem) !important;
+    }
+    
+    .attendance-page #cameraModal .modal-content {
+        z-index: 10001 !important;
+        max-height: calc(100vh - 1rem) !important;
+    }
+    
+    .attendance-page #cameraModal .modal-header {
+        padding: 0.5rem 0.75rem !important;
+    }
+    
+    .attendance-page #cameraModal .modal-body {
+        padding: 0.75rem !important;
+    }
+    
+    .attendance-page #cameraModal .modal-footer {
+        padding: 0.5rem 0.75rem !important;
+    }
+    
+    .attendance-page #cameraModal .modal-footer .btn {
+        font-size: 0.9rem !important;
+        padding: 0.5rem 0.75rem !important;
+    }
+    
+    /* جعل الفيديو مربع على الموبايل */
+    .attendance-page #cameraModal #video {
+        aspect-ratio: 1 / 1 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        height: auto !important;
+        object-fit: cover !important;
+    }
+    
+    .attendance-page #cameraModal #capturedImage {
+        aspect-ratio: 1 / 1 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        height: auto !important;
+        object-fit: cover !important;
+    }
+}
+
+/* إزالة أي تأثيرات من badges */
+.attendance-page .badge {
+    box-shadow: none !important;
+    transition: none !important;
+}
+
+/* إزالة تأثيرات من alert */
+.attendance-page .alert {
+    box-shadow: none !important;
+    border: 1px solid;
+}
+
+/* ===== Touch Device Optimizations ===== */
+@media (hover: none) and (pointer: coarse) {
+    /* تحسين التمرير على الأجهزة اللمسية */
+    .container-fluid,
+    .dashboard-main,
+    .dashboard-wrapper {
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    /* تحسين حجم الأزرار للمس */
+    .btn-lg {
+        min-height: 48px;
+        min-width: 48px;
+    }
+    
+    /* إزالة جميع التأثيرات على الأجهزة اللمسية */
+    .attendance-page .card:hover,
+    .attendance-page .btn:hover {
+        transform: none !important;
+        box-shadow: none !important;
+    }
+}
+

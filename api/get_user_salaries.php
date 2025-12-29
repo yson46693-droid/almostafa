@@ -1,0 +1,608 @@
+<?php
+declare(strict_types=1);
+
+// تعريف ACCESS_ALLOWED قبل تضمين أي ملفات
+define('ACCESS_ALLOWED', true);
+
+// تعطيل عرض الأخطاء في المتصفح لمنع HTML في JSON
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+error_reporting(E_ALL);
+
+// تعيين error handler لمنع عرض الأخطاء
+set_error_handler(function($errno, $errstr, $errfile, $errline) {
+    error_log("PHP Error [$errno]: $errstr in $errfile on line $errline");
+    return true; // منع عرض الخطأ الافتراضي
+}, E_ALL);
+
+// تنظيف أي output buffer موجود
+while (ob_get_level() > 0) {
+    ob_end_clean();
+}
+
+// بدء output buffering جديد
+ob_start();
+
+// إرسال header JSON أولاً
+header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-cache, must-revalidate');
+header('X-Content-Type-Options: nosniff');
+
+try {
+    require_once __DIR__ . '/../includes/config.php';
+    require_once __DIR__ . '/../includes/db.php';
+    require_once __DIR__ . '/../includes/auth.php';
+    
+    // تنظيف أي output تم إنتاجه من الملفات المحملة
+    if (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    ob_start();
+} catch (Throwable $e) {
+    ob_end_clean();
+    error_log('Error loading includes in get_user_salaries.php: ' . $e->getMessage());
+    error_log('Stack trace: ' . $e->getTraceAsString());
+    echo json_encode(['success' => false, 'message' => 'خطأ في تحميل الملفات المطلوبة: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+// التحقق من تسجيل الدخول
+try {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    
+    // تسجيل معلومات الـ session للتشخيص
+    error_log('get_user_salaries.php - Session status: ' . session_status());
+    error_log('get_user_salaries.php - Session user_id: ' . ($_SESSION['user_id'] ?? 'NOT SET'));
+    error_log('get_user_salaries.php - Session role: ' . ($_SESSION['role'] ?? 'NOT SET'));
+    
+    if (empty($_SESSION['user_id']) || empty($_SESSION['role'])) {
+        ob_end_clean();
+        error_log('get_user_salaries.php - User not logged in. user_id: ' . ($_SESSION['user_id'] ?? 'empty') . ', role: ' . ($_SESSION['role'] ?? 'empty'));
+        echo json_encode(['success' => false, 'message' => 'يجب تسجيل الدخول أولاً'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+} catch (Throwable $e) {
+    ob_end_clean();
+    error_log('Error checking session in get_user_salaries.php: ' . $e->getMessage());
+    error_log('Stack trace: ' . $e->getTraceAsString());
+    echo json_encode(['success' => false, 'message' => 'خطأ في التحقق من الصلاحيات: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+try {
+    $userId = intval($_GET['user_id'] ?? 0);
+    
+    if ($userId <= 0) {
+        http_response_code(400);
+        ob_end_clean();
+        echo json_encode(['success' => false, 'message' => 'معرف المستخدم غير صحيح'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    
+    $db = db();
+    
+    // جلب جميع الرواتب للموظف مع حساب المتبقي
+    // التحقق من وجود الأعمدة بشكل آمن
+    $hasYearColumn = false;
+    $isMonthDate = false;
+    
+    try {
+        $yearColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries LIKE 'year'");
+        $hasYearColumn = !empty($yearColumnCheck);
+    } catch (Exception $e) {
+        error_log('Error checking year column: ' . $e->getMessage());
+        // افتراض أن year غير موجود في حالة الخطأ
+        $hasYearColumn = false;
+    }
+    
+    // التحقق من نوع عمود month بشكل آمن
+    try {
+        $monthColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field = 'month'");
+        if (!empty($monthColumnCheck) && isset($monthColumnCheck['Type'])) {
+            $monthType = $monthColumnCheck['Type'];
+            $isMonthDate = stripos($monthType, 'date') !== false;
+        }
+    } catch (Exception $e) {
+        error_log('Error checking month column: ' . $e->getMessage());
+        // افتراض أن month من نوع INT في حالة الخطأ
+        $isMonthDate = false;
+    }
+    
+    // جلب بيانات المستخدم (الدور) لتحديد طريقة حساب الراتب
+    $userInfo = $db->queryOne("SELECT role, hourly_rate FROM users WHERE id = ?", [$userId]);
+    $userRole = $userInfo['role'] ?? 'production';
+    $userHourlyRate = cleanFinancialValue($userInfo['hourly_rate'] ?? 0);
+    
+    // بناء الاستعلام - تبسيط الشروط لتشمل جميع الرواتب
+    // ملاحظة: نستخدم COALESCE للتعامل مع القيم NULL
+    $query = "SELECT s.*, 
+                     COALESCE(s.accumulated_amount, s.total_amount, 0) as calculated_accumulated,
+                     COALESCE(s.settlements_advances, 0) as settlements_advances,
+                     (COALESCE(s.accumulated_amount, s.total_amount, 0) - COALESCE(s.settlements_advances, 0)) as remaining,
+                     s.id as salary_id";
+    
+    // بناء الاستعلام بناءً على نوع عمود month أولاً
+    if ($isMonthDate) {
+        // عمود month من نوع DATE - استخدام DATE_FORMAT
+        $query .= ", CASE 
+                       WHEN s.month IS NOT NULL AND s.month != '0000-00-00' AND s.month != '1970-01-01'
+                       THEN DATE_FORMAT(s.month, '%Y-%m')
+                       ELSE DATE_FORMAT(CURDATE(), '%Y-%m')
+                    END as month_label";
+        // استبعاد السجلات ذات التواريخ غير الصحيحة
+        $whereClause = "WHERE s.user_id = ? AND s.month IS NOT NULL AND s.month != '0000-00-00' AND s.month != '1970-01-01'";
+        
+        // إذا كان عمود year موجوداً، نضيفه كشرط إضافي
+        if ($hasYearColumn) {
+            $whereClause .= " AND s.year > 0";
+        }
+        
+        // الترتيب حسب month (DATE) - الأحدث أولاً
+        $orderClause = "ORDER BY s.month DESC, s.id DESC";
+    } elseif ($hasYearColumn) {
+        // عمود month من نوع INT مع وجود عمود year منفصل
+        $query .= ", CASE 
+                       WHEN s.month > 0 AND s.month <= 12 AND s.year > 0 AND s.year <= 9999 
+                       THEN CONCAT(s.year, '-', LPAD(s.month, 2, '0'))
+                       ELSE CONCAT(COALESCE(s.year, YEAR(CURDATE())), '-', LPAD(COALESCE(s.month, MONTH(CURDATE())), 2, '0'))
+                    END as month_label";
+        // استبعاد السجلات ذات التواريخ غير الصحيحة (month = 0 أو year = 0)
+        $whereClause = "WHERE s.user_id = ? AND s.month > 0 AND s.month <= 12 AND s.year > 0";
+        // الترتيب حسب year ثم month - الأحدث أولاً
+        $orderClause = "ORDER BY s.year DESC, s.month DESC, s.id DESC";
+    } else {
+        // عمود month من نوع INT بدون year
+        $query .= ", DATE_FORMAT(CONCAT(YEAR(CURDATE()), '-', LPAD(COALESCE(s.month, MONTH(CURDATE())), 2, '0'), '-01'), '%Y-%m') as month_label";
+        // استبعاد السجلات ذات التواريخ غير الصحيحة
+        $whereClause = "WHERE s.user_id = ? AND s.month IS NOT NULL AND s.month > 0 AND s.month <= 12";
+        // الترتيب حسب month - الأحدث أولاً
+        $orderClause = "ORDER BY s.month DESC, s.id DESC";
+    }
+    
+    $query .= " FROM salaries s " . $whereClause . " " . $orderClause;
+    
+    // تسجيل الاستعلام للتdebugging
+    error_log("get_user_salaries.php query: " . $query);
+    error_log("get_user_salaries.php params: " . json_encode([$userId]));
+    error_log("get_user_salaries.php hasYearColumn: " . ($hasYearColumn ? 'true' : 'false'));
+    error_log("get_user_salaries.php isMonthDate: " . ($isMonthDate ? 'true' : 'false'));
+    
+    // تنفيذ الاستعلام مع معالجة الأخطاء
+    try {
+        $salaries = $db->query($query, [$userId]);
+        if (!is_array($salaries)) {
+            error_log("get_user_salaries.php: query returned non-array result");
+            $salaries = [];
+        }
+    } catch (Exception $e) {
+        error_log("get_user_salaries.php: Database query error: " . $e->getMessage());
+        error_log("get_user_salaries.php: Query was: " . $query);
+        throw new Exception("خطأ في جلب الرواتب من قاعدة البيانات: " . $e->getMessage(), 0, $e);
+    }
+    
+    // تسجيل عدد الرواتب المسترجعة
+    error_log("get_user_salaries.php found " . count($salaries) . " salaries for user_id: " . $userId);
+    
+    // تسجيل تفاصيل الرواتب المسترجعة
+    if (count($salaries) > 0) {
+        foreach ($salaries as $idx => $sal) {
+            error_log("get_user_salaries.php raw salary[$idx]: id=" . ($sal['id'] ?? 'N/A') . ", user_id=" . ($sal['user_id'] ?? 'N/A') . ", month=" . ($sal['month'] ?? 'NULL') . ", year=" . ($sal['year'] ?? 'NULL'));
+        }
+    }
+    
+    // التحقق من وجود رواتب
+    if (empty($salaries) || count($salaries) === 0) {
+        error_log("get_user_salaries.php: No salaries found for user_id: " . $userId);
+        ob_end_clean();
+        echo json_encode([
+            'success' => true,
+            'salaries' => [],
+            'message' => 'لا توجد رواتب مسجلة لهذا الموظف'
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    
+    $monthNames = [
+        1 => 'يناير', 2 => 'فبراير', 3 => 'مارس', 4 => 'أبريل',
+        5 => 'مايو', 6 => 'يونيو', 7 => 'يوليو', 8 => 'أغسطس',
+        9 => 'سبتمبر', 10 => 'أكتوبر', 11 => 'نوفمبر', 12 => 'ديسمبر'
+    ];
+    
+    $formattedSalaries = [];
+    $monthYearMap = []; // لتجميع الرواتب حسب الشهر والسنة
+    
+    $processedCount = 0;
+    $skippedCount = 0;
+    
+    foreach ($salaries as $salary) {
+        try {
+            // التحقق من وجود user_id في الراتب
+            $salaryUserId = intval($salary['user_id'] ?? 0);
+            $salaryId = intval($salary['id'] ?? $salary['salary_id'] ?? 0);
+            
+            error_log("get_user_salaries.php: Processing salary ID $salaryId, user_id=$salaryUserId, expected_user_id=$userId");
+            
+            if ($salaryUserId <= 0) {
+                $skippedCount++;
+                error_log("get_user_salaries.php: Skipping salary ID $salaryId - invalid user_id: $salaryUserId");
+                continue;
+            }
+            
+            if ($salaryUserId != $userId) {
+                $skippedCount++;
+                error_log("get_user_salaries.php: Skipping salary ID $salaryId - user_id mismatch: expected $userId, got $salaryUserId");
+                continue;
+            }
+            
+            $processedCount++;
+            
+            $month = 0;
+            $year = date('Y');
+            $monthLabel = 'غير محدد';
+        
+        // تحديد الشهر والسنة بناءً على نوع عمود month
+        if ($hasYearColumn) {
+            // month من نوع INT و year موجود
+            // التحقق من NULL بشكل صحيح
+            $monthValue = $salary['month'] ?? null;
+            $yearValue = $salary['year'] ?? null;
+            
+            // استخدام month_label من SQL إذا كان موجوداً
+            if (!empty($salary['month_label'])) {
+                $date = date_create_from_format('Y-m', $salary['month_label']);
+                if ($date) {
+                    $year = intval($date->format('Y'));
+                    $month = intval($date->format('n'));
+                    $monthLabel = ($monthNames[$month] ?? 'شهر غير معروف') . ' ' . $year;
+                } else {
+                    // استخدام القيم من month و year مباشرة
+                    $month = ($monthValue !== null && $monthValue !== '') ? intval($monthValue) : 0;
+                    $year = ($yearValue !== null && $yearValue !== '') ? intval($yearValue) : date('Y');
+                    
+                    // استخدام القيم الافتراضية إذا كانت غير صحيحة
+                    if ($month <= 0 || $month > 12) {
+                        $month = date('n');
+                    }
+                    if ($year <= 0 || $year > 9999) {
+                        $year = date('Y');
+                    }
+                    
+                    $monthLabel = ($monthNames[$month] ?? 'شهر غير معروف') . ' ' . $year;
+                }
+            } else {
+                // استخدام القيم من month و year مباشرة
+                $month = ($monthValue !== null && $monthValue !== '') ? intval($monthValue) : 0;
+                $year = ($yearValue !== null && $yearValue !== '') ? intval($yearValue) : date('Y');
+                
+                // استخدام القيم الافتراضية إذا كانت غير صحيحة
+                if ($month <= 0 || $month > 12) {
+                    $month = date('n');
+                }
+                if ($year <= 0 || $year > 9999) {
+                    $year = date('Y');
+                }
+                
+                $monthLabel = ($monthNames[$month] ?? 'شهر غير معروف') . ' ' . $year;
+            }
+        } else {
+            if ($isMonthDate) {
+                // month من نوع DATE
+                $monthDate = $salary['month'] ?? null;
+                if ($monthDate && $monthDate !== '0000-00-00' && $monthDate !== '1970-01-01') {
+                    $date = date_create_from_format('Y-m-d', $monthDate);
+                    if ($date && $date->format('Y') > 0) {
+                        $year = intval($date->format('Y'));
+                        $month = intval($date->format('n'));
+                        $monthLabel = $monthNames[$month] . ' ' . $year;
+                    } else {
+                        // محاولة استخدام month_label
+                        if (!empty($salary['month_label'])) {
+                            $date = date_create_from_format('Y-m', $salary['month_label']);
+                            if ($date) {
+                                $year = intval($date->format('Y'));
+                                $month = intval($date->format('n'));
+                                $monthLabel = $monthNames[$month] . ' ' . $year;
+                            } else {
+                                // استخدام التاريخ الحالي كافتراضي
+                                $year = date('Y');
+                                $month = date('n');
+                                $monthLabel = $monthNames[$month] . ' ' . $year;
+                            }
+                        } else {
+                            // استخدام التاريخ الحالي كافتراضي
+                            $year = date('Y');
+                            $month = date('n');
+                            $monthLabel = $monthNames[$month] . ' ' . $year;
+                        }
+                    }
+                } else {
+                    // استخدام التاريخ الحالي كافتراضي
+                    $year = date('Y');
+                    $month = date('n');
+                    $monthLabel = $monthNames[$month] . ' ' . $year;
+                }
+            } else {
+                // month من نوع INT بدون year
+                // استخدام month_label من SQL إذا كان موجوداً
+                if (!empty($salary['month_label'])) {
+                    $date = date_create_from_format('Y-m', $salary['month_label']);
+                    if ($date) {
+                        $year = intval($date->format('Y'));
+                        $month = intval($date->format('n'));
+                        $monthLabel = $monthNames[$month] . ' ' . $year;
+                    } else {
+                        // استخدام القيم الافتراضية
+                        $month = date('n');
+                        $year = date('Y');
+                        $monthLabel = $monthNames[$month] . ' ' . $year;
+                    }
+                } else {
+                    // استخدام القيم من month مباشرة
+                    $monthValue = $salary['month'] ?? null;
+                    $month = ($monthValue !== null && $monthValue !== '') ? intval($monthValue) : 0;
+                    if ($month <= 0 || $month > 12) {
+                        $month = date('n');
+                    }
+                    $year = date('Y'); // استخدام السنة الحالية كافتراضي
+                    $monthLabel = $monthNames[$month] . ' ' . $year;
+                }
+            }
+        }
+        
+        // حساب المبلغ التراكمي بشكل صحيح (نفس طريقة بطاقة الموظف في salaries.php)
+        // استخدام نفس طريقة حساب الراتب من المكونات كما في بطاقة الموظف
+        // الراتب الإجمالي = الراتب الأساسي + المكافآت + نسبة التحصيلات - الخصومات
+        require_once __DIR__ . '/../includes/salary_calculator.php';
+        
+        $baseAmount = cleanFinancialValue($salary['base_amount'] ?? 0);
+        $bonus = cleanFinancialValue($salary['bonus_standardized'] ?? ($salary['bonus'] ?? $salary['bonuses'] ?? 0));
+        $deductions = cleanFinancialValue($salary['deductions'] ?? 0);
+        $collectionsBonus = cleanFinancialValue($salary['collections_bonus'] ?? 0);
+        
+        // إعادة حساب نسبة التحصيلات للمندوبين (مطابق لبطاقة الموظف في salaries.php)
+        // يجب أن تُحسب نسبة التحصيلات على رصيد الخزنة الإجمالي (مطابق لصفحة خزنة المندوب)
+        if ($userRole === 'sales') {
+            require_once __DIR__ . '/../includes/approval_system.php';
+            if (function_exists('calculateSalesRepCashBalance')) {
+                try {
+                    $cashRegisterBalance = calculateSalesRepCashBalance($userId);
+                    if ($cashRegisterBalance !== null && $cashRegisterBalance !== false) {
+                        $displayCashBalance = (float)$cashRegisterBalance;
+                        $recalculatedCollectionsBonus = round($displayCashBalance * 0.02, 2);
+                        
+                        // استخدام القيمة المحسوبة إذا كانت أكبر من المحفوظة أو إذا لم تكن هناك قيمة محفوظة
+                        if ($collectionsBonus <= 0 || $recalculatedCollectionsBonus > $collectionsBonus) {
+                            $collectionsBonus = $recalculatedCollectionsBonus;
+                        }
+                    }
+                } catch (Throwable $e) {
+                    error_log('Error calculating cash balance for user ' . $userId . ' in get_user_salaries: ' . $e->getMessage());
+                    // في حالة الخطأ، استخدم الطريقة البديلة
+                    $recalculatedCollectionsAmount = calculateSalesCollections($userId, $month, $year);
+                    $recalculatedCollectionsBonus = round($recalculatedCollectionsAmount * 0.02, 2);
+                    if ($collectionsBonus <= 0 || $recalculatedCollectionsBonus > $collectionsBonus) {
+                        $collectionsBonus = $recalculatedCollectionsBonus;
+                    }
+                }
+            } else {
+                // إذا لم تكن الدالة موجودة، نستخدم الطريقة القديمة
+                $recalculatedCollectionsAmount = calculateSalesCollections($userId, $month, $year);
+                $recalculatedCollectionsBonus = round($recalculatedCollectionsAmount * 0.02, 2);
+                if ($collectionsBonus <= 0 || $recalculatedCollectionsBonus > $collectionsBonus) {
+                    $collectionsBonus = $recalculatedCollectionsBonus;
+                }
+            }
+        }
+        
+        // حساب الراتب الإجمالي من المكونات (مطابق لبطاقة الموظف)
+        $currentTotal = round($baseAmount + $bonus + $collectionsBonus - $deductions, 2);
+        
+        // التأكد من أن الراتب الإجمالي لا يكون سالباً
+        $currentTotal = max(0, $currentTotal);
+        
+        $salaryId = intval($salary['id'] ?? $salary['salary_id'] ?? 0);
+        
+        // إذا كان الراتب المحسوب من المكونات يساوي 0، استخدم total_amount من قاعدة البيانات كقيمة احتياطية
+        // هذا يحدث عندما تكون المكونات غير محفوظة في قاعدة البيانات
+        $dbTotalAmount = cleanFinancialValue($salary['total_amount'] ?? 0);
+        if ($currentTotal < 0.01 && $dbTotalAmount > 0.01) {
+            $currentTotal = $dbTotalAmount;
+        }
+        
+        // استخدام الدالة المشتركة لحساب المبلغ التراكمي
+        $accumulatedData = calculateSalaryAccumulatedAmount(
+            $userId, 
+            $salaryId, 
+            $currentTotal, 
+            $month, 
+            $year, 
+            $db
+        );
+        
+        $accumulated = $accumulatedData['accumulated'];
+        // حساب المتبقي بناءً على التسويات والسلف (settlements_advances) وليس paid_amount
+        // لتجنب المضاعفة لأن التسويات تُسجل في settlements_advances (مطابق لبطاقة الموظف)
+        $settlementsAdvances = cleanFinancialValue($salary['settlements_advances'] ?? 0);
+        $remaining = max(0, $accumulated - $settlementsAdvances);
+        
+        // تسجيل للتشخيص (يمكن حذفه لاحقاً)
+        error_log(sprintf(
+            'get_user_salaries.php: salary_id=%d, user_id=%d, month=%d, year=%d, baseAmount=%.2f, bonus=%.2f, collectionsBonus=%.2f, deductions=%.2f, currentTotal=%.2f, dbTotalAmount=%.2f, accumulated=%.2f, settlementsAdvances=%.2f, remaining=%.2f',
+            $salaryId, $userId, $month, $year, $baseAmount, $bonus, $collectionsBonus, $deductions, $currentTotal, $dbTotalAmount, $accumulated, $settlementsAdvances, $remaining
+        ));
+        
+        // عرض جميع الرواتب حتى لو كان المتبقي صفر (لإتاحة التسوية الكاملة)
+        // يمكن تغيير هذا الشرط إذا أردت تصفية الرواتب المدفوعة بالكامل
+        // if ($remaining < 0.01) {
+        //     continue; // تخطي هذا الراتب
+        // }
+        
+        // التأكد من أن month_label موجود دائماً
+        if (empty($monthLabel) || $monthLabel === 'غير محدد' || $monthLabel === '') {
+            // إعادة إنشاء month_label إذا كان فارغاً
+            if ($month >= 1 && $month <= 12 && $year > 0 && $year <= 9999) {
+                $monthLabel = ($monthNames[$month] ?? 'شهر غير معروف') . ' ' . $year;
+            } else {
+                // للرواتب التي month NULL، نستخدم "راتب بدون شهر" مع ID
+                if ($hasNullMonth) {
+                    $monthLabel = 'راتب بدون شهر (ID: ' . $salaryId . ')';
+                } else {
+                    // استخدام القيم الافتراضية
+                    $month = date('n');
+                    $year = date('Y');
+                    $monthLabel = ($monthNames[$month] ?? 'شهر غير معروف') . ' ' . $year;
+                }
+            }
+        }
+        
+        // إنشاء مفتاح فريد للشهر والسنة
+        // للرواتب التي month NULL، نستخدم salary_id في المفتاح لضمان عدم التجميع
+        $monthValue = $salary['month'] ?? null;
+        $yearValue = $salary['year'] ?? null;
+        $hasNullMonth = ($monthValue === null || $monthValue === '') || ($hasYearColumn && ($yearValue === null || $yearValue === ''));
+        
+        if ($hasNullMonth) {
+            // استخدام salary_id في المفتاح للرواتب التي month NULL
+            $monthYearKey = 'null-' . $salaryId;
+        } else {
+            // تحويل month إلى string قبل استخدام str_pad (PHP 8+ requirement)
+            $monthYearKey = $year . '-' . str_pad((string)$month, 2, '0', STR_PAD_LEFT);
+        }
+        
+        // إذا كان هناك راتب آخر لنفس الشهر والسنة، نأخذ الراتب الأحدث (id أكبر)
+        // لكن فقط للرواتب التي ليست NULL
+        if (!$hasNullMonth && isset($monthYearMap[$monthYearKey])) {
+            $existingId = intval($monthYearMap[$monthYearKey]['id']);
+            $currentId = intval($salary['id'] ?? 0);
+            
+            // إذا كان الراتب الحالي أحدث (id أكبر)، نستبدله
+            if ($currentId > $existingId) {
+                $monthYearMap[$monthYearKey] = [
+                    'id' => $salaryId,
+                    'month' => $month,
+                    'year' => $year,
+                    'month_label' => $monthLabel,
+                    'total_amount' => $currentTotal,
+                    'accumulated_amount' => $accumulated,
+                    'settlements_advances' => $settlementsAdvances,
+                    'remaining' => $remaining,
+                    'status' => $salary['status'] ?? 'calculated'
+                ];
+            }
+        } else {
+            // إضافة الراتب الجديد
+            $monthYearMap[$monthYearKey] = [
+                'id' => $salaryId,
+                'month' => $month,
+                'year' => $year,
+                'month_label' => $monthLabel,
+                'total_amount' => $currentTotal,
+                'accumulated_amount' => $accumulated,
+                'settlements_advances' => $settlementsAdvances,
+                'remaining' => $remaining,
+                'status' => $salary['status'] ?? 'calculated'
+            ];
+        }
+        } catch (Exception $e) {
+            // تسجيل الخطأ ولكن الاستمرار في معالجة الرواتب الأخرى
+            error_log("Error processing salary ID " . ($salary['id'] ?? 'unknown') . ": " . $e->getMessage());
+            error_log("Stack trace: " . $e->getTraceAsString());
+            $skippedCount++;
+            continue; // تخطي هذا الراتب والمتابعة مع البقية
+        } catch (Throwable $e) {
+            // معالجة جميع أنواع الأخطاء
+            error_log("Fatal error processing salary ID " . ($salary['id'] ?? 'unknown') . ": " . $e->getMessage());
+            error_log("Stack trace: " . $e->getTraceAsString());
+            $skippedCount++;
+            continue; // تخطي هذا الراتب والمتابعة مع البقية
+        }
+    }
+    
+    // تسجيل إحصائيات نهائية
+    error_log("get_user_salaries.php: Final stats - Processed: $processedCount, Skipped: $skippedCount, monthYearMap entries: " . count($monthYearMap));
+    
+    // تحويل الخريطة إلى مصفوفة وترتيبها حسب السنة والشهر (الأحدث أولاً)
+    $formattedSalaries = array_values($monthYearMap);
+    
+    // تسجيل عدد الرواتب قبل الترتيب
+    error_log("get_user_salaries.php: monthYearMap contains " . count($monthYearMap) . " entries before sorting");
+    
+    usort($formattedSalaries, function($a, $b) {
+        // للرواتب التي month NULL، نضعها في النهاية
+        $aHasNullMonth = (empty($a['month']) || $a['month'] <= 0) && (empty($a['year']) || $a['year'] <= 0);
+        $bHasNullMonth = (empty($b['month']) || $b['month'] <= 0) && (empty($b['year']) || $b['year'] <= 0);
+        
+        if ($aHasNullMonth && !$bHasNullMonth) {
+            return 1; // a بعد b
+        }
+        if (!$aHasNullMonth && $bHasNullMonth) {
+            return -1; // a قبل b
+        }
+        if ($aHasNullMonth && $bHasNullMonth) {
+            return $b['id'] - $a['id']; // الأحدث أولاً
+        }
+        
+        // للرواتب العادية، الترتيب حسب السنة والشهر
+        if ($a['year'] != $b['year']) {
+            return $b['year'] - $a['year']; // الأحدث أولاً
+        }
+        if ($a['month'] != $b['month']) {
+            return $b['month'] - $a['month']; // الأحدث أولاً
+        }
+        return $b['id'] - $a['id']; // الأحدث أولاً
+    });
+    
+    // تسجيل عدد الرواتب المعالجة
+    error_log("get_user_salaries.php formatted " . count($formattedSalaries) . " salaries for user_id: " . $userId);
+    
+    // تسجيل تفاصيل الرواتب المرجعة
+    foreach ($formattedSalaries as $idx => $sal) {
+        error_log("get_user_salaries.php salary[$idx]: id=" . ($sal['id'] ?? 'N/A') . ", month=" . ($sal['month'] ?? 'NULL') . ", year=" . ($sal['year'] ?? 'NULL') . ", month_label=" . ($sal['month_label'] ?? 'N/A') . ", remaining=" . ($sal['remaining'] ?? 0));
+    }
+    
+    // تسجيل JSON المرسل
+    $jsonResponse = json_encode([
+        'success' => true,
+        'salaries' => $formattedSalaries
+    ], JSON_UNESCAPED_UNICODE);
+    
+    error_log("get_user_salaries.php: Sending JSON response with " . count($formattedSalaries) . " salaries, JSON length: " . strlen($jsonResponse));
+    
+    ob_end_clean();
+    echo $jsonResponse;
+    
+} catch (Throwable $e) {
+    ob_end_clean();
+    $errorMessage = $e->getMessage();
+    $errorTrace = $e->getTraceAsString();
+    
+    error_log('Error in get_user_salaries.php: ' . $errorMessage);
+    error_log('Stack trace: ' . $errorTrace);
+    error_log('File: ' . $e->getFile() . ' Line: ' . $e->getLine());
+    
+    // في بيئة التطوير، عرض رسالة الخطأ الفعلية للمساعدة في التشخيص
+    // في بيئة الإنتاج، استخدم رسالة عامة
+    $isDevelopment = (defined('DEBUG_MODE') && DEBUG_MODE) || 
+                     (isset($_SERVER['SERVER_NAME']) && 
+                      (strpos($_SERVER['SERVER_NAME'], 'localhost') !== false || 
+                       strpos($_SERVER['SERVER_NAME'], '127.0.0.1') !== false));
+    
+    $displayMessage = $isDevelopment 
+        ? 'حدث خطأ داخلي في الخادم: ' . $errorMessage 
+        : 'حدث خطأ داخلي في الخادم. يرجى المحاولة مرة أخرى أو الاتصال بالدعم الفني.';
+    
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'message' => $displayMessage,
+        'debug' => $isDevelopment ? [
+            'error' => $errorMessage,
+            'file' => $e->getFile(),
+            'line' => $e->getLine()
+        ] : null
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+

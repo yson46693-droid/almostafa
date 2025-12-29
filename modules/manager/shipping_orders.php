@@ -1,0 +1,3736 @@
+<?php
+/**
+ * إدارة طلبات شركات الشحن للمدير
+ */
+
+if (!defined('ACCESS_ALLOWED')) {
+    die('Direct access not allowed');
+}
+
+require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/invoices.php';
+require_once __DIR__ . '/../../includes/inventory_movements.php';
+require_once __DIR__ . '/../../includes/audit_log.php';
+require_once __DIR__ . '/../../includes/path_helper.php';
+require_once __DIR__ . '/../../includes/customer_history.php';
+
+requireRole(['manager', 'accountant', 'developer']);
+
+$currentUser = getCurrentUser();
+$db = db();
+
+$sessionErrorKey = 'manager_shipping_orders_error';
+$sessionSuccessKey = 'manager_shipping_orders_success';
+$error = '';
+$success = '';
+
+if (!empty($_SESSION[$sessionErrorKey])) {
+    $error = $_SESSION[$sessionErrorKey];
+    unset($_SESSION[$sessionErrorKey]);
+}
+
+if (!empty($_SESSION[$sessionSuccessKey])) {
+    $success = $_SESSION[$sessionSuccessKey];
+    unset($_SESSION[$sessionSuccessKey]);
+}
+
+try {
+    $db->execute(
+        "CREATE TABLE IF NOT EXISTS `shipping_companies` (
+            `id` int(11) NOT NULL AUTO_INCREMENT,
+            `name` varchar(150) NOT NULL,
+            `contact_person` varchar(100) DEFAULT NULL,
+            `phone` varchar(30) DEFAULT NULL,
+            `email` varchar(120) DEFAULT NULL,
+            `address` text DEFAULT NULL,
+            `balance` decimal(15,2) NOT NULL DEFAULT 0.00,
+            `status` enum('active','inactive') NOT NULL DEFAULT 'active',
+            `notes` text DEFAULT NULL,
+            `created_by` int(11) DEFAULT NULL,
+            `updated_by` int(11) DEFAULT NULL,
+            `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            `updated_at` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `name` (`name`),
+            KEY `status` (`status`),
+            KEY `created_by` (`created_by`),
+            KEY `updated_by` (`updated_by`),
+            CONSTRAINT `shipping_companies_created_fk` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+            CONSTRAINT `shipping_companies_updated_fk` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+} catch (Throwable $tableError) {
+    error_log('shipping_orders: failed ensuring shipping_companies table -> ' . $tableError->getMessage());
+}
+
+try {
+    $db->execute(
+        "CREATE TABLE IF NOT EXISTS `shipping_company_orders` (
+            `id` int(11) NOT NULL AUTO_INCREMENT,
+            `order_number` varchar(50) NOT NULL,
+            `shipping_company_id` int(11) NOT NULL,
+            `customer_id` int(11) NOT NULL,
+            `invoice_id` int(11) DEFAULT NULL,
+            `total_amount` decimal(15,2) NOT NULL DEFAULT 0.00,
+            `status` enum('assigned','in_transit','delivered','cancelled') NOT NULL DEFAULT 'assigned',
+            `handed_over_at` timestamp NULL DEFAULT NULL,
+            `delivered_at` timestamp NULL DEFAULT NULL,
+            `notes` text DEFAULT NULL,
+            `created_by` int(11) DEFAULT NULL,
+            `updated_by` int(11) DEFAULT NULL,
+            `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            `updated_at` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `order_number` (`order_number`),
+            KEY `shipping_company_id` (`shipping_company_id`),
+            KEY `customer_id` (`customer_id`),
+            KEY `invoice_id` (`invoice_id`),
+            KEY `status` (`status`),
+            CONSTRAINT `shipping_company_orders_company_fk` FOREIGN KEY (`shipping_company_id`) REFERENCES `shipping_companies` (`id`) ON DELETE CASCADE,
+            CONSTRAINT `shipping_company_orders_invoice_fk` FOREIGN KEY (`invoice_id`) REFERENCES `invoices` (`id`) ON DELETE SET NULL,
+            CONSTRAINT `shipping_company_orders_created_fk` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+            CONSTRAINT `shipping_company_orders_updated_fk` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+} catch (Throwable $tableError) {
+    error_log('shipping_orders: failed ensuring shipping_company_orders table -> ' . $tableError->getMessage());
+}
+
+try {
+    $db->execute(
+        "CREATE TABLE IF NOT EXISTS `shipping_company_order_items` (
+            `id` int(11) NOT NULL AUTO_INCREMENT,
+            `order_id` int(11) NOT NULL,
+            `product_id` int(11) NOT NULL,
+            `batch_id` int(11) DEFAULT NULL,
+            `quantity` decimal(10,2) NOT NULL,
+            `unit_price` decimal(15,2) NOT NULL,
+            `total_price` decimal(15,2) NOT NULL,
+            `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            KEY `order_id` (`order_id`),
+            KEY `product_id` (`product_id`),
+            KEY `batch_id` (`batch_id`),
+            CONSTRAINT `shipping_company_order_items_order_fk` FOREIGN KEY (`order_id`) REFERENCES `shipping_company_orders` (`id`) ON DELETE CASCADE,
+            CONSTRAINT `shipping_company_order_items_product_fk` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    
+    // إضافة عمود batch_id إذا لم يكن موجوداً
+    try {
+        $batchIdColumn = $db->queryOne("SHOW COLUMNS FROM shipping_company_order_items LIKE 'batch_id'");
+        if (empty($batchIdColumn)) {
+            $db->execute("ALTER TABLE shipping_company_order_items ADD COLUMN batch_id int(11) DEFAULT NULL AFTER product_id");
+            $db->execute("ALTER TABLE shipping_company_order_items ADD KEY batch_id (batch_id)");
+        }
+    } catch (Throwable $alterError) {
+        // العمود موجود بالفعل أو حدث خطأ
+        error_log('shipping_orders: batch_id column check -> ' . $alterError->getMessage());
+    }
+} catch (Throwable $tableError) {
+    error_log('shipping_orders: failed ensuring shipping_company_order_items table -> ' . $tableError->getMessage());
+}
+
+function generateShippingOrderNumber(Database $db): string
+{
+    $year = date('Y');
+    $month = date('m');
+    $prefix = "SHIP-{$year}{$month}-";
+
+    $lastOrder = $db->queryOne(
+        "SELECT order_number FROM shipping_company_orders WHERE order_number LIKE ? ORDER BY order_number DESC LIMIT 1",
+        [$prefix . '%']
+    );
+
+    if ($lastOrder && isset($lastOrder['order_number'])) {
+        $parts = explode('-', $lastOrder['order_number']);
+        $serial = (int)($parts[2] ?? 0) + 1;
+    } else {
+        $serial = 1;
+    }
+
+    return sprintf('%s%04d', $prefix, $serial);
+}
+
+$mainWarehouse = $db->queryOne("SELECT id, name FROM warehouses WHERE warehouse_type = 'main' AND status = 'active' LIMIT 1");
+if (!$mainWarehouse) {
+    $db->execute(
+        "INSERT INTO warehouses (name, warehouse_type, status, location, description) VALUES (?, 'main', 'active', ?, ?)",
+        ['المخزن الرئيسي', 'الموقع الرئيسي للشركة', 'تم إنشاء هذا المخزن تلقائياً لطلبات الشحن']
+    );
+    $mainWarehouse = $db->queryOne("SELECT id, name FROM warehouses WHERE warehouse_type = 'main' AND status = 'active' LIMIT 1");
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? '';
+
+    if ($action === 'add_shipping_company') {
+        $name = trim($_POST['company_name'] ?? '');
+        $contactPerson = trim($_POST['contact_person'] ?? '');
+        $phone = trim($_POST['phone'] ?? '');
+        $email = trim($_POST['email'] ?? '');
+        $address = trim($_POST['address'] ?? '');
+        $notes = trim($_POST['company_notes'] ?? '');
+
+        if ($name === '') {
+            $_SESSION[$sessionErrorKey] = 'يجب إدخال اسم شركة الشحن.';
+        } else {
+            try {
+                $existingCompany = $db->queryOne("SELECT id FROM shipping_companies WHERE name = ?", [$name]);
+                if ($existingCompany) {
+                    throw new InvalidArgumentException('اسم شركة الشحن مستخدم بالفعل.');
+                }
+
+                $db->execute(
+                    "INSERT INTO shipping_companies (name, contact_person, phone, email, address, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    [
+                        $name,
+                        $contactPerson !== '' ? $contactPerson : null,
+                        $phone !== '' ? $phone : null,
+                        $email !== '' ? $email : null,
+                        $address !== '' ? $address : null,
+                        $notes !== '' ? $notes : null,
+                        $currentUser['id'] ?? null,
+                    ]
+                );
+
+                $_SESSION[$sessionSuccessKey] = 'تم إضافة شركة الشحن بنجاح.';
+            } catch (InvalidArgumentException $validationError) {
+                $_SESSION[$sessionErrorKey] = $validationError->getMessage();
+            } catch (Throwable $addError) {
+                error_log('shipping_orders: add company error -> ' . $addError->getMessage());
+                $_SESSION[$sessionErrorKey] = 'تعذر إضافة شركة الشحن. يرجى المحاولة لاحقاً.';
+            }
+        }
+
+        redirectAfterPost('shipping_orders', [], [], 'manager');
+        exit;
+    }
+
+    if ($action === 'add_local_customer') {
+        $name = trim($_POST['customer_name'] ?? '');
+        $phone = trim($_POST['customer_phone'] ?? '');
+        $address = trim($_POST['customer_address'] ?? '');
+        $balance = isset($_POST['customer_balance']) ? cleanFinancialValue($_POST['customer_balance'], true) : 0;
+
+        if ($name === '') {
+            $_SESSION[$sessionErrorKey] = 'يجب إدخال اسم العميل.';
+        } else {
+            try {
+                // التحقق من وجود جدول local_customers
+                $localCustomersTableExists = $db->queryOne("SHOW TABLES LIKE 'local_customers'");
+                if (empty($localCustomersTableExists)) {
+                    throw new RuntimeException('جدول العملاء المحليين غير موجود. يرجى التأكد من إعداد النظام.');
+                }
+
+                // التحقق من عدم تكرار اسم العميل
+                $existingCustomer = $db->queryOne("SELECT id FROM local_customers WHERE name = ?", [$name]);
+                if ($existingCustomer) {
+                    throw new InvalidArgumentException('اسم العميل مستخدم بالفعل. يرجى اختيار اسم آخر.');
+                }
+
+                // إضافة العميل الجديد
+                $result = $db->execute(
+                    "INSERT INTO local_customers (name, phone, address, balance, status, created_by) VALUES (?, ?, ?, ?, 'active', ?)",
+                    [
+                        $name,
+                        $phone !== '' ? $phone : null,
+                        $address !== '' ? $address : null,
+                        $balance,
+                        $currentUser['id'] ?? null,
+                    ]
+                );
+
+                $newCustomerId = (int)($result['insert_id'] ?? 0);
+                if ($newCustomerId <= 0) {
+                    throw new RuntimeException('فشل إضافة العميل: لم يتم الحصول على معرف العميل.');
+                }
+
+                // تسجيل العملية
+                require_once __DIR__ . '/../../includes/audit_log.php';
+                logAudit($currentUser['id'], 'add_local_customer_from_shipping', 'local_customer', $newCustomerId, null, [
+                    'name' => $name,
+                    'from_shipping_page' => true,
+                ]);
+
+                // إرجاع معرف العميل الجديد في الجلسة لاستخدامه في JavaScript
+                $_SESSION['new_customer_id'] = $newCustomerId;
+                $_SESSION['new_customer_name'] = $name;
+                $_SESSION['new_customer_phone'] = $phone;
+                $_SESSION[$sessionSuccessKey] = 'تم إضافة العميل بنجاح.';
+            } catch (InvalidArgumentException $validationError) {
+                $_SESSION[$sessionErrorKey] = $validationError->getMessage();
+            } catch (Throwable $addError) {
+                error_log('shipping_orders: add local customer error -> ' . $addError->getMessage());
+                $errorMessage = $addError->getMessage();
+                if (stripos($errorMessage, 'duplicate') !== false || stripos($errorMessage, '1062') !== false) {
+                    $_SESSION[$sessionErrorKey] = 'يوجد عميل مسجل مسبقاً بنفس الاسم.';
+                } else {
+                    $_SESSION[$sessionErrorKey] = 'تعذر إضافة العميل: ' . htmlspecialchars($errorMessage);
+                }
+            }
+        }
+
+        redirectAfterPost('shipping_orders', [], [], 'manager');
+        exit;
+    }
+
+    if ($action === 'create_shipping_order') {
+        $shippingCompanyId = isset($_POST['shipping_company_id']) ? (int)$_POST['shipping_company_id'] : 0;
+        $customerId = isset($_POST['customer_id']) ? (int)$_POST['customer_id'] : 0;
+        $notes = trim($_POST['order_notes'] ?? '');
+        $itemsInput = $_POST['items'] ?? [];
+
+        if ($shippingCompanyId <= 0) {
+            $_SESSION[$sessionErrorKey] = 'يرجى اختيار شركة الشحن.';
+            redirectAfterPost('shipping_orders', [], [], 'manager');
+            exit;
+        }
+
+        if ($customerId <= 0) {
+            $_SESSION[$sessionErrorKey] = 'يرجى اختيار العميل.';
+            redirectAfterPost('shipping_orders', [], [], 'manager');
+            exit;
+        }
+
+        if (!is_array($itemsInput) || empty($itemsInput)) {
+            $_SESSION[$sessionErrorKey] = 'يرجى إضافة منتجات إلى الطلب.';
+            redirectAfterPost('shipping_orders', [], [], 'manager');
+            exit;
+        }
+
+            $normalizedItems = [];
+            $totalAmount = 0.0;
+            $productIds = [];
+
+            error_log("shipping_orders: Processing create_shipping_order - itemsInput count: " . count($itemsInput));
+            foreach ($itemsInput as $index => $itemRow) {
+                error_log("shipping_orders: Processing itemsInput[$index]: " . json_encode($itemRow));
+                if (!is_array($itemRow)) {
+                    continue;
+                }
+
+                $productId = isset($itemRow['product_id']) ? (int)$itemRow['product_id'] : 0;
+                // قراءة الكمية بشكل صحيح - التأكد من أنها قيمة رقمية صحيحة
+                $rawQuantity = $itemRow['quantity'] ?? 0.0;
+                $quantity = (float)$rawQuantity;
+                error_log("shipping_orders: RAW quantity from form: " . var_export($rawQuantity, true) . " -> parsed: $quantity for product_id: $productId");
+                // التحقق من أن الكمية قيمة صحيحة وموجبة
+                if ($quantity <= 0 || $quantity > 100000) {
+                    error_log("shipping_orders: Invalid quantity detected: " . var_export($itemRow['quantity'], true) . " for product_id: " . $productId);
+                    continue;
+                }
+                $unitPrice = isset($itemRow['unit_price']) ? (float)$itemRow['unit_price'] : 0.0;
+                // إصلاح: استخدام !empty() لضمان أن batch_id يكون null إذا كان فارغ أو 0 أو غير موجود
+                $batchId = !empty($itemRow['batch_id']) && (int)$itemRow['batch_id'] > 0 ? (int)$itemRow['batch_id'] : null;
+                $productType = isset($itemRow['product_type']) ? trim($itemRow['product_type']) : '';
+
+                if ($productId <= 0 || $unitPrice < 0) {
+                    continue;
+                }
+
+                // للمنتجات من المصنع، استخدم product_id الأصلي (طرح 1000000)
+                $originalProductId = $productId;
+                if ($productId > 1000000 && $productType === 'factory') {
+                    $originalProductId = $productId - 1000000;
+                }
+
+                $productIds[] = $originalProductId;
+                $lineTotal = round($quantity * $unitPrice, 2);
+                $totalAmount += $lineTotal;
+
+                $normalizedItems[] = [
+                    'product_id' => $originalProductId,
+                    'quantity' => $quantity,
+                    'unit_price' => $unitPrice,
+                    'total_price' => $lineTotal,
+                    'batch_id' => $batchId,
+                    'product_type' => $productType,
+                ];
+            }
+
+        if (empty($normalizedItems)) {
+            $_SESSION[$sessionErrorKey] = 'يرجى التأكد من إدخال بيانات صحيحة للمنتجات.';
+            redirectAfterPost('shipping_orders', [], [], 'manager');
+            exit;
+        }
+
+        // تجميع العناصر المكررة لمنع الخصم المتكرر
+        // إذا كان نفس المنتج مع نفس batch_id موجود أكثر من مرة، نجمع الكميات
+        error_log("shipping_orders: BEFORE grouping - normalizedItems count: " . count($normalizedItems) . ", items: " . json_encode($normalizedItems));
+        $groupedItems = [];
+        foreach ($normalizedItems as $index => $item) {
+            $batchIdForKey = $item['batch_id'] ?? null;
+            $key = $item['product_id'] . '_' . ($batchIdForKey ?? 'null') . '_' . $item['product_type'];
+            error_log("shipping_orders: Grouping item[$index]: key='$key', product_id={$item['product_id']}, batch_id=" . ($batchIdForKey ?? 'NULL') . ", quantity={$item['quantity']}, product_type={$item['product_type']}");
+            
+            if (!isset($groupedItems[$key])) {
+                $groupedItems[$key] = $item;
+                error_log("shipping_orders: NEW grouped item with key '$key', quantity: {$item['quantity']}");
+            } else {
+                // جمع الكميات للعناصر المكررة
+                $oldQuantity = $groupedItems[$key]['quantity'];
+                $newQuantity = $item['quantity'];
+                $groupedItems[$key]['quantity'] = $oldQuantity + $newQuantity;
+                error_log("shipping_orders: MERGED grouped item with key '$key': old_quantity=$oldQuantity, new_quantity=$newQuantity, total_quantity={$groupedItems[$key]['quantity']}");
+                // استخدام أعلى سعر وحدة عند التجميع
+                if ($item['unit_price'] > $groupedItems[$key]['unit_price']) {
+                    $groupedItems[$key]['unit_price'] = $item['unit_price'];
+                }
+                // إعادة حساب السعر الإجمالي بناءً على الكمية المجمعة والسعر
+                $groupedItems[$key]['total_price'] = round($groupedItems[$key]['quantity'] * $groupedItems[$key]['unit_price'], 2);
+            }
+        }
+        
+        // إعادة حساب المبلغ الإجمالي بناءً على العناصر المجمعة
+        $totalAmount = 0.0;
+        foreach ($groupedItems as $key => $item) {
+            $totalAmount += $item['total_price'];
+            error_log("shipping_orders: Final grouped item '$key': quantity={$item['quantity']}, total_price={$item['total_price']}");
+        }
+        
+        // تحويل المصفوفة المجمعة إلى مصفوفة عادية
+        $normalizedItems = array_values($groupedItems);
+        error_log("shipping_orders: AFTER grouping - items count: " . count($normalizedItems) . ", normalizedItems: " . json_encode($normalizedItems));
+        $totalAmount = round($totalAmount, 2);
+
+        $transactionStarted = false;
+
+        try {
+            $db->beginTransaction();
+            $transactionStarted = true;
+
+            $shippingCompany = $db->queryOne(
+                "SELECT id, status, balance FROM shipping_companies WHERE id = ? FOR UPDATE",
+                [$shippingCompanyId]
+            );
+
+            if (!$shippingCompany || ($shippingCompany['status'] ?? '') !== 'active') {
+                throw new InvalidArgumentException('شركة الشحن المحددة غير متاحة أو غير نشطة.');
+            }
+
+            // البحث عن العميل في جدول local_customers (العملاء المحليين)
+            $localCustomersTableExists = $db->queryOne("SHOW TABLES LIKE 'local_customers'");
+            if (empty($localCustomersTableExists)) {
+                throw new InvalidArgumentException('جدول العملاء المحليين غير متوفر في النظام.');
+            }
+
+            $customer = $db->queryOne(
+                "SELECT id, balance, status FROM local_customers WHERE id = ? FOR UPDATE",
+                [$customerId]
+            );
+
+            if (!$customer) {
+                error_log('Shipping order: Customer not found - customer_id: ' . $customerId);
+                throw new InvalidArgumentException('تعذر العثور على العميل المحدد. يرجى التحقق من اختيار العميل.');
+            }
+
+            if (($customer['status'] ?? '') !== 'active') {
+                error_log('Shipping order: Customer is not active - customer_id: ' . $customerId . ', status: ' . ($customer['status'] ?? 'unknown'));
+                throw new InvalidArgumentException('العميل المحدد غير نشط. يرجى اختيار عميل نشط.');
+            }
+
+            // التحقق من الكميات المتاحة
+            foreach ($normalizedItems as $normalizedItem) {
+                $productId = $normalizedItem['product_id'];
+                $requestedQuantity = $normalizedItem['quantity'];
+                $productType = $normalizedItem['product_type'] ?? '';
+                $batchId = $normalizedItem['batch_id'] ?? null;
+
+                if ($productType === 'factory' && $batchId) {
+                    // للمنتجات من المصنع، التحقق من الكمية المتاحة في finished_products والمخزن الرئيسي
+                    $fp = $db->queryOne("
+                        SELECT 
+                            fp.id,
+                            fp.quantity_produced,
+                            fp.batch_number,
+                            COALESCE(fp.product_id, bn.product_id) AS product_id,
+                            COALESCE(NULLIF(TRIM(fp.product_name), ''), pr.name, 'غير محدد') AS product_name
+                        FROM finished_products fp
+                        LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
+                        LEFT JOIN products pr ON COALESCE(fp.product_id, bn.product_id) = pr.id
+                        WHERE fp.id = ?
+                    ", [$batchId]);
+
+                    if (!$fp) {
+                        throw new InvalidArgumentException('تعذر العثور على منتج من عناصر الطلب.');
+                    }
+
+                    $quantityProduced = (float)($fp['quantity_produced'] ?? 0);
+                    $actualProductId = (int)($fp['product_id'] ?? 0);
+                    
+                    // للمنتجات التي لها رقم تشغيلة: استخدام quantity_produced مباشرة
+                    // وعدم استخدام products.quantity لأنها قد تكون لجميع أرقام التشغيلة مجتمعة
+                    $quantity = $quantityProduced;
+                    
+                    // حساب الكميات المحجوزة والمباعة (يُطبق فقط على quantity_produced للمنتجات التي لها رقم تشغيلة)
+                    $soldQty = 0;
+                    $pendingQty = 0;
+                    $pendingShippingQty = 0;
+                    
+                    if (!empty($fp['batch_number'])) {
+                        try {
+                            // حساب الكمية المباعة (مثل company_products.php)
+                            $sold = $db->queryOne("
+                                SELECT COALESCE(SUM(ii.quantity), 0) AS sold_quantity
+                                FROM invoice_items ii
+                                INNER JOIN invoices i ON ii.invoice_id = i.id
+                                INNER JOIN sales_batch_numbers sbn ON ii.id = sbn.invoice_item_id
+                                INNER JOIN batch_numbers bn ON sbn.batch_number_id = bn.id
+                                WHERE bn.batch_number = ?
+                            ", [$fp['batch_number']]);
+                            $soldQty = (float)($sold['sold_quantity'] ?? 0);
+                            
+                            // حساب الكمية المحجوزة في طلبات العملاء المعلقة
+                            // ملاحظة: customer_order_items لا يحتوي على batch_number مباشرة
+                            // لذلك نستخدم finished_products للربط مع batch_number بناءً على product_id و batch_number
+                            $pending = $db->queryOne("
+                                SELECT COALESCE(SUM(oi.quantity), 0) AS pending_quantity
+                                FROM customer_order_items oi
+                                INNER JOIN customer_orders co ON oi.order_id = co.id
+                                INNER JOIN finished_products fp2 ON fp2.product_id = oi.product_id AND fp2.batch_number = ?
+                                WHERE co.status = 'pending'
+                            ", [$fp['batch_number']]);
+                            $pendingQty = (float)($pending['pending_quantity'] ?? 0);
+                            
+                            // حساب الكمية المحجوزة في طلبات الشحن المعلقة (in_transit)
+                            $pendingShipping = $db->queryOne("
+                                SELECT COALESCE(SUM(soi.quantity), 0) AS pending_quantity
+                                FROM shipping_company_order_items soi
+                                INNER JOIN shipping_company_orders sco ON soi.order_id = sco.id
+                                WHERE sco.status = 'in_transit'
+                                  AND soi.batch_id = ?
+                            ", [$batchId]);
+                            $pendingShippingQty = (float)($pendingShipping['pending_quantity'] ?? 0);
+                        } catch (Throwable $calcError) {
+                            error_log('shipping_orders: error calculating available quantity: ' . $calcError->getMessage());
+                        }
+                    }
+                    
+                    // حساب الكمية المتاحة
+                    // ملاحظة: quantity_produced يتم تحديثه تلقائياً عند المبيعات وطلبات الشحن
+                    // لذلك نحتاج فقط خصم طلبات العملاء المعلقة (pendingQty)
+                    $availableQuantity = max(0, $quantity - $pendingQty);
+                    
+                    if ($availableQuantity < $requestedQuantity) {
+                        throw new InvalidArgumentException('الكمية المتاحة للمنتج ' . ($fp['product_name'] ?? '') . ' غير كافية.');
+                    }
+                } else {
+                    // للمنتجات الخارجية، التحقق من جدول products
+                    $productRow = $db->queryOne(
+                        "SELECT id, name, quantity FROM products WHERE id = ? FOR UPDATE",
+                        [$productId]
+                    );
+
+                    if (!$productRow) {
+                        throw new InvalidArgumentException('تعذر العثور على منتج من عناصر الطلب.');
+                    }
+
+                    $availableQuantity = (float)($productRow['quantity'] ?? 0);
+                    if ($availableQuantity < $requestedQuantity) {
+                        throw new InvalidArgumentException('الكمية المتاحة للمنتج ' . ($productRow['name'] ?? '') . ' غير كافية.');
+                    }
+                }
+            }
+
+            // ===== إعداد عناصر الفاتورة مع اسم المنتج الصحيح =====
+            $invoiceItems = [];
+            foreach ($normalizedItems as $normalizedItem) {
+                $productId = $normalizedItem['product_id'];
+                $productType = $normalizedItem['product_type'] ?? '';
+                $batchId = $normalizedItem['batch_id'] ?? null;
+                $correctProductId = $productId;
+                
+                $productName = '';
+                $batchNumberForDisplay = '';
+                
+                if ($productType === 'factory' && $batchId) {
+                    // ===== منتج مصنع - جلب جميع البيانات من finished_products =====
+                    $fpData = $db->queryOne("
+                        SELECT 
+                            fp.id as finished_product_id,
+                            fp.product_name as fp_product_name,
+                            fp.batch_number as fp_batch_number,
+                            fp.product_id as fp_product_id,
+                            bn.id as batch_number_id,
+                            bn.batch_number as bn_batch_number,
+                            bn.product_id as bn_product_id,
+                            pr1.name as pr1_name,
+                            pr2.name as pr2_name
+                        FROM finished_products fp
+                        LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
+                        LEFT JOIN products pr1 ON fp.product_id = pr1.id
+                        LEFT JOIN products pr2 ON bn.product_id = pr2.id
+                        WHERE fp.id = ?
+                        LIMIT 1
+                    ", [$batchId]);
+                    
+                    if ($fpData) {
+                        // 1. جلب batch_number
+                        if (!empty($fpData['fp_batch_number'])) {
+                            $batchNumberForDisplay = trim($fpData['fp_batch_number']);
+                        } elseif (!empty($fpData['bn_batch_number'])) {
+                            $batchNumberForDisplay = trim($fpData['bn_batch_number']);
+                        }
+                        
+                        // 2. تحديد product_id الصحيح
+                        if (!empty($fpData['fp_product_id']) && $fpData['fp_product_id'] > 0) {
+                            $correctProductId = (int)$fpData['fp_product_id'];
+                        } elseif (!empty($fpData['bn_product_id']) && $fpData['bn_product_id'] > 0) {
+                            $correctProductId = (int)$fpData['bn_product_id'];
+                        }
+                        
+                        // 3. تحديد اسم المنتج - الأولوية لأسماء products
+                        $candidateNames = [];
+                        
+                        // اسم من products المرتبط بـ fp.product_id
+                        if (!empty($fpData['pr1_name']) && trim($fpData['pr1_name']) !== '' 
+                            && strpos($fpData['pr1_name'], 'منتج رقم') !== 0) {
+                            $candidateNames[] = trim($fpData['pr1_name']);
+                        }
+                        
+                        // اسم من products المرتبط بـ bn.product_id
+                        if (!empty($fpData['pr2_name']) && trim($fpData['pr2_name']) !== '' 
+                            && strpos($fpData['pr2_name'], 'منتج رقم') !== 0) {
+                            $candidateNames[] = trim($fpData['pr2_name']);
+                        }
+                        
+                        // اسم من finished_products
+                        if (!empty($fpData['fp_product_name']) && trim($fpData['fp_product_name']) !== '' 
+                            && strpos($fpData['fp_product_name'], 'منتج رقم') !== 0) {
+                            $candidateNames[] = trim($fpData['fp_product_name']);
+                        }
+                        
+                        // اختيار أول اسم صالح
+                        if (!empty($candidateNames)) {
+                            $productName = $candidateNames[0];
+                        } else {
+                            $productName = 'منتج رقم ' . $correctProductId;
+                        }
+                        
+                        // إضافة رقم التشغيلة إلى اسم المنتج للعرض
+                        if (!empty($batchNumberForDisplay)) {
+                            $productName .= ' (' . $batchNumberForDisplay . ')';
+                        }
+                        
+                        error_log("shipping_orders: Invoice item - product_name: $productName, batch_number: $batchNumberForDisplay, correct_product_id: $correctProductId");
+                    } else {
+                        // لم يُعثر على finished_product
+                        $product = $db->queryOne("SELECT name FROM products WHERE id = ?", [$productId]);
+                        $productName = $product['name'] ?? 'غير محدد';
+                    }
+                } else {
+                    // ===== منتج خارجي =====
+                    $productRow = $db->queryOne("SELECT name FROM products WHERE id = ?", [$productId]);
+                    $productName = $productRow['name'] ?? 'غير محدد';
+                }
+                
+                $invoiceItems[] = [
+                    'product_id' => $correctProductId, // استخدام product_id الصحيح
+                    'description' => $productName,
+                    'quantity' => $normalizedItem['quantity'],
+                    'unit_price' => $normalizedItem['unit_price'],
+                ];
+            }
+
+            // التحقق من وجود العميل في جدول customers قبل إنشاء الفاتورة
+            // لأن جدول invoices يحتوي على foreign key constraint يشير إلى customers
+            $customerInCustomersTable = $db->queryOne(
+                "SELECT id FROM customers WHERE id = ?",
+                [$customerId]
+            );
+            
+            if (!$customerInCustomersTable) {
+                // جلب بيانات العميل من local_customers
+                $localCustomerData = $db->queryOne(
+                    "SELECT name, phone, address, balance, created_by FROM local_customers WHERE id = ?",
+                    [$customerId]
+                );
+                
+                if ($localCustomerData) {
+                    // التحقق من وجود عمود rep_id في جدول customers
+                    $hasRepIdColumn = !empty($db->queryOne("SHOW COLUMNS FROM customers LIKE 'rep_id'"));
+                    
+                    // إنشاء سجل في جدول customers
+                    if ($hasRepIdColumn) {
+                        $db->execute(
+                            "INSERT INTO customers (id, name, phone, address, balance, status, rep_id, created_by, created_at) 
+                             VALUES (?, ?, ?, ?, ?, 'active', NULL, ?, NOW())",
+                            [
+                                $customerId,
+                                $localCustomerData['name'] ?? '',
+                                $localCustomerData['phone'] ?? null,
+                                $localCustomerData['address'] ?? null,
+                                $localCustomerData['balance'] ?? 0,
+                                $localCustomerData['created_by'] ?? $currentUser['id'] ?? null,
+                            ]
+                        );
+                    } else {
+                        $db->execute(
+                            "INSERT INTO customers (id, name, phone, address, balance, status, created_by, created_at) 
+                             VALUES (?, ?, ?, ?, ?, 'active', ?, NOW())",
+                            [
+                                $customerId,
+                                $localCustomerData['name'] ?? '',
+                                $localCustomerData['phone'] ?? null,
+                                $localCustomerData['address'] ?? null,
+                                $localCustomerData['balance'] ?? 0,
+                                $localCustomerData['created_by'] ?? $currentUser['id'] ?? null,
+                            ]
+                        );
+                    }
+                } else {
+                    throw new InvalidArgumentException('تعذر العثور على بيانات العميل.');
+                }
+            }
+
+            $invoiceResult = createInvoice(
+                $customerId,
+                null,
+                date('Y-m-d'),
+                $invoiceItems,
+                0,
+                0,
+                $notes,
+                $currentUser['id'] ?? null
+            );
+
+            if (empty($invoiceResult['success'])) {
+                throw new RuntimeException($invoiceResult['message'] ?? 'تعذر إنشاء الفاتورة الخاصة بالطلب.');
+            }
+
+            $invoiceId = (int)$invoiceResult['invoice_id'];
+            $invoiceNumber = $invoiceResult['invoice_number'] ?? '';
+
+            // التحقق من عدم تحديث فواتير نقطة البيع
+            $hasCreatedFromPosColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'created_from_pos'"));
+            if ($hasCreatedFromPosColumn) {
+                $invoiceCheck = $db->queryOne("SELECT created_from_pos FROM invoices WHERE id = ?", [$invoiceId]);
+                if (empty($invoiceCheck) || empty($invoiceCheck['created_from_pos'])) {
+                    // ليست فاتورة من نقطة البيع، يمكن تحديثها
+                    $db->execute(
+                        "UPDATE invoices SET paid_amount = 0, remaining_amount = ?, status = 'sent', updated_at = NOW() WHERE id = ?",
+                        [$totalAmount, $invoiceId]
+                    );
+                }
+            } else {
+                // العمود غير موجود، يمكن التحديث (للتوافق مع الإصدارات القديمة)
+                $db->execute(
+                    "UPDATE invoices SET paid_amount = 0, remaining_amount = ?, status = 'sent', updated_at = NOW() WHERE id = ?",
+                    [$totalAmount, $invoiceId]
+                );
+            }
+
+            // ربط أرقام التشغيلة بعناصر الفاتورة - مطابقة محسّنة لضمان الدقة
+            $invoiceItemsFromDb = $db->query(
+                "SELECT id, product_id, quantity, unit_price FROM invoice_items WHERE invoice_id = ? ORDER BY id",
+                [$invoiceId]
+            );
+            
+            // إنشاء خريطة محسّنة للمطابقة بين invoice_items و normalizedItems
+            // المطابقة بناءً على product_id و quantity و unit_price لضمان الدقة
+            $invoiceItemsMap = [];
+            foreach ($invoiceItemsFromDb as $invItem) {
+                $productId = (int)$invItem['product_id'];
+                $quantity = (float)$invItem['quantity'];
+                $unitPrice = (float)$invItem['unit_price'];
+                $key = "{$productId}_{$quantity}_{$unitPrice}";
+                
+                if (!isset($invoiceItemsMap[$key])) {
+                    $invoiceItemsMap[$key] = [];
+                }
+                $invoiceItemsMap[$key][] = (int)$invItem['id'];
+            }
+            
+            // ربط أرقام التشغيلة بعناصر الفاتورة
+            foreach ($normalizedItems as $normalizedItem) {
+                $productId = (int)$normalizedItem['product_id'];
+                $batchId = $normalizedItem['batch_id'] ?? null;
+                $productType = $normalizedItem['product_type'] ?? '';
+                $quantity = (float)$normalizedItem['quantity'];
+                $unitPrice = (float)$normalizedItem['unit_price'];
+                
+                // البحث عن invoice_item_id المطابق بناءً على product_id و quantity و unit_price
+                $matchKey = "{$productId}_{$quantity}_{$unitPrice}";
+                $invoiceItemId = null;
+                
+                if (isset($invoiceItemsMap[$matchKey]) && !empty($invoiceItemsMap[$matchKey])) {
+                    // استخدام أول invoice_item_id متطابق
+                    $invoiceItemId = array_shift($invoiceItemsMap[$matchKey]);
+                    if (empty($invoiceItemsMap[$matchKey])) {
+                        unset($invoiceItemsMap[$matchKey]);
+                    }
+                } else {
+                    // إذا لم نجد مطابقة دقيقة، نبحث عن أي invoice_item بنفس product_id
+                    // (للتعامل مع حالات التقريب في الأسعار)
+                    foreach ($invoiceItemsMap as $key => $items) {
+                        $parts = explode('_', $key);
+                        if (count($parts) >= 3 && (int)$parts[0] === $productId) {
+                            // مطابقة product_id فقط
+                            if (!empty($items)) {
+                                $invoiceItemId = array_shift($items);
+                                if (empty($items)) {
+                                    unset($invoiceItemsMap[$key]);
+                                } else {
+                                    $invoiceItemsMap[$key] = $items;
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                if ($invoiceItemId) {
+                    // البحث عن batch_number_id من جدول batch_numbers
+                    $batchNumberId = null;
+                    if ($productType === 'factory' && $batchId) {
+                        // جلب batch_number من finished_products
+                        $fp = $db->queryOne("
+                            SELECT fp.batch_number, fp.batch_id, fp.product_id, fp.product_name
+                            FROM finished_products fp
+                            WHERE fp.id = ?
+                            LIMIT 1
+                        ", [$batchId]);
+                        
+                        if ($fp) {
+                            // محاولة جلب batch_number من finished_products.batch_number مباشرة
+                            $batchNumber = null;
+                            if (!empty($fp['batch_number'])) {
+                                $batchNumber = trim($fp['batch_number']);
+                            } elseif (!empty($fp['batch_id'])) {
+                                // إذا لم يكن batch_number موجوداً، نحاول جلب batch_number من batch_numbers باستخدام batch_id
+                                $batchFromTable = $db->queryOne(
+                                    "SELECT batch_number FROM batch_numbers WHERE id = ?",
+                                    [(int)$fp['batch_id']]
+                                );
+                                if ($batchFromTable && !empty($batchFromTable['batch_number'])) {
+                                    $batchNumber = trim($batchFromTable['batch_number']);
+                                }
+                            }
+                            
+                            if ($batchNumber) {
+                                // البحث عن batch_number_id من جدول batch_numbers
+                                $batchCheck = $db->queryOne(
+                                    "SELECT id FROM batch_numbers WHERE batch_number = ?",
+                                    [$batchNumber]
+                                );
+                                if ($batchCheck) {
+                                    $batchNumberId = (int)$batchCheck['id'];
+                                } else {
+                                    error_log("shipping_orders: WARNING - batch_number '$batchNumber' not found in batch_numbers table for batch_id=$batchId");
+                                }
+                            } else {
+                                error_log("shipping_orders: WARNING - batch_number is empty for finished_products.id = $batchId");
+                            }
+                        } else {
+                            error_log("shipping_orders: ERROR - finished_products not found with id = $batchId");
+                        }
+                    }
+                    
+                    // ربط رقم التشغيلة بعنصر الفاتورة إذا وُجد
+                    if ($batchNumberId) {
+                        try {
+                            // التحقق من وجود سجل مسبقاً لتجنب التكرار
+                            $existingBatchLink = $db->queryOne(
+                                "SELECT id, quantity FROM sales_batch_numbers WHERE invoice_item_id = ? AND batch_number_id = ?",
+                                [$invoiceItemId, $batchNumberId]
+                            );
+                            
+                            if ($existingBatchLink) {
+                                // إذا كان السجل موجوداً، نحدّث الكمية فقط إذا كانت مختلفة
+                                if (abs((float)($existingBatchLink['quantity'] ?? 0) - $quantity) > 0.001) {
+                                    $db->execute(
+                                        "UPDATE sales_batch_numbers SET quantity = ? WHERE id = ?",
+                                        [$quantity, $existingBatchLink['id']]
+                                    );
+                                    error_log("shipping_orders: Updated existing batch link - invoice_item_id=$invoiceItemId, batch_number_id=$batchNumberId, quantity=$quantity");
+                                }
+                            } else {
+                                // إدراج سجل جديد
+                                $db->execute(
+                                    "INSERT INTO sales_batch_numbers (invoice_item_id, batch_number_id, quantity) 
+                                     VALUES (?, ?, ?)",
+                                    [$invoiceItemId, $batchNumberId, $quantity]
+                                );
+                                error_log("shipping_orders: Successfully linked batch - invoice_item_id=$invoiceItemId, batch_number_id=$batchNumberId, batch_number=$batchNumber, quantity=$quantity, product_id=$productId, batch_id=$batchId");
+                            }
+                        } catch (Throwable $batchError) {
+                            error_log('shipping_orders: Error linking batch number to invoice item: ' . $batchError->getMessage());
+                        }
+                    } else {
+                        error_log("shipping_orders: WARNING - batchNumberId is null for product_id: $productId, batchId: $batchId, productType: $productType");
+                    }
+                } else {
+                    error_log("shipping_orders: WARNING - Could not find matching invoice_item for normalized item - product_id=$productId, quantity=$quantity, unit_price=$unitPrice, batch_id=$batchId");
+                }
+            }
+
+            $orderNumber = generateShippingOrderNumber($db);
+
+            $db->execute(
+                "INSERT INTO shipping_company_orders (order_number, shipping_company_id, customer_id, invoice_id, total_amount, status, handed_over_at, notes, created_by) VALUES (?, ?, ?, ?, ?, 'in_transit', NOW(), ?, ?)",
+                [
+                    $orderNumber,
+                    $shippingCompanyId,
+                    $customerId,
+                    $invoiceId,
+                    $totalAmount,
+                    $notes !== '' ? $notes : null,
+                    $currentUser['id'] ?? null,
+                ]
+            );
+
+            $orderId = (int)$db->getLastInsertId();
+
+            // حفظ عناصر الطلب
+            foreach ($normalizedItems as $normalizedItem) {
+                $db->execute(
+                    "INSERT INTO shipping_company_order_items (order_id, product_id, batch_id, quantity, unit_price, total_price) VALUES (?, ?, ?, ?, ?, ?)",
+                    [
+                        $orderId,
+                        $normalizedItem['product_id'],
+                        $normalizedItem['batch_id'] ?? null,
+                        $normalizedItem['quantity'],
+                        $normalizedItem['unit_price'],
+                        $normalizedItem['total_price'],
+                    ]
+                );
+            }
+
+            // خصم الكميات من المخزون عند إنشاء الطلب
+            // ملاحظة: نستخدم recordInventoryMovement فقط لتجنب الخصم المزدوج
+            $movementNote = 'تسليم طلب شحن #' . $orderNumber . ' لشركة الشحن';
+            foreach ($normalizedItems as $normalizedItem) {
+                $productId = $normalizedItem['product_id'];
+                $batchId = $normalizedItem['batch_id'] ?? null;
+                $productType = $normalizedItem['product_type'] ?? '';
+                $quantity = (float)$normalizedItem['quantity'];
+
+                // للمنتجات التي لها رقم تشغيلة: قراءة products.quantity قبل recordInventoryMovement
+                $productsQuantityBeforeMovement = null;
+                $actualProductIdForTracking = null;
+                if ($productType === 'factory' && $batchId) {
+                    try {
+                        // جلب product_id الصحيح من finished_products
+                        $fpDataForTracking = $db->queryOne("
+                            SELECT 
+                                fp.product_id,
+                                bn.product_id AS batch_product_id,
+                                COALESCE(fp.product_id, bn.product_id) AS actual_product_id
+                            FROM finished_products fp
+                            LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
+                            WHERE fp.id = ?
+                        ", [$batchId]);
+                        
+                        if ($fpDataForTracking) {
+                            $actualProductIdForTracking = (int)($fpDataForTracking['actual_product_id'] ?? $productId);
+                            $productBeforeMovement = $db->queryOne(
+                                "SELECT quantity FROM products WHERE id = ?",
+                                [$actualProductIdForTracking]
+                            );
+                            if ($productBeforeMovement) {
+                                $productsQuantityBeforeMovement = (float)($productBeforeMovement['quantity'] ?? 0);
+                                error_log(sprintf(
+                                    "shipping_orders: BEFORE recordInventoryMovement - Order: %s, Product ID: %d, Batch ID: %d, products.quantity: %.2f",
+                                    $orderNumber,
+                                    $actualProductIdForTracking,
+                                    $batchId,
+                                    $productsQuantityBeforeMovement
+                                ));
+                            }
+                        }
+                    } catch (Throwable $trackingError) {
+                        error_log(sprintf(
+                            "shipping_orders: ERROR reading products.quantity before recordInventoryMovement - Order: %s, Error: %s",
+                            $orderNumber,
+                            $trackingError->getMessage()
+                        ));
+                    }
+                }
+
+                // تسجيل حركة المخزون (تقوم الدالة بالخصم تلقائياً)
+                recordInventoryMovement(
+                    $productId,
+                    $mainWarehouse['id'] ?? null,
+                    'out',
+                    $quantity,
+                    'shipping_order',
+                    $orderId,
+                    $movementNote,
+                    $currentUser['id'] ?? null,
+                    ($productType === 'factory' && $batchId) ? $batchId : null
+                );
+
+                // للمنتجات التي لها رقم تشغيلة: قراءة products.quantity بعد recordInventoryMovement
+                if ($productType === 'factory' && $batchId && $actualProductIdForTracking) {
+                    try {
+                        $productAfterMovement = $db->queryOne(
+                            "SELECT quantity FROM products WHERE id = ?",
+                            [$actualProductIdForTracking]
+                        );
+                        if ($productAfterMovement) {
+                            $productsQuantityAfterMovement = (float)($productAfterMovement['quantity'] ?? 0);
+                            $difference = $productsQuantityBeforeMovement !== null 
+                                ? ($productsQuantityAfterMovement - $productsQuantityBeforeMovement) 
+                                : null;
+                            error_log(sprintf(
+                                "shipping_orders: AFTER recordInventoryMovement - Order: %s, Product ID: %d, Batch ID: %d, products.quantity: %.2f, Difference: %s",
+                                $orderNumber,
+                                $actualProductIdForTracking,
+                                $batchId,
+                                $productsQuantityAfterMovement,
+                                $difference !== null ? sprintf("%.2f", $difference) : 'N/A'
+                            ));
+                        }
+                    } catch (Throwable $trackingError) {
+                        error_log(sprintf(
+                            "shipping_orders: ERROR reading products.quantity after recordInventoryMovement - Order: %s, Error: %s",
+                            $orderNumber,
+                            $trackingError->getMessage()
+                        ));
+                    }
+                }
+
+                // للمنتجات التي لها رقم تشغيلة: إضافة الكمية إلى products.quantity
+                if ($productType === 'factory' && $batchId) {
+                    try {
+                        // جلب product_id الصحيح من finished_products (لأن batch_id هو finished_products.id وليس products.id)
+                        $fpData = $db->queryOne("
+                            SELECT 
+                                fp.product_id,
+                                bn.product_id AS batch_product_id,
+                                COALESCE(fp.product_id, bn.product_id) AS actual_product_id
+                            FROM finished_products fp
+                            LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
+                            WHERE fp.id = ?
+                        ", [$batchId]);
+                        
+                        if (!$fpData) {
+                            error_log(sprintf(
+                                "shipping_orders: WARNING - finished_products not found for batch_id: %d, Order: %s",
+                                $batchId,
+                                $orderNumber
+                            ));
+                            continue;
+                        }
+                        
+                        // استخدام product_id الصحيح من finished_products أو batch_numbers
+                        $actualProductId = (int)($fpData['actual_product_id'] ?? $productId);
+                        
+                        // جلب الكمية الحالية من products قبل الإضافة
+                        $currentProduct = $db->queryOne(
+                            "SELECT quantity FROM products WHERE id = ?",
+                            [$actualProductId]
+                        );
+                        
+                        if (!$currentProduct) {
+                            error_log(sprintf(
+                                "shipping_orders: WARNING - products not found for product_id: %d (from batch_id: %d), Order: %s",
+                                $actualProductId,
+                                $batchId,
+                                $orderNumber
+                            ));
+                            continue;
+                        }
+                        
+                        $currentQuantity = (float)($currentProduct['quantity'] ?? 0);
+                        
+                        error_log(sprintf(
+                            "shipping_orders: BEFORE adding quantity - Order: %s, Product ID: %d, Batch ID: %d, products.quantity: %.2f, Quantity to add: %.2f",
+                            $orderNumber,
+                            $actualProductId,
+                            $batchId,
+                            $currentQuantity,
+                            $quantity
+                        ));
+                        
+                        // إضافة الكمية المدخلة إلى products.quantity
+                        $newQuantity = $currentQuantity + $quantity;
+                        $db->execute(
+                            "UPDATE products SET quantity = ? WHERE id = ?",
+                            [$newQuantity, $actualProductId]
+                        );
+                        
+                        // قراءة الكمية بعد الإضافة للتحقق
+                        $productAfterAdd = $db->queryOne(
+                            "SELECT quantity FROM products WHERE id = ?",
+                            [$actualProductId]
+                        );
+                        $verifiedQuantity = $productAfterAdd ? (float)($productAfterAdd['quantity'] ?? 0) : $newQuantity;
+                        
+                        // تسجيل العملية في سجل الأخطاء
+                        error_log(sprintf(
+                            "shipping_orders: AFTER adding quantity - Order: %s, Finished Product ID (batch_id): %d, Actual Product ID: %d, Quantity Added: %.2f, Previous Quantity: %.2f, Calculated New Quantity: %.2f, Verified Quantity: %.2f",
+                            $orderNumber,
+                            $batchId,
+                            $actualProductId,
+                            $quantity,
+                            $currentQuantity,
+                            $newQuantity,
+                            $verifiedQuantity
+                        ));
+                    } catch (Throwable $addQuantityError) {
+                        // في حالة حدوث خطأ، نسجله فقط ولا نوقف العملية
+                        error_log(sprintf(
+                            "shipping_orders: ERROR adding quantity to products.quantity for product with batch_id - Order: %s, Batch ID: %d, Product ID: %d, Quantity: %.2f, Error: %s",
+                            $orderNumber,
+                            $batchId,
+                            $productId,
+                            $quantity,
+                            $addQuantityError->getMessage()
+                        ));
+                    }
+                }
+            }
+
+            $db->execute(
+                "UPDATE shipping_companies SET balance = balance + ?, updated_by = ?, updated_at = NOW() WHERE id = ?",
+                [$totalAmount, $currentUser['id'] ?? null, $shippingCompanyId]
+            );
+
+            logAudit(
+                $currentUser['id'] ?? null,
+                'create_shipping_order',
+                'shipping_order',
+                $orderId,
+                null,
+                [
+                    'order_number' => $orderNumber,
+                    'total_amount' => $totalAmount,
+                    'shipping_company_id' => $shippingCompanyId,
+                    'customer_id' => $customerId,
+                ]
+            );
+
+            $db->commit();
+            $transactionStarted = false;
+
+            $_SESSION[$sessionSuccessKey] = 'تم تسجيل طلب الشحن وتسليم المنتجات لشركة الشحن بنجاح.';
+        } catch (InvalidArgumentException $validationError) {
+            if ($transactionStarted) {
+                $db->rollback();
+            }
+            $_SESSION[$sessionErrorKey] = $validationError->getMessage();
+        } catch (Throwable $createError) {
+            if ($transactionStarted) {
+                $db->rollback();
+            }
+            error_log('shipping_orders: create order error -> ' . $createError->getMessage());
+            $_SESSION[$sessionErrorKey] = 'تعذر إنشاء طلب الشحن. يرجى المحاولة لاحقاً.';
+        }
+
+        redirectAfterPost('shipping_orders', [], [], 'manager');
+        exit;
+    }
+
+    if ($action === 'cancel_shipping_order') {
+        $orderId = isset($_POST['order_id']) ? (int)$_POST['order_id'] : 0;
+
+        if ($orderId <= 0) {
+            $_SESSION[$sessionErrorKey] = 'طلب غير صالح للإلغاء.';
+            redirectAfterPost('shipping_orders', [], [], 'manager');
+            exit;
+        }
+
+        $transactionStarted = false;
+
+        try {
+            $db->beginTransaction();
+            $transactionStarted = true;
+
+            $order = $db->queryOne(
+                "SELECT id, shipping_company_id, customer_id, total_amount, status, invoice_id FROM shipping_company_orders WHERE id = ? FOR UPDATE",
+                [$orderId]
+            );
+
+            if (!$order) {
+                throw new InvalidArgumentException('طلب الشحن المحدد غير موجود.');
+            }
+
+            if ($order['status'] === 'cancelled') {
+                throw new InvalidArgumentException('تم إلغاء هذا الطلب بالفعل.');
+            }
+
+            if ($order['status'] === 'delivered') {
+                throw new InvalidArgumentException('لا يمكن إلغاء طلب تم تسليمه بالفعل.');
+            }
+
+            $totalAmount = (float)($order['total_amount'] ?? 0.0);
+
+            // خصم المبلغ من ديون شركة الشحن
+            $db->execute(
+                "UPDATE shipping_companies SET balance = balance - ?, updated_by = ?, updated_at = NOW() WHERE id = ?",
+                [$totalAmount, $currentUser['id'] ?? null, $order['shipping_company_id']]
+            );
+
+            // إرجاع المنتجات إلى المخزن الرئيسي
+            // ملاحظة: نستخدم recordInventoryMovement فقط لتجنب الإرجاع المزدوج
+            $orderItems = $db->query(
+                "SELECT product_id, batch_id, quantity FROM shipping_company_order_items WHERE order_id = ?",
+                [$orderId]
+            );
+
+            $movementNote = 'إرجاع منتجات من طلب شحن ملغي #' . ($order['order_number'] ?? $orderId);
+            
+            foreach ($orderItems as $item) {
+                $productId = (int)($item['product_id'] ?? 0);
+                $batchId = isset($item['batch_id']) && $item['batch_id'] > 0 ? (int)$item['batch_id'] : null;
+                $quantity = (float)($item['quantity'] ?? 0);
+                
+                // للمنتجات التي لها رقم تشغيلة: جلب actual_product_id الصحيح
+                $actualProductId = $productId;
+                if ($batchId) {
+                    try {
+                        $fpData = $db->queryOne("
+                            SELECT 
+                                fp.id,
+                                fp.quantity_produced,
+                                fp.product_id,
+                                bn.product_id AS batch_product_id,
+                                COALESCE(fp.product_id, bn.product_id) AS actual_product_id
+                            FROM finished_products fp
+                            LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
+                            WHERE fp.id = ?
+                        ", [$batchId]);
+                        
+                        if ($fpData) {
+                            $actualProductId = (int)($fpData['actual_product_id'] ?? $productId);
+                        }
+                    } catch (Throwable $fpError) {
+                        error_log(sprintf(
+                            "shipping_orders: ERROR getting actual_product_id for batch_id (cancel) - Order: %s, Batch ID: %d, Error: %s",
+                            $order['order_number'] ?? $orderId,
+                            $batchId,
+                            $fpError->getMessage()
+                        ));
+                    }
+                }
+                
+                // تسجيل حركة المخزون (تقوم الدالة بالإرجاع تلقائياً)
+                // ملاحظة: للمنتجات التي لها batchId، recordInventoryMovement يحدث products.quantity فقط
+                // ولا يحدث finished_products.quantity_produced عند type = 'in'
+                recordInventoryMovement(
+                    $actualProductId,
+                    $mainWarehouse['id'] ?? null,
+                    'in',
+                    $quantity,
+                    'shipping_order_cancelled',
+                    $orderId,
+                    $movementNote,
+                    $currentUser['id'] ?? null,
+                    $batchId
+                );
+
+                // للمنتجات التي لها رقم تشغيلة: إرجاع الكمية إلى finished_products.quantity_produced
+                // (products.quantity تم تحديثه بالفعل بواسطة recordInventoryMovement)
+                if ($batchId) {
+                    try {
+                        // جلب بيانات finished_products (إذا لم نكن قد جلبناها بالفعل)
+                        if (!isset($fpData)) {
+                            $fpData = $db->queryOne("
+                                SELECT 
+                                    fp.id,
+                                    fp.quantity_produced,
+                                    fp.product_id,
+                                    bn.product_id AS batch_product_id,
+                                    COALESCE(fp.product_id, bn.product_id) AS actual_product_id
+                                FROM finished_products fp
+                                LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
+                                WHERE fp.id = ?
+                            ", [$batchId]);
+                        }
+                        
+                        if (!$fpData) {
+                            error_log(sprintf(
+                                "shipping_orders: WARNING - finished_products not found for batch_id: %d, Order: %s",
+                                $batchId,
+                                $order['order_number'] ?? $orderId
+                            ));
+                            continue;
+                        }
+                        
+                        $currentQuantityProduced = (float)($fpData['quantity_produced'] ?? 0);
+                        
+                        // إرجاع الكمية إلى finished_products.quantity_produced
+                        $newQuantityProduced = $currentQuantityProduced + $quantity;
+                        $db->execute(
+                            "UPDATE finished_products SET quantity_produced = ? WHERE id = ?",
+                            [$newQuantityProduced, $batchId]
+                        );
+                        
+                        error_log(sprintf(
+                            "shipping_orders: Updated finished_products.quantity_produced (cancel) - Order: %s, Batch ID: %d, Previous: %.2f, Added: %.2f, New: %.2f",
+                            $order['order_number'] ?? $orderId,
+                            $batchId,
+                            $currentQuantityProduced,
+                            $quantity,
+                            $newQuantityProduced
+                        ));
+                    } catch (Throwable $addQuantityError) {
+                        // في حالة حدوث خطأ، نسجله فقط ولا نوقف العملية
+                        error_log(sprintf(
+                            "shipping_orders: ERROR updating finished_products.quantity_produced for batch_id (cancel) - Order: %s, Batch ID: %d, Quantity: %.2f, Error: %s",
+                            $order['order_number'] ?? $orderId,
+                            $batchId,
+                            $quantity,
+                            $addQuantityError->getMessage()
+                        ));
+                    }
+                }
+            }
+
+            // تحديث حالة الطلب إلى ملغي
+            $db->execute(
+                "UPDATE shipping_company_orders SET status = 'cancelled', updated_by = ?, updated_at = NOW() WHERE id = ?",
+                [$currentUser['id'] ?? null, $orderId]
+            );
+
+            // إلغاء الفاتورة إذا كانت موجودة
+            if (!empty($order['invoice_id'])) {
+                // التحقق من عدم تحديث فواتير نقطة البيع
+                $hasCreatedFromPosColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'created_from_pos'"));
+                if ($hasCreatedFromPosColumn) {
+                    $invoiceCheck = $db->queryOne("SELECT created_from_pos FROM invoices WHERE id = ?", [$order['invoice_id']]);
+                    if (empty($invoiceCheck) || empty($invoiceCheck['created_from_pos'])) {
+                        // ليست فاتورة من نقطة البيع، يمكن تحديثها
+                        $db->execute(
+                            "UPDATE invoices SET status = 'cancelled', updated_at = NOW() WHERE id = ?",
+                            [$order['invoice_id']]
+                        );
+                    }
+                } else {
+                    // العمود غير موجود، يمكن التحديث (للتوافق مع الإصدارات القديمة)
+                    $db->execute(
+                        "UPDATE invoices SET status = 'cancelled', updated_at = NOW() WHERE id = ?",
+                        [$order['invoice_id']]
+                    );
+                }
+            }
+
+            logAudit(
+                $currentUser['id'] ?? null,
+                'cancel_shipping_order',
+                'shipping_order',
+                $orderId,
+                null,
+                [
+                    'total_amount' => $totalAmount,
+                    'shipping_company_id' => $order['shipping_company_id'],
+                ]
+            );
+
+            $db->commit();
+            $transactionStarted = false;
+
+            $_SESSION[$sessionSuccessKey] = 'تم إلغاء الطلب وإرجاع المنتجات إلى المخزن الرئيسي بنجاح.';
+        } catch (InvalidArgumentException $validationError) {
+            if ($transactionStarted) {
+                $db->rollback();
+            }
+            $_SESSION[$sessionErrorKey] = $validationError->getMessage();
+        } catch (Throwable $cancelError) {
+            if ($transactionStarted) {
+                $db->rollback();
+            }
+            error_log('shipping_orders: cancel order error -> ' . $cancelError->getMessage());
+            $_SESSION[$sessionErrorKey] = 'تعذر إلغاء الطلب. يرجى المحاولة لاحقاً.';
+        }
+
+        redirectAfterPost('shipping_orders', [], [], 'manager');
+        exit;
+    }
+
+    if ($action === 'complete_shipping_order') {
+        $orderId = isset($_POST['order_id']) ? (int)$_POST['order_id'] : 0;
+
+        if ($orderId <= 0) {
+            $_SESSION[$sessionErrorKey] = 'طلب غير صالح لإتمام التسليم.';
+            redirectAfterPost('shipping_orders', [], [], 'manager');
+            exit;
+        }
+
+        $transactionStarted = false;
+
+        try {
+            $db->beginTransaction();
+            $transactionStarted = true;
+
+            $order = $db->queryOne(
+                "SELECT id, order_number, shipping_company_id, customer_id, total_amount, status, invoice_id FROM shipping_company_orders WHERE id = ? FOR UPDATE",
+                [$orderId]
+            );
+
+            if (!$order) {
+                throw new InvalidArgumentException('طلب الشحن المحدد غير موجود.');
+            }
+
+            if ($order['status'] === 'delivered') {
+                throw new InvalidArgumentException('تم تسليم هذا الطلب بالفعل.');
+            }
+
+            if ($order['status'] === 'cancelled') {
+                throw new InvalidArgumentException('لا يمكن إتمام طلب ملغى.');
+            }
+
+            $shippingCompany = $db->queryOne(
+                "SELECT id, balance FROM shipping_companies WHERE id = ? FOR UPDATE",
+                [$order['shipping_company_id']]
+            );
+
+            if (!$shippingCompany) {
+                throw new InvalidArgumentException('شركة الشحن المرتبطة بالطلب غير موجودة.');
+            }
+
+            // البحث عن العميل في جدول local_customers أولاً (العملاء المحليين)
+            $customer = null;
+            $customerTable = null;
+            $localCustomersTableExists = $db->queryOne("SHOW TABLES LIKE 'local_customers'");
+            
+            if (!empty($localCustomersTableExists)) {
+                $customer = $db->queryOne(
+                    "SELECT id, name, phone, address, balance, status FROM local_customers WHERE id = ? FOR UPDATE",
+                    [$order['customer_id']]
+                );
+                if ($customer) {
+                    $customerTable = 'local_customers';
+                }
+            }
+
+            // إذا لم نجد العميل في local_customers، نبحث في customers (للطلبات القديمة)
+            if (!$customer) {
+                $customersTableExists = $db->queryOne("SHOW TABLES LIKE 'customers'");
+                if (!empty($customersTableExists)) {
+                    $customer = $db->queryOne(
+                        "SELECT id, name, phone, address, balance, status FROM customers WHERE id = ? FOR UPDATE",
+                        [$order['customer_id']]
+                    );
+                    if ($customer) {
+                        $customerTable = 'customers';
+                    }
+                }
+            }
+
+            if (!$customer || !$customerTable) {
+                error_log('Complete shipping order: Customer not found - customer_id: ' . ($order['customer_id'] ?? 'null') . ', order_id: ' . $orderId);
+                throw new InvalidArgumentException('تعذر العثور على العميل المرتبط بالطلب. قد يكون العميل قد تم حذفه.');
+            }
+
+            $totalAmount = (float)($order['total_amount'] ?? 0.0);
+            
+            // الحصول على المبلغ المحصل من العميل (إن وجد)
+            $collectedAmount = isset($_POST['collected_amount']) ? (float)$_POST['collected_amount'] : 0.0;
+            if ($collectedAmount < 0) {
+                $collectedAmount = 0.0;
+            }
+            if ($collectedAmount > $totalAmount) {
+                throw new InvalidArgumentException('المبلغ المحصل لا يمكن أن يكون أكبر من المبلغ الإجمالي للطلب.');
+            }
+
+            // الخطوة 1: خصم المبلغ الإجمالي من دين الشركة الحالي
+            // عند التسليم، يتم خصم المبلغ الإجمالي من دين الشركة لأن الطلب تم تسليمه للعميل
+            $db->execute(
+                "UPDATE shipping_companies SET balance = balance - ?, updated_by = ?, updated_at = NOW() WHERE id = ?",
+                [$totalAmount, $currentUser['id'] ?? null, $order['shipping_company_id']]
+            );
+
+            // الخطوة 2: إضافة المبلغ الإجمالي إلى ديون العميل
+            // الخطوة 3: خصم المبلغ الذي تم تحصيله من العميل كتحصيل
+            // المتبقي في ديون العميل = المبلغ الإجمالي - المبلغ الذي تم تحصيله
+            // الصيغة: الرصيد الجديد = الرصيد الحالي + المبلغ الإجمالي - المبلغ المحصل
+            $currentBalance = (float)($customer['balance'] ?? 0.0);
+            $newBalance = round($currentBalance + $totalAmount - $collectedAmount, 2);
+            
+            $db->execute(
+                "UPDATE {$customerTable} SET balance = ?, updated_at = NOW() WHERE id = ?",
+                [$newBalance, $order['customer_id']]
+            );
+            
+            // الخطوة 4: تسجيل عملية التحصيل في accountant_transactions إذا تم تحصيل مبلغ من العميل
+            // هذا يسجل المبلغ المحصل كتحصيل في خزنة الشركة
+            if ($collectedAmount > 0) {
+                $accountantTableCheck = $db->queryOne("SHOW TABLES LIKE 'accountant_transactions'");
+                if (!empty($accountantTableCheck)) {
+                    $customerName = $customer['name'] ?? 'غير محدد';
+                    $description = 'تحصيل من عميل: ' . $customerName . ' (طلب شحن #' . ($order['order_number'] ?? $orderId) . ')';
+                    $referenceNumber = 'COL-CUST-' . $order['customer_id'] . '-' . date('YmdHis');
+                    
+                    $db->execute(
+                        "INSERT INTO accountant_transactions 
+                            (transaction_type, amount, sales_rep_id, description, reference_number, 
+                             status, approved_by, created_by, approved_at)
+                         VALUES (?, ?, NULL, ?, ?, 'approved', ?, ?, NOW())",
+                        [
+                            'income',  // نوع المعاملة: إيراد (تحصيل من عميل وليس من مندوب)
+                            $collectedAmount,
+                            $description,
+                            $referenceNumber,
+                            $currentUser['id'],
+                            $currentUser['id']
+                        ]
+                    );
+                }
+            }
+
+            $db->execute(
+                "UPDATE shipping_company_orders SET status = 'delivered', delivered_at = NOW(), updated_by = ?, updated_at = NOW() WHERE id = ?",
+                [$currentUser['id'] ?? null, $orderId]
+            );
+
+            // ربط أرقام التشغيلة بعناصر الفاتورة في sales_batch_numbers (لضمان ظهورها في سجل مشتريات العميل)
+            // هذا الحل الجذري يضمن الربط الصحيح حتى لو فشل عند إنشاء الطلب
+            if (!empty($order['invoice_id'])) {
+                try {
+                    $invoiceId = (int)$order['invoice_id'];
+                    
+                    // جلب عناصر الفاتورة مع جميع البيانات المطلوبة للمطابقة الدقيقة
+                    $invoiceItemsFromDb = $db->query(
+                        "SELECT id, product_id, quantity, unit_price FROM invoice_items WHERE invoice_id = ? ORDER BY id",
+                        [$invoiceId]
+                    );
+                    
+                    // جلب عناصر طلب الشحن مع batch_id و unit_price للمطابقة الدقيقة
+                    $orderItemsWithBatch = $db->query(
+                        "SELECT product_id, batch_id, quantity, unit_price FROM shipping_company_order_items WHERE order_id = ? ORDER BY id",
+                        [$orderId]
+                    );
+                    
+                    // إنشاء خريطة محسّنة للمطابقة بين invoice_items و orderItems
+                    // المطابقة بناءً على product_id و quantity و unit_price لضمان الدقة
+                    $invoiceItemsMap = [];
+                    foreach ($invoiceItemsFromDb as $invItem) {
+                        $productId = (int)$invItem['product_id'];
+                        $quantity = (float)$invItem['quantity'];
+                        $unitPrice = (float)$invItem['unit_price'];
+                        $key = "{$productId}_{$quantity}_{$unitPrice}";
+                        
+                        if (!isset($invoiceItemsMap[$key])) {
+                            $invoiceItemsMap[$key] = [];
+                        }
+                        $invoiceItemsMap[$key][] = (int)$invItem['id'];
+                    }
+                    
+                    // ربط أرقام التشغيلة بعناصر الفاتورة
+                    foreach ($orderItemsWithBatch as $orderItem) {
+                        $productId = (int)$orderItem['product_id'];
+                        $batchId = !empty($orderItem['batch_id']) ? (int)$orderItem['batch_id'] : null;
+                        $quantity = (float)$orderItem['quantity'];
+                        $unitPrice = (float)$orderItem['unit_price'];
+                        
+                        if ($batchId) {
+                            // البحث عن invoice_item_id المطابق بناءً على product_id و quantity و unit_price
+                            $matchKey = "{$productId}_{$quantity}_{$unitPrice}";
+                            $invoiceItemId = null;
+                            
+                            if (isset($invoiceItemsMap[$matchKey]) && !empty($invoiceItemsMap[$matchKey])) {
+                                // استخدام أول invoice_item_id متطابق
+                                $invoiceItemId = array_shift($invoiceItemsMap[$matchKey]);
+                            } else {
+                                // إذا لم نجد مطابقة دقيقة، نبحث عن أي invoice_item بنفس product_id
+                                // (للتعامل مع حالات التقريب في الأسعار)
+                                foreach ($invoiceItemsMap as $key => $items) {
+                                    $parts = explode('_', $key);
+                                    if (count($parts) >= 3 && (int)$parts[0] === $productId) {
+                                        // مطابقة product_id فقط
+                                        if (!empty($items)) {
+                                            $invoiceItemId = array_shift($items);
+                                            if (empty($items)) {
+                                                unset($invoiceItemsMap[$key]);
+                                            } else {
+                                                $invoiceItemsMap[$key] = $items;
+                                            }
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            if ($invoiceItemId) {
+                                // جلب batch_number من finished_products
+                                $fp = $db->queryOne("
+                                    SELECT fp.batch_number, fp.batch_id, fp.product_id, fp.product_name
+                                    FROM finished_products fp
+                                    WHERE fp.id = ?
+                                    LIMIT 1
+                                ", [$batchId]);
+                                
+                                if ($fp) {
+                                    $batchNumber = null;
+                                    if (!empty($fp['batch_number'])) {
+                                        $batchNumber = trim($fp['batch_number']);
+                                    } elseif (!empty($fp['batch_id'])) {
+                                        // إذا لم يكن batch_number موجوداً، نحاول جلب batch_number من batch_numbers
+                                        $batchFromTable = $db->queryOne(
+                                            "SELECT batch_number FROM batch_numbers WHERE id = ?",
+                                            [(int)$fp['batch_id']]
+                                        );
+                                        if ($batchFromTable && !empty($batchFromTable['batch_number'])) {
+                                            $batchNumber = trim($batchFromTable['batch_number']);
+                                        }
+                                    }
+                                    
+                                    if ($batchNumber) {
+                                        // البحث عن batch_number_id من جدول batch_numbers
+                                        $batchCheck = $db->queryOne(
+                                            "SELECT id FROM batch_numbers WHERE batch_number = ?",
+                                            [$batchNumber]
+                                        );
+                                        if ($batchCheck) {
+                                            $batchNumberId = (int)$batchCheck['id'];
+                                            
+                                            // التحقق من وجود سجل مسبقاً لتجنب التكرار
+                                            $existingBatchLink = $db->queryOne(
+                                                "SELECT id, quantity FROM sales_batch_numbers WHERE invoice_item_id = ? AND batch_number_id = ?",
+                                                [$invoiceItemId, $batchNumberId]
+                                            );
+                                            
+                                            if ($existingBatchLink) {
+                                                // إذا كان السجل موجوداً، نحدّث الكمية فقط إذا كانت مختلفة
+                                                if (abs((float)($existingBatchLink['quantity'] ?? 0) - $quantity) > 0.001) {
+                                                    $db->execute(
+                                                        "UPDATE sales_batch_numbers SET quantity = ? WHERE id = ?",
+                                                        [$quantity, $existingBatchLink['id']]
+                                                    );
+                                                    error_log("shipping_orders: Updated batch link on delivery - invoice_item_id=$invoiceItemId, batch_number_id=$batchNumberId, batch_number=$batchNumber, quantity=$quantity");
+                                                }
+                                            } else {
+                                                // إدراج سجل جديد
+                                                $db->execute(
+                                                    "INSERT INTO sales_batch_numbers (invoice_item_id, batch_number_id, quantity) 
+                                                     VALUES (?, ?, ?)",
+                                                    [$invoiceItemId, $batchNumberId, $quantity]
+                                                );
+                                                error_log("shipping_orders: Linked batch on delivery - invoice_item_id=$invoiceItemId, batch_number_id=$batchNumberId, batch_number=$batchNumber, quantity=$quantity, product_id=$productId, batch_id=$batchId");
+                                                
+                                                // التحقق من أن الربط تم بشكل صحيح
+                                                $verifyLink = $db->queryOne(
+                                                    "SELECT sbn.id, sbn.invoice_item_id, sbn.batch_number_id, bn.batch_number, 
+                                                            fp.product_name, pr.name as product_name_from_products
+                                                     FROM sales_batch_numbers sbn
+                                                     INNER JOIN batch_numbers bn ON sbn.batch_number_id = bn.id
+                                                     LEFT JOIN finished_products fp ON fp.batch_number = bn.batch_number
+                                                     LEFT JOIN products pr ON COALESCE(fp.product_id, bn.product_id) = pr.id
+                                                     WHERE sbn.invoice_item_id = ? AND sbn.batch_number_id = ?
+                                                     LIMIT 1",
+                                                    [$invoiceItemId, $batchNumberId]
+                                                );
+                                                if ($verifyLink) {
+                                                    error_log("shipping_orders: VERIFIED link - invoice_item_id=$invoiceItemId, batch_number=" . ($verifyLink['batch_number'] ?? 'N/A') . ", product_name=" . ($verifyLink['product_name'] ?? $verifyLink['product_name_from_products'] ?? 'N/A'));
+                                                } else {
+                                                    error_log("shipping_orders: WARNING - Could not verify link for invoice_item_id=$invoiceItemId, batch_number_id=$batchNumberId");
+                                                }
+                                            }
+                                        } else {
+                                            error_log("shipping_orders: WARNING - batch_number '$batchNumber' not found in batch_numbers table when completing delivery for batch_id=$batchId");
+                                        }
+                                    } else {
+                                        error_log("shipping_orders: WARNING - batch_number is empty for finished_products.id = $batchId when completing delivery");
+                                    }
+                                } else {
+                                    error_log("shipping_orders: ERROR - finished_products not found with id = $batchId when completing delivery");
+                                }
+                            } else {
+                                error_log("shipping_orders: WARNING - Could not find matching invoice_item for order item - product_id=$productId, quantity=$quantity, unit_price=$unitPrice, batch_id=$batchId");
+                            }
+                        }
+                    }
+                } catch (Throwable $batchLinkError) {
+                    error_log('shipping_orders: Error linking batch numbers to invoice items on delivery completion: ' . $batchLinkError->getMessage());
+                    error_log('shipping_orders: batch link error trace: ' . $batchLinkError->getTraceAsString());
+                    // لا نوقف العملية إذا فشل ربط أرقام التشغيلة
+                }
+            } else {
+                error_log("shipping_orders: WARNING - invoice_id is empty for order_id=$orderId when completing delivery");
+            }
+
+            // تحديد customer_id للاستخدام في جدول sales والمزامنة (يجب أن يكون متاحاً خارج try-catch)
+            $salesCustomerId = null;
+            
+            // إضافة المنتجات إلى جدول sales (سجل مشتريات العميل)
+            try {
+                // جلب منتجات الطلب
+                $orderItems = $db->query(
+                    "SELECT product_id, batch_id, quantity, unit_price, total_price FROM shipping_company_order_items WHERE order_id = ?",
+                    [$orderId]
+                );
+
+                if (!empty($orderItems)) {
+                    // تحديد customer_id للاستخدام في جدول sales
+                    $salesCustomerId = $order['customer_id'];
+                    
+                    // إذا كان العميل في local_customers، يجب البحث عن أو إنشاء عميل مؤقت في customers
+                    // لأن جدول sales له foreign key على customers
+                    if ($customerTable === 'local_customers') {
+                        $customerName = $customer['name'] ?? '';
+                        $customerPhone = $customer['phone'] ?? null;
+                        $customerAddress = $customer['address'] ?? null;
+                        
+                        // البحث عن عميل في customers بنفس الاسم
+                        $existingCustomerInCustomers = $db->queryOne(
+                            "SELECT id FROM customers WHERE name = ? AND created_by_admin = 1 LIMIT 1",
+                            [$customerName]
+                        );
+                        
+                        if ($existingCustomerInCustomers) {
+                            $salesCustomerId = (int)$existingCustomerInCustomers['id'];
+                        } else {
+                            // إنشاء عميل مؤقت في customers للربط
+                            $db->execute(
+                                "INSERT INTO customers (name, phone, address, balance, status, created_by, rep_id, created_from_pos, created_by_admin) 
+                                 VALUES (?, ?, ?, 0, 'active', ?, NULL, 1, 1)",
+                                [
+                                    $customerName,
+                                    $customerPhone,
+                                    $customerAddress,
+                                    $currentUser['id'] ?? null,
+                                ]
+                            );
+                            $salesCustomerId = (int) $db->getLastInsertId();
+                        }
+                    }
+                    
+                    // تاريخ البيع (تاريخ التسليم)
+                    $saleDate = date('Y-m-d');
+                    
+                    // التحقق من وجود عمود batch_id في جدول sales
+                    $hasBatchIdColumn = !empty($db->queryOne("SHOW COLUMNS FROM sales LIKE 'batch_id'"));
+                    
+                    // إضافة كل منتج إلى جدول sales
+                    foreach ($orderItems as $item) {
+                        $productId = (int)($item['product_id'] ?? 0);
+                        $batchId = !empty($item['batch_id']) ? (int)$item['batch_id'] : null;
+                        $quantity = (float)($item['quantity'] ?? 0);
+                        $unitPrice = (float)($item['unit_price'] ?? 0);
+                        $totalPrice = (float)($item['total_price'] ?? 0);
+                        
+                        if ($productId > 0 && $quantity > 0) {
+                            if ($hasBatchIdColumn && $batchId) {
+                                // إضافة batch_id إذا كان العمود موجوداً وكان batch_id متوفراً
+                                $db->execute(
+                                    "INSERT INTO sales (customer_id, product_id, batch_id, quantity, price, total, date, salesperson_id, status) 
+                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'completed')",
+                                    [$salesCustomerId, $productId, $batchId, $quantity, $unitPrice, $totalPrice, $saleDate, $currentUser['id'] ?? null]
+                                );
+                                
+                                error_log(sprintf(
+                                    'shipping_orders: Added sale record with batch_id - customer_id=%d, product_id=%d, batch_id=%d, quantity=%.2f, total=%.2f, order_id=%d',
+                                    $salesCustomerId,
+                                    $productId,
+                                    $batchId,
+                                    $quantity,
+                                    $totalPrice,
+                                    $orderId
+                                ));
+                            } else {
+                                // إضافة بدون batch_id (للتوافق مع الإصدارات القديمة)
+                                $db->execute(
+                                    "INSERT INTO sales (customer_id, product_id, quantity, price, total, date, salesperson_id, status) 
+                                     VALUES (?, ?, ?, ?, ?, ?, ?, 'completed')",
+                                    [$salesCustomerId, $productId, $quantity, $unitPrice, $totalPrice, $saleDate, $currentUser['id'] ?? null]
+                                );
+                                
+                                error_log(sprintf(
+                                    'shipping_orders: Added sale record - customer_id=%d, product_id=%d, quantity=%.2f, total=%.2f, order_id=%d%s',
+                                    $salesCustomerId,
+                                    $productId,
+                                    $quantity,
+                                    $totalPrice,
+                                    $orderId,
+                                    $batchId ? " (batch_id=$batchId not added - column not exists)" : ''
+                                ));
+                            }
+                        }
+                    }
+                    
+                    error_log(sprintf(
+                        'shipping_orders: Added %d product(s) to sales table for order_id=%d, customer_id=%d',
+                        count($orderItems),
+                        $orderId,
+                        $salesCustomerId
+                    ));
+                }
+            } catch (Throwable $salesError) {
+                error_log('shipping_orders: failed adding products to sales table -> ' . $salesError->getMessage());
+                error_log('shipping_orders: sales error trace -> ' . $salesError->getTraceAsString());
+                // لا نوقف العملية إذا فشل إضافة المنتجات إلى جدول sales
+            }
+
+            // إنشاء فاتورة محلية للعميل المحلي (حتى تظهر المشتريات في سجل العميل المحلي)
+            if ($customerTable === 'local_customers') {
+                try {
+                    // جلب منتجات الطلب
+                    $orderItems = $db->query(
+                        "SELECT product_id, batch_id, quantity, unit_price, total_price FROM shipping_company_order_items WHERE order_id = ?",
+                        [$orderId]
+                    );
+                    
+                    if (empty($orderItems)) {
+                        throw new RuntimeException('لا توجد منتجات في الطلب');
+                    }
+                    // التأكد من وجود جدول local_invoices وإنشاؤه إذا لم يكن موجوداً
+                    $localInvoicesTableExists = $db->queryOne("SHOW TABLES LIKE 'local_invoices'");
+                    if (empty($localInvoicesTableExists)) {
+                        // إنشاء جدول local_invoices
+                        $db->execute("
+                            CREATE TABLE IF NOT EXISTS `local_invoices` (
+                              `id` int(11) NOT NULL AUTO_INCREMENT,
+                              `invoice_number` varchar(50) NOT NULL,
+                              `customer_id` int(11) NOT NULL,
+                              `date` date NOT NULL,
+                              `due_date` date DEFAULT NULL,
+                              `subtotal` decimal(15,2) NOT NULL DEFAULT 0.00,
+                              `tax_rate` decimal(5,2) DEFAULT 0.00,
+                              `tax_amount` decimal(15,2) DEFAULT 0.00,
+                              `discount_amount` decimal(15,2) DEFAULT 0.00,
+                              `total_amount` decimal(15,2) NOT NULL DEFAULT 0.00,
+                              `paid_amount` decimal(15,2) DEFAULT 0.00,
+                              `remaining_amount` decimal(15,2) DEFAULT 0.00,
+                              `status` enum('draft','sent','paid','partial','overdue','cancelled') DEFAULT 'draft',
+                              `notes` text DEFAULT NULL,
+                              `created_by` int(11) NOT NULL,
+                              `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                              `updated_at` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+                              PRIMARY KEY (`id`),
+                              UNIQUE KEY `invoice_number` (`invoice_number`),
+                              KEY `customer_id` (`customer_id`),
+                              KEY `date` (`date`),
+                              KEY `status` (`status`),
+                              KEY `created_by` (`created_by`)
+                            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                        ");
+                    } else {
+                        // التأكد من وجود جميع الأعمدة المطلوبة وإضافتها إذا لم تكن موجودة
+                        $requiredColumns = [
+                            'due_date' => "ALTER TABLE local_invoices ADD COLUMN `due_date` date DEFAULT NULL AFTER `date`",
+                            'subtotal' => "ALTER TABLE local_invoices ADD COLUMN `subtotal` decimal(15,2) NOT NULL DEFAULT 0.00 AFTER `due_date`",
+                            'tax_rate' => "ALTER TABLE local_invoices ADD COLUMN `tax_rate` decimal(5,2) DEFAULT 0.00 AFTER `subtotal`",
+                            'tax_amount' => "ALTER TABLE local_invoices ADD COLUMN `tax_amount` decimal(15,2) DEFAULT 0.00 AFTER `tax_rate`",
+                            'discount_amount' => "ALTER TABLE local_invoices ADD COLUMN `discount_amount` decimal(15,2) DEFAULT 0.00 AFTER `tax_amount`",
+                            'total_amount' => "ALTER TABLE local_invoices ADD COLUMN `total_amount` decimal(15,2) NOT NULL DEFAULT 0.00 AFTER `discount_amount`",
+                            'paid_amount' => "ALTER TABLE local_invoices ADD COLUMN `paid_amount` decimal(15,2) DEFAULT 0.00 AFTER `total_amount`",
+                            'remaining_amount' => "ALTER TABLE local_invoices ADD COLUMN `remaining_amount` decimal(15,2) DEFAULT 0.00 AFTER `paid_amount`",
+                            'status' => "ALTER TABLE local_invoices ADD COLUMN `status` enum('draft','sent','paid','partial','overdue','cancelled') DEFAULT 'draft' AFTER `remaining_amount`",
+                            'notes' => "ALTER TABLE local_invoices ADD COLUMN `notes` text DEFAULT NULL AFTER `status`",
+                            'created_by' => "ALTER TABLE local_invoices ADD COLUMN `created_by` int(11) NOT NULL AFTER `notes`",
+                            'created_at' => "ALTER TABLE local_invoices ADD COLUMN `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP AFTER `created_by`",
+                            'updated_at' => "ALTER TABLE local_invoices ADD COLUMN `updated_at` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP AFTER `created_at`"
+                        ];
+                        
+                        foreach ($requiredColumns as $columnName => $alterSql) {
+                            $columnExists = !empty($db->queryOne("SHOW COLUMNS FROM local_invoices LIKE '$columnName'"));
+                            if (!$columnExists) {
+                                try {
+                                    $db->execute($alterSql);
+                                    error_log("Added column $columnName to local_invoices table");
+                                } catch (Throwable $alterError) {
+                                    error_log("Error adding column $columnName to local_invoices: " . $alterError->getMessage());
+                                }
+                            }
+                        }
+                    }
+                    
+                    // التأكد من وجود جدول local_invoice_items وإنشاؤه إذا لم يكن موجوداً
+                    $localInvoiceItemsTableExists = $db->queryOne("SHOW TABLES LIKE 'local_invoice_items'");
+                    if (empty($localInvoiceItemsTableExists)) {
+                        // إنشاء جدول local_invoice_items مع الأعمدة المطلوبة
+                        $db->execute("
+                            CREATE TABLE IF NOT EXISTS `local_invoice_items` (
+                              `id` int(11) NOT NULL AUTO_INCREMENT,
+                              `invoice_id` int(11) NOT NULL,
+                              `product_id` int(11) NOT NULL,
+                              `description` varchar(255) DEFAULT NULL,
+                              `quantity` decimal(10,2) NOT NULL,
+                              `unit_price` decimal(15,2) NOT NULL,
+                              `total_price` decimal(15,2) NOT NULL,
+                              `batch_number` varchar(100) DEFAULT NULL,
+                              `batch_id` int(11) DEFAULT NULL,
+                              `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                              PRIMARY KEY (`id`),
+                              KEY `invoice_id` (`invoice_id`),
+                              KEY `product_id` (`product_id`),
+                              KEY `batch_id` (`batch_id`)
+                            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                        ");
+                        error_log("shipping_orders: Created local_invoice_items table with batch_number and batch_id columns");
+                    } else {
+                        // التأكد من وجود الأعمدة المطلوبة وإضافتها إذا لم تكن موجودة
+                        $requiredColumns = [
+                            'batch_number' => "ALTER TABLE local_invoice_items ADD COLUMN `batch_number` varchar(100) DEFAULT NULL AFTER `total_price`",
+                            'batch_id' => "ALTER TABLE local_invoice_items ADD COLUMN `batch_id` int(11) DEFAULT NULL AFTER `batch_number`"
+                        ];
+                        
+                        foreach ($requiredColumns as $columnName => $alterSql) {
+                            $columnExists = !empty($db->queryOne("SHOW COLUMNS FROM local_invoice_items LIKE '$columnName'"));
+                            if (!$columnExists) {
+                                try {
+                                    $db->execute($alterSql);
+                                    // إضافة index لـ batch_id إذا لم يكن موجوداً
+                                    if ($columnName === 'batch_id') {
+                                        try {
+                                            $indexExists = !empty($db->queryOne("SHOW INDEX FROM local_invoice_items WHERE Key_name = 'batch_id'"));
+                                            if (!$indexExists) {
+                                                $db->execute("ALTER TABLE local_invoice_items ADD KEY `batch_id` (`batch_id`)");
+                                            }
+                                        } catch (Throwable $indexError) {
+                                            error_log("shipping_orders: Error adding index for batch_id: " . $indexError->getMessage());
+                                        }
+                                    }
+                                    error_log("shipping_orders: Added column $columnName to local_invoice_items table");
+                                } catch (Throwable $alterError) {
+                                    error_log("shipping_orders: Error adding column $columnName to local_invoice_items: " . $alterError->getMessage());
+                                }
+                            }
+                        }
+                    }
+                    
+                    // إنشاء الفاتورة المحلية
+                    $orderNumber = $order['order_number'] ?? 'ORD-' . $orderId;
+                    $localInvoiceNumber = 'LOC-' . $orderNumber;
+                    
+                    // فحص إذا كانت الفاتورة المحلية موجودة مسبقاً
+                    $existingLocalInvoice = $db->queryOne(
+                        "SELECT id FROM local_invoices WHERE invoice_number = ? LIMIT 1",
+                        [$localInvoiceNumber]
+                    );
+                    
+                    if (empty($existingLocalInvoice)) {
+                        // إنشاء الفاتورة المحلية
+                        $saleDate = date('Y-m-d');
+                        $localCustomerId = $order['customer_id'];
+                        $subtotal = $totalAmount; // المبلغ الإجمالي هو نفسه subtotal في حالة طلبات الشحن
+                        $dueDate = null; // لا يوجد تاريخ استحقاق لطلبات الشحن
+                        $notes = 'طلب شحن - ' . $orderNumber;
+                        
+                        // بعد التأكد من وجود جميع الأعمدة، نستخدم نفس استعلام INSERT
+                        $hasDueDateColumn = !empty($db->queryOne("SHOW COLUMNS FROM local_invoices LIKE 'due_date'"));
+                        
+                        if ($hasDueDateColumn) {
+                            $db->execute(
+                                "INSERT INTO local_invoices 
+                                (invoice_number, customer_id, date, due_date, subtotal, tax_rate, tax_amount, 
+                                 discount_amount, total_amount, paid_amount, remaining_amount, status, notes, created_by)
+                                VALUES (?, ?, ?, ?, ?, 0, 0, 0, ?, 0, ?, 'sent', ?, ?)",
+                                [
+                                    $localInvoiceNumber,
+                                    $localCustomerId,
+                                    $saleDate,
+                                    $dueDate,
+                                    $subtotal,
+                                    $totalAmount,
+                                    $totalAmount,
+                                    $notes,
+                                    $currentUser['id'] ?? null
+                                ]
+                            );
+                        } else {
+                            $db->execute(
+                                "INSERT INTO local_invoices 
+                                (invoice_number, customer_id, date, subtotal, tax_rate, tax_amount, 
+                                 discount_amount, total_amount, paid_amount, remaining_amount, status, notes, created_by)
+                                VALUES (?, ?, ?, ?, 0, 0, 0, ?, 0, ?, 'sent', ?, ?)",
+                                [
+                                    $localInvoiceNumber,
+                                    $localCustomerId,
+                                    $saleDate,
+                                    $subtotal,
+                                    $totalAmount,
+                                    $totalAmount,
+                                    $notes,
+                                    $currentUser['id'] ?? null
+                                ]
+                            );
+                        }
+                        
+                        $localInvoiceId = (int)$db->getLastInsertId();
+                        
+                        error_log("Local invoice created successfully: ID=$localInvoiceId, Number=$localInvoiceNumber, Customer=$localCustomerId");
+                        
+                        // إضافة عناصر الفاتورة المحلية
+                        if (!empty($orderItems)) {
+                            // التحقق من وجود أعمدة batch_number و batch_id في local_invoice_items
+                            $hasBatchNumber = !empty($db->queryOne("SHOW COLUMNS FROM local_invoice_items LIKE 'batch_number'"));
+                            $hasBatchId = !empty($db->queryOne("SHOW COLUMNS FROM local_invoice_items LIKE 'batch_id'"));
+                            
+                            foreach ($orderItems as $item) {
+                                $productId = (int)($item['product_id'] ?? 0);
+                                $quantity = (float)($item['quantity'] ?? 0);
+                                $unitPrice = (float)($item['unit_price'] ?? 0);
+                                $totalPrice = (float)($item['total_price'] ?? 0);
+                                
+                                if ($productId > 0 && $quantity > 0) {
+                                    // ===== جلب بيانات المنتج ورقم التشغيلة بشكل جذري =====
+                                    $batchId = isset($item['batch_id']) && $item['batch_id'] ? (int)$item['batch_id'] : null;
+                                    $productName = '';
+                                    $batchNumber = null;
+                                    $correctProductId = $productId; // product_id الصحيح للمنتج
+                                    
+                                    error_log("shipping_orders: Processing local_invoice_item - original product_id: $productId, batch_id: " . ($batchId ?? 'NULL'));
+                                    
+                                    if ($batchId) {
+                                        // ===== منتج مصنع - جلب جميع البيانات من finished_products =====
+                                        $fpData = $db->queryOne("
+                                            SELECT 
+                                                fp.id as finished_product_id,
+                                                fp.product_name as fp_product_name,
+                                                fp.batch_number as fp_batch_number,
+                                                fp.product_id as fp_product_id,
+                                                bn.id as batch_number_id,
+                                                bn.batch_number as bn_batch_number,
+                                                bn.product_id as bn_product_id,
+                                                pr1.name as pr1_name,
+                                                pr2.name as pr2_name
+                                            FROM finished_products fp
+                                            LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
+                                            LEFT JOIN products pr1 ON fp.product_id = pr1.id
+                                            LEFT JOIN products pr2 ON bn.product_id = pr2.id
+                                            WHERE fp.id = ?
+                                            LIMIT 1
+                                        ", [$batchId]);
+                                        
+                                        if ($fpData) {
+                                            // 1. جلب batch_number
+                                            if (!empty($fpData['fp_batch_number'])) {
+                                                $batchNumber = trim($fpData['fp_batch_number']);
+                                            } elseif (!empty($fpData['bn_batch_number'])) {
+                                                $batchNumber = trim($fpData['bn_batch_number']);
+                                            }
+                                            
+                                            // 2. تحديد product_id الصحيح
+                                            if (!empty($fpData['fp_product_id']) && $fpData['fp_product_id'] > 0) {
+                                                $correctProductId = (int)$fpData['fp_product_id'];
+                                            } elseif (!empty($fpData['bn_product_id']) && $fpData['bn_product_id'] > 0) {
+                                                $correctProductId = (int)$fpData['bn_product_id'];
+                                            }
+                                            
+                                            // 3. تحديد اسم المنتج بالترتيب الصحيح
+                                            // الأولوية: اسم من products المرتبط بـ fp.product_id > اسم من products المرتبط بـ bn.product_id > fp.product_name
+                                            $candidateNames = [];
+                                            
+                                            // اسم المنتج من products (fp.product_id)
+                                            if (!empty($fpData['pr1_name']) && trim($fpData['pr1_name']) !== '' 
+                                                && strpos($fpData['pr1_name'], 'منتج رقم') !== 0) {
+                                                $candidateNames[] = trim($fpData['pr1_name']);
+                                            }
+                                            
+                                            // اسم المنتج من products (bn.product_id)
+                                            if (!empty($fpData['pr2_name']) && trim($fpData['pr2_name']) !== '' 
+                                                && strpos($fpData['pr2_name'], 'منتج رقم') !== 0) {
+                                                $candidateNames[] = trim($fpData['pr2_name']);
+                                            }
+                                            
+                                            // اسم المنتج من finished_products
+                                            if (!empty($fpData['fp_product_name']) && trim($fpData['fp_product_name']) !== '' 
+                                                && strpos($fpData['fp_product_name'], 'منتج رقم') !== 0) {
+                                                $candidateNames[] = trim($fpData['fp_product_name']);
+                                            }
+                                            
+                                            // اختيار أول اسم صالح
+                                            if (!empty($candidateNames)) {
+                                                $productName = $candidateNames[0];
+                                            } else {
+                                                // لا يوجد اسم صالح، نستخدم product_id
+                                                $productName = 'منتج رقم ' . $correctProductId;
+                                            }
+                                            
+                                            error_log("shipping_orders: Found fpData - batch_number: " . ($batchNumber ?? 'NULL') . 
+                                                      ", product_name: $productName, correct_product_id: $correctProductId" .
+                                                      ", fp_product_id: " . ($fpData['fp_product_id'] ?? 'NULL') .
+                                                      ", bn_product_id: " . ($fpData['bn_product_id'] ?? 'NULL'));
+                                        } else {
+                                            // لم يُعثر على finished_product - جلب من products
+                                            error_log("shipping_orders: WARNING - finished_products not found for batch_id: $batchId");
+                                            $product = $db->queryOne("SELECT name FROM products WHERE id = ?", [$productId]);
+                                            $productName = $product['name'] ?? 'منتج رقم ' . $productId;
+                                        }
+                                    } else {
+                                        // ===== منتج خارجي - جلب اسم المنتج من products =====
+                                        $product = $db->queryOne("SELECT name FROM products WHERE id = ?", [$productId]);
+                                        $productName = $product['name'] ?? 'منتج رقم ' . $productId;
+                                    }
+                                    
+                                    $itemTotal = $quantity * $unitPrice;
+                                    
+                                    // ===== بناء استعلام INSERT ديناميكياً =====
+                                    $columns = ['invoice_id', 'product_id', 'description', 'quantity', 'unit_price', 'total_price'];
+                                    $values = [
+                                        $localInvoiceId,
+                                        $correctProductId, // استخدام product_id الصحيح
+                                        $productName,      // اسم المنتج الصحيح
+                                        $quantity,
+                                        $unitPrice,
+                                        $itemTotal
+                                    ];
+                                    
+                                    if ($hasBatchNumber) {
+                                        $columns[] = 'batch_number';
+                                        $values[] = $batchNumber;
+                                        error_log("shipping_orders: Adding to local_invoice_items - product_name: $productName, batch_number: " . ($batchNumber ?? 'NULL') . ", product_id: $correctProductId, batch_id: " . ($batchId ?? 'NULL'));
+                                    }
+                                    
+                                    if ($hasBatchId) {
+                                        $columns[] = 'batch_id';
+                                        $values[] = $batchId;
+                                    }
+                                    
+                                    $placeholders = str_repeat('?,', count($values) - 1) . '?';
+                                    $sql = "INSERT INTO local_invoice_items (" . implode(', ', $columns) . ") VALUES ($placeholders)";
+                                    
+                                    $insertResult = $db->execute($sql, $values);
+                                    
+                                    // ربط local_invoice_item مع sales_batch_numbers عبر invoice_items (إذا كان هناك invoice_id)
+                                    // هذا يضمن ظهور رقم التشغيلة في سجل مشتريات العميل المحلي
+                                    if (!empty($order['invoice_id']) && $batchId && !empty($batchNumber)) {
+                                        try {
+                                            $localInvoiceItemId = (int)($insertResult['insert_id'] ?? $db->getLastInsertId());
+                                            
+                                            // البحث عن invoice_item_id المطابق من الفاتورة الأصلية
+                                            // المطابقة بناءً على product_id و quantity و unit_price
+                                            $matchingInvoiceItem = $db->queryOne(
+                                                "SELECT id FROM invoice_items 
+                                                 WHERE invoice_id = ? 
+                                                   AND product_id = ? 
+                                                   AND ABS(quantity - ?) < 0.001 
+                                                   AND ABS(unit_price - ?) < 0.001
+                                                 ORDER BY id ASC
+                                                 LIMIT 1",
+                                                [$order['invoice_id'], $productId, $quantity, $unitPrice]
+                                            );
+                                            
+                                            if ($matchingInvoiceItem && !empty($matchingInvoiceItem['id'])) {
+                                                $invoiceItemId = (int)$matchingInvoiceItem['id'];
+                                                
+                                                // جلب batch_number_id من batch_numbers
+                                                $batchNumberIdCheck = $db->queryOne(
+                                                    "SELECT id FROM batch_numbers WHERE batch_number = ?",
+                                                    [$batchNumber]
+                                                );
+                                                
+                                                if ($batchNumberIdCheck) {
+                                                    $batchNumberId = (int)$batchNumberIdCheck['id'];
+                                                    
+                                                    // التحقق من وجود سجل في sales_batch_numbers لهذا invoice_item_id
+                                                    $existingSalesBatchLink = $db->queryOne(
+                                                        "SELECT id FROM sales_batch_numbers WHERE invoice_item_id = ? AND batch_number_id = ?",
+                                                        [$invoiceItemId, $batchNumberId]
+                                                    );
+                                                    
+                                                    if (!$existingSalesBatchLink) {
+                                                        // إنشاء سجل في sales_batch_numbers إذا لم يكن موجوداً
+                                                        $db->execute(
+                                                            "INSERT INTO sales_batch_numbers (invoice_item_id, batch_number_id, quantity) 
+                                                             VALUES (?, ?, ?)
+                                                             ON DUPLICATE KEY UPDATE quantity = quantity",
+                                                            [$invoiceItemId, $batchNumberId, $quantity]
+                                                        );
+                                                        error_log("shipping_orders: Created sales_batch_numbers link for local_invoice_item_id=$localInvoiceItemId via invoice_item_id=$invoiceItemId, batch_number=$batchNumber");
+                                                    } else {
+                                                        error_log("shipping_orders: sales_batch_numbers link already exists for invoice_item_id=$invoiceItemId, batch_number=$batchNumber");
+                                                    }
+                                                } else {
+                                                    error_log("shipping_orders: WARNING - batch_number_id not found for batch_number=$batchNumber when linking local_invoice_item");
+                                                }
+                                            } else {
+                                                error_log("shipping_orders: WARNING - Could not find matching invoice_item for local_invoice_item - product_id=$productId, quantity=$quantity, unit_price=$unitPrice");
+                                            }
+                                        } catch (Throwable $linkError) {
+                                            error_log('shipping_orders: Error linking local_invoice_item to sales_batch_numbers: ' . $linkError->getMessage());
+                                            // لا نوقف العملية
+                                        }
+                                    }
+                                }
+                            }
+                            error_log("Local invoice items added successfully: " . count($orderItems) . " items for invoice ID=$localInvoiceId");
+                        }
+                    } else {
+                        error_log("Local invoice already exists: Number=$localInvoiceNumber");
+                        // حتى لو كانت الفاتورة موجودة، نحاول ربط العناصر مع sales_batch_numbers
+                        if (!empty($order['invoice_id'])) {
+                            try {
+                                $existingLocalInvoiceId = (int)$existingLocalInvoice['id'];
+                                
+                                // جلب عناصر الفاتورة المحلية
+                                $existingLocalInvoiceItems = $db->query(
+                                    "SELECT id, product_id, batch_id, quantity, unit_price, batch_number 
+                                     FROM local_invoice_items 
+                                     WHERE invoice_id = ?",
+                                    [$existingLocalInvoiceId]
+                                );
+                                
+                                foreach ($existingLocalInvoiceItems as $localItem) {
+                                    $localProductId = (int)$localItem['product_id'];
+                                    $localQuantity = (float)$localItem['quantity'];
+                                    $localUnitPrice = (float)$localItem['unit_price'];
+                                    $localBatchId = !empty($localItem['batch_id']) ? (int)$localItem['batch_id'] : null;
+                                    $localBatchNumber = !empty($localItem['batch_number']) ? trim($localItem['batch_number']) : null;
+                                    
+                                    if ($localBatchId && $localBatchNumber) {
+                                        // البحث عن invoice_item_id المطابق
+                                        $matchingInvoiceItem = $db->queryOne(
+                                            "SELECT id FROM invoice_items 
+                                             WHERE invoice_id = ? 
+                                               AND product_id = ? 
+                                               AND ABS(quantity - ?) < 0.001 
+                                               AND ABS(unit_price - ?) < 0.001
+                                             ORDER BY id ASC
+                                             LIMIT 1",
+                                            [$order['invoice_id'], $localProductId, $localQuantity, $localUnitPrice]
+                                        );
+                                        
+                                        if ($matchingInvoiceItem) {
+                                            $invoiceItemId = (int)$matchingInvoiceItem['id'];
+                                            $batchNumberIdCheck = $db->queryOne(
+                                                "SELECT id FROM batch_numbers WHERE batch_number = ?",
+                                                [$localBatchNumber]
+                                            );
+                                            
+                                            if ($batchNumberIdCheck) {
+                                                $batchNumberId = (int)$batchNumberIdCheck['id'];
+                                                $existingSalesBatchLink = $db->queryOne(
+                                                    "SELECT id FROM sales_batch_numbers WHERE invoice_item_id = ? AND batch_number_id = ?",
+                                                    [$invoiceItemId, $batchNumberId]
+                                                );
+                                                
+                                                if (!$existingSalesBatchLink) {
+                                                    $db->execute(
+                                                        "INSERT INTO sales_batch_numbers (invoice_item_id, batch_number_id, quantity) 
+                                                         VALUES (?, ?, ?)
+                                                         ON DUPLICATE KEY UPDATE quantity = quantity",
+                                                        [$invoiceItemId, $batchNumberId, $localQuantity]
+                                                    );
+                                                    error_log("shipping_orders: Linked existing local_invoice_item_id=" . $localItem['id'] . " via invoice_item_id=$invoiceItemId");
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (Throwable $existingLinkError) {
+                                error_log('shipping_orders: Error linking existing local invoice items: ' . $existingLinkError->getMessage());
+                            }
+                        }
+                    }
+                } catch (Throwable $localInvoiceError) {
+                    // لا نوقف العملية إذا فشل إنشاء الفاتورة المحلية، فقط نسجل الخطأ
+                    error_log('Error creating local invoice: ' . $localInvoiceError->getMessage());
+                    error_log('Stack trace: ' . $localInvoiceError->getTraceAsString());
+                }
+            }
+
+            // تحديث الفاتورة لتعكس المبلغ المتبقي وإضافة المنتجات إلى سجل مشتريات العميل
+            if (!empty($order['invoice_id'])) {
+                // التحقق من عدم تحديث فواتير نقطة البيع
+                $hasCreatedFromPosColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'created_from_pos'"));
+                if ($hasCreatedFromPosColumn) {
+                    $invoiceCheck = $db->queryOne("SELECT created_from_pos FROM invoices WHERE id = ?", [$order['invoice_id']]);
+                    if (empty($invoiceCheck) || empty($invoiceCheck['created_from_pos'])) {
+                        // ليست فاتورة من نقطة البيع، يمكن تحديثها
+                        $db->execute(
+                            "UPDATE invoices SET status = 'sent', remaining_amount = ?, paid_amount = 0, updated_at = NOW() WHERE id = ?",
+                            [$totalAmount, $order['invoice_id']]
+                        );
+                    }
+                } else {
+                    // العمود غير موجود، يمكن التحديث (للتوافق مع الإصدارات القديمة)
+                    $db->execute(
+                        "UPDATE invoices SET status = 'sent', remaining_amount = ?, paid_amount = 0, updated_at = NOW() WHERE id = ?",
+                        [$totalAmount, $order['invoice_id']]
+                    );
+                }
+                
+                // جلب بيانات الفاتورة للتأكد من تحديث سجل المشتريات
+                $invoiceData = $db->queryOne(
+                    "SELECT id, invoice_number, date, total_amount, paid_amount, status, customer_id 
+                     FROM invoices WHERE id = ?",
+                    [$order['invoice_id']]
+                );
+                
+                // إضافة المنتجات إلى سجل مشتريات العميل
+                if ($invoiceData) {
+                    try {
+                        // التحقق من تطابق customer_id بين الفاتورة والطلب
+                        $invoiceCheck = $db->queryOne(
+                            "SELECT customer_id FROM invoices WHERE id = ?",
+                            [$order['invoice_id']]
+                        );
+                        
+                        if (!$invoiceCheck) {
+                            throw new RuntimeException('الفاتورة غير موجودة');
+                        }
+                        
+                        $invoiceCustomerId = (int)($invoiceCheck['customer_id'] ?? 0);
+                        $orderCustomerId = (int)($order['customer_id'] ?? 0);
+                        
+                        if ($invoiceCustomerId !== $orderCustomerId) {
+                            error_log(sprintf(
+                                'ERROR: customer_id mismatch in shipping_orders! Invoice customer_id: %d, Order customer_id: %d, Invoice ID: %d',
+                                $invoiceCustomerId,
+                                $orderCustomerId,
+                                $order['invoice_id']
+                            ));
+                            throw new RuntimeException('تضارب في بيانات العميل: customer_id في الفاتورة لا يطابق customer_id في الطلب');
+                        }
+                        
+                        // التأكد من أن جدول customer_purchase_history موجود
+                        customerHistoryEnsureSetup();
+                        
+                        // إضافة أو تحديث سجل الفاتورة في customer_purchase_history
+                        $db->execute(
+                            "INSERT INTO customer_purchase_history
+                                (customer_id, invoice_id, invoice_number, invoice_date, invoice_total, paid_amount, invoice_status,
+                                 return_total, return_count, created_at)
+                             VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, NOW())
+                             ON DUPLICATE KEY UPDATE
+                                invoice_number = VALUES(invoice_number),
+                                invoice_date = VALUES(invoice_date),
+                                invoice_total = VALUES(invoice_total),
+                                paid_amount = VALUES(paid_amount),
+                                invoice_status = VALUES(invoice_status),
+                                updated_at = NOW()",
+                            [
+                                $orderCustomerId,
+                                $order['invoice_id'],
+                                $invoiceData['invoice_number'] ?? '',
+                                $invoiceData['date'] ?? date('Y-m-d'),
+                                (float)($invoiceData['total_amount'] ?? 0),
+                                (float)($invoiceData['paid_amount'] ?? 0),
+                                $invoiceData['status'] ?? 'sent',
+                            ]
+                        );
+                        
+                        error_log(sprintf(
+                            'shipping_orders: Saved purchase history for customer_id=%d, invoice_id=%d, invoice_number=%s',
+                            $order['customer_id'],
+                            $order['invoice_id'],
+                            $invoiceData['invoice_number'] ?? 'N/A'
+                        ));
+                    } catch (Throwable $historyError) {
+                        error_log('shipping_orders: failed saving customer purchase history -> ' . $historyError->getMessage());
+                        error_log('shipping_orders: history error trace -> ' . $historyError->getTraceAsString());
+                    }
+                }
+            }
+            
+            // مزامنة كاملة لسجل المشتريات للتأكد من تحديث جميع البيانات (يتم استدعاؤها دائماً)
+            // يجب استخدام customer_id من جدول customers وليس local_customers
+            try {
+                // تحديد customer_id الصحيح للاستخدام في المزامنة
+                $syncCustomerId = $order['customer_id'];
+                $foundCustomerIdFromInvoice = false;
+                
+                // إذا كان هناك invoice_id، نستخدم customer_id من الفاتورة (من جدول customers)
+                if (!empty($order['invoice_id'])) {
+                    $invoiceDataForSync = $db->queryOne(
+                        "SELECT customer_id FROM invoices WHERE id = ?",
+                        [$order['invoice_id']]
+                    );
+                    if ($invoiceDataForSync && !empty($invoiceDataForSync['customer_id'])) {
+                        $syncCustomerId = (int)$invoiceDataForSync['customer_id'];
+                        $foundCustomerIdFromInvoice = true;
+                    }
+                }
+                
+                // إذا كان العميل من local_customers ولم نجد customer_id من الفاتورة، نحاول استخدام salesCustomerId
+                // أو البحث عن/إنشاء عميل مؤقت في customers
+                if ($customerTable === 'local_customers' && !$foundCustomerIdFromInvoice) {
+                    // البحث عن أو إنشاء عميل مؤقت في customers (مثل ما تم في كود sales)
+                    $customerName = $customer['name'] ?? '';
+                    $customerPhone = $customer['phone'] ?? null;
+                    $customerAddress = $customer['address'] ?? null;
+                    
+                    $existingCustomerInCustomers = $db->queryOne(
+                        "SELECT id FROM customers WHERE name = ? AND created_by_admin = 1 LIMIT 1",
+                        [$customerName]
+                    );
+                    
+                    if ($existingCustomerInCustomers) {
+                        $syncCustomerId = (int)$existingCustomerInCustomers['id'];
+                    } elseif ($salesCustomerId && !empty($salesCustomerId)) {
+                        // استخدام salesCustomerId إذا كان موجوداً
+                        $customerInCustomers = $db->queryOne(
+                            "SELECT id FROM customers WHERE id = ?",
+                            [$salesCustomerId]
+                        );
+                        if ($customerInCustomers) {
+                            $syncCustomerId = $salesCustomerId;
+                        }
+                    }
+                } elseif ($customerTable === 'local_customers' && isset($salesCustomerId) && !empty($salesCustomerId)) {
+                    // التحقق من أن salesCustomerId موجود في جدول customers
+                    $customerInCustomers = $db->queryOne(
+                        "SELECT id FROM customers WHERE id = ?",
+                        [$salesCustomerId]
+                    );
+                    if ($customerInCustomers) {
+                        $syncCustomerId = $salesCustomerId;
+                    }
+                }
+                
+                // استدعاء دالة المزامنة فقط إذا كان customer_id من جدول customers
+                $customerInCustomersCheck = $db->queryOne(
+                    "SELECT id FROM customers WHERE id = ?",
+                    [$syncCustomerId]
+                );
+                
+                if ($customerInCustomersCheck) {
+                    customerHistorySyncForCustomer($syncCustomerId);
+                    error_log(sprintf(
+                        'shipping_orders: Synced purchase history for customer_id=%d (from %s table) after completing order_id=%d',
+                        $syncCustomerId,
+                        $customerTable === 'local_customers' ? 'customers (mapped from local)' : 'customers',
+                        $orderId
+                    ));
+                } else {
+                    error_log(sprintf(
+                        'shipping_orders: Skipped syncing purchase history - customer_id=%d is not in customers table (from %s table)',
+                        $syncCustomerId,
+                        $customerTable
+                    ));
+                }
+            } catch (Throwable $syncError) {
+                error_log('shipping_orders: failed syncing customer purchase history -> ' . $syncError->getMessage());
+                error_log('shipping_orders: sync error trace -> ' . $syncError->getTraceAsString());
+                // لا نوقف العملية إذا فشل تحديث السجل
+            }
+
+            logAudit(
+                $currentUser['id'] ?? null,
+                'complete_shipping_order',
+                'shipping_order',
+                $orderId,
+                null,
+                [
+                    'total_amount' => $totalAmount,
+                    'customer_id' => $order['customer_id'],
+                    'customer_table' => $customerTable,
+                    'old_balance' => $currentBalance,
+                    'new_balance' => $newBalance,
+                    'shipping_company_id' => $order['shipping_company_id'],
+                ]
+            );
+
+            $db->commit();
+            $transactionStarted = false;
+
+            $_SESSION[$sessionSuccessKey] = 'تم تأكيد تسليم الطلب للعميل ونقل الدين بنجاح. تم إضافة المنتجات إلى سجل مشتريات العميل.';
+        } catch (InvalidArgumentException $validationError) {
+            if ($transactionStarted) {
+                $db->rollback();
+            }
+            $_SESSION[$sessionErrorKey] = $validationError->getMessage();
+        } catch (Throwable $completeError) {
+            if ($transactionStarted) {
+                $db->rollback();
+            }
+            error_log('shipping_orders: complete order error -> ' . $completeError->getMessage());
+            $_SESSION[$sessionErrorKey] = 'تعذر إتمام إجراءات الطلب. يرجى المحاولة لاحقاً.';
+        }
+
+        redirectAfterPost('shipping_orders', [], [], 'manager');
+        exit;
+    }
+}
+
+$shippingCompanies = [];
+try {
+    $shippingCompanies = $db->query(
+        "SELECT id, name, phone, status, balance FROM shipping_companies ORDER BY status = 'active' DESC, name ASC"
+    );
+} catch (Throwable $companiesError) {
+    error_log('shipping_orders: failed fetching companies -> ' . $companiesError->getMessage());
+    $shippingCompanies = [];
+}
+
+$activeCustomers = [];
+try {
+    // جلب العملاء المحليين فقط من جدول local_customers
+    $localCustomersTableExists = $db->queryOne("SHOW TABLES LIKE 'local_customers'");
+    if (!empty($localCustomersTableExists)) {
+        $activeCustomers = $db->query(
+            "SELECT id, name, phone FROM local_customers WHERE status = 'active' ORDER BY name ASC"
+        );
+    } else {
+        $activeCustomers = [];
+    }
+} catch (Throwable $customersError) {
+    error_log('shipping_orders: failed fetching customers -> ' . $customersError->getMessage());
+    $activeCustomers = [];
+}
+
+$availableProducts = [];
+try {
+    // التحقق من وجود جدول finished_products
+    $finishedProductsTableExists = $db->queryOne("SHOW TABLES LIKE 'finished_products'");
+    
+    $productsList = [];
+    
+    // جلب منتجات المصنع من finished_products
+    if (!empty($finishedProductsTableExists)) {
+        try {
+            $factoryProducts = $db->query("
+                SELECT 
+                    fp.id,
+                    COALESCE(fp.product_id, bn.product_id) AS product_id,
+                    COALESCE(
+                        NULLIF(TRIM(fp.product_name), ''),
+                        pr.name,
+                        CONCAT('منتج رقم ', COALESCE(fp.product_id, bn.product_id, fp.id))
+                    ) AS name,
+                    fp.quantity_produced AS quantity,
+                    COALESCE(
+                        NULLIF(fp.unit_price, 0),
+                        (SELECT pt.unit_price 
+                         FROM product_templates pt 
+                         WHERE pt.status = 'active' 
+                           AND pt.unit_price IS NOT NULL 
+                           AND pt.unit_price > 0
+                           AND pt.unit_price <= 10000
+                           AND (
+                               (COALESCE(fp.product_id, bn.product_id) IS NOT NULL 
+                                AND COALESCE(fp.product_id, bn.product_id) > 0
+                                AND pt.product_id IS NOT NULL 
+                                AND pt.product_id > 0 
+                                AND pt.product_id = COALESCE(fp.product_id, bn.product_id))
+                               OR (
+                                   pt.product_name IS NOT NULL 
+                                   AND pt.product_name != ''
+                                   AND COALESCE(NULLIF(TRIM(fp.product_name), ''), pr.name) IS NOT NULL
+                                   AND COALESCE(NULLIF(TRIM(fp.product_name), ''), pr.name) != ''
+                                   AND (
+                                       LOWER(TRIM(pt.product_name)) = LOWER(TRIM(COALESCE(NULLIF(TRIM(fp.product_name), ''), pr.name)))
+                                       OR LOWER(TRIM(pt.product_name)) LIKE CONCAT('%', LOWER(TRIM(COALESCE(NULLIF(TRIM(fp.product_name), ''), pr.name))), '%')
+                                   )
+                               )
+                           )
+                         ORDER BY pt.unit_price DESC
+                         LIMIT 1),
+                        0
+                    ) AS unit_price,
+                    'قطعة' AS unit,
+                    fp.batch_number,
+                    fp.id AS batch_id,
+                    'factory' AS product_type
+                FROM finished_products fp
+                LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
+                LEFT JOIN products pr ON COALESCE(fp.product_id, bn.product_id) = pr.id
+                WHERE (fp.quantity_produced IS NULL OR fp.quantity_produced > 0)
+                ORDER BY fp.production_date DESC, fp.id DESC
+            ");
+            
+            foreach ($factoryProducts as $fp) {
+                $batchNumber = $fp['batch_number'] ?? '';
+                $productName = $fp['name'] ?? 'غير محدد';
+                $productId = (int)($fp['product_id'] ?? 0);
+                $batchId = (int)($fp['batch_id'] ?? 0);
+                $quantityProduced = (float)($fp['quantity'] ?? 0); // هذا هو quantity_produced (الكمية المتبقية)
+                $unitPrice = (float)($fp['unit_price'] ?? 0);
+                
+                // للمنتجات التي لها رقم تشغيلة: استخدام quantity_produced مباشرة
+                // وعدم استخدام products.quantity لأنها قد تكون لجميع أرقام التشغيلة مجتمعة
+                $quantity = $quantityProduced;
+                
+                // حساب الكميات المحجوزة والمباعة (يُطبق فقط على quantity_produced للمنتجات التي لها رقم تشغيلة)
+                $soldQty = 0;
+                $pendingQty = 0;
+                $pendingShippingQty = 0;
+                
+                if (!empty($batchNumber)) {
+                    try {
+                        // حساب الكمية المباعة (مثل company_products.php)
+                        $sold = $db->queryOne("
+                            SELECT COALESCE(SUM(ii.quantity), 0) AS sold_quantity
+                            FROM invoice_items ii
+                            INNER JOIN invoices i ON ii.invoice_id = i.id
+                            INNER JOIN sales_batch_numbers sbn ON ii.id = sbn.invoice_item_id
+                            INNER JOIN batch_numbers bn ON sbn.batch_number_id = bn.id
+                            WHERE bn.batch_number = ?
+                        ", [$batchNumber]);
+                        $soldQty = (float)($sold['sold_quantity'] ?? 0);
+                        
+                        // حساب الكمية المحجوزة في طلبات العملاء المعلقة
+                        // ملاحظة: customer_order_items لا يحتوي على batch_number مباشرة
+                        // لذلك نستخدم finished_products للربط مع batch_number بناءً على product_id و batch_number
+                        $pending = $db->queryOne("
+                            SELECT COALESCE(SUM(oi.quantity), 0) AS pending_quantity
+                            FROM customer_order_items oi
+                            INNER JOIN customer_orders co ON oi.order_id = co.id
+                            INNER JOIN finished_products fp2 ON fp2.product_id = oi.product_id AND fp2.batch_number = ?
+                            WHERE co.status = 'pending'
+                        ", [$batchNumber]);
+                        $pendingQty = (float)($pending['pending_quantity'] ?? 0);
+                        
+                        // حساب الكمية المحجوزة في طلبات الشحن المعلقة
+                        $pendingShipping = $db->queryOne("
+                            SELECT COALESCE(SUM(soi.quantity), 0) AS pending_quantity
+                            FROM shipping_company_order_items soi
+                            INNER JOIN shipping_company_orders sco ON soi.order_id = sco.id
+                            WHERE sco.status = 'in_transit'
+                              AND soi.batch_id = ?
+                        ", [$batchId]);
+                        $pendingShippingQty = (float)($pendingShipping['pending_quantity'] ?? 0);
+                    } catch (Throwable $calcError) {
+                        error_log('shipping_orders: error calculating available quantity for batch ' . $batchNumber . ': ' . $calcError->getMessage());
+                    }
+                }
+                
+                // حساب الكمية المتاحة
+                // ملاحظة: quantity_produced يتم تحديثه تلقائياً عند المبيعات وطلبات الشحن
+                // لذلك نحتاج فقط خصم طلبات العملاء المعلقة (pendingQty)
+                $availableQuantity = max(0, $quantity - $pendingQty);
+                
+                // عرض جميع المنتجات حتى لو كانت الكمية المتاحة صفر (مثل نقطة بيع المدير)
+                $productsList[] = [
+                    'id' => (int)$fp['id'] + 1000000, // استخدام رقم فريد لمنتجات المصنع
+                    'name' => $productName . ($batchNumber ? ' (' . $batchNumber . ')' : ''),
+                    'quantity' => $availableQuantity,
+                    'total_quantity' => $quantity, // الكمية الإجمالية قبل طرح المبيعات
+                    'unit' => $fp['unit'] ?? 'قطعة',
+                    'unit_price' => $unitPrice,
+                    'batch_number' => $batchNumber,
+                    'batch_id' => $fp['batch_id'] ?? null,
+                    'product_type' => 'factory',
+                    'original_id' => (int)$fp['id']
+                ];
+            }
+        } catch (Throwable $factoryError) {
+            error_log('shipping_orders: failed fetching factory products -> ' . $factoryError->getMessage());
+        }
+    }
+    
+    // جلب المنتجات الخارجية من products
+    try {
+        $externalProducts = $db->query("
+            SELECT 
+                id,
+                name,
+                quantity,
+                COALESCE(unit, 'قطعة') as unit,
+                unit_price
+            FROM products
+            WHERE product_type = 'external'
+              AND status = 'active'
+              AND quantity > 0
+            ORDER BY name ASC
+        ");
+        
+        foreach ($externalProducts as $ep) {
+            $productsList[] = [
+                'id' => (int)$ep['id'],
+                'name' => $ep['name'] ?? 'غير محدد',
+                'quantity' => (float)($ep['quantity'] ?? 0),
+                'unit' => $ep['unit'] ?? 'قطعة',
+                'unit_price' => (float)($ep['unit_price'] ?? 0),
+                'batch_number' => null,
+                'batch_id' => null,
+                'product_type' => 'external',
+                'original_id' => (int)$ep['id']
+            ];
+        }
+    } catch (Throwable $externalError) {
+        error_log('shipping_orders: failed fetching external products -> ' . $externalError->getMessage());
+    }
+    
+    // ترتيب المنتجات حسب الاسم
+    usort($productsList, function($a, $b) {
+        return strcmp($a['name'] ?? '', $b['name'] ?? '');
+    });
+    
+    $availableProducts = $productsList;
+    
+} catch (Throwable $productsError) {
+    error_log('shipping_orders: failed fetching products -> ' . $productsError->getMessage());
+    $availableProducts = [];
+}
+
+$orders = [];
+try {
+    // جلب الطلبات مع البحث عن العملاء في كلا الجدولين (local_customers و customers)
+    $orders = $db->query(
+        "SELECT 
+            sco.*, 
+            sc.name AS shipping_company_name,
+            sc.balance AS company_balance,
+            COALESCE(lc.name, c.name) AS customer_name,
+            COALESCE(lc.phone, c.phone) AS customer_phone,
+            COALESCE(lc.balance, c.balance, 0) AS customer_balance,
+            i.invoice_number
+        FROM shipping_company_orders sco
+        LEFT JOIN shipping_companies sc ON sco.shipping_company_id = sc.id
+        LEFT JOIN local_customers lc ON sco.customer_id = lc.id
+        LEFT JOIN customers c ON sco.customer_id = c.id AND lc.id IS NULL
+        LEFT JOIN invoices i ON sco.invoice_id = i.id
+        ORDER BY sco.created_at DESC
+        LIMIT 50"
+    );
+} catch (Throwable $ordersError) {
+    error_log('shipping_orders: failed fetching orders -> ' . $ordersError->getMessage());
+    $orders = [];
+}
+
+$ordersStats = [
+    'total_orders' => 0,
+    'active_orders' => 0,
+    'delivered_orders' => 0,
+    'outstanding_amount' => 0.0,
+];
+
+try {
+    $statsRow = $db->queryOne(
+        "SELECT 
+            COUNT(*) AS total_orders,
+            SUM(CASE WHEN status = 'in_transit' THEN 1 ELSE 0 END) AS active_orders,
+            SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END) AS delivered_orders,
+            SUM(CASE WHEN status = 'in_transit' THEN total_amount ELSE 0 END) AS outstanding_amount
+        FROM shipping_company_orders"
+    );
+
+    if ($statsRow) {
+        $ordersStats['total_orders'] = (int)($statsRow['total_orders'] ?? 0);
+        $ordersStats['active_orders'] = (int)($statsRow['active_orders'] ?? 0);
+        $ordersStats['delivered_orders'] = (int)($statsRow['delivered_orders'] ?? 0);
+        $ordersStats['outstanding_amount'] = (float)($statsRow['outstanding_amount'] ?? 0);
+    }
+} catch (Throwable $statsError) {
+    error_log('shipping_orders: failed fetching stats -> ' . $statsError->getMessage());
+}
+
+$statusLabels = [
+    'assigned' => ['label' => 'تم التسليم لشركة الشحن', 'class' => 'bg-primary'],
+    'in_transit' => ['label' => 'جاري الشحن', 'class' => 'bg-warning text-dark'],
+    'delivered' => ['label' => 'تم التسليم للعميل', 'class' => 'bg-success'],
+    'cancelled' => ['label' => 'ملغي', 'class' => 'bg-secondary'],
+];
+
+$hasProducts = !empty($availableProducts);
+$hasShippingCompanies = !empty($shippingCompanies);
+?>
+
+<?php if ($error): ?>
+    <div class="alert alert-danger alert-dismissible fade show" id="errorAlert" data-auto-refresh="true">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        <?php echo htmlspecialchars($error); ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+<?php endif; ?>
+
+<?php if ($success): ?>
+    <div class="alert alert-success alert-dismissible fade show" id="successAlert" data-auto-refresh="true">
+        <i class="bi bi-check-circle-fill me-2"></i>
+        <?php echo htmlspecialchars($success); ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+<?php endif; ?>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3 col-sm-6">
+        <div class="stat-card">
+            <div class="stat-card-header">
+                <div class="stat-card-icon blue"><i class="bi bi-building"></i></div>
+            </div>
+            <div class="stat-card-title">شركات الشحن</div>
+            <div class="stat-card-value"><?php echo number_format(count($shippingCompanies)); ?></div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="stat-card">
+            <div class="stat-card-header">
+                <div class="stat-card-icon orange"><i class="bi bi-truck"></i></div>
+            </div>
+            <div class="stat-card-title">طلبات نشطة</div>
+            <div class="stat-card-value"><?php echo number_format($ordersStats['active_orders']); ?></div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="stat-card">
+            <div class="stat-card-header">
+                <div class="stat-card-icon green"><i class="bi bi-check2-circle"></i></div>
+            </div>
+            <div class="stat-card-title">طلبات مكتملة</div>
+            <div class="stat-card-value"><?php echo number_format($ordersStats['delivered_orders']); ?></div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="stat-card">
+            <div class="stat-card-header">
+                <div class="stat-card-icon purple"><i class="bi bi-cash-stack"></i></div>
+            </div>
+            <div class="stat-card-title">مبالغ قيد التحصيل</div>
+            <div class="stat-card-value"><?php echo formatCurrency($ordersStats['outstanding_amount']); ?></div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+            <h5 class="mb-1">تسجيل طلب شحن جديد</h5>
+            <small class="text-muted">قم بتسليم المنتجات لشركة الشحن وتتبع الدين عليها لحين استلام العميل.</small>
+        </div>
+        <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addShippingCompanyModal">
+            <i class="bi bi-plus-circle me-1"></i>شركة شحن جديدة
+        </button>
+    </div>
+    <div class="card-body">
+        <?php if (!$hasShippingCompanies): ?>
+            <div class="alert alert-warning d-flex align-items-center gap-2 mb-0">
+                <i class="bi bi-info-circle-fill fs-5"></i>
+                <div>لم يتم إضافة شركات شحن بعد. يرجى إضافة شركة شحن قبل تسجيل الطلبات.</div>
+            </div>
+        <?php elseif (!$hasProducts): ?>
+            <div class="alert alert-warning d-flex align-items-center gap-2 mb-0">
+                <i class="bi bi-box-seam fs-5"></i>
+                <div>لا توجد منتجات متاحة في المخزن الرئيسي حالياً.</div>
+            </div>
+        <?php elseif (empty($activeCustomers)): ?>
+            <div class="alert alert-warning d-flex align-items-center gap-2 mb-0">
+                <i class="bi bi-people fs-5"></i>
+                <div>لا توجد عملاء نشطون في النظام. قم بإضافة عميل أولاً.</div>
+            </div>
+        <?php else: ?>
+            <form method="POST" id="shippingOrderForm" class="needs-validation" novalidate>
+                <input type="hidden" name="action" value="create_shipping_order">
+                <div class="row g-3 mb-3">
+                    <div class="col-lg-4 col-md-6">
+                        <label class="form-label">شركة الشحن <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <select class="form-select" name="shipping_company_id" required>
+                                <option value="">اختر شركة الشحن</option>
+                                <?php foreach ($shippingCompanies as $company): ?>
+                                    <option value="<?php echo (int)$company['id']; ?>">
+                                        <?php echo htmlspecialchars($company['name']); ?>
+                                        <?php if (!empty($company['phone'])): ?>
+                                            - <?php echo htmlspecialchars($company['phone']); ?>
+                                        <?php endif; ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#addShippingCompanyModal" title="إضافة شركة شحن">
+                                <i class="bi bi-plus"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-lg-4 col-md-6">
+                        <label class="form-label">العميل <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <select class="form-select" name="customer_id" id="customerSelect" required>
+                                <option value="">اختر العميل</option>
+                                <?php foreach ($activeCustomers as $customer): ?>
+                                    <option value="<?php echo (int)$customer['id']; ?>">
+                                        <?php echo htmlspecialchars($customer['name']); ?>
+                                        <?php if (!empty($customer['phone'])): ?>
+                                            - <?php echo htmlspecialchars($customer['phone']); ?>
+                                        <?php endif; ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#addLocalCustomerModal" title="إضافة عميل جديد">
+                                <i class="bi bi-plus"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <label class="form-label">المخزن المصدر</label>
+                        <div class="form-control bg-light">
+                            <i class="bi bi-building me-1"></i>
+                            <?php echo htmlspecialchars($mainWarehouse['name'] ?? 'المخزن الرئيسي'); ?>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-responsive mb-3">
+                    <table class="table table-sm align-middle" id="shippingItemsTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="min-width: 220px;">المنتج</th>
+                                <th style="width: 110px;">المتاح</th>
+                                <th style="width: 140px;">الكمية <span class="text-danger">*</span></th>
+                                <th style="width: 160px;">سعر الوحدة <span class="text-danger">*</span></th>
+                                <th style="width: 160px;">الإجمالي</th>
+                                <th style="width: 80px;">حذف</th>
+                            </tr>
+                        </thead>
+                        <tbody id="shippingItemsBody"></tbody>
+                    </table>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="addShippingItemBtn">
+                        <i class="bi bi-plus-circle me-1"></i>إضافة منتج
+                    </button>
+                    <div class="shipping-order-summary card bg-light border-0 px-3 py-2">
+                        <div class="d-flex align-items-center gap-3">
+                            <div>
+                                <div class="small text-muted">إجمالي عدد المنتجات</div>
+                                <div class="fw-semibold" id="shippingItemsCount">0</div>
+                            </div>
+                            <div>
+                                <div class="small text-muted">إجمالي الطلب</div>
+                                <div class="fw-bold text-success" id="shippingOrderTotal"><?php echo formatCurrency(0); ?></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">ملاحظات إضافية</label>
+                    <textarea class="form-control" name="order_notes" rows="2" placeholder="أي تفاصيل إضافية لشركة الشحن أو فريق المبيعات (اختياري)"></textarea>
+                </div>
+
+                <div class="alert alert-info d-flex align-items-center gap-2">
+                    <i class="bi bi-info-circle-fill fs-5"></i>
+                    <div>
+                        سيتم تسجيل هذا الطلب على شركة الشحن كدين لحين تأكيد التسليم للعميل، ثم يتحول الدين إلى العميل ليتم تحصيله لاحقاً.
+                    </div>
+                </div>
+
+                <div class="text-end">
+                    <button type="submit" class="btn btn-success btn-lg" id="submitShippingOrderBtn">
+                        <i class="bi bi-send-check me-1"></i>تسجيل الطلب وتسليم المنتجات
+                    </button>
+                </div>
+            </form>
+        <?php endif; ?>
+    </div>
+</div>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">شركات الشحن</h5>
+    </div>
+    <div class="card-body p-0">
+        <?php if (empty($shippingCompanies)): ?>
+            <div class="p-4 text-center text-muted">لم يتم إضافة شركات شحن بعد.</div>
+        <?php else: ?>
+            <div class="table-responsive">
+                <table class="table table-striped table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>الاسم</th>
+                            <th>الهاتف</th>
+                            <th>الحالة</th>
+                            <th>ديون الشركة</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($shippingCompanies as $company): ?>
+                            <tr>
+                                <td><?php echo htmlspecialchars($company['name']); ?></td>
+                                <td><?php echo $company['phone'] ? htmlspecialchars($company['phone']) : '<span class="text-muted">غير متوفر</span>'; ?></td>
+                                <td>
+                                    <?php if (($company['status'] ?? '') === 'active'): ?>
+                                        <span class="badge bg-success">نشطة</span>
+                                    <?php else: ?>
+                                        <span class="badge bg-secondary">غير نشطة</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="fw-semibold text-<?php echo ($company['balance'] ?? 0) > 0 ? 'danger' : 'muted'; ?>">
+                                    <?php echo formatCurrency((float)($company['balance'] ?? 0)); ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header">
+        <h5 class="mb-0">طلبات الشحن</h5>
+    </div>
+    <div class="card-body p-0">
+        <?php
+        // تقسيم الطلبات حسب الحالة
+        $activeOrders = array_filter($orders, function($order) {
+            return in_array($order['status'], ['in_transit'], true);
+        });
+        $deliveredOrders = array_filter($orders, function($order) {
+            return $order['status'] === 'delivered';
+        });
+        $cancelledOrders = array_filter($orders, function($order) {
+            return $order['status'] === 'cancelled';
+        });
+        ?>
+        
+        <ul class="nav nav-tabs card-header-tabs border-0" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="active-orders-tab" data-bs-toggle="tab" data-bs-target="#active-orders" type="button" role="tab">
+                    جاري الشحن <span class="badge bg-warning text-dark ms-1"><?php echo count($activeOrders); ?></span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="delivered-orders-tab" data-bs-toggle="tab" data-bs-target="#delivered-orders" type="button" role="tab">
+                    تم التسليم <span class="badge bg-success ms-1"><?php echo count($deliveredOrders); ?></span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="cancelled-orders-tab" data-bs-toggle="tab" data-bs-target="#cancelled-orders" type="button" role="tab">
+                    ملغاة <span class="badge bg-secondary ms-1"><?php echo count($cancelledOrders); ?></span>
+                </button>
+            </li>
+        </ul>
+        
+        <div class="tab-content">
+            <!-- طلبات جارية -->
+            <div class="tab-pane fade show active" id="active-orders" role="tabpanel">
+                <?php if (empty($activeOrders)): ?>
+                    <div class="p-4 text-center text-muted">لا توجد طلبات جارية حالياً.</div>
+                <?php else: ?>
+                    <div class="table-responsive">
+                        <table class="table table-hover table-nowrap mb-0 align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>رقم الطلب</th>
+                                    <th>شركة الشحن</th>
+                                    <th>العميل</th>
+                                    <th>المبلغ</th>
+                                    <th>الحالة</th>
+                                    <th>تاريخ التسليم للشركة</th>
+                                    <th>الفاتورة</th>
+                                    <th style="width: 250px;">الإجراءات</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($activeOrders as $order): ?>
+                                    <?php
+                                        $statusInfo = $statusLabels[$order['status']] ?? ['label' => $order['status'], 'class' => 'bg-secondary'];
+                                        $invoiceLink = '';
+                                        if (!empty($order['invoice_id'])) {
+                                            $invoiceUrl = getRelativeUrl('print_invoice.php?id=' . (int)$order['invoice_id']);
+                                            $invoiceLink = '<a href="' . htmlspecialchars($invoiceUrl) . '" target="_blank" class="btn btn-outline-primary btn-sm"><i class="bi bi-file-earmark-text me-1"></i>عرض الفاتورة</a>';
+                                        }
+                                    ?>
+                                    <tr>
+                                        <td>
+                                            <div class="fw-semibold">#<?php echo htmlspecialchars($order['order_number']); ?></div>
+                                            <div class="text-muted small">سجل في <?php echo formatDateTime($order['created_at']); ?></div>
+                                        </td>
+                                        <td>
+                                            <div class="fw-semibold"><?php echo htmlspecialchars($order['shipping_company_name'] ?? 'غير معروف'); ?></div>
+                                            <div class="text-muted small">دين حالي: <?php echo formatCurrency((float)($order['company_balance'] ?? 0)); ?></div>
+                                        </td>
+                                        <td>
+                                            <div class="fw-semibold"><?php echo htmlspecialchars($order['customer_name'] ?? 'غير محدد'); ?></div>
+                                            <?php if (!empty($order['customer_phone'])): ?>
+                                                <div class="text-muted small"><i class="bi bi-telephone"></i> <?php echo htmlspecialchars($order['customer_phone']); ?></div>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td class="fw-semibold"><?php echo formatCurrency((float)$order['total_amount']); ?></td>
+                                        <td>
+                                            <span class="badge <?php echo $statusInfo['class']; ?>">
+                                                <?php echo htmlspecialchars($statusInfo['label']); ?>
+                                            </span>
+                                            <?php if (!empty($order['handed_over_at'])): ?>
+                                                <div class="text-muted small mt-1">سُلِّم للشركة: <?php echo formatDateTime($order['handed_over_at']); ?></div>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <?php if (!empty($order['handed_over_at'])): ?>
+                                                <span class="text-info fw-semibold"><?php echo formatDateTime($order['handed_over_at']); ?></span>
+                                            <?php else: ?>
+                                                <span class="text-muted">-</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td><?php echo $invoiceLink ?: '<span class="text-muted">لا توجد فاتورة</span>'; ?></td>
+                                        <td>
+                                            <div class="d-flex flex-wrap gap-2">
+                                                <form method="POST" class="d-inline" onsubmit="return confirm('هل ترغب في إلغاء هذا الطلب وإرجاع المنتجات إلى المخزن الرئيسي؟');">
+                                                    <input type="hidden" name="action" value="cancel_shipping_order">
+                                                    <input type="hidden" name="order_id" value="<?php echo (int)$order['id']; ?>">
+                                                    <button type="submit" class="btn btn-outline-danger btn-sm">
+                                                        <i class="bi bi-x-circle me-1"></i>طلب ملغي
+                                                    </button>
+                                                </form>
+                                                <button type="button" 
+                                                        class="btn btn-success btn-sm" 
+                                                        data-bs-toggle="modal" 
+                                                        data-bs-target="#deliveryModal"
+                                                        data-order-id="<?php echo (int)$order['id']; ?>"
+                                                        data-order-number="<?php echo htmlspecialchars($order['order_number'] ?? ''); ?>"
+                                                        data-customer-id="<?php echo (int)($order['customer_id'] ?? 0); ?>"
+                                                        data-customer-name="<?php echo htmlspecialchars($order['customer_name'] ?? 'غير محدد'); ?>"
+                                                        data-customer-balance="<?php echo (float)($order['customer_balance'] ?? 0); ?>"
+                                                        data-total-amount="<?php echo (float)$order['total_amount']; ?>"
+                                                        data-shipping-company-name="<?php echo htmlspecialchars($order['shipping_company_name'] ?? 'غير معروف'); ?>"
+                                                        data-company-balance="<?php echo (float)($order['company_balance'] ?? 0); ?>">
+                                                    <i class="bi bi-check-circle me-1"></i>تم التسليم
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
+            
+            <!-- طلبات مكتملة -->
+            <div class="tab-pane fade" id="delivered-orders" role="tabpanel">
+                <?php if (empty($deliveredOrders)): ?>
+                    <div class="p-4 text-center text-muted">لا توجد طلبات مكتملة.</div>
+                <?php else: ?>
+                    <div class="table-responsive">
+                        <table class="table table-hover table-nowrap mb-0 align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>رقم الطلب</th>
+                                    <th>شركة الشحن</th>
+                                    <th>العميل</th>
+                                    <th>المبلغ</th>
+                                    <th>تاريخ التسليم للعميل</th>
+                                    <th>الفاتورة</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($deliveredOrders as $order): ?>
+                                    <?php
+                                        $deliveredAt = $order['delivered_at'] ?? null;
+                                        $invoiceLink = '';
+                                        if (!empty($order['invoice_id'])) {
+                                            $invoiceUrl = getRelativeUrl('print_invoice.php?id=' . (int)$order['invoice_id']);
+                                            $invoiceLink = '<a href="' . htmlspecialchars($invoiceUrl) . '" target="_blank" class="btn btn-outline-primary btn-sm"><i class="bi bi-file-earmark-text me-1"></i>عرض الفاتورة</a>';
+                                        }
+                                    ?>
+                                    <tr>
+                                        <td>
+                                            <div class="fw-semibold">#<?php echo htmlspecialchars($order['order_number']); ?></div>
+                                            <div class="text-muted small">سجل في <?php echo formatDateTime($order['created_at']); ?></div>
+                                        </td>
+                                        <td>
+                                            <div class="fw-semibold"><?php echo htmlspecialchars($order['shipping_company_name'] ?? 'غير معروف'); ?></div>
+                                        </td>
+                                        <td>
+                                            <div class="fw-semibold"><?php echo htmlspecialchars($order['customer_name'] ?? 'غير محدد'); ?></div>
+                                            <?php if (!empty($order['customer_phone'])): ?>
+                                                <div class="text-muted small"><i class="bi bi-telephone"></i> <?php echo htmlspecialchars($order['customer_phone']); ?></div>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td class="fw-semibold"><?php echo formatCurrency((float)$order['total_amount']); ?></td>
+                                        <td>
+                                            <?php if ($deliveredAt): ?>
+                                                <span class="text-success fw-semibold"><?php echo formatDateTime($deliveredAt); ?></span>
+                                            <?php else: ?>
+                                                <span class="text-muted">-</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td><?php echo $invoiceLink ?: '<span class="text-muted">لا توجد فاتورة</span>'; ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
+            
+            <!-- طلبات ملغاة -->
+            <div class="tab-pane fade" id="cancelled-orders" role="tabpanel">
+                <?php if (empty($cancelledOrders)): ?>
+                    <div class="p-4 text-center text-muted">لا توجد طلبات ملغاة.</div>
+                <?php else: ?>
+                    <div class="table-responsive">
+                        <table class="table table-hover table-nowrap mb-0 align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>رقم الطلب</th>
+                                    <th>شركة الشحن</th>
+                                    <th>العميل</th>
+                                    <th>المبلغ</th>
+                                    <th>تاريخ الإلغاء</th>
+                                    <th>الفاتورة</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($cancelledOrders as $order): ?>
+                                    <?php
+                                        $invoiceLink = '';
+                                        if (!empty($order['invoice_id'])) {
+                                            $invoiceUrl = getRelativeUrl('print_invoice.php?id=' . (int)$order['invoice_id']);
+                                            $invoiceLink = '<a href="' . htmlspecialchars($invoiceUrl) . '" target="_blank" class="btn btn-outline-primary btn-sm"><i class="bi bi-file-earmark-text me-1"></i>عرض الفاتورة</a>';
+                                        }
+                                    ?>
+                                    <tr>
+                                        <td>
+                                            <div class="fw-semibold">#<?php echo htmlspecialchars($order['order_number']); ?></div>
+                                            <div class="text-muted small">سجل في <?php echo formatDateTime($order['created_at']); ?></div>
+                                        </td>
+                                        <td>
+                                            <div class="fw-semibold"><?php echo htmlspecialchars($order['shipping_company_name'] ?? 'غير معروف'); ?></div>
+                                        </td>
+                                        <td>
+                                            <div class="fw-semibold"><?php echo htmlspecialchars($order['customer_name'] ?? 'غير محدد'); ?></div>
+                                            <?php if (!empty($order['customer_phone'])): ?>
+                                                <div class="text-muted small"><i class="bi bi-telephone"></i> <?php echo htmlspecialchars($order['customer_phone']); ?></div>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td class="fw-semibold"><?php echo formatCurrency((float)$order['total_amount']); ?></td>
+                                        <td>
+                                            <?php if (!empty($order['updated_at'])): ?>
+                                                <span class="text-muted"><?php echo formatDateTime($order['updated_at']); ?></span>
+                                            <?php else: ?>
+                                                <span class="text-muted">-</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td><?php echo $invoiceLink ?: '<span class="text-muted">لا توجد فاتورة</span>'; ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="addShippingCompanyModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-truck me-2"></i>إضافة شركة شحن</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST">
+                <input type="hidden" name="action" value="add_shipping_company">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">اسم الشركة <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="company_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">الشخص المسؤول</label>
+                        <input type="text" class="form-control" name="contact_person" placeholder="اسم الشخص المسؤول (اختياري)">
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">رقم الهاتف</label>
+                            <input type="text" class="form-control" name="phone" placeholder="مثال: 01000000000">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">البريد الإلكتروني</label>
+                            <input type="email" class="form-control" name="email" placeholder="example@domain.com">
+                        </div>
+                    </div>
+                    <div class="mb-3 mt-3">
+                        <label class="form-label">العنوان</label>
+                        <textarea class="form-control" name="address" rows="2" placeholder="عنوان شركة الشحن (اختياري)"></textarea>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label">ملاحظات</label>
+                        <textarea class="form-control" name="company_notes" rows="2" placeholder="أي معلومات إضافية (اختياري)"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save me-1"></i>حفظ
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="addLocalCustomerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-person-plus me-2"></i>إضافة عميل جديد</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" id="addLocalCustomerForm">
+                <input type="hidden" name="action" value="add_local_customer">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">اسم العميل <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="customer_name" id="newCustomerName" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">رقم الهاتف</label>
+                        <input type="text" class="form-control" name="customer_phone" id="newCustomerPhone" placeholder="مثال: 01000000000">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">العنوان</label>
+                        <textarea class="form-control" name="customer_address" id="newCustomerAddress" rows="2" placeholder="عنوان العميل (اختياري)"></textarea>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label">الرصيد الابتدائي</label>
+                        <input type="number" class="form-control" name="customer_balance" id="newCustomerBalance" value="0" step="0.01" min="0">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save me-1"></i>حفظ
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const products = <?php echo json_encode(array_map(function ($product) {
+        return [
+            'id' => (int)($product['id'] ?? 0),
+            'name' => $product['name'] ?? '',
+            'quantity' => (float)($product['quantity'] ?? 0),
+            'unit_price' => (float)($product['unit_price'] ?? 0),
+            'unit' => $product['unit'] ?? '',
+            'batch_id' => isset($product['batch_id']) ? (int)$product['batch_id'] : null,
+            'batch_number' => $product['batch_number'] ?? null,
+            'product_type' => $product['product_type'] ?? 'external'
+        ];
+    }, $availableProducts), JSON_UNESCAPED_UNICODE); ?>;
+
+    const itemsBody = document.getElementById('shippingItemsBody');
+    const addItemBtn = document.getElementById('addShippingItemBtn');
+    const itemsCountEl = document.getElementById('shippingItemsCount');
+    const orderTotalEl = document.getElementById('shippingOrderTotal');
+    const submitBtn = document.getElementById('submitShippingOrderBtn');
+
+    if (!itemsBody || !addItemBtn) {
+        return;
+    }
+
+    if (!Array.isArray(products) || !products.length) {
+        if (submitBtn) {
+            submitBtn.disabled = true;
+        }
+        return;
+    }
+
+    let rowIndex = 0;
+
+    const formatCurrency = (value) => {
+        return new Intl.NumberFormat('ar-EG', { style: 'currency', currency: 'EGP', minimumFractionDigits: 2 }).format(value || 0);
+    };
+
+    const escapeHtml = (value) => {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        return value.replace(/[&<>"']/g, function (char) {
+            switch (char) {
+                case '&': return '&amp;';
+                case '<': return '&lt;';
+                case '>': return '&gt;';
+                case '"': return '&quot;';
+                case "'": return '&#39;';
+                default: return char;
+            }
+        });
+    };
+
+    const buildProductOptions = () => {
+        return products.map(product => {
+            const available = Number(product.quantity || 0).toFixed(2);
+            const unitPrice = Number(product.unit_price || 0).toFixed(2);
+            const unit = escapeHtml(product.unit || 'وحدة');
+            const name = escapeHtml(product.name || '');
+            const batchId = product.batch_id || '';
+            const productType = product.product_type || 'external';
+            return `
+                <option value="${product.id}" 
+                        data-available="${available}" 
+                        data-unit-price="${unitPrice}"
+                        data-batch-id="${batchId}"
+                        data-product-type="${productType}">
+                    ${name} (المتاح: ${available} ${unit})
+                </option>
+            `;
+        }).join('');
+    };
+
+    const recalculateTotals = () => {
+        const rows = itemsBody.querySelectorAll('tr');
+        let totalItems = 0;
+        let totalAmount = 0;
+
+        rows.forEach(row => {
+            const quantityInput = row.querySelector('input[name$="[quantity]"]');
+            const unitPriceInput = row.querySelector('input[name$="[unit_price]"]');
+            const lineTotalEl = row.querySelector('.line-total');
+
+            const quantity = parseFloat(quantityInput?.value || '0');
+            const unitPrice = parseFloat(unitPriceInput?.value || '0');
+            const lineTotal = quantity * unitPrice;
+
+            if (quantity > 0) {
+                totalItems += quantity;
+            }
+            totalAmount += lineTotal;
+
+            if (lineTotalEl) {
+                lineTotalEl.textContent = formatCurrency(lineTotal);
+            }
+        });
+
+        if (itemsCountEl) {
+            itemsCountEl.textContent = totalItems.toLocaleString('ar-EG', { maximumFractionDigits: 2 });
+        }
+        if (orderTotalEl) {
+            orderTotalEl.textContent = formatCurrency(totalAmount);
+        }
+    };
+
+    const attachRowEvents = (row) => {
+        const productSelect = row.querySelector('select[name$="[product_id]"]');
+        const quantityInput = row.querySelector('input[name$="[quantity]"]');
+        const unitPriceInput = row.querySelector('input[name$="[unit_price]"]');
+        const availableBadges = row.querySelectorAll('.available-qty');
+        const removeBtn = row.querySelector('.remove-item');
+
+        const updateAvailability = () => {
+            const selectedOption = productSelect?.selectedOptions?.[0];
+            const available = parseFloat(selectedOption?.dataset?.available || '0');
+            const unitPrice = parseFloat(selectedOption?.dataset?.unitPrice || '0');
+            const batchId = selectedOption?.dataset?.batchId || '';
+            const productType = selectedOption?.dataset?.productType || 'external';
+
+            // تحديث الحقول المخفية
+            const batchIdInput = row.querySelector('.batch-id-input');
+            const productTypeInput = row.querySelector('.product-type-input');
+            if (batchIdInput) {
+                batchIdInput.value = batchId;
+            }
+            if (productTypeInput) {
+                productTypeInput.value = productType;
+            }
+
+            if (quantityInput) {
+                quantityInput.max = available > 0 ? String(available) : '';
+                if (available > 0 && parseFloat(quantityInput.value || '0') > available) {
+                    quantityInput.value = available;
+                }
+            }
+
+            if (unitPriceInput && (!unitPriceInput.value || parseFloat(unitPriceInput.value) <= 0)) {
+                unitPriceInput.value = unitPrice.toFixed(2);
+            }
+
+            if (availableBadges.length) {
+                const message = selectedOption && available > 0
+                    ? `المتاح: ${available.toLocaleString('ar-EG')} وحدة`
+                    : 'لا توجد كمية متاحة';
+                availableBadges.forEach((badge) => {
+                    badge.textContent = message;
+                    badge.classList.toggle('text-danger', !(selectedOption && available > 0));
+                });
+            }
+
+            recalculateTotals();
+        };
+
+        productSelect?.addEventListener('change', updateAvailability);
+        quantityInput?.addEventListener('input', recalculateTotals);
+        unitPriceInput?.addEventListener('input', recalculateTotals);
+
+        removeBtn?.addEventListener('click', () => {
+            if (itemsBody.children.length > 1) {
+                row.remove();
+                recalculateTotals();
+            }
+        });
+
+        updateAvailability();
+    };
+
+    const addNewRow = () => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>
+                <select class="form-select" name="items[${rowIndex}][product_id]" required>
+                    <option value="">اختر المنتج</option>
+                    ${buildProductOptions()}
+                </select>
+                <input type="hidden" name="items[${rowIndex}][batch_id]" class="batch-id-input">
+                <input type="hidden" name="items[${rowIndex}][product_type]" class="product-type-input">
+            </td>
+            <td class="text-muted fw-semibold">
+                <span class="available-qty d-inline-block">-</span>
+            </td>
+            <td>
+                <input type="number" class="form-control" name="items[${rowIndex}][quantity]" step="1" min="0" value="1" required>
+            </td>
+            <td>
+                <input type="number" class="form-control" name="items[${rowIndex}][unit_price]" step="0.1" min="0" required>
+            </td>
+            <td class="fw-semibold line-total">${formatCurrency(0)}</td>
+            <td>
+                <button type="button" class="btn btn-outline-danger btn-sm remove-item" title="حذف المنتج">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </td>
+        `;
+
+        itemsBody.appendChild(row);
+        attachRowEvents(row);
+        rowIndex += 1;
+        recalculateTotals();
+    };
+
+    addItemBtn.addEventListener('click', () => {
+        addNewRow();
+    });
+
+    addNewRow();
+
+    // إضافة validation للنموذج
+    const shippingOrderForm = document.getElementById('shippingOrderForm');
+    if (shippingOrderForm) {
+        shippingOrderForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // التحقق من شركة الشحن
+            const shippingCompanySelect = shippingOrderForm.querySelector('select[name="shipping_company_id"]');
+            if (!shippingCompanySelect || !shippingCompanySelect.value || shippingCompanySelect.value === '') {
+                alert('يرجى اختيار شركة الشحن');
+                shippingCompanySelect?.focus();
+                return false;
+            }
+
+            // التحقق من العميل
+            const customerSelect = shippingOrderForm.querySelector('select[name="customer_id"]');
+            if (!customerSelect || !customerSelect.value || customerSelect.value === '') {
+                alert('يرجى اختيار العميل');
+                customerSelect?.focus();
+                return false;
+            }
+
+            // التحقق من المنتجات
+            const rows = itemsBody.querySelectorAll('tr');
+            let hasValidItems = false;
+            const validationErrors = [];
+
+            rows.forEach((row, index) => {
+                const productSelect = row.querySelector('select[name$="[product_id]"]');
+                const quantityInput = row.querySelector('input[name$="[quantity]"]');
+                const unitPriceInput = row.querySelector('input[name$="[unit_price]"]');
+
+                const productId = productSelect?.value || '';
+                const quantity = parseFloat(quantityInput?.value || '0');
+                const unitPrice = parseFloat(unitPriceInput?.value || '0');
+
+                if (productId && productId !== '') {
+                    if (quantity <= 0) {
+                        validationErrors.push(`المنتج في الصف ${index + 1}: يرجى إدخال كمية صحيحة`);
+                        quantityInput?.classList.add('is-invalid');
+                    } else {
+                        quantityInput?.classList.remove('is-invalid');
+                    }
+
+                    if (unitPrice <= 0) {
+                        validationErrors.push(`المنتج في الصف ${index + 1}: يرجى إدخال سعر وحدة صحيح`);
+                        unitPriceInput?.classList.add('is-invalid');
+                    } else {
+                        unitPriceInput?.classList.remove('is-invalid');
+                    }
+
+                    // التحقق من الكمية المتاحة
+                    const selectedOption = productSelect?.selectedOptions?.[0];
+                    const available = parseFloat(selectedOption?.dataset?.available || '0');
+                    if (quantity > available) {
+                        validationErrors.push(`المنتج في الصف ${index + 1}: الكمية المطلوبة (${quantity}) أكبر من المتاح (${available})`);
+                        quantityInput?.classList.add('is-invalid');
+                    }
+
+                    if (productId && quantity > 0 && unitPrice > 0 && quantity <= available) {
+                        hasValidItems = true;
+                    }
+                }
+            });
+
+            if (!hasValidItems) {
+                alert('يرجى إضافة منتج واحد على الأقل مع كمية وسعر صحيحين');
+                return false;
+            }
+
+            if (validationErrors.length > 0) {
+                alert('يرجى تصحيح الأخطاء التالية:\n' + validationErrors.join('\n'));
+                return false;
+            }
+
+            // إذا تم التحقق من كل شيء، أرسل النموذج
+            this.submit();
+        });
+    }
+})();
+</script>
+
+<!-- Modal لتسليم الطلب -->
+<div class="modal fade" id="deliveryModal" tabindex="-1" aria-labelledby="deliveryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="deliveryModalLabel">
+                    <i class="bi bi-check-circle me-2"></i>تأكيد تسليم الطلب
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" id="deliveryForm">
+                <input type="hidden" name="action" value="complete_shipping_order">
+                <input type="hidden" name="order_id" id="modal_order_id">
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>ملاحظة:</strong> سيتم نقل الدين من شركة الشحن إلى العميل تلقائياً.
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <h6 class="text-muted mb-2">معلومات الطلب</h6>
+                            <p class="mb-1"><strong>رقم الطلب:</strong> <span id="modal_order_number"></span></p>
+                            <p class="mb-1"><strong>شركة الشحن:</strong> <span id="modal_shipping_company"></span></p>
+                            <p class="mb-1"><strong>دين الشركة الحالي:</strong> <span id="modal_company_balance" class="text-danger"></span></p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-muted mb-2">معلومات العميل</h6>
+                            <p class="mb-1"><strong>اسم العميل:</strong> <span id="modal_customer_name"></span></p>
+                            <p class="mb-1"><strong>الرصيد الحالي:</strong> <span id="modal_customer_balance"></span></p>
+                            <p class="mb-1"><strong>المبلغ الإجمالي:</strong> <span id="modal_total_amount" class="text-primary fw-bold"></span></p>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div class="mb-3">
+                        <label for="collected_amount" class="form-label">
+                            <i class="bi bi-cash-coin me-1"></i>المبلغ الذي تم تحصيله من العميل
+                            <span class="text-danger">*</span>
+                        </label>
+                        <input type="number" 
+                               class="form-control" 
+                               id="collected_amount" 
+                               name="collected_amount" 
+                               step="0.01" 
+                               min="0" 
+                               required
+                               placeholder="أدخل المبلغ المحصل من العميل">
+                        <div class="form-text">
+                            سيتم خصم هذا المبلغ من ديون العميل بعد نقل الدين من الشركة.
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-warning" id="balance_warning" style="display: none;">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <span id="balance_warning_text"></span>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-check-circle me-1"></i>تأكيد التسليم
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+    
+    const deliveryModal = document.getElementById('deliveryModal');
+    const deliveryForm = document.getElementById('deliveryForm');
+    const collectedAmountInput = document.getElementById('collected_amount');
+    const balanceWarning = document.getElementById('balance_warning');
+    const balanceWarningText = document.getElementById('balance_warning_text');
+    
+    if (deliveryModal) {
+        deliveryModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            const orderId = button.getAttribute('data-order-id');
+            const orderNumber = button.getAttribute('data-order-number');
+            const customerId = button.getAttribute('data-customer-id');
+            const customerName = button.getAttribute('data-customer-name');
+            const customerBalance = parseFloat(button.getAttribute('data-customer-balance') || 0);
+            const totalAmount = parseFloat(button.getAttribute('data-total-amount') || 0);
+            const shippingCompanyName = button.getAttribute('data-shipping-company-name');
+            const companyBalance = parseFloat(button.getAttribute('data-company-balance') || 0);
+            
+            // تعبئة البيانات في الـ modal
+            document.getElementById('modal_order_id').value = orderId;
+            document.getElementById('modal_order_number').textContent = '#' + orderNumber;
+            document.getElementById('modal_shipping_company').textContent = shippingCompanyName;
+            document.getElementById('modal_company_balance').textContent = companyBalance.toLocaleString('ar-EG', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ج.م';
+            document.getElementById('modal_customer_name').textContent = customerName;
+            document.getElementById('modal_customer_balance').textContent = customerBalance.toLocaleString('ar-EG', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ج.م';
+            document.getElementById('modal_total_amount').textContent = totalAmount.toLocaleString('ar-EG', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ج.م';
+            
+            // تعيين القيمة الافتراضية للمبلغ المحصل (يمكن أن يكون 0 أو المبلغ الكامل)
+            collectedAmountInput.value = '';
+            collectedAmountInput.max = totalAmount;
+            balanceWarning.style.display = 'none';
+        });
+        
+        // التحقق من المبلغ المحصل عند الإدخال
+        if (collectedAmountInput) {
+            collectedAmountInput.addEventListener('input', function() {
+                const collectedAmount = parseFloat(this.value) || 0;
+                const totalAmount = parseFloat(document.getElementById('modal_total_amount').textContent.replace(/[^\d.-]/g, '')) || 0;
+                const customerBalance = parseFloat(document.getElementById('modal_customer_balance').textContent.replace(/[^\d.-]/g, '')) || 0;
+                const newCustomerDebt = customerBalance + totalAmount - collectedAmount;
+                
+                if (collectedAmount > totalAmount) {
+                    balanceWarningText.textContent = 'المبلغ المحصل أكبر من المبلغ الإجمالي للطلب!';
+                    balanceWarning.className = 'alert alert-danger';
+                    balanceWarning.style.display = 'block';
+                } else if (collectedAmount > 0) {
+                    balanceWarningText.textContent = 'بعد التسليم، سيكون رصيد العميل: ' + 
+                        newCustomerDebt.toLocaleString('ar-EG', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ج.م';
+                    balanceWarning.className = 'alert alert-info';
+                    balanceWarning.style.display = 'block';
+                } else {
+                    balanceWarning.style.display = 'none';
+                }
+            });
+        }
+        
+        // تنظيف البيانات عند إغلاق الـ modal
+        deliveryModal.addEventListener('hidden.bs.modal', function() {
+            collectedAmountInput.value = '';
+            balanceWarning.style.display = 'none';
+        });
+    }
+    
+    // معالجة إضافة عميل جديد
+    const addLocalCustomerModal = document.getElementById('addLocalCustomerModal');
+    const addLocalCustomerForm = document.getElementById('addLocalCustomerForm');
+    const customerSelect = document.getElementById('customerSelect');
+    
+    if (addLocalCustomerModal && addLocalCustomerForm && customerSelect) {
+        // عند إغلاق الـ modal بعد إضافة عميل جديد، تحديث القائمة واختيار العميل الجديد
+        addLocalCustomerModal.addEventListener('hidden.bs.modal', function() {
+            <?php if (!empty($_SESSION['new_customer_id'])): ?>
+                const newCustomerId = <?php echo (int)$_SESSION['new_customer_id']; ?>;
+                const newCustomerName = <?php echo json_encode($_SESSION['new_customer_name'] ?? '', JSON_UNESCAPED_UNICODE); ?>;
+                const newCustomerPhone = <?php echo json_encode($_SESSION['new_customer_phone'] ?? '', JSON_UNESCAPED_UNICODE); ?>;
+                
+                // إضافة العميل الجديد إلى القائمة
+                const option = document.createElement('option');
+                option.value = newCustomerId;
+                option.selected = true;
+                let optionText = newCustomerName;
+                if (newCustomerPhone) {
+                    optionText += ' - ' + newCustomerPhone;
+                }
+                option.textContent = optionText;
+                customerSelect.appendChild(option);
+                
+                // مسح البيانات من الجلسة
+                <?php 
+                unset($_SESSION['new_customer_id']);
+                unset($_SESSION['new_customer_name']);
+                unset($_SESSION['new_customer_phone']);
+                ?>
+            <?php endif; ?>
+            
+            // تنظيف النموذج
+            addLocalCustomerForm.reset();
+        });
+    }
+})();
+</script>

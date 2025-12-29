@@ -1,0 +1,1258 @@
+<?php
+/**
+ * صفحة إرسال المهام لقسم الإنتاج
+ */
+
+// تعيين ترميز UTF-8
+if (!headers_sent()) {
+    header('Content-Type: text/html; charset=UTF-8');
+    // إضافة headers لمنع cache لضمان عرض البيانات المحدثة
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0, private');
+    header('Pragma: no-cache');
+    header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
+}
+mb_internal_encoding('UTF-8');
+mb_http_output('UTF-8');
+
+if (!defined('ACCESS_ALLOWED')) {
+    die('Direct access not allowed');
+}
+
+require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/notifications.php';
+require_once __DIR__ . '/../../includes/audit_log.php';
+require_once __DIR__ . '/../../includes/security.php';
+require_once __DIR__ . '/../../includes/path_helper.php';
+require_once __DIR__ . '/../../includes/table_styles.php';
+
+if (!function_exists('getTasksRetentionLimit')) {
+    function getTasksRetentionLimit(): int {
+        if (defined('TASKS_RETENTION_MAX_ROWS')) {
+            $value = (int) TASKS_RETENTION_MAX_ROWS;
+            if ($value > 0) {
+                return $value;
+            }
+        }
+        return 100;
+    }
+}
+
+if (!function_exists('enforceTasksRetentionLimit')) {
+    function enforceTasksRetentionLimit($dbInstance = null, int $maxRows = 100) {
+        $maxRows = (int) $maxRows;
+        if ($maxRows < 1) {
+            $maxRows = 100;
+        }
+
+        try {
+            if ($dbInstance === null) {
+                $dbInstance = db();
+            }
+
+            if (!$dbInstance) {
+                return false;
+            }
+
+            $totalRow = $dbInstance->queryOne("SELECT COUNT(*) AS total FROM tasks");
+            $total = isset($totalRow['total']) ? (int) $totalRow['total'] : 0;
+
+            if ($total <= $maxRows) {
+                return true;
+            }
+
+            $toDelete = $total - $maxRows;
+            $batchSize = 100;
+
+            while ($toDelete > 0) {
+                $currentBatch = min($batchSize, $toDelete);
+
+                // حذف المهام الأقدم فقط، مع استثناء المهام المُنشأة في آخر دقيقة لمنع حذف المهام الجديدة
+                $oldest = $dbInstance->query(
+                    "SELECT id FROM tasks 
+                     WHERE created_at < DATE_SUB(NOW(), INTERVAL 1 MINUTE)
+                     ORDER BY created_at ASC, id ASC 
+                     LIMIT ?",
+                    [$currentBatch]
+                );
+
+                if (empty($oldest)) {
+                    break;
+                }
+
+                $ids = array_map('intval', array_column($oldest, 'id'));
+                $ids = array_filter($ids, static function ($id) {
+                    return $id > 0;
+                });
+
+                if (empty($ids)) {
+                    break;
+                }
+
+                $placeholders = implode(',', array_fill(0, count($ids), '?'));
+                $dbInstance->execute(
+                    "DELETE FROM tasks WHERE id IN ($placeholders)",
+                    $ids
+                );
+
+                $deleted = count($ids);
+                $toDelete -= $deleted;
+
+                if ($deleted < $currentBatch) {
+                    break;
+                }
+            }
+
+            return true;
+        } catch (Throwable $e) {
+            error_log('Tasks retention enforce error: ' . $e->getMessage());
+            return false;
+        }
+    }
+}
+
+requireRole(['manager', 'accountant', 'developer']);
+
+$db = db();
+$currentUser = getCurrentUser();
+$error = '';
+$success = '';
+$tasksRetentionLimit = getTasksRetentionLimit();
+
+// تحديد نوع المستخدم
+$isAccountant = ($currentUser['role'] ?? '') === 'accountant';
+$isManager = ($currentUser['role'] ?? '') === 'manager';
+
+// جلب القوالب (templates) لعرضها في القائمة المنسدلة
+$productTemplates = [];
+try {
+    // محاولة جلب من unified_product_templates أولاً (الأحدث)
+    $unifiedTemplatesCheck = $db->queryOne("SHOW TABLES LIKE 'unified_product_templates'");
+    if (!empty($unifiedTemplatesCheck)) {
+        $productTemplates = $db->query("
+            SELECT DISTINCT product_name 
+            FROM unified_product_templates 
+            WHERE status = 'active' 
+            ORDER BY product_name ASC
+        ");
+    }
+    
+    // إذا لم توجد قوالب في unified_product_templates، جرب product_templates
+    if (empty($productTemplates)) {
+        $templatesCheck = $db->queryOne("SHOW TABLES LIKE 'product_templates'");
+        if (!empty($templatesCheck)) {
+            $productTemplates = $db->query("
+                SELECT DISTINCT product_name 
+                FROM product_templates 
+                WHERE status = 'active' 
+                ORDER BY product_name ASC
+            ");
+        }
+    }
+} catch (Exception $e) {
+    error_log('Error fetching product templates: ' . $e->getMessage());
+    $productTemplates = [];
+}
+
+/**
+ * تأكد من وجود جدول المهام (tasks)
+ */
+try {
+    $tableCheck = $db->queryOne("SHOW TABLES LIKE 'tasks'");
+    if (empty($tableCheck)) {
+        $db->execute("
+            CREATE TABLE IF NOT EXISTS `tasks` (
+              `id` int(11) NOT NULL AUTO_INCREMENT,
+              `title` varchar(255) NOT NULL,
+              `description` text DEFAULT NULL,
+              `assigned_to` int(11) DEFAULT NULL,
+              `created_by` int(11) NOT NULL,
+              `priority` enum('low','normal','high','urgent') DEFAULT 'normal',
+              `status` enum('pending','received','in_progress','completed','cancelled') DEFAULT 'pending',
+              `due_date` date DEFAULT NULL,
+              `completed_at` timestamp NULL DEFAULT NULL,
+              `received_at` timestamp NULL DEFAULT NULL,
+              `started_at` timestamp NULL DEFAULT NULL,
+              `related_type` varchar(50) DEFAULT NULL,
+              `related_id` int(11) DEFAULT NULL,
+              `product_id` int(11) DEFAULT NULL,
+              `quantity` decimal(10,2) DEFAULT NULL,
+              `notes` text DEFAULT NULL,
+              `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              `updated_at` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+              PRIMARY KEY (`id`),
+              KEY `assigned_to` (`assigned_to`),
+              KEY `created_by` (`created_by`),
+              KEY `status` (`status`),
+              KEY `priority` (`priority`),
+              KEY `due_date` (`due_date`),
+              KEY `product_id` (`product_id`),
+              CONSTRAINT `tasks_ibfk_1` FOREIGN KEY (`assigned_to`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+              CONSTRAINT `tasks_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+              CONSTRAINT `tasks_ibfk_3` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE SET NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+    }
+} catch (Exception $e) {
+    error_log('Manager task page table check error: ' . $e->getMessage());
+}
+
+// التحقق من وجود عمود template_id وإضافته إذا لم يكن موجوداً
+try {
+    $templateIdColumn = $db->queryOne("SHOW COLUMNS FROM tasks LIKE 'template_id'");
+    if (empty($templateIdColumn)) {
+        $db->execute("ALTER TABLE tasks ADD COLUMN template_id int(11) NULL AFTER product_id");
+        $db->execute("ALTER TABLE tasks ADD KEY template_id (template_id)");
+        error_log('Added template_id column to tasks table');
+    }
+} catch (Exception $e) {
+    error_log('Error checking/adding template_id column: ' . $e->getMessage());
+}
+
+// التحقق من وجود عمود product_name وإضافته إذا لم يكن موجوداً
+try {
+    $productNameColumn = $db->queryOne("SHOW COLUMNS FROM tasks LIKE 'product_name'");
+    if (empty($productNameColumn)) {
+        $db->execute("ALTER TABLE tasks ADD COLUMN product_name VARCHAR(255) NULL AFTER template_id");
+        error_log('Added product_name column to tasks table');
+    }
+} catch (Exception $e) {
+    error_log('Error checking/adding product_name column: ' . $e->getMessage());
+}
+
+/**
+ * تحميل بيانات المستخدمين
+ */
+$productionUsers = [];
+
+try {
+    $productionUsers = $db->query("
+        SELECT id, full_name
+        FROM users
+        WHERE status = 'active' AND role = 'production'
+        ORDER BY full_name
+    ");
+} catch (Exception $e) {
+    error_log('Manager task page users query error: ' . $e->getMessage());
+}
+
+$allowedTypes = ['general', 'production', 'quality', 'maintenance'];
+$allowedPriorities = ['low', 'normal', 'high', 'urgent'];
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? '';
+
+    if ($action === 'create_production_task') {
+        $taskType = $_POST['task_type'] ?? 'general';
+        $taskType = in_array($taskType, $allowedTypes, true) ? $taskType : 'general';
+
+        $title = trim($_POST['title'] ?? '');
+        $details = trim($_POST['details'] ?? '');
+        $priority = $_POST['priority'] ?? 'normal';
+        $priority = in_array($priority, $allowedPriorities, true) ? $priority : 'normal';
+        $dueDate = $_POST['due_date'] ?? '';
+        $assignees = $_POST['assigned_to'] ?? [];
+        // الحصول على اسم المنتج من حقل الإدخال النصي
+        $productName = trim($_POST['product_name'] ?? '');
+
+        $productQuantityInput = isset($_POST['product_quantity']) ? trim((string)$_POST['product_quantity']) : '';
+        $productQuantity = null;
+        if ($productQuantityInput !== '') {
+            $normalizedQuantity = str_replace(',', '.', $productQuantityInput);
+            if (!is_numeric($normalizedQuantity)) {
+                $error = 'يرجى إدخال كمية صحيحة أو ترك الحقل فارغاً.';
+            } else {
+                $productQuantity = (float)$normalizedQuantity;
+                if ($productQuantity < 0) {
+                    $error = 'لا يمكن أن تكون الكمية سالبة.';
+                }
+            }
+        }
+        if ($productQuantity !== null && $productQuantity <= 0) {
+            $productQuantity = null;
+        }
+
+        if (!is_array($assignees)) {
+            $assignees = [$assignees];
+        }
+
+        $assignees = array_unique(array_filter(array_map('intval', $assignees)));
+        $allowedAssignees = array_map(function ($user) {
+            return (int)($user['id'] ?? 0);
+        }, $productionUsers);
+        $assignees = array_values(array_intersect($assignees, $allowedAssignees));
+
+        if ($error !== '') {
+            // تم ضبط رسالة الخطأ أعلاه (مثل التحقق من الكمية)
+        } elseif (empty($assignees)) {
+            $error = 'يجب اختيار عامل واحد على الأقل لاستلام المهمة.';
+        } elseif ($dueDate && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dueDate)) {
+            $error = 'صيغة تاريخ الاستحقاق غير صحيحة.';
+        } else {
+            try {
+                $db->beginTransaction();
+
+                $relatedTypeValue = 'manager_' . $taskType;
+
+                if ($title === '') {
+                    $title = $taskType === 'production' ? 'مهمة إنتاج جديدة' : 'مهمة جديدة';
+                }
+
+                // الحصول على أسماء العمال المختارين
+                $assigneeNames = [];
+                foreach ($assignees as $assignedId) {
+                    foreach ($productionUsers as $user) {
+                        if ((int)$user['id'] === $assignedId) {
+                            $assigneeNames[] = $user['full_name'];
+                            break;
+                        }
+                    }
+                }
+
+                // إنشاء مهمة واحدة فقط مع حفظ جميع العمال
+                $columns = ['title', 'description', 'created_by', 'priority', 'status', 'related_type'];
+                $values = [$title, $details ?: null, $currentUser['id'], $priority, 'pending', $relatedTypeValue];
+                $placeholders = ['?', '?', '?', '?', '?', '?'];
+
+                // وضع أول عامل في assigned_to للتوافق مع الكود الحالي
+                $firstAssignee = !empty($assignees) ? (int)$assignees[0] : 0;
+                if ($firstAssignee > 0) {
+                    $columns[] = 'assigned_to';
+                    $values[] = $firstAssignee;
+                    $placeholders[] = '?';
+                }
+
+                if ($dueDate) {
+                    $columns[] = 'due_date';
+                    $values[] = $dueDate;
+                    $placeholders[] = '?';
+                }
+
+                // البحث عن template_id و product_id من اسم المنتج - نفس طريقة customer_orders
+                $templateId = null;
+                $productId = null;
+                if ($productName !== '') {
+                    $templateName = trim($productName);
+                    
+                    // أولاً: البحث عن القالب بالاسم في unified_product_templates (النشطة أولاً)
+                    try {
+                        $unifiedCheck = $db->queryOne("SHOW TABLES LIKE 'unified_product_templates'");
+                        if (!empty($unifiedCheck)) {
+                            // البحث في القوالب النشطة أولاً
+                            $template = $db->queryOne(
+                                "SELECT id FROM unified_product_templates WHERE (product_name = ? OR CONCAT('قالب #', id) = ?) AND status = 'active' LIMIT 1",
+                                [$templateName, $templateName]
+                            );
+                            if ($template) {
+                                $templateId = (int)$template['id'];
+                            } else {
+                                // إذا لم يُعثر عليه في النشطة، البحث في جميع القوالب (بما في ذلك غير النشطة)
+                                $template = $db->queryOne(
+                                    "SELECT id FROM unified_product_templates WHERE (product_name = ? OR CONCAT('قالب #', id) = ?) LIMIT 1",
+                                    [$templateName, $templateName]
+                                );
+                                if ($template) {
+                                    $templateId = (int)$template['id'];
+                                }
+                            }
+                        }
+                    } catch (Exception $e) {
+                        error_log('Error searching unified_product_templates: ' . $e->getMessage());
+                    }
+                    
+                    // ثانياً: إذا لم يُعثر عليه، البحث في product_templates
+                    if (!$templateId) {
+                        try {
+                            $productTemplatesCheck = $db->queryOne("SHOW TABLES LIKE 'product_templates'");
+                            if (!empty($productTemplatesCheck)) {
+                                // البحث في القوالب النشطة أولاً
+                                $template = $db->queryOne(
+                                    "SELECT id FROM product_templates WHERE (product_name = ? OR CONCAT('قالب #', id) = ?) AND status = 'active' LIMIT 1",
+                                    [$templateName, $templateName]
+                                );
+                                if ($template) {
+                                    $templateId = (int)$template['id'];
+                                } else {
+                                    // إذا لم يُعثر عليه في النشطة، البحث في جميع القوالب (بما في ذلك غير النشطة)
+                                    $template = $db->queryOne(
+                                        "SELECT id FROM product_templates WHERE (product_name = ? OR CONCAT('قالب #', id) = ?) LIMIT 1",
+                                        [$templateName, $templateName]
+                                    );
+                                    if ($template) {
+                                        $templateId = (int)$template['id'];
+                                    }
+                                }
+                            }
+                        } catch (Exception $e) {
+                            error_log('Error searching product_templates: ' . $e->getMessage());
+                        }
+                    }
+                    
+                    // ثالثاً: إذا لم يُعثر على template_id، البحث عن product_id في products
+                    if (!$templateId) {
+                        try {
+                            $product = $db->queryOne(
+                                "SELECT id FROM products WHERE name = ? AND status = 'active' LIMIT 1",
+                                [$templateName]
+                            );
+                            if ($product) {
+                                $productId = (int)$product['id'];
+                            }
+                        } catch (Exception $e) {
+                            error_log('Error searching products: ' . $e->getMessage());
+                        }
+                    }
+                }
+
+                // بناء notes مع معلومات المنتج والعمال
+                $notesParts = [];
+                if ($details) {
+                    $notesParts[] = $details;
+                }
+                
+                if ($productName !== '') {
+                    $productInfo = 'المنتج: ' . $productName;
+                    if ($productQuantity !== null) {
+                        $productInfo .= ' - الكمية: ' . $productQuantity;
+                    }
+                    $notesParts[] = $productInfo;
+                }
+                
+                // حفظ قائمة العمال في notes
+                if (count($assignees) > 1) {
+                    $assigneesInfo = 'العمال المخصصون: ' . implode(', ', $assigneeNames);
+                    $assigneesInfo .= "\n[ASSIGNED_WORKERS_IDS]:" . implode(',', $assignees);
+                    $notesParts[] = $assigneesInfo;
+                } elseif (count($assignees) === 1) {
+                    $assigneesInfo = 'العامل المخصص: ' . ($assigneeNames[0] ?? '');
+                    $assigneesInfo .= "\n[ASSIGNED_WORKERS_IDS]:" . $assignees[0];
+                    $notesParts[] = $assigneesInfo;
+                }
+                
+                $notesValue = !empty($notesParts) ? implode("\n\n", $notesParts) : null;
+                if ($notesValue) {
+                    $columns[] = 'notes';
+                    $values[] = $notesValue;
+                    $placeholders[] = '?';
+                }
+
+                // حفظ template_id و product_name و product_id - نفس طريقة customer_orders
+                // حفظ template_id (حتى لو كان null) لضمان حفظ product_name بشكل صحيح
+                // عندما template_id = null، يجب أن يتم حفظ product_name لضمان عرضه في الجدول
+                $columns[] = 'template_id';
+                $values[] = $templateId; // يمكن أن يكون null
+                $placeholders[] = '?';
+                
+                // حفظ product_name دائماً (حتى لو كان null أو فارغاً) لضمان الاتساق
+                // هذا يضمن عرض اسم القالب في الجدول حتى لو فشل JOIN مع جداول القوالب أو كان template_id = null
+                // نفس الطريقة المستخدمة في production/tasks.php (السطر 502-519)
+                // نحفظ product_name دائماً لضمان الاتساق بين قاعدة البيانات و audit log
+                $columns[] = 'product_name';
+                $values[] = ($productName !== '') ? $productName : null; // حفظ null إذا كان فارغاً
+                $placeholders[] = '?';
+                
+                // حفظ product_id إذا تم العثور عليه
+                if ($productId !== null && $productId > 0) {
+                    $columns[] = 'product_id';
+                    $values[] = $productId;
+                    $placeholders[] = '?';
+                }
+
+                if ($productQuantity !== null) {
+                    $columns[] = 'quantity';
+                    $values[] = $productQuantity;
+                    $placeholders[] = '?';
+                }
+
+                $sql = "INSERT INTO tasks (" . implode(', ', $columns) . ") VALUES (" . implode(', ', $placeholders) . ")";
+                $result = $db->execute($sql, $values);
+                $taskId = $result['insert_id'] ?? 0;
+
+                if ($taskId <= 0) {
+                    throw new Exception('تعذر إنشاء المهمة.');
+                }
+
+                logAudit(
+                    $currentUser['id'],
+                    'create_production_task',
+                    'tasks',
+                    $taskId,
+                    null,
+                    [
+                        'task_type' => $taskType,
+                        'assigned_to' => $assignees,
+                        'assigned_count' => count($assignees),
+                        'priority' => $priority,
+                        'due_date' => $dueDate,
+                        'product_name' => $productName ?: null,
+                        'quantity' => $productQuantity
+                    ]
+                );
+
+                // إرسال إشعارات لجميع العمال المختارين
+                $notificationTitle = 'مهمة جديدة من الإدارة';
+                $notificationMessage = $title;
+                if (count($assignees) > 1) {
+                    $notificationMessage .= ' (مشتركة مع ' . (count($assignees) - 1) . ' عامل آخر)';
+                }
+
+                foreach ($assignees as $assignedId) {
+                    try {
+                        createNotification(
+                            $assignedId,
+                            $notificationTitle,
+                            $notificationMessage,
+                            'info',
+                            getRelativeUrl('production.php?page=tasks')
+                        );
+                    } catch (Exception $notificationException) {
+                        error_log('Manager task notification error: ' . $notificationException->getMessage());
+                    }
+                }
+
+                $db->commit();
+
+                // تطبيق حد الاحتفاظ بعد الالتزام لضمان عدم حذف المهمة الجديدة
+                // يتم استدعاؤه بعد الالتزام لمنع أي مشاكل في المعاملة
+                enforceTasksRetentionLimit($db, $tasksRetentionLimit);
+
+                // استخدام preventDuplicateSubmission لإعادة التوجيه مع cache-busting
+                // إضافة timestamp فريد لضمان تحديث الصفحة مباشرة
+                $successMessage = 'تم إرسال المهمة بنجاح إلى ' . count($assignees) . ' من عمال الإنتاج.';
+                // تحديد role بناءً على المستخدم الحالي
+                $userRole = ($currentUser['role'] ?? '') === 'accountant' ? 'accountant' : 'manager';
+                preventDuplicateSubmission($successMessage, ['page' => 'production_tasks', '_refresh' => time()], null, $userRole);
+                exit; // منع تنفيذ باقي الكود بعد إعادة التوجيه
+            } catch (Exception $e) {
+                $db->rollback();
+                error_log('Manager production task creation error: ' . $e->getMessage());
+                $error = 'حدث خطأ أثناء إنشاء المهام. يرجى المحاولة مرة أخرى.';
+            }
+        }
+    } elseif ($action === 'cancel_task') {
+        $taskId = intval($_POST['task_id'] ?? 0);
+
+        if ($taskId <= 0) {
+            $error = 'معرف المهمة غير صحيح.';
+        } else {
+            try {
+                $db->beginTransaction();
+
+                // السماح للمحاسب والمدير بإلغاء أي مهمة
+                $isAccountant = ($currentUser['role'] ?? '') === 'accountant';
+                $isManager = ($currentUser['role'] ?? '') === 'manager';
+                
+                if ($isAccountant || $isManager) {
+                    // المحاسب والمدير يمكنهم إلغاء أي مهمة
+                    $task = $db->queryOne(
+                        "SELECT id, title, status FROM tasks WHERE id = ? LIMIT 1",
+                        [$taskId]
+                    );
+                } else {
+                    // المستخدمون الآخرون يمكنهم إلغاء المهام التي أنشأوها فقط
+                    $task = $db->queryOne(
+                        "SELECT id, title, status FROM tasks WHERE id = ? AND created_by = ? LIMIT 1",
+                        [$taskId, $currentUser['id']]
+                    );
+                }
+
+                if (!$task) {
+                    if ($isAccountant || $isManager) {
+                        throw new Exception('المهمة غير موجودة.');
+                    } else {
+                        throw new Exception('المهمة غير موجودة أو ليست من إنشائك.');
+                    }
+                }
+
+                if ($task['status'] === 'cancelled') {
+                    throw new Exception('المهمة ملغاة مسبقاً.');
+                }
+
+                $db->execute(
+                    "UPDATE tasks SET status = 'cancelled', updated_at = NOW() WHERE id = ?",
+                    [$taskId]
+                );
+
+                // تعليم الإشعارات القديمة كمقروءة
+                $db->execute(
+                    "UPDATE notifications SET `read` = 1 WHERE message = ? AND type IN ('info','success','warning')",
+                    [$task['title']]
+                );
+
+                // إرسال إشعار عاجل لجميع عمال الإنتاج
+                $workers = $db->query("SELECT id FROM users WHERE status = 'active' AND role = 'production'");
+                $alertTitle = 'تنبيه هام: تم إلغاء مهمة';
+                $alertMessage = 'تم إلغاء المهمة "' . $task['title'] . '" من قبل الإدارة. يرجى تجاهلها.';
+                $alertLink = getRelativeUrl('production.php?page=tasks');
+
+                foreach ($workers as $worker) {
+                    try {
+                        createNotification(
+                            (int)$worker['id'],
+                            $alertTitle,
+                            $alertMessage,
+                            'error',
+                            $alertLink
+                        );
+                    } catch (Exception $notifyError) {
+                        error_log('Cancel task notification error: ' . $notifyError->getMessage());
+                    }
+                }
+
+                logAudit(
+                    $currentUser['id'],
+                    'cancel_task',
+                    'tasks',
+                    $taskId,
+                    null,
+                    ['title' => $task['title']]
+                );
+
+                $db->commit();
+                
+                // استخدام preventDuplicateSubmission لإعادة التوجيه مع cache-busting
+                $successMessage = 'تم إلغاء المهمة وإخطار عمال الإنتاج بنجاح.';
+                // تحديد role بناءً على المستخدم الحالي
+                $userRole = ($currentUser['role'] ?? '') === 'accountant' ? 'accountant' : 'manager';
+                preventDuplicateSubmission($successMessage, ['page' => 'production_tasks'], null, $userRole);
+                exit; // منع تنفيذ باقي الكود بعد إعادة التوجيه
+            } catch (Exception $cancelError) {
+                $db->rollBack();
+                $error = 'تعذر إلغاء المهمة: ' . $cancelError->getMessage();
+            }
+        }
+    }
+}
+
+// قراءة رسائل النجاح/الخطأ من session بعد redirect
+applyPRGPattern($error, $success);
+
+/**
+ * إحصائيات سريعة للمهام التي أنشأها المدير والمحاسب
+ * المحاسب والمدير يرون جميع المهام التي أنشأها أي منهما
+ */
+$statsTemplate = [
+    'total' => 0,
+    'pending' => 0,
+    'received' => 0,
+    'in_progress' => 0,
+    'completed' => 0,
+    'cancelled' => 0
+];
+
+$stats = $statsTemplate;
+try {
+    // جلب الإحصائيات لجميع المهام التي أنشأها المدير أو المحاسب
+    if ($isAccountant || $isManager) {
+        // جلب معرفات جميع المديرين والمحاسبين
+        $adminUsers = $db->query("
+            SELECT id FROM users 
+            WHERE role IN ('manager', 'accountant') AND status = 'active'
+        ");
+        $adminIds = array_map(function($user) {
+            return (int)$user['id'];
+        }, $adminUsers);
+        
+        if (!empty($adminIds)) {
+            $placeholders = implode(',', array_fill(0, count($adminIds), '?'));
+            $counts = $db->query("
+                SELECT status, COUNT(*) as total
+                FROM tasks
+                WHERE created_by IN ($placeholders)
+                GROUP BY status
+            ", $adminIds);
+        } else {
+            $counts = [];
+        }
+    } else {
+        // للمستخدمين الآخرين، عرض المهام التي أنشأوها فقط
+        $counts = $db->query("
+            SELECT status, COUNT(*) as total
+            FROM tasks
+            WHERE created_by = ?
+            GROUP BY status
+        ", [$currentUser['id']]);
+    }
+
+    foreach ($counts as $row) {
+        $statusKey = $row['status'] ?? '';
+        if (isset($stats[$statusKey])) {
+            $stats[$statusKey] = (int)$row['total'];
+        }
+        $stats['total'] += (int)$row['total'];
+    }
+} catch (Exception $e) {
+    error_log('Manager task stats error: ' . $e->getMessage());
+}
+
+$recentTasks = [];
+$statusStyles = [
+    'pending' => ['class' => 'warning', 'label' => 'معلقة'],
+    'received' => ['class' => 'info', 'label' => 'مستلمة'],
+    'in_progress' => ['class' => 'primary', 'label' => 'قيد التنفيذ'],
+    'completed' => ['class' => 'success', 'label' => 'مكتملة'],
+    'cancelled' => ['class' => 'danger', 'label' => 'ملغاة']
+];
+
+$priorityStyles = [
+    'low' => ['class' => 'secondary', 'label' => 'منخفضة'],
+    'normal' => ['class' => 'info', 'label' => 'عادية'],
+    'high' => ['class' => 'warning', 'label' => 'مرتفعة'],
+    'urgent' => ['class' => 'danger', 'label' => 'عاجلة']
+];
+
+try {
+    // جلب المهام المحدثة مباشرة - المحاسب والمدير يرون جميع المهام التي أنشأها أي منهما
+    if ($isAccountant || $isManager) {
+        // جلب معرفات جميع المديرين والمحاسبين
+        $adminUsers = $db->query("
+            SELECT id FROM users 
+            WHERE role IN ('manager', 'accountant') AND status = 'active'
+        ");
+        $adminIds = array_map(function($user) {
+            return (int)$user['id'];
+        }, $adminUsers);
+        
+        if (!empty($adminIds)) {
+            $placeholders = implode(',', array_fill(0, count($adminIds), '?'));
+            $recentTasks = $db->query("
+                SELECT t.id, t.title, t.status, t.priority, t.due_date, t.created_at,
+                       t.quantity, t.notes, t.product_id, u.full_name AS assigned_name, t.assigned_to,
+                       uCreator.full_name AS creator_name, t.created_by
+                FROM tasks t
+                LEFT JOIN users u ON t.assigned_to = u.id
+                LEFT JOIN users uCreator ON t.created_by = uCreator.id
+                WHERE t.created_by IN ($placeholders)
+                ORDER BY t.created_at DESC, t.id DESC
+                LIMIT 10
+            ", $adminIds);
+        } else {
+            $recentTasks = [];
+        }
+    } else {
+        // للمستخدمين الآخرين، عرض المهام التي أنشأوها فقط
+        $recentTasks = $db->query("
+            SELECT t.id, t.title, t.status, t.priority, t.due_date, t.created_at,
+                   t.quantity, t.notes, t.product_id, u.full_name AS assigned_name, t.assigned_to
+            FROM tasks t
+            LEFT JOIN users u ON t.assigned_to = u.id
+            WHERE t.created_by = ?
+            ORDER BY t.created_at DESC, t.id DESC
+            LIMIT 10
+        ", [$currentUser['id']]);
+    }
+    
+    // استخراج جميع العمال من notes لكل مهمة واستخراج اسم المنتج
+    foreach ($recentTasks as &$task) {
+        $notes = $task['notes'] ?? '';
+        $allWorkers = [];
+        
+        // محاولة استخراج IDs من notes
+        if (preg_match('/\[ASSIGNED_WORKERS_IDS\]:\s*([0-9,]+)/', $notes, $matches)) {
+            $workerIds = array_filter(array_map('intval', explode(',', $matches[1])));
+            if (!empty($workerIds)) {
+                $placeholders = implode(',', array_fill(0, count($workerIds), '?'));
+                $workers = $db->query(
+                    "SELECT id, full_name FROM users WHERE id IN ($placeholders) ORDER BY full_name",
+                    $workerIds
+                );
+                foreach ($workers as $worker) {
+                    $allWorkers[] = $worker['full_name'];
+                }
+            }
+        }
+        
+        // إذا لم نجد عمال من notes، استخدم assigned_to
+        if (empty($allWorkers) && !empty($task['assigned_name'])) {
+            $allWorkers[] = $task['assigned_name'];
+        }
+        
+        // استخراج اسم المنتج من notes والتحقق من وجوده في القوالب
+        // نفس الطريقة المستخدمة في النموذج لعرض اسم القالب
+        $extractedProductName = null;
+        $tempProductName = null;
+        
+        // محاولة 1: استخدام product_id للحصول على اسم المنتج من جدول products
+        if (!empty($task['product_id'])) {
+            try {
+                $product = $db->queryOne(
+                    "SELECT name FROM products WHERE id = ? LIMIT 1",
+                    [(int)$task['product_id']]
+                );
+                if ($product && !empty($product['name'])) {
+                    $tempProductName = trim($product['name']);
+                }
+            } catch (Exception $e) {
+                error_log('Error fetching product name from product_id: ' . $e->getMessage());
+            }
+        }
+        
+        // محاولة 2: إذا لم نجد من product_id، استخرج اسم المنتج من notes
+        // الصيغة المحفوظة: "المنتج: [اسم المنتج] - الكمية: [الكمية]"
+        // أو: "المنتج: [اسم المنتج]" (إذا لم تكن هناك كمية)
+        if (empty($tempProductName) && !empty($notes)) {
+            // محاولة 1: البحث عن "المنتج: [اسم] - الكمية:" (الصيغة القياسية المحفوظة)
+            if (preg_match('/المنتج:\s*(.+?)\s*-\s*الكمية:/i', $notes, $productMatches)) {
+                $tempProductName = trim($productMatches[1] ?? '');
+            }
+            
+            // محاولة 2: إذا لم نجد، جرب البحث عن "المنتج: [اسم]" فقط (بدون كمية)
+            if (empty($tempProductName) && preg_match('/المنتج:\s*(.+?)(?:\n|$)/i', $notes, $productMatches2)) {
+                $tempProductName = trim($productMatches2[1] ?? '');
+            }
+            
+            // محاولة 3: البحث البسيط عن "المنتج: " متبوعاً بأي نص حتى "-" أو نهاية السطر
+            if (empty($tempProductName) && preg_match('/المنتج:\s*(.+?)(?:\s*-\s*|$)/i', $notes, $productMatches3)) {
+                $tempProductName = trim($productMatches3[1] ?? '');
+            }
+            
+            // تنظيف اسم المنتج من أي أحرف زائدة
+            if (!empty($tempProductName)) {
+                $tempProductName = trim($tempProductName);
+                // إزالة أي "-" في البداية أو النهاية
+                $tempProductName = trim($tempProductName, '-');
+                $tempProductName = trim($tempProductName);
+            }
+        }
+        
+        // محاولة 3: التحقق من وجود الاسم في القوالب (unified_product_templates أو product_templates)
+        // بنفس الطريقة المستخدمة في النموذج
+        if (!empty($tempProductName)) {
+            try {
+                // محاولة البحث في unified_product_templates أولاً
+                $unifiedTemplatesCheck = $db->queryOne("SHOW TABLES LIKE 'unified_product_templates'");
+                if (!empty($unifiedTemplatesCheck)) {
+                    $template = $db->queryOne(
+                        "SELECT DISTINCT product_name 
+                         FROM unified_product_templates 
+                         WHERE product_name = ? AND status = 'active' 
+                         LIMIT 1",
+                        [$tempProductName]
+                    );
+                    if ($template && !empty($template['product_name'])) {
+                        $extractedProductName = trim($template['product_name']);
+                    }
+                }
+                
+                // إذا لم نجد في unified_product_templates، جرب product_templates
+                if (empty($extractedProductName)) {
+                    $templatesCheck = $db->queryOne("SHOW TABLES LIKE 'product_templates'");
+                    if (!empty($templatesCheck)) {
+                        $template = $db->queryOne(
+                            "SELECT DISTINCT product_name 
+                             FROM product_templates 
+                             WHERE product_name = ? AND status = 'active' 
+                             LIMIT 1",
+                            [$tempProductName]
+                        );
+                        if ($template && !empty($template['product_name'])) {
+                            $extractedProductName = trim($template['product_name']);
+                        }
+                    }
+                }
+                
+                // إذا لم نجد في القوالب، استخدم الاسم المستخرج من notes مباشرة
+                // (قد يكون منتج مخصص غير موجود في القوالب)
+                if (empty($extractedProductName)) {
+                    $extractedProductName = $tempProductName;
+                }
+            } catch (Exception $e) {
+                error_log('Error checking product name in templates: ' . $e->getMessage());
+                // في حالة الخطأ، استخدم الاسم المستخرج من notes
+                $extractedProductName = $tempProductName;
+            }
+        }
+        
+        $task['all_workers'] = $allWorkers;
+        $task['workers_count'] = count($allWorkers);
+        $task['extracted_product_name'] = $extractedProductName;
+        
+        // إضافة creator_name و creator_role إذا لم يكونا موجودين
+        if (!isset($task['creator_name']) && isset($task['created_by'])) {
+            $creator = $db->queryOne("SELECT full_name, role FROM users WHERE id = ?", [$task['created_by']]);
+            if ($creator) {
+                $task['creator_name'] = $creator['full_name'];
+                $task['creator_role'] = $creator['role'];
+            }
+        } elseif (isset($task['created_by']) && !isset($task['creator_role'])) {
+            // إذا كان creator_name موجوداً لكن creator_role غير موجود
+            $creator = $db->queryOne("SELECT role FROM users WHERE id = ?", [$task['created_by']]);
+            if ($creator) {
+                $task['creator_role'] = $creator['role'];
+            }
+        }
+    }
+    unset($task);
+} catch (Exception $e) {
+    error_log('Manager recent tasks error: ' . $e->getMessage());
+}
+
+?>
+
+<script>
+// إجبار تحديث الصفحة عند تحميلها بعد redirect لمنع cache
+(function() {
+    'use strict';
+    
+    // التحقق من وجود معامل _refresh في URL
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('_refresh')) {
+        // إزالة معامل _refresh من URL بدون إعادة تحميل
+        urlParams.delete('_refresh');
+        const newUrl = window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : '');
+        window.history.replaceState({}, '', newUrl);
+    }
+})();
+</script>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-list-task me-2"></i>إرسال مهام لقسم الإنتاج</h2>
+            <p class="text-muted mb-0">قم بإنشاء مهام موجهة لعمال الإنتاج مع تتبّع الحالة في صفحة المهام الخاصة بهم.</p>
+        </div>
+    </div>
+
+    <?php if ($error): ?>
+        <div class="alert alert-danger alert-dismissible fade show" id="errorAlert" role="alert">
+            <i class="bi bi-exclamation-triangle me-2"></i><?php echo htmlspecialchars($error); ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($success): ?>
+        <div class="alert alert-success alert-dismissible fade show" id="successAlert" role="alert">
+            <i class="bi bi-check-circle me-2"></i><?php echo htmlspecialchars($success); ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    <?php endif; ?>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-2 col-sm-6">
+            <div class="card border-primary h-100">
+                <div class="card-body text-center py-3">
+                    <div class="text-muted small mb-1">إجمالي المهام</div>
+                    <div class="fs-4 text-primary fw-semibold"><?php echo $stats['total']; ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2 col-sm-6">
+            <div class="card border-warning h-100">
+                <div class="card-body text-center py-3">
+                    <div class="text-muted small mb-1">معلقة</div>
+                    <div class="fs-4 text-warning fw-semibold"><?php echo $stats['pending']; ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2 col-sm-6">
+            <div class="card border-info h-100">
+                <div class="card-body text-center py-3">
+                    <div class="text-muted small mb-1">مستلمة</div>
+                    <div class="fs-4 text-info fw-semibold"><?php echo $stats['received']; ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2 col-sm-6">
+            <div class="card border-info h-100">
+                <div class="card-body text-center py-3">
+                    <div class="text-muted small mb-1">قيد التنفيذ</div>
+                    <div class="fs-4 text-info fw-semibold"><?php echo $stats['in_progress']; ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2 col-sm-6">
+            <div class="card border-success h-100">
+                <div class="card-body text-center py-3">
+                    <div class="text-muted small mb-1">مكتملة</div>
+                    <div class="fs-4 text-success fw-semibold"><?php echo $stats['completed']; ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2 col-sm-6">
+            <div class="card border-danger h-100">
+                <div class="card-body text-center py-3">
+                    <div class="text-muted small mb-1">ملغاة</div>
+                    <div class="fs-4 text-danger fw-semibold"><?php echo $stats['cancelled']; ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <button class="btn btn-primary mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#createTaskFormCollapse" aria-expanded="false" aria-controls="createTaskFormCollapse">
+        <i class="bi bi-plus-circle me-1"></i>إنشاء مهمة جديدة
+    </button>
+
+    <div class="collapse" id="createTaskFormCollapse">
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>إنشاء مهمة جديدة</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" action="">
+                    <input type="hidden" name="action" value="create_production_task">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">نوع المهمة</label>
+                            <select class="form-select" name="task_type" id="taskTypeSelect" required>
+                                <option value="general">مهمة عامة</option>
+                                <option value="production">إنتاج منتج</option>
+                                <option value="quality">مهمة جودة</option>
+                                <option value="maintenance">صيانة</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">الأولوية</label>
+                            <select class="form-select" name="priority">
+                                <option value="low">منخفضة</option>
+                                <option value="normal" selected>عادية</option>
+                                <option value="high">مرتفعة</option>
+                                <option value="urgent">عاجلة</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">تاريخ الاستحقاق</label>
+                            <input type="date" class="form-control" name="due_date" value="">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">اختر العمال المستهدفين</label>
+                            <select class="form-select" name="assigned_to[]" multiple required size="6">
+                                <?php foreach ($productionUsers as $worker): ?>
+                                    <option value="<?php echo (int)$worker['id']; ?>"><?php echo htmlspecialchars($worker['full_name']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="form-text">يمكن تحديد أكثر من عامل باستخدام زر CTRL أو SHIFT.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">عنوان المهمة</label>
+                            <input type="text" class="form-control" name="title" placeholder="مثال: تنظيف خط الإنتاج">
+                            <div class="form-text">يمكنك ترك العنوان فارغاً وسيتم توليد عنوان افتراضي للمهمة الإنتاجية.</div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">وصف وتفاصيل المهمة</label>
+                            <textarea class="form-control" name="details" rows="4" placeholder="أدخل التفاصيل والتعليمات اللازمة للعمال."></textarea>
+                        </div>
+                        <div class="col-md-6" id="productFieldWrapper">
+                            <label class="form-label">المنتج (اختياري)</label>
+                            <input type="text" class="form-control" name="product_name" id="productNameInput" placeholder="أدخل اسم المنتج أو القالب" list="templateSuggestions" autocomplete="off">
+                            <datalist id="templateSuggestions"></datalist>
+                            <div class="form-text mt-2">
+                                <small class="text-muted">أدخل اسم المنتج أو القالب المراد إنتاجه.</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6" id="quantityFieldWrapper">
+                            <label class="form-label">الكمية (اختياري)</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" name="product_quantity" id="productQuantityInput" step="0.01" min="0" placeholder="مثال: 120">
+                                <span class="input-group-text">وحدة</span>
+                            </div>
+                            <div class="form-text">اختياري: أدخل الكمية المرتبطة بالمهمة.</div>
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-end mt-4 gap-2">
+                        <button type="reset" class="btn btn-secondary"><i class="bi bi-arrow-counterclockwise me-1"></i>إعادة تعيين</button>
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-send-check me-1"></i>إرسال المهمة</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mt-4">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>آخر المهام التي تم إرسالها</h5>
+            <span class="text-muted small">آخر 10 مهام</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive dashboard-table-wrapper">
+                <table class="table dashboard-table dashboard-table--no-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>العنوان</th>
+                            <th>الموظف</th>
+                            <th>الحالة</th>
+                            <th>الأولوية</th>
+                            <th>تاريخ الاستحقاق</th>
+                            <th>تاريخ الإنشاء</th>
+                            <th>إجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($recentTasks)): ?>
+                            <tr>
+                                <td colspan="7" class="text-center text-muted py-4">لم يتم إنشاء مهام بعد.</td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach ($recentTasks as $task): ?>
+                                <tr>
+                                    <td>
+                                        <strong><?php echo htmlspecialchars($task['title']); ?></strong>
+                                        <?php 
+                                        // عرض منشئ المهمة إذا كان المحاسب أو المدير
+                                        if (isset($task['creator_name']) && ($isAccountant || $isManager)) {
+                                            $creatorRoleLabel = '';
+                                            if (isset($task['creator_role'])) {
+                                                $creatorRoleLabel = ($task['creator_role'] ?? '') === 'accountant' ? 'المحاسب' : 'المدير';
+                                            } elseif (isset($task['created_by'])) {
+                                                $creatorUser = $db->queryOne("SELECT role FROM users WHERE id = ? LIMIT 1", [$task['created_by']]);
+                                                if ($creatorUser) {
+                                                    $creatorRoleLabel = ($creatorUser['role'] ?? '') === 'accountant' ? 'المحاسب' : 'المدير';
+                                                }
+                                            }
+                                            if ($creatorRoleLabel) {
+                                                echo '<div class="text-muted small"><i class="bi bi-person me-1"></i>من: ' . htmlspecialchars($task['creator_name']) . ' (' . $creatorRoleLabel . ')</div>';
+                                            }
+                                        }
+                                        // عرض اسم المنتج المستخرج من notes (تم استخراجه مسبقاً في loop)
+                                        if (!empty($task['extracted_product_name'])) {
+                                            echo '<div class="text-muted small"><i class="bi bi-box me-1"></i>المنتج: ' . htmlspecialchars($task['extracted_product_name']) . '</div>';
+                                        }
+                                        ?>
+                                        <?php if ((float)($task['quantity'] ?? 0) > 0): ?>
+                                            <div class="text-muted small">الكمية: <?php echo number_format((float)$task['quantity'], 2); ?></div>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?php 
+                                        if (!empty($task['all_workers'])) {
+                                            $workersList = $task['all_workers'];
+                                            if (count($workersList) > 1) {
+                                                echo '<span class="badge bg-info me-1">' . count($workersList) . ' عمال</span><br>';
+                                                echo '<small class="text-muted">' . htmlspecialchars(implode(', ', $workersList)) . '</small>';
+                                            } else {
+                                                echo htmlspecialchars($workersList[0]);
+                                            }
+                                        } else {
+                                            echo htmlspecialchars($task['assigned_name'] ?? 'غير محدد');
+                                        }
+                                        ?>
+                                    </td>
+                                    <td>
+                                        <?php
+                                        $statusKey = $task['status'] ?? '';
+                                        $statusMeta = $statusStyles[$statusKey] ?? ['class' => 'secondary', 'label' => 'غير معروفة'];
+                                        ?>
+                                        <span class="badge bg-<?php echo htmlspecialchars($statusMeta['class']); ?>">
+                                            <?php echo htmlspecialchars($statusMeta['label']); ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <?php
+                                        $priorityKey = $task['priority'] ?? '';
+                                        $priorityMeta = $priorityStyles[$priorityKey] ?? ['class' => 'secondary', 'label' => 'غير محدد'];
+                                        ?>
+                                        <span class="badge bg-<?php echo htmlspecialchars($priorityMeta['class']); ?>">
+                                            <?php echo htmlspecialchars($priorityMeta['label']); ?>
+                                        </span>
+                                    </td>
+                                    <td><?php echo $task['due_date'] ? htmlspecialchars($task['due_date']) : '<span class="text-muted">غير محدد</span>'; ?></td>
+                                    <td><?php echo htmlspecialchars($task['created_at']); ?></td>
+                                    <td>
+                                        <?php if (in_array($task['status'], ['completed', 'cancelled'], true)): ?>
+                                            <span class="text-muted small">لا يوجد إجراء</span>
+                                        <?php else: ?>
+                                            <form method="post" class="d-inline" onsubmit="return confirm('هل أنت متأكد من إلغاء هذه المهمة؟');">
+                                                <input type="hidden" name="action" value="cancel_task">
+                                                <input type="hidden" name="task_id" value="<?php echo (int)$task['id']; ?>">
+                                                <button type="submit" class="btn btn-outline-danger btn-sm">
+                                                    <i class="bi bi-x-circle me-1"></i>إلغاء المهمة
+                                                </button>
+                                            </form>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const taskTypeSelect = document.getElementById('taskTypeSelect');
+    const titleInput = document.querySelector('input[name="title"]');
+    const productWrapper = document.getElementById('productFieldWrapper');
+    const quantityWrapper = document.getElementById('quantityFieldWrapper');
+    const productNameInput = document.getElementById('productNameInput');
+    const quantityInput = document.getElementById('productQuantityInput');
+    const templateSuggestions = document.getElementById('templateSuggestions');
+
+    function updateTaskTypeUI() {
+        if (!titleInput) {
+            // continue to toggle other fields even إن لم يوجد العنوان
+        }
+        const isProduction = taskTypeSelect && taskTypeSelect.value === 'production';
+        if (titleInput) {
+            titleInput.placeholder = isProduction
+                ? '.'
+                : 'مثال: تنظيف خط الإنتاج';
+        }
+    }
+
+    if (taskTypeSelect) {
+        taskTypeSelect.addEventListener('change', updateTaskTypeUI);
+    }
+    updateTaskTypeUI();
+
+    // تحميل أسماء القوالب وتعبئة datalist
+    function loadTemplateSuggestions() {
+        if (!templateSuggestions) {
+            return;
+        }
+
+        // الحصول على base path بشكل صحيح
+        function getApiPath(endpoint) {
+            const currentPath = window.location.pathname || '/';
+            const pathParts = currentPath.split('/').filter(Boolean);
+            const stopSegments = ['dashboard', 'modules', 'api', 'assets', 'includes'];
+            const baseParts = [];
+
+            for (const part of pathParts) {
+                if (stopSegments.includes(part) || part.endsWith('.php')) {
+                    break;
+                }
+                baseParts.push(part);
+            }
+
+            const basePath = baseParts.length ? '/' + baseParts.join('/') : '';
+            const apiPath = (basePath + '/api/' + endpoint).replace(/\/+/g, '/');
+            return apiPath.startsWith('/') ? apiPath : '/' + apiPath;
+        }
+
+        const apiUrl = getApiPath('get_product_templates.php');
+
+        fetch(apiUrl)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success && Array.isArray(data.templates)) {
+                    // مسح القائمة الحالية
+                    templateSuggestions.innerHTML = '';
+                    
+                    // إضافة الخيارات
+                    data.templates.forEach(templateName => {
+                        const option = document.createElement('option');
+                        option.value = templateName;
+                        templateSuggestions.appendChild(option);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error loading template suggestions:', error);
+            });
+    }
+
+    // تحميل الاقتراحات عند تحميل الصفحة
+    loadTemplateSuggestions();
+});
+
+// لا حاجة لإعادة التحميل التلقائي - preventDuplicateSubmission يتولى ذلك
+</script>
+

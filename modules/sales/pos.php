@@ -1,0 +1,4518 @@
+<?php
+/**
+ * نقطة بيع خاصة بمندوب المبيعات - بيع من مخزون سيارة المندوب
+ */
+
+if (!defined('ACCESS_ALLOWED')) {
+    die('Direct access not allowed');
+}
+
+require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/audit_log.php';
+require_once __DIR__ . '/../../includes/vehicle_inventory.php';
+require_once __DIR__ . '/../../includes/inventory_movements.php';
+require_once __DIR__ . '/../../includes/path_helper.php';
+require_once __DIR__ . '/../../includes/invoices.php';
+require_once __DIR__ . '/../../includes/reports.php';
+require_once __DIR__ . '/../../includes/simple_telegram.php';
+require_once __DIR__ . '/../../includes/customer_history.php';
+
+if (!function_exists('renderSalesInvoiceHtml')) {
+    function renderSalesInvoiceHtml(array $invoice, array $meta = []): string
+    {
+        ob_start();
+        $selectedInvoice = $invoice;
+        $invoiceData = $invoice;
+        $invoiceMeta = $meta;
+        include __DIR__ . '/../accountant/invoice_print.php';
+        return (string) ob_get_clean();
+    }
+}
+
+if (!function_exists('storeSalesInvoiceDocument')) {
+    function storeSalesInvoiceDocument(array $invoice, array $meta = []): ?array
+    {
+        try {
+            if (!function_exists('ensurePrivateDirectory')) {
+                return null;
+            }
+
+            $basePath = defined('REPORTS_PRIVATE_PATH')
+                ? REPORTS_PRIVATE_PATH
+                : (defined('REPORTS_PATH') ? REPORTS_PATH : (dirname(__DIR__, 2) . '/reports'));
+
+            $basePath = rtrim((string) $basePath, '/\\');
+            if ($basePath === '') {
+                return null;
+            }
+
+            ensurePrivateDirectory($basePath);
+
+            $exportsDir = $basePath . DIRECTORY_SEPARATOR . 'exports';
+            $salesDir = $exportsDir . DIRECTORY_SEPARATOR . 'sales-pos';
+
+            ensurePrivateDirectory($exportsDir);
+            ensurePrivateDirectory($salesDir);
+
+            if (!is_dir($salesDir) || !is_writable($salesDir)) {
+                error_log('POS invoice directory not writable: ' . $salesDir);
+                return null;
+            }
+
+            $document = renderSalesInvoiceHtml($invoice, $meta);
+            if ($document === '') {
+                return null;
+            }
+
+            $token = bin2hex(random_bytes(8));
+            $normalizedNumber = preg_replace('/[^A-Za-z0-9_-]+/', '-', (string) ($invoice['invoice_number'] ?? 'INV'));
+            // تضمين الـ token في اسم الملف للتحقق من الأمان في reports/view.php
+            $filename = sprintf('pos-invoice-%s-%s-%s.html', date('Ymd-His'), $normalizedNumber, $token);
+            $fullPath = $salesDir . DIRECTORY_SEPARATOR . $filename;
+
+            // حفظ الملف (للاستخدام الفوري)
+            if (@file_put_contents($fullPath, $document) === false) {
+                return null;
+            }
+
+            // حفظ الفاتورة في قاعدة البيانات للوصول إليها لاحقاً
+            try {
+                require_once __DIR__ . '/../../includes/db.php';
+                $db = db();
+                
+                // التأكد من وجود الجدول
+                $tableExists = $db->queryOne("SHOW TABLES LIKE 'telegram_invoices'");
+                if ($tableExists) {
+                    $invoiceId = isset($invoice['id']) ? (int)$invoice['id'] : null;
+                    $invoiceNumber = $invoice['invoice_number'] ?? null;
+                    $summaryJson = !empty($meta['summary']) ? json_encode($meta['summary'], JSON_UNESCAPED_UNICODE) : null;
+                    
+                    $relativePath = 'exports/sales-pos/' . $filename;
+                    
+                    $db->execute(
+                        "INSERT INTO telegram_invoices 
+                        (invoice_id, invoice_number, invoice_type, token, html_content, relative_path, filename, summary, created_at)
+                        VALUES (?, ?, 'sales_pos_invoice', ?, ?, ?, ?, ?, NOW())",
+                        [
+                            $invoiceId,
+                            $invoiceNumber,
+                            $token,
+                            $document,
+                            $relativePath,
+                            $filename,
+                            $summaryJson
+                        ]
+                    );
+                }
+            } catch (Throwable $dbError) {
+                // في حالة فشل حفظ قاعدة البيانات، نستمر في العملية
+                error_log('Failed to save invoice to database: ' . $dbError->getMessage());
+            }
+
+            $relativePath = 'exports/sales-pos/' . $filename;
+            $viewerPath = '/reports/view.php?type=export&file=' . rawurlencode($relativePath) . '&token=' . $token;
+            $printPath = $viewerPath . '&print=1';
+
+            $absoluteViewer = function_exists('getAbsoluteUrl')
+                ? getAbsoluteUrl(ltrim($viewerPath, '/'))
+                : $viewerPath;
+            $absolutePrint = function_exists('getAbsoluteUrl')
+                ? getAbsoluteUrl(ltrim($printPath, '/'))
+                : $printPath;
+
+            return [
+                'relative_path' => $relativePath,
+                'viewer_path' => $viewerPath,
+                'print_path' => $printPath,
+                'absolute_report_url' => $absoluteViewer,
+                'absolute_print_url' => $absolutePrint,
+                'generated_at' => date('Y-m-d H:i:s'),
+                'summary' => $meta['summary'] ?? [],
+                'token' => $token,
+            ];
+        } catch (Throwable $error) {
+            error_log('POS invoice storage failed: ' . $error->getMessage());
+            return null;
+        }
+    }
+}
+
+// التحقق من الصلاحيات يتم مسبقاً في dashboard/sales.php
+// requireRole(['sales', 'manager', 'developer']); // تم إزالة هذا السطر لأن التحقق يتم في dashboard/sales.php
+
+$currentUser = getCurrentUser();
+$pageDirection = getDirection();
+$db = db();
+$error = '';
+$success = '';
+$validationErrors = [];
+
+// التأكد من وجود الجداول المطلوبة
+$customersTableExists = $db->queryOne("SHOW TABLES LIKE 'customers'");
+$productsTableExists = $db->queryOne("SHOW TABLES LIKE 'products'");
+$vehicleInventoryTableExists = $db->queryOne("SHOW TABLES LIKE 'vehicle_inventory'");
+$salesTableExists = $db->queryOne("SHOW TABLES LIKE 'sales'");
+
+if (empty($customersTableExists) || empty($productsTableExists) || empty($vehicleInventoryTableExists) || empty($salesTableExists)) {
+    $error = 'بعض الجداول المطلوبة غير متوفرة في قاعدة البيانات. يرجى التواصل مع المسؤول.';
+}
+
+// الحصول على بيانات السيارة المربوطة بالمندوب
+$vehicle = null;
+$vehicleWarehouseId = null;
+
+if (!$error) {
+    $vehicle = $db->queryOne(
+        "SELECT v.*, w.id AS warehouse_id, w.name AS warehouse_name
+         FROM vehicles v
+         LEFT JOIN warehouses w ON w.vehicle_id = v.id AND w.warehouse_type = 'vehicle'
+         WHERE v.driver_id = ?",
+        [$currentUser['id']]
+    );
+
+    if (!$vehicle) {
+        $error = 'لم يتم ربط سيارة بهذا الحساب بعد. يرجى التواصل مع فريق الإدارة.';
+    } else {
+        if (empty($vehicle['warehouse_id'])) {
+            $warehouseResult = createVehicleWarehouse($vehicle['id'], "مخزن سيارة " . ($vehicle['vehicle_number'] ?? ''));
+            if ($warehouseResult['success']) {
+                $vehicleWarehouseId = $warehouseResult['warehouse_id'];
+                // تحديث الكيان ليشمل المعرّف الجديد
+                $vehicle['warehouse_id'] = $vehicleWarehouseId;
+            } else {
+                $error = $warehouseResult['message'] ?? 'تعذر إنشاء مخزن للسيارة.';
+            }
+        } else {
+            $vehicleWarehouseId = (int) $vehicle['warehouse_id'];
+        }
+    }
+}
+
+// تحميل قائمة العملاء المتاحين للمندوب
+// فحص أمني: المندوب يرى فقط عملائه (created_by = user_id) وليس جميع العملاء
+$customers = [];
+if (!$error && !empty($customersTableExists)) {
+    $statusColumnExists = $db->queryOne("SHOW COLUMNS FROM customers LIKE 'status'");
+    $createdByColumnExists = $db->queryOne("SHOW COLUMNS FROM customers LIKE 'created_by'");
+
+    $customerSql = "SELECT id, name, balance, COALESCE(credit_limit, 0) as credit_limit FROM customers WHERE 1=1";
+    $customerParams = [];
+
+    if (!empty($statusColumnExists)) {
+        $customerSql .= " AND status = 'active'";
+    }
+
+    // فحص أمني: للمندوبين، عرض فقط العملاء الذين أنشأهم هذا المندوب
+    // إزالة الشرط "OR created_by IS NULL" لمنع ظهور عملاء المندوبين الآخرين
+    if (!empty($createdByColumnExists) && ($currentUser['role'] ?? '') === 'sales') {
+        $currentUserId = isset($currentUser['id']) ? (int)$currentUser['id'] : 0;
+        if ($currentUserId > 0) {
+            $customerSql .= " AND created_by = ?";
+            $customerParams[] = $currentUserId;
+        }
+    }
+
+    $customerSql .= " ORDER BY name ASC";
+    $customers = $db->query($customerSql, $customerParams);
+}
+
+// تحميل مخزون السيارة
+$vehicleInventory = [];
+$inventoryStats = [
+    'total_products' => 0,
+    'total_quantity' => 0,
+    'total_value' => 0,
+];
+
+if ($vehicle) {
+    $vehicleInventory = getVehicleInventory($vehicle['id']);
+
+    foreach ($vehicleInventory as &$item) {
+        $item['quantity'] = cleanFinancialValue($item['quantity'] ?? 0);
+        $item['unit_price'] = cleanFinancialValue($item['unit_price'] ?? 0);
+        $computedTotal = cleanFinancialValue(($item['quantity'] ?? 0) * ($item['unit_price'] ?? 0));
+        $item['total_value'] = cleanFinancialValue($item['total_value'] ?? $computedTotal);
+        if (abs($item['total_value'] - $computedTotal) > 0.01) {
+            $item['total_value'] = $computedTotal;
+        }
+
+        $inventoryStats['total_products']++;
+        $inventoryStats['total_quantity'] += (float) ($item['quantity'] ?? 0);
+        $inventoryStats['total_value'] += (float) ($item['total_value'] ?? 0);
+    }
+    unset($item);
+}
+
+// معالجة إنشاء عملية بيع جديدة
+$posInvoiceLinks = null;
+$inventoryByProduct = [];
+foreach ($vehicleInventory as $item) {
+    // استخدام مفتاح مركب من product_id و finished_batch_id للتمييز بين التشغيلات المختلفة
+    $productId = (int) ($item['product_id'] ?? 0);
+    $batchId = !empty($item['finished_batch_id']) ? (int) $item['finished_batch_id'] : 0;
+    $key = $productId . '_' . $batchId;
+    $inventoryByProduct[$key] = $item;
+    // أيضاً نحتفظ بنسخة بالمفتاح القديم للتوافق مع الكود القديم (إذا لم يكن هناك batch_id)
+    if ($batchId === 0) {
+        $inventoryByProduct[$productId] = $item;
+    }
+}
+
+if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? '';
+
+    if ($action === 'create_pos_sale') {
+        $cartPayload = $_POST['cart_data'] ?? '';
+        $cartItems = json_decode($cartPayload, true);
+        $saleDate = $_POST['sale_date'] ?? date('Y-m-d');
+        $customerMode = $_POST['customer_mode'] ?? 'existing';
+        $paymentType = $_POST['payment_type'] ?? 'full';
+        $discountAmount = cleanFinancialValue($_POST['discount_amount'] ?? 0);
+        $prepaidAmount = cleanFinancialValue($_POST['prepaid_amount'] ?? 0);
+        $paidAmountInput = cleanFinancialValue($_POST['paid_amount'] ?? 0);
+        $notes = trim($_POST['notes'] ?? '');
+        $dueDateInput = trim($_POST['due_date'] ?? '');
+        $dueDate = null;
+        if (!empty($dueDateInput) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $dueDateInput)) {
+            $dueDate = $dueDateInput;
+        }
+
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $saleDate)) {
+            $saleDate = date('Y-m-d');
+        }
+
+        if (!in_array($paymentType, ['full', 'partial', 'credit'], true)) {
+            $paymentType = 'full';
+        }
+
+        if (!is_array($cartItems) || empty($cartItems)) {
+            $validationErrors[] = 'يجب اختيار منتج واحد على الأقل من المخزون.';
+        }
+
+        $normalizedCart = [];
+        $subtotal = 0;
+
+        if (empty($validationErrors)) {
+            foreach ($cartItems as $index => $row) {
+                $productId = isset($row['product_id']) ? (int) $row['product_id'] : 0;
+                $batchId = isset($row['finished_batch_id']) ? (int) $row['finished_batch_id'] : 0;
+                $quantity = isset($row['quantity']) ? (float) $row['quantity'] : 0;
+                $unitPrice = isset($row['unit_price']) ? round((float) $row['unit_price'], 2) : 0;
+
+                // البحث باستخدام المفتاح المركب أولاً، ثم المفتاح القديم للتوافق
+                $key = $productId . '_' . $batchId;
+                $product = $inventoryByProduct[$key] ?? ($batchId === 0 ? ($inventoryByProduct[$productId] ?? null) : null);
+
+                if ($productId <= 0 || !$product) {
+                    $validationErrors[] = 'المنتج المحدد رقم ' . ($index + 1) . ' غير متاح في مخزون السيارة.';
+                    continue;
+                }
+
+                $available = (float) ($product['quantity'] ?? 0);
+
+                if ($quantity <= 0) {
+                    $validationErrors[] = 'يجب تحديد كمية صالحة للمنتج ' . htmlspecialchars($product['product_name'] ?? '', ENT_QUOTES, 'UTF-8') . '.';
+                    continue;
+                }
+
+                if ($quantity > $available) {
+                    $validationErrors[] = 'الكمية المطلوبة للمنتج ' . htmlspecialchars($product['product_name'] ?? '', ENT_QUOTES, 'UTF-8') . ' تتجاوز الكمية المتاحة.';
+                    continue;
+                }
+
+                if ($unitPrice <= 0) {
+                    $unitPrice = round((float) ($product['unit_price'] ?? 0), 2);
+                    if ($unitPrice <= 0) {
+                        $validationErrors[] = 'لا يمكن تحديد سعر المنتج ' . htmlspecialchars($product['product_name'] ?? '', ENT_QUOTES, 'UTF-8') . '.';
+                        continue;
+                    }
+                }
+
+                $lineTotal = round($unitPrice * $quantity, 2);
+                $subtotal += $lineTotal;
+
+                // الحصول على finished_batch_id من المنتج
+                $finishedBatchId = !empty($product['finished_batch_id']) ? (int)$product['finished_batch_id'] : null;
+
+                $normalizedCart[] = [
+                    'product_id' => $productId,
+                    'finished_batch_id' => $finishedBatchId,
+                    'name' => $product['product_name'] ?? 'منتج',
+                    'category' => $product['category'] ?? null,
+                    'quantity' => $quantity,
+                    'available' => $available,
+                    'unit_price' => $unitPrice,
+                    'line_total' => $lineTotal,
+                ];
+            }
+        }
+
+        if ($subtotal <= 0 && empty($validationErrors)) {
+            $validationErrors[] = 'لا يمكن إتمام عملية بيع بمجموع صفري.';
+        }
+
+        // تطبيق الخصم على الإجمالي
+        $discountAmount = max(0, min($discountAmount, $subtotal));
+        $subtotalAfterDiscount = round($subtotal - $discountAmount, 2);
+        
+        if ($subtotalAfterDiscount < 0) {
+            $subtotalAfterDiscount = 0;
+        }
+
+        $prepaidAmount = max(0, min($prepaidAmount, $subtotalAfterDiscount));
+        $netTotal = round($subtotalAfterDiscount - $prepaidAmount, 2);
+
+        $effectivePaidAmount = 0.0;
+        if ($paymentType === 'full') {
+            $effectivePaidAmount = $netTotal;
+        } elseif ($paymentType === 'partial') {
+            if ($paidAmountInput <= 0) {
+                $validationErrors[] = 'يجب إدخال مبلغ التحصيل الجزئي.';
+            } elseif ($paidAmountInput >= $netTotal) {
+                $validationErrors[] = 'مبلغ التحصيل الجزئي يجب أن يكون أقل من الإجمالي بعد الخصم.';
+            } else {
+                $effectivePaidAmount = $paidAmountInput;
+            }
+        } else { // credit
+            $effectivePaidAmount = 0.0;
+        }
+
+        $baseDueAmount = round(max(0, $netTotal - $effectivePaidAmount), 2);
+        $dueAmount = $baseDueAmount;
+        $creditUsed = 0.0;
+
+        $customerId = 0;
+        $createdCustomerId = null;
+        $customer = null;
+
+        if ($customerMode === 'existing') {
+            $customerId = isset($_POST['customer_id']) ? (int) $_POST['customer_id'] : 0;
+            if ($customerId <= 0) {
+                $validationErrors[] = 'يجب اختيار عميل من القائمة.';
+            } else {
+                $customer = $db->queryOne("SELECT id, name, balance, credit_limit, created_by FROM customers WHERE id = ?", [$customerId]);
+                if (!$customer) {
+                    $validationErrors[] = 'العميل المحدد غير موجود.';
+                } elseif (($currentUser['role'] ?? '') === 'sales' && isset($customer['created_by']) && (int) $customer['created_by'] !== (int) $currentUser['id']) {
+                    $validationErrors[] = 'غير مصرح لك بإتمام البيع لهذا العميل.';
+                } else {
+                    // التحقق من الحد الائتماني
+                    $customerBalance = (float)($customer['balance'] ?? 0);
+                    $creditLimit = (float)($customer['credit_limit'] ?? 0);
+                    
+                    // إذا كان payment_type هو partial أو credit وتجاوز الرصيد المدين الحد الائتماني
+                    if (($paymentType === 'partial' || $paymentType === 'credit') && $customerBalance >= $creditLimit && $creditLimit > 0) {
+                        $validationErrors[] = 'لا يمكنك البيع بالأجل أو بتحصيل جزئي للعميل الحالي. الرصيد المدين (' . formatCurrency($customerBalance) . ') يتجاوز أو يساوي الحد الائتماني (' . formatCurrency($creditLimit) . '). يرجى التحصيل أولاً لتخفيف ديون العميل المستحقة للشركة.';
+                    }
+                }
+            }
+        } else {
+            $newCustomerName = trim($_POST['new_customer_name'] ?? '');
+            $newCustomerPhone = trim($_POST['new_customer_phone'] ?? '');
+            $newCustomerAddress = trim($_POST['new_customer_address'] ?? '');
+            $newCustomerLatitude = isset($_POST['new_customer_latitude']) && $_POST['new_customer_latitude'] !== '' ? trim($_POST['new_customer_latitude']) : null;
+            $newCustomerLongitude = isset($_POST['new_customer_longitude']) && $_POST['new_customer_longitude'] !== '' ? trim($_POST['new_customer_longitude']) : null;
+
+            if ($newCustomerName === '') {
+                $validationErrors[] = 'يجب إدخال اسم العميل الجديد.';
+            }
+        }
+
+        if (empty($validationErrors) && empty($normalizedCart)) {
+            $validationErrors[] = 'قائمة المنتجات فارغة.';
+        }
+
+        if (empty($validationErrors)) {
+            try {
+                $conn = $db->getConnection();
+                $conn->begin_transaction();
+
+                if ($customerMode === 'new') {
+                    $dueAmount = $baseDueAmount;
+                    $creditUsed = 0.0;
+                    $amountAddedToSales = $netTotal; // كامل المبلغ يُضاف إلى خزنة المندوب للعميل الجديد
+                    $repIdForCustomer = ($currentUser['role'] ?? '') === 'sales' ? $currentUser['id'] : null;
+                    $createdByAdminFlag = $repIdForCustomer ? 0 : 1;
+
+                    // التحقق من عدم تكرار بيانات العميل الجديد مع عملاء المندوب الحاليين
+                    if ($repIdForCustomer) {
+                        $duplicateCheckConditions = [
+                            "(rep_id = ? OR created_by = ?)",
+                            "name = ?"
+                        ];
+                        $duplicateCheckParams = [$repIdForCustomer, $repIdForCustomer, $newCustomerName];
+                        
+                        // إضافة فحص رقم الهاتف إذا كان موجوداً
+                        if (!empty($newCustomerPhone)) {
+                            $duplicateCheckConditions[] = "phone = ?";
+                            $duplicateCheckParams[] = $newCustomerPhone;
+                        }
+                        
+                        // إضافة فحص العنوان إذا كان موجوداً
+                        if (!empty($newCustomerAddress)) {
+                            $duplicateCheckConditions[] = "address = ?";
+                            $duplicateCheckParams[] = $newCustomerAddress;
+                        }
+                        
+                        $duplicateQuery = "SELECT id, name, phone, address FROM customers WHERE " . implode(" AND ", $duplicateCheckConditions) . " LIMIT 1";
+                        $duplicateCustomer = $db->queryOne($duplicateQuery, $duplicateCheckParams);
+                        
+                        if ($duplicateCustomer) {
+                            $duplicateInfo = [];
+                            if (!empty($duplicateCustomer['phone'])) {
+                                $duplicateInfo[] = "رقم الهاتف: " . $duplicateCustomer['phone'];
+                            }
+                            if (!empty($duplicateCustomer['address'])) {
+                                $duplicateInfo[] = "العنوان: " . $duplicateCustomer['address'];
+                            }
+                            $duplicateMessage = "يوجد عميل مسجل مسبقاً بنفس البيانات في قائمة عملائك";
+                            if (!empty($duplicateInfo)) {
+                                $duplicateMessage .= " (" . implode(", ", $duplicateInfo) . ")";
+                            }
+                            $duplicateMessage .= ". يرجى اختيار العميل الموجود من القائمة أو تعديل البيانات.";
+                            throw new InvalidArgumentException($duplicateMessage);
+                        }
+                    }
+
+                    // التحقق من وجود أعمدة اللوكيشن
+                    $hasLatitudeColumn = !empty($db->queryOne("SHOW COLUMNS FROM customers LIKE 'latitude'"));
+                    $hasLongitudeColumn = !empty($db->queryOne("SHOW COLUMNS FROM customers LIKE 'longitude'"));
+                    $hasLocationCapturedAtColumn = !empty($db->queryOne("SHOW COLUMNS FROM customers LIKE 'location_captured_at'"));
+                    
+                    $customerColumns = ['name', 'phone', 'address', 'balance', 'status', 'created_by', 'rep_id', 'created_from_pos', 'created_by_admin'];
+                    $customerValues = [
+                        $newCustomerName,
+                        $newCustomerPhone !== '' ? $newCustomerPhone : null,
+                        $newCustomerAddress !== '' ? $newCustomerAddress : null,
+                        $dueAmount,
+                        'active',
+                        $currentUser['id'],
+                        $repIdForCustomer,
+                        0,
+                        $createdByAdminFlag,
+                    ];
+                    $customerPlaceholders = ['?', '?', '?', '?', '?', '?', '?', '?', '?'];
+                    
+                    if ($hasLatitudeColumn && $newCustomerLatitude !== null) {
+                        $customerColumns[] = 'latitude';
+                        $customerValues[] = (float)$newCustomerLatitude;
+                        $customerPlaceholders[] = '?';
+                    }
+                    
+                    if ($hasLongitudeColumn && $newCustomerLongitude !== null) {
+                        $customerColumns[] = 'longitude';
+                        $customerValues[] = (float)$newCustomerLongitude;
+                        $customerPlaceholders[] = '?';
+                    }
+                    
+                    if ($hasLocationCapturedAtColumn && $newCustomerLatitude !== null && $newCustomerLongitude !== null) {
+                        $customerColumns[] = 'location_captured_at';
+                        $customerValues[] = date('Y-m-d H:i:s');
+                        $customerPlaceholders[] = '?';
+                    }
+                    
+                    $db->execute(
+                        "INSERT INTO customers (" . implode(', ', $customerColumns) . ") 
+                         VALUES (" . implode(', ', $customerPlaceholders) . ")",
+                        $customerValues
+                    );
+                    $customerId = (int) $db->getLastInsertId();
+                    $createdCustomerId = $customerId;
+                    $customer = [
+                        'id' => $customerId,
+                        'name' => $newCustomerName,
+                        'balance' => $dueAmount,
+                        'created_by' => $currentUser['id'],
+                    ];
+                    // تهيئة الرصيد الحالي للعميل الجديد (يكون 0 لأن العميل جديد)
+                    $currentBalance = 0.0;
+                    $creditUsed = 0.0;
+                    $amountAddedToSales = 0.0; // المبلغ الذي يُضاف إلى إجمالي المبيعات في خزنة المندوب
+                } else {
+                    $customer = $db->queryOne(
+                        "SELECT id, balance FROM customers WHERE id = ? FOR UPDATE",
+                        [$customerId]
+                    );
+
+                    if (!$customer) {
+                        throw new RuntimeException('تعذر تحميل بيانات العميل أثناء المعالجة.');
+                    }
+
+                    $currentBalance = (float) ($customer['balance'] ?? 0);
+                    $originalBalance = $currentBalance; // حفظ الرصيد الأصلي قبل أي تحديثات
+                    $creditUsed = 0.0;
+                    $amountAddedToSales = 0.0; // المبلغ الذي يُضاف إلى إجمالي المبيعات في خزنة المندوب
+                    
+                    // التحقق من وجود سجل مشتريات سابق للعميل (قبل إنشاء الفاتورة الحالية)
+                    // القاعدة: يجب أن يكون للعميل فواتير سابقة أو إرجاعات سابقة
+                    // هذا التحقق مهم لتحديد ما إذا كان يجب حساب نسبة 2% عند خصم من الرصيد الدائن
+                    $hasPreviousPurchases = false;
+                    try {
+                        // التحقق من وجود فواتير سابقة للعميل (قبل الفاتورة الحالية)
+                        $previousInvoiceCount = $db->queryOne(
+                            "SELECT COUNT(*) as count FROM invoices WHERE customer_id = ?",
+                            [$customerId]
+                        );
+                        $invoiceCount = ((int)($previousInvoiceCount['count'] ?? 0));
+                        
+                        // التحقق من وجود إرجاعات سابقة للعميل
+                        // هذا مهم جداً: يجب التحقق من وجود سجل مرتجعات للعميل
+                        $hasReturns = false;
+                        try {
+                            $returnsTableCheck = $db->queryOne("SHOW TABLES LIKE 'invoice_returns'");
+                            if (!empty($returnsTableCheck)) {
+                                $previousReturnsCount = $db->queryOne(
+                                    "SELECT COUNT(*) as count FROM invoice_returns WHERE customer_id = ?",
+                                    [$customerId]
+                                );
+                                $returnsCount = ((int)($previousReturnsCount['count'] ?? 0));
+                                $hasReturns = ($returnsCount > 0);
+                                
+                                // تسجيل معلومات التشخيص
+                                error_log(sprintf(
+                                    'Returns check for customer %d: returnsCount=%d, hasReturns=%s',
+                                    $customerId,
+                                    $returnsCount,
+                                    $hasReturns ? 'true' : 'false'
+                                ));
+                            } else {
+                                error_log('invoice_returns table does not exist');
+                            }
+                        } catch (Throwable $returnsError) {
+                            error_log('Error checking previous returns for customer ' . $customerId . ': ' . $returnsError->getMessage());
+                            error_log('Returns check error trace: ' . $returnsError->getTraceAsString());
+                            // في حالة الخطأ، نفترض عدم وجود سجل مرتجعات
+                            $hasReturns = false;
+                        }
+                        
+                        // العميل لديه سجل مشتريات إذا كان لديه فواتير أو إرجاعات سابقة
+                        $hasPreviousPurchases = ($invoiceCount > 0) || $hasReturns;
+                        
+                        // تسجيل معلومات التشخيص
+                        error_log(sprintf(
+                            'Previous purchases check for customer %d: invoiceCount=%d, hasReturns=%s, hasPreviousPurchases=%s',
+                            $customerId,
+                            $invoiceCount,
+                            $hasReturns ? 'true' : 'false',
+                            $hasPreviousPurchases ? 'true' : 'false'
+                        ));
+                    } catch (Throwable $e) {
+                        error_log('Error checking previous purchases for customer ' . $customerId . ': ' . $e->getMessage());
+                        error_log('Previous purchases check error trace: ' . $e->getTraceAsString());
+                        // في حالة الخطأ، نفترض عدم وجود سجل مشتريات سابق (لضمان عدم منح عمولة غير مستحقة)
+                        $hasPreviousPurchases = false;
+                        $hasReturns = false; // التأكد من أن القيمة محددة
+                    }
+                    
+                    // المنطق الجديد: خصم المبلغ المتبقي (بعد الدفع الجزئي) من الرصيد الدائن أولاً
+                    // ثم إضافة المبلغ الزائد فقط إلى خزنة المندوب
+                    if ($currentBalance < 0) {
+                        // العميل لديه رصيد دائن
+                        $creditAvailable = abs($currentBalance);
+                        $remainingAmount = $baseDueAmount; // المبلغ المتبقي بعد الدفع الجزئي (إن وجد)
+                        
+                        // خصم المبلغ المتبقي من الرصيد الدائن
+                        if ($remainingAmount <= $creditAvailable) {
+                            // المبلغ المتبقي أقل من أو يساوي الرصيد الدائن
+                            // يتم خصم كامل المبلغ المتبقي من الرصيد الدائن
+                            $creditUsed = $remainingAmount;
+                            
+                            // عند استخدام الرصيد الدائن لعميل ليس له سجل مشتريات:
+                            // - creditUsed يُضاف إلى amountAddedToSales لإجمالي المبيعات (صافي)
+                            // - لكن creditUsed لا يُضاف إلى رصيد الخزنة الإجمالي أو التحصيلات
+                            // - سيتم احتساب نسبة 2% من creditUsed تُضاف إلى نسبة تحصيلات المندوب
+                            if (!($hasPreviousPurchases ?? false)) {
+                                // العميل ليس له سجل مشتريات: نضيف creditUsed إلى amountAddedToSales لإجمالي المبيعات (صافي)
+                                $amountAddedToSales = $effectivePaidAmount + $creditUsed;
+                            } else {
+                                // العميل له سجل مشتريات: فقط المبلغ المحصل نقداً يُضاف
+                                $amountAddedToSales = $effectivePaidAmount;
+                            }
+                            
+                            $dueAmount = 0.0; // لا يوجد دين متبقي
+                            
+                            // الرصيد الجديد = الرصيد الدائن الحالي + المبلغ المخصوم من الرصيد الدائن (لأن الرصيد سالب)
+                            // مثال: رصيد دائن -100، بيع 220، دفع جزئي 0، المتبقي 220
+                            // creditUsed = min(220, 100) = 100
+                            // الرصيد الجديد = -100 + 100 = 0
+                            $newBalance = round($currentBalance + $creditUsed, 2);
+                        } else {
+                            // المبلغ المتبقي أكبر من الرصيد الدائن
+                            // يتم خصم الرصيد الدائن بالكامل، والمبلغ الزائد يُضاف كدين
+                            $creditUsed = $creditAvailable;
+                            $excessAmount = round($remainingAmount - $creditUsed, 2); // المبلغ الزائد
+                            
+                            // عند استخدام الرصيد الدائن لعميل ليس له سجل مشتريات:
+                            // - creditUsed يُضاف إلى amountAddedToSales لإجمالي المبيعات (صافي)
+                            // - لكن creditUsed لا يُضاف إلى رصيد الخزنة الإجمالي أو التحصيلات
+                            // - سيتم احتساب نسبة 2% من creditUsed تُضاف إلى نسبة تحصيلات المندوب
+                            if (!($hasPreviousPurchases ?? false)) {
+                                // العميل ليس له سجل مشتريات: نضيف creditUsed إلى amountAddedToSales لإجمالي المبيعات (صافي)
+                                $amountAddedToSales = $effectivePaidAmount + $creditUsed;
+                            } else {
+                                // العميل له سجل مشتريات: فقط المبلغ المحصل نقداً يُضاف
+                                $amountAddedToSales = $effectivePaidAmount;
+                            }
+                            
+                            $dueAmount = $excessAmount; // المبلغ الزائد هو الدين الجديد
+                            
+                            // الرصيد الجديد = 0 (لا رصيد دائن) + المبلغ الزائد (دين)
+                            // مثال: رصيد دائن -100، بيع 220، دفع جزئي 0، المتبقي 220
+                            // creditUsed = 100، excessAmount = 120
+                            // الرصيد الجديد = 0 + 120 = 120 (رصيد مدين)
+                            $newBalance = $dueAmount;
+                        }
+                    } else {
+                        // العميل ليس لديه رصيد دائن
+                        // المنطق العادي: حساب المبلغ المتبقي بعد التحصيل الجزئي
+                        $remainingAfterPartialPayment = $baseDueAmount;
+                        $dueAmount = $remainingAfterPartialPayment;
+                        $amountAddedToSales = $netTotal; // كامل المبلغ يُضاف إلى خزنة المندوب
+                        
+                        // حساب الرصيد الجديد: الرصيد الحالي + الدين الجديد
+                        $newBalance = round($currentBalance + $dueAmount, 2);
+                    }
+                    
+                    // تحديث رصيد العميل
+                    if (abs($newBalance - $currentBalance) > 0.0001) {
+                        $db->execute("UPDATE customers SET balance = ? WHERE id = ?", [$newBalance, $customerId]);
+                        $customer['balance'] = $newBalance;
+                    }
+                    
+                    // التحقق من وجود العميل في جدول returns (أصحاب الرصيد الدائن)
+                    // إذا كان العميل موجوداً في returns، يتم احتساب نسبة 2% من المبلغ المدفوع من الرصيد الدائن
+                    $customerInReturns = false;
+                    try {
+                        $returnsCustomers = $db->query("SELECT * FROM `returns` ORDER BY `customer_id` ASC");
+                        $returnsCustomerIds = [];
+                        foreach ($returnsCustomers as $returnRecord) {
+                            $returnCustomerId = (int)($returnRecord['customer_id'] ?? 0);
+                            if ($returnCustomerId > 0 && !in_array($returnCustomerId, $returnsCustomerIds)) {
+                                $returnsCustomerIds[] = $returnCustomerId;
+                            }
+                        }
+                        $customerInReturns = in_array($customerId, $returnsCustomerIds);
+                        
+                        error_log(sprintf(
+                            'Returns table check: customerId=%d, customerInReturns=%s, creditUsed=%.2f',
+                            $customerId,
+                            $customerInReturns ? 'true' : 'false',
+                            $creditUsed
+                        ));
+                    } catch (Throwable $returnsCheckError) {
+                        error_log('Error checking returns table for customer ' . $customerId . ': ' . $returnsCheckError->getMessage());
+                        $customerInReturns = false;
+                    }
+                }
+
+                $invoiceItems = [];
+                foreach ($normalizedCart as $item) {
+                    $invoiceItems[] = [
+                        'product_id' => $item['product_id'],
+                        'description' => $item['name'],
+                        'quantity' => $item['quantity'],
+                        'unit_price' => $item['unit_price'],
+                    ];
+                }
+
+                // تمرير created_from_pos = true لأن هذه فاتورة من نقطة البيع
+                $invoiceResult = createInvoice(
+                    $customerId,
+                    $currentUser['id'],
+                    $saleDate,
+                    $invoiceItems,
+                    0,  // taxRate
+                    $discountAmount,  // discountAmount
+                    $notes,
+                    $currentUser['id'],
+                    $dueDate,  // تمرير تاريخ الاستحقاق
+                    true  // created_from_pos = true
+                );
+
+                if (empty($invoiceResult['success'])) {
+                    throw new RuntimeException($invoiceResult['message'] ?? 'تعذر إنشاء الفاتورة.');
+                }
+
+                $invoiceId = (int) $invoiceResult['invoice_id'];
+                $invoiceNumber = $invoiceResult['invoice_number'] ?? '';
+
+                // ربط أرقام التشغيلة بعناصر الفاتورة
+                $invoiceItems = $db->query(
+                    "SELECT id, product_id FROM invoice_items WHERE invoice_id = ? ORDER BY id",
+                    [$invoiceId]
+                );
+                
+                // إنشاء خريطة للمطابقة بين invoice_items و normalizedCart
+                $invoiceItemsMap = [];
+                foreach ($invoiceItems as $invItem) {
+                    $productId = (int)$invItem['product_id'];
+                    if (!isset($invoiceItemsMap[$productId])) {
+                        $invoiceItemsMap[$productId] = [];
+                    }
+                    $invoiceItemsMap[$productId][] = (int)$invItem['id'];
+                }
+                
+                // ربط أرقام التشغيلة
+                foreach ($normalizedCart as $item) {
+                    $productId = (int)$item['product_id'];
+                    $finishedBatchId = isset($item['finished_batch_id']) && $item['finished_batch_id'] > 0 ? (int)$item['finished_batch_id'] : null;
+                    $finishedBatchNumber = isset($item['finished_batch_number']) ? trim($item['finished_batch_number']) : null;
+                    
+                    if (isset($invoiceItemsMap[$productId]) && !empty($invoiceItemsMap[$productId])) {
+                        // استخدام أول invoice_item_id متطابق
+                        $invoiceItemId = array_shift($invoiceItemsMap[$productId]);
+                        
+                        // البحث عن batch_number_id من جدول batch_numbers
+                        $batchNumberId = null;
+                        if ($finishedBatchId) {
+                            // محاولة استخدام finished_batch_id مباشرة كـ batch_number_id
+                            $batchCheck = $db->queryOne(
+                                "SELECT id FROM batch_numbers WHERE id = ?",
+                                [$finishedBatchId]
+                            );
+                            if ($batchCheck) {
+                                $batchNumberId = (int)$batchCheck['id'];
+                            }
+                        }
+                        
+                        // إذا لم نجد batch_number_id من finished_batch_id، نبحث باستخدام batch_number string
+                        if (!$batchNumberId && $finishedBatchNumber) {
+                            $batchCheck = $db->queryOne(
+                                "SELECT id FROM batch_numbers WHERE batch_number = ?",
+                                [$finishedBatchNumber]
+                            );
+                            if ($batchCheck) {
+                                $batchNumberId = (int)$batchCheck['id'];
+                            }
+                        }
+                        
+                        // ربط رقم التشغيلة بعنصر الفاتورة إذا وُجد
+                        if ($batchNumberId) {
+                            try {
+                                $db->execute(
+                                    "INSERT INTO sales_batch_numbers (invoice_item_id, batch_number_id, quantity) 
+                                     VALUES (?, ?, ?)
+                                     ON DUPLICATE KEY UPDATE quantity = quantity + ?",
+                                    [$invoiceItemId, $batchNumberId, $item['quantity'], $item['quantity']]
+                                );
+                            } catch (Throwable $batchError) {
+                                error_log('Error linking batch number to invoice item: ' . $batchError->getMessage());
+                            }
+                        }
+                    }
+                }
+
+                // تحديد حالة الفاتورة
+                // إذا كان الدين = 0 (إما دفعة كاملة نقداً أو استخدام الرصيد الدائن بالكامل)، تكون الفاتورة مدفوعة
+                $invoiceStatus = 'sent';
+                if ($dueAmount <= 0.0001) {
+                    $invoiceStatus = 'paid';
+                    // عند استخدام الرصيد الدائن بالكامل، المبلغ المدفوع = إجمالي الفاتورة
+                    if ($creditUsed > 0 && $effectivePaidAmount < $netTotal) {
+                        $effectivePaidAmount = $netTotal;
+                    }
+                } elseif ($effectivePaidAmount > 0) {
+                    $invoiceStatus = 'partial';
+                }
+
+                // تحديد ما إذا كانت المعاملة من رصيد دائن
+                $isCreditSale = ($creditUsed > 0.0001);
+                $hasRemainingDebt = ($dueAmount > 0.0001);
+                
+                // تحديث الفاتورة بالمبلغ المدفوع والمبلغ المتبقي
+                // هذا ضروري لعرض المبلغ المدفوع بشكل صحيح في الفواتير المطبوعة
+                $invoiceUpdateSql = "UPDATE invoices SET paid_amount = ?, remaining_amount = ?, status = ?, updated_at = NOW()";
+                $invoiceUpdateParams = [$effectivePaidAmount, $dueAmount, $invoiceStatus];
+                
+                // إضافة فلاج للفاتورة إذا كان هناك عمود paid_from_credit
+                // هذا الفلاج مهم جداً: يستخدم لاستبعاد الفواتير المدفوعة من الرصيد الدائن من حساب التحصيلات
+                // في calculateSalesCollections، يتم استبعاد الفواتير التي لديها paid_from_credit = 1
+                // لأن المبالغ المدفوعة من الرصيد الدائن لا تُحسب في التحصيلات (المندوب لم يقم بتحصيلها نقدياً)
+                $hasPaidFromCreditColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'paid_from_credit'"));
+                if ($hasPaidFromCreditColumn) {
+                    // إذا تم استخدام أي مبلغ من الرصيد الدائن، نضع الفلاج = 1
+                    // هذا يضمن استبعاد هذه الفاتورة من حساب التحصيلات في calculateSalesCollections
+                    $paidFromCreditFlag = ($creditUsed > 0.0001) ? 1 : 0;
+                    $invoiceUpdateSql .= ", paid_from_credit = ?";
+                    $invoiceUpdateParams[] = $paidFromCreditFlag;
+                    
+                    // تسجيل معلومات التشخيص
+                    error_log(sprintf(
+                        'Setting paid_from_credit flag: creditUsed=%.2f, paidFromCreditFlag=%d, invoiceId=%d, invoiceNumber=%s',
+                        $creditUsed,
+                        $paidFromCreditFlag,
+                        $invoiceId,
+                        $invoiceNumber ?? 'N/A'
+                    ));
+                }
+                
+                // إضافة مبلغ credit_used إذا كان هناك عمود credit_used
+                $hasCreditUsedColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'credit_used'"));
+                if ($hasCreditUsedColumn) {
+                    $invoiceUpdateSql .= ", credit_used = ?";
+                    $invoiceUpdateParams[] = $creditUsed;
+                } else {
+                    // إضافة العمود إذا لم يكن موجوداً
+                    try {
+                        $db->execute("ALTER TABLE invoices ADD COLUMN credit_used DECIMAL(15,2) DEFAULT 0.00 COMMENT 'المبلغ المخصوم من الرصيد الدائن' AFTER paid_from_credit");
+                        $hasCreditUsedColumn = true;
+                        $invoiceUpdateSql .= ", credit_used = ?";
+                        $invoiceUpdateParams[] = $creditUsed;
+                    } catch (Throwable $e) {
+                        error_log('Error adding credit_used column: ' . $e->getMessage());
+                    }
+                }
+                
+                // إضافة المبلغ الذي يُضاف إلى خزنة المندوب (amount_added_to_sales)
+                // يجب تسجيل هذا المبلغ لجميع الفواتير (ليس فقط للفواتير المدفوعة من رصيد دائن)
+                // للفواتير العادية: amount_added_to_sales = netTotal
+                // للفواتير المدفوعة من رصيد دائن: amount_added_to_sales = المبلغ الزائد فقط
+                $hasAmountAddedToSalesColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'amount_added_to_sales'"));
+                if ($hasAmountAddedToSalesColumn) {
+                    $invoiceUpdateSql .= ", amount_added_to_sales = ?";
+                    $invoiceUpdateParams[] = $amountAddedToSales;
+                } else {
+                    // إضافة العمود إذا لم يكن موجوداً
+                    try {
+                        $db->execute("ALTER TABLE invoices ADD COLUMN amount_added_to_sales DECIMAL(15,2) DEFAULT NULL COMMENT 'المبلغ المضاف إلى خزنة المندوب (بعد خصم الرصيد الدائن)' AFTER paid_from_credit");
+                        $hasAmountAddedToSalesColumn = true;
+                        $invoiceUpdateSql .= ", amount_added_to_sales = ?";
+                        $invoiceUpdateParams[] = $amountAddedToSales;
+                    } catch (Throwable $e) {
+                        error_log('Error adding amount_added_to_sales column: ' . $e->getMessage());
+                    }
+                }
+                
+                // تنفيذ تحديث الفاتورة فوراً قبل أي استدعاء لـ refreshSalesCommissionForUser
+                // هذا يضمن أن paid_from_credit يتم تعيينه بشكل صحيح قبل حساب التحصيلات
+                $invoiceUpdateParams[] = $invoiceId;
+                $db->execute($invoiceUpdateSql . " WHERE id = ?", $invoiceUpdateParams);
+                
+                // تسجيل معلومات التشخيص بعد التحديث
+                if ($hasPaidFromCreditColumn && $creditUsed > 0.0001) {
+                    error_log(sprintf(
+                        'Invoice updated with paid_from_credit flag: invoiceId=%d, invoiceNumber=%s, paidFromCreditFlag=%d, creditUsed=%.2f',
+                        $invoiceId,
+                        $invoiceNumber ?? 'N/A',
+                        $paidFromCreditFlag ?? 0,
+                        $creditUsed
+                    ));
+                }
+                
+                // إضافة الفاتورة إلى سجل مشتريات العميل (داخل نفس الـ transaction)
+                // التحقق من تطابق customer_id بين الفاتورة والبيانات الممررة
+                try {
+                    // التحقق من تطابق customer_id في الفاتورة
+                    $invoiceCheck = $db->queryOne(
+                        "SELECT customer_id FROM invoices WHERE id = ?",
+                        [$invoiceId]
+                    );
+                    
+                    if (!$invoiceCheck) {
+                        throw new RuntimeException('الفاتورة غير موجودة');
+                    }
+                    
+                    $invoiceCustomerId = (int)($invoiceCheck['customer_id'] ?? 0);
+                    if ($invoiceCustomerId !== (int)$customerId) {
+                        error_log(sprintf(
+                            'ERROR: customer_id mismatch! Invoice customer_id: %d, Provided: %d, Invoice ID: %d',
+                            $invoiceCustomerId,
+                            $customerId,
+                            $invoiceId
+                        ));
+                        throw new RuntimeException('تضارب في بيانات العميل: customer_id في الفاتورة لا يطابق البيانات الممررة');
+                    }
+                    
+                    customerHistoryEnsureSetup();
+                    $db->execute(
+                        "INSERT INTO customer_purchase_history
+                            (customer_id, invoice_id, invoice_number, invoice_date, invoice_total, paid_amount, invoice_status,
+                             return_total, return_count, created_at)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, NOW())
+                         ON DUPLICATE KEY UPDATE
+                            invoice_number = VALUES(invoice_number),
+                            invoice_date = VALUES(invoice_date),
+                            invoice_total = VALUES(invoice_total),
+                            paid_amount = VALUES(paid_amount),
+                            invoice_status = VALUES(invoice_status),
+                            updated_at = NOW()",
+                        [
+                            $customerId,
+                            $invoiceId,
+                            $invoiceNumber,
+                            $saleDate,
+                            $netTotal,
+                            $effectivePaidAmount,
+                            $invoiceStatus
+                        ]
+                    );
+                } catch (Throwable $historyError) {
+                    error_log('Error adding invoice to customer purchase history: ' . $historyError->getMessage());
+                    // في حالة الخطأ، نوقف العملية ونتدحرج
+                    throw $historyError;
+                }
+                
+                // تسجيل التحصيل في جدول التحصيلات إذا كان هناك مبلغ محصل فعلياً
+                // يتم تسجيل التحصيلات للدفع الكامل والدفع الجزئي
+                // لا نسجل في خزنة المندوب إذا كانت المعاملة من رصيد دائن
+                $shouldRecordCollection = ($effectivePaidAmount > 0.0001 && in_array($paymentType, ['full', 'partial']) && !$isCreditSale);
+                
+                if ($shouldRecordCollection) {
+                    // التحقق من وجود الأعمدة في جدول collections
+                    $hasStatusColumn = !empty($db->queryOne("SHOW COLUMNS FROM collections LIKE 'status'"));
+                    $hasNotesColumn = !empty($db->queryOne("SHOW COLUMNS FROM collections LIKE 'notes'"));
+                    $hasCollectionNumberColumn = !empty($db->queryOne("SHOW COLUMNS FROM collections LIKE 'collection_number'"));
+                    
+                    $collectionNumber = null;
+                    if ($hasCollectionNumberColumn) {
+                        try {
+                            $year = date('Y', strtotime($saleDate));
+                            $month = date('m', strtotime($saleDate));
+                            $lastCollection = $db->queryOne(
+                                "SELECT collection_number FROM collections WHERE collection_number LIKE ? ORDER BY collection_number DESC LIMIT 1",
+                                ["COL-{$year}{$month}-%"]
+                            );
+                            
+                            $serial = 1;
+                            if (!empty($lastCollection['collection_number'])) {
+                                $parts = explode('-', $lastCollection['collection_number']);
+                                $serial = intval($parts[2] ?? 0) + 1;
+                            }
+                            $collectionNumber = sprintf("COL-%s%s-%04d", $year, $month, $serial);
+                        } catch (Throwable $e) {
+                            error_log('Error generating collection number: ' . $e->getMessage());
+                        }
+                    }
+                    
+                    $collectionColumns = ['customer_id', 'amount', 'date', 'payment_method', 'collected_by'];
+                    $collectionValues = [$customerId, $effectivePaidAmount, $saleDate, 'cash', $currentUser['id']];
+                    $collectionPlaceholders = ['?', '?', '?', '?', '?'];
+                    
+                    if ($hasCollectionNumberColumn && $collectionNumber !== null) {
+                        array_unshift($collectionColumns, 'collection_number');
+                        array_unshift($collectionValues, $collectionNumber);
+                        array_unshift($collectionPlaceholders, '?');
+                    }
+                    
+                    if ($hasNotesColumn) {
+                        $collectionColumns[] = 'notes';
+                        $collectionNote = ($paymentType === 'full') 
+                            ? 'دفع كامل من نقطة بيع المندوب - فاتورة ' . $invoiceNumber
+                            : 'تحصيل جزئي من نقطة بيع المندوب - فاتورة ' . $invoiceNumber;
+                        $collectionValues[] = $collectionNote;
+                        $collectionPlaceholders[] = '?';
+                    }
+                    
+                    if ($hasStatusColumn) {
+                        $collectionColumns[] = 'status';
+                        $collectionValues[] = 'pending';
+                        $collectionPlaceholders[] = '?';
+                    }
+                    
+                    try {
+                        $collectionSql = "INSERT INTO collections (" . implode(', ', $collectionColumns) . ") VALUES (" . implode(', ', $collectionPlaceholders) . ")";
+                        $db->execute($collectionSql, $collectionValues);
+                        $collectionId = $db->getLastInsertId();
+                        
+                        $auditAction = ($paymentType === 'full') ? 'pos_full_collection' : 'pos_partial_collection';
+                        logAudit($currentUser['id'], $auditAction, 'collection', $collectionId, null, [
+                            'invoice_id' => $invoiceId,
+                            'invoice_number' => $invoiceNumber,
+                            'amount' => $effectivePaidAmount,
+                            'collection_number' => $collectionNumber,
+                            'payment_type' => $paymentType
+                        ]);
+                        
+                        // إضافة المكافأة الفورية بنسبة 2% للمندوب الذي قام بالتحصيل مباشرة
+                        // ملاحظة: للبيع الكاش، لا نستخدم applyCollectionInstantReward هنا
+                        // لأن refreshSalesCommissionForUser سيقوم بحساب نسبة التحصيلات لجميع الفواتير
+                        // فقط للبيع الجزئي نستخدم applyCollectionInstantReward
+                        if (($currentUser['role'] ?? '') === 'sales' && $collectionId) {
+                            try {
+                                require_once __DIR__ . '/../../includes/salary_calculator.php';
+                                if (function_exists('applyCollectionInstantReward')) {
+                                    // للبيع الكاش، لا نستخدم applyCollectionInstantReward
+                                    // لأن refreshSalesCommissionForUser سيقوم بحساب نسبة التحصيلات
+                                    // فقط للبيع الجزئي نستخدم applyCollectionInstantReward
+                                    if ($paymentType === 'partial') {
+                                        applyCollectionInstantReward(
+                                            $currentUser['id'],
+                                            $effectivePaidAmount,
+                                            $saleDate,
+                                            $collectionId,
+                                            $currentUser['id']
+                                        );
+                                    }
+                                    // للبيع الكاش، سيتم حساب نسبة التحصيلات عبر refreshSalesCommissionForUser لاحقاً
+                                }
+                            } catch (Throwable $instantRewardError) {
+                                error_log('Instant collection reward error (pos): ' . $instantRewardError->getMessage());
+                            }
+                        }
+                    } catch (Throwable $collectionError) {
+                        error_log('Error recording partial collection: ' . $collectionError->getMessage());
+                        // لا نوقف العملية إذا فشل تسجيل التحصيل، لكن نسجل الخطأ
+                    }
+                }
+                
+                // إنشاء سجل في payment_schedules إذا كان هناك تاريخ استحقاق ومبلغ متبقي
+                if ($dueDate && $dueAmount > 0.0001) {
+                    try {
+                        // التحقق من وجود جدول payment_schedules
+                        $paymentSchedulesTableExists = $db->queryOne("SHOW TABLES LIKE 'payment_schedules'");
+                        if (!empty($paymentSchedulesTableExists)) {
+                            // التحقق من وجود عمود invoice_id في payment_schedules
+                            $hasInvoiceIdColumn = !empty($db->queryOne("SHOW COLUMNS FROM payment_schedules LIKE 'invoice_id'"));
+                            
+                            if ($hasInvoiceIdColumn) {
+                                // إنشاء سجل في payment_schedules مرتبط بالفاتورة
+                                $db->execute(
+                                    "INSERT INTO payment_schedules 
+                                    (invoice_id, customer_id, sales_rep_id, amount, due_date, installment_number, total_installments, status, created_by) 
+                                    VALUES (?, ?, ?, ?, ?, 1, 1, 'pending', ?)",
+                                    [
+                                        $invoiceId,
+                                        $customerId,
+                                        $currentUser['id'],
+                                        $dueAmount,
+                                        $dueDate,
+                                        $currentUser['id']
+                                    ]
+                                );
+                                
+                                logAudit($currentUser['id'], 'create_payment_schedule_from_pos', 'payment_schedule', $invoiceId, null, [
+                                    'invoice_id' => $invoiceId,
+                                    'invoice_number' => $invoiceNumber,
+                                    'amount' => $dueAmount,
+                                    'due_date' => $dueDate
+                                ]);
+                            } else {
+                                // إذا لم يكن هناك عمود invoice_id، نستخدم sale_id (null في هذه الحالة)
+                                $db->execute(
+                                    "INSERT INTO payment_schedules 
+                                    (sale_id, customer_id, sales_rep_id, amount, due_date, installment_number, total_installments, status, created_by) 
+                                    VALUES (NULL, ?, ?, ?, ?, 1, 1, 'pending', ?)",
+                                    [
+                                        $customerId,
+                                        $currentUser['id'],
+                                        $dueAmount,
+                                        $dueDate,
+                                        $currentUser['id']
+                                    ]
+                                );
+                            }
+                        }
+                    } catch (Throwable $scheduleError) {
+                        error_log('Error creating payment schedule: ' . $scheduleError->getMessage());
+                        // لا نوقف العملية إذا فشل إنشاء الجدول الزمني، لكن نسجل الخطأ
+                    }
+                }
+
+                $totalSoldValue = 0;
+
+                foreach ($normalizedCart as $item) {
+                    $productId = $item['product_id'];
+                    $quantity = $item['quantity'];
+                    $unitPrice = $item['unit_price'];
+                    $lineTotal = $item['line_total'];
+                    // الحصول على finished_batch_id من البيانات المرسلة
+                    $requestedBatchId = isset($item['finished_batch_id']) && $item['finished_batch_id'] > 0 ? (int)$item['finished_batch_id'] : null;
+
+                    // التحقق من الكمية مرة أخرى باستخدام FOR UPDATE لتجنب race conditions
+                    // جلب جميع بيانات المنتج من مخزون السيارة للحفاظ عليها عند التحديث
+                    // استخدام finished_batch_id للبحث عن السجل الصحيح إذا كان متوفراً
+                    if ($requestedBatchId !== null) {
+                        $vehicleInventoryItem = $db->queryOne(
+                            "SELECT quantity, finished_batch_id, finished_batch_number, finished_production_date, 
+                                    finished_quantity_produced, finished_workers, product_name, product_category, 
+                                    product_unit, product_unit_price, product_snapshot, manager_unit_price
+                             FROM vehicle_inventory 
+                             WHERE vehicle_id = ? AND product_id = ? AND finished_batch_id = ? FOR UPDATE",
+                            [$vehicle['id'], $productId, $requestedBatchId]
+                        );
+                    } else {
+                        // إذا لم يكن هناك batch_id، البحث عن سجل بدون batch_id
+                        $vehicleInventoryItem = $db->queryOne(
+                            "SELECT quantity, finished_batch_id, finished_batch_number, finished_production_date, 
+                                    finished_quantity_produced, finished_workers, product_name, product_category, 
+                                    product_unit, product_unit_price, product_snapshot, manager_unit_price
+                             FROM vehicle_inventory 
+                             WHERE vehicle_id = ? AND product_id = ? AND (finished_batch_id IS NULL OR finished_batch_id = 0) FOR UPDATE",
+                            [$vehicle['id'], $productId]
+                        );
+                    }
+
+                    if (!$vehicleInventoryItem) {
+                        throw new RuntimeException('المنتج ' . $item['name'] . ' غير موجود في مخزون السيارة.');
+                    }
+
+                    $available = (float)($vehicleInventoryItem['quantity'] ?? 0);
+
+                    if ($quantity > $available) {
+                        throw new RuntimeException('الكمية المتاحة للمنتج ' . $item['name'] . ' غير كافية. المتاح: ' . $available . '، المطلوب: ' . $quantity);
+                    }
+
+                    // استخدام batch_id من البيانات المرسلة أو من vehicle_inventory
+                    $batchId = $requestedBatchId ?? (!empty($vehicleInventoryItem['finished_batch_id']) ? (int)$vehicleInventoryItem['finished_batch_id'] : null);
+
+                    // تسجيل حركة المخزون أولاً (قبل تحديث vehicle_inventory)
+                    // لأن recordInventoryMovement تتحقق من الكمية من vehicle_inventory
+                    $movementResult = recordInventoryMovement(
+                        $productId,
+                        $vehicleWarehouseId,
+                        'out',
+                        $quantity,
+                        'sales',
+                        $invoiceId,
+                        'بيع من نقطة بيع المندوب - فاتورة ' . $invoiceNumber,
+                        $currentUser['id'],
+                        $batchId  // تمرير batchId إذا كان متوفراً
+                    );
+
+                    if (empty($movementResult['success'])) {
+                        throw new RuntimeException($movementResult['message'] ?? 'تعذر تسجيل حركة المخزون.');
+                    }
+
+                    // تحديث vehicle_inventory بعد تسجيل الحركة
+                    $newQuantity = max(0, $available - $quantity);
+                    // تمرير جميع بيانات التشغيلة من السجل الموجود للحفاظ عليها عند التحديث
+                    $finishedProductData = [];
+                    if ($batchId) {
+                        $finishedProductData['finished_batch_id'] = $batchId;
+                        $finishedProductData['batch_id'] = $batchId;
+                        // الحفاظ على بيانات التشغيلة من السجل الموجود
+                        if (!empty($vehicleInventoryItem['finished_batch_number'])) {
+                            $finishedProductData['finished_batch_number'] = $vehicleInventoryItem['finished_batch_number'];
+                        }
+                        if (!empty($vehicleInventoryItem['finished_production_date'])) {
+                            $finishedProductData['finished_production_date'] = $vehicleInventoryItem['finished_production_date'];
+                        }
+                        if (!empty($vehicleInventoryItem['finished_quantity_produced'])) {
+                            $finishedProductData['finished_quantity_produced'] = $vehicleInventoryItem['finished_quantity_produced'];
+                        }
+                        if (!empty($vehicleInventoryItem['finished_workers'])) {
+                            $finishedProductData['finished_workers'] = $vehicleInventoryItem['finished_workers'];
+                        }
+                    }
+                    $updateResult = updateVehicleInventory($vehicle['id'], $productId, $newQuantity, $currentUser['id'], null, $finishedProductData);
+                    if (empty($updateResult['success'])) {
+                        throw new RuntimeException($updateResult['message'] ?? 'تعذر تحديث مخزون السيارة.');
+                    }
+
+                    $db->execute(
+                        "INSERT INTO sales (customer_id, product_id, quantity, price, total, date, salesperson_id, status) 
+                         VALUES (?, ?, ?, ?, ?, ?, ?, 'completed')",
+                        [$customerId, $productId, $quantity, $unitPrice, $lineTotal, $saleDate, $currentUser['id']]
+                    );
+
+                    $inventoryByProduct[$productId]['quantity'] = $newQuantity;
+                    $inventoryByProduct[$productId]['total_value'] = ($newQuantity * $unitPrice);
+                    $totalSoldValue += $lineTotal;
+                }
+
+                logAudit($currentUser['id'], 'create_pos_sale_multi', 'invoice', $invoiceId, null, [
+                    'invoice_number'    => $invoiceNumber,
+                    'items'             => $normalizedCart,
+                    'net_total'         => $netTotal,
+                    'paid_amount'       => $effectivePaidAmount,
+                    'base_due_amount'   => $baseDueAmount,
+                    'credit_used'       => $creditUsed,
+                    'due_amount'        => $dueAmount,
+                    'customer_id'       => $customerId,
+                    'is_credit_sale'    => $isCreditSale,
+                    'has_previous_purchases' => $hasPreviousPurchases ?? false,
+                    'amount_added_to_sales' => $amountAddedToSales,
+                    'customer_balance_before' => $currentBalance ?? 0,
+                    'customer_balance_after' => $newBalance ?? 0,
+                ]);
+
+                // تحديث عمولة المندوب حسب القواعد الجديدة:
+                // القاعدة 1: عند خصم من الرصيد الدائن لعميل لديه سجل مشتريات:
+                //   - يتم احتساب نسبة 2% من المبلغ المخصوم من الرصيد الدائن (creditUsed)
+                //   - تُضاف النسبة إلى collections_bonus فقط (لا تُضاف إلى collections_amount)
+                //   - creditUsed لا يُضاف إلى رصيد الخزنة الإجمالي لأن المبلغ لم يُحصل فعلياً
+                // القاعدة 2: عند خصم من الرصيد الدائن لعميل ليس لديه سجل مشتريات:
+                //   - يتم احتساب نسبة 2% من المبلغ المخصوم من الرصيد الدائن (creditUsed)
+                //   - تُضاف النسبة إلى collections_bonus فقط (لا تُضاف إلى collections_amount)
+                //   - creditUsed لا يُضاف إلى رصيد الخزنة الإجمالي لأن المبلغ لم يُحصل فعلياً
+                // القاعدة 3: نسبة التحصيل تضاف للمندوب في الحالات التالية:
+                //   - البيع الكاش (full payment) - تُحتسب على كامل المبلغ
+                //   - البيع بالتحصيل الجزئي - تُحتسب فقط على المبلغ المحصل
+                //   - أي مبلغ يقوم المندوب بتحصيله من العملاء من خلال صفحة العملاء
+                //   - خصم من الرصيد الدائن (لعميل لديه سجل مشتريات أو ليس له سجل مشتريات)
+                if (($currentUser['role'] ?? '') === 'sales') {
+                    try {
+                        require_once __DIR__ . '/../../includes/salary_calculator.php';
+                        
+                        // تسجيل معلومات التشخيص العامة
+                        error_log(sprintf(
+                            'Sales commission calculation started: paymentType=%s, creditUsed=%.2f, invoiceId=%d, customerId=%d',
+                            $paymentType ?? 'unknown',
+                            $creditUsed,
+                            $invoiceId,
+                            $customerId
+                        ));
+                        
+                        // الحالة الخاصة: خصم من الرصيد الدائن لعميل لديه رصيد دائن وسجل مرتجعات
+                        // القاعدة الجديدة: عند خصم أي مبلغ من الرصيد الدائن لعميل لديه:
+                        //   1. رصيد دائن (credit balance < 0)
+                        //   2. سجل مرتجعات (returns record)
+                        // يتم احتساب نسبة 2% من المبلغ المخصوم وتضاف إلى نسبة التحصيلات (collections_bonus)
+                        // مع إضافة المبلغ الأساسي إلى collections_amount
+                        // بدون إضافة إلى رصيد الخزنة الإجمالي
+                        
+                        // التحقق من أن العميل لديه رصيد دائن (قبل البيع)
+                        // يجب أن يكون الرصيد سالباً قبل البيع
+                        // استخدام الرصيد الأصلي المحفوظ قبل التحديث
+                        $hasCreditBalance = (isset($originalBalance) && $originalBalance < 0);
+                        
+                        // استخدام قيمة creditUsed التي تم حسابها مسبقاً في السطور 589-622
+                        // هذه القيمة صحيحة لأنها تم حسابها بناءً على الرصيد الأصلي قبل التحديث
+                        // لا حاجة لإعادة حساب creditUsed هنا لأن القيمة المحسوبة مسبقاً صحيحة
+                        error_log(sprintf(
+                            'Using pre-calculated creditUsed: creditUsed=%.2f, originalBalance=%.2f, paymentType=%s, invoiceId=%d',
+                            $creditUsed, $originalBalance ?? $currentBalance, $paymentType ?? 'NULL', $invoiceId
+                        ));
+                        
+                        // تسجيل معلومات التشخيص قبل التحقق من النظام الجديد
+                        error_log(sprintf(
+                            'DEBUG: New commission check - hasCreditBalance=%s, currentBalance=%.2f, creditUsed=%.2f, paymentType=%s, netTotal=%.2f, effectivePaidAmount=%.2f, invoiceId=%d, customerId=%d',
+                            $hasCreditBalance ? 'true' : 'false',
+                            $currentBalance,
+                            $creditUsed,
+                            $paymentType ?? 'NULL',
+                            $netTotal,
+                            $effectivePaidAmount,
+                            $invoiceId,
+                            $customerId
+                        ));
+                        
+                        // النظام الجديد: إذا كان العميل لديه رصيد دائن وليس له سجل مشتريات والبيع بالآجل أو جزئي
+                        // يتم احتساب نسبة 2% من المبلغ المدفوع من الرصيد الدائن
+                        // القاعدة: 
+                        // - المبلغ المدفوع من رصيد العميل (creditUsed) يُضاف إلى amount_added_to_sales لإجمالي المبيعات (صافي)
+                        // - لكن creditUsed لا يُضاف إلى رصيد الخزنة الإجمالي أو التحصيلات
+                        // - سيتم احتساب نسبة 2% من creditUsed تُضاف إلى collections_bonus فقط
+                        // - بالآجل: حساب 2% من المبلغ المدفوع من الرصيد الدائن فقط
+                        // - جزئي: حساب 2% من المبلغ المدفوع من الرصيد الدائن فقط (لعميل ليس له سجل مشتريات)
+                        // متغير لتتبع ما إذا تم تطبيق نسبة التحصيلات بالفعل (لمنع الحساب المزدوج)
+                        $commissionApplied = false;
+                        
+                        // الحالة الخاصة: حساب نسبة التحصيلات عندما يكون للعميل رصيد مدين ويدفع نقداً أو جزئياً
+                        // إذا كان للعميل رصيد مدين (balance > 0) ودفع نقداً أو جزئياً، يجب حساب نسبة 2% على المبلغ المدفوع
+                        $hasDebitBalance = (isset($originalBalance) && $originalBalance > 0.0001);
+                        if ($hasDebitBalance && ($paymentType === 'full' || $paymentType === 'partial') && $effectivePaidAmount > 0.0001 && !$commissionApplied) {
+                            // حساب نسبة 2% على المبلغ المدفوع نقداً
+                            $debitCommissionAmount = round($effectivePaidAmount * 0.02, 2);
+                            
+                            if ($debitCommissionAmount > 0) {
+                                try {
+                                    $timestamp = strtotime($saleDate) ?: time();
+                                    $targetMonth = (int)date('n', $timestamp);
+                                    $targetYear = (int)date('Y', $timestamp);
+                                    
+                                    $summary = getSalarySummary($currentUser['id'], $targetMonth, $targetYear);
+                                    if (!$summary['exists']) {
+                                        $creation = createOrUpdateSalary($currentUser['id'], $targetMonth, $targetYear);
+                                        if (!($creation['success'] ?? false)) {
+                                            throw new RuntimeException('Failed to create salary record: ' . ($creation['message'] ?? 'Unknown error'));
+                                        }
+                                        $summary = getSalarySummary($currentUser['id'], $targetMonth, $targetYear);
+                                    }
+                                    
+                                    if ($summary['exists']) {
+                                        $salary = $summary['salary'];
+                                        $salaryId = (int)($salary['id'] ?? 0);
+                                        
+                                        if ($salaryId > 0) {
+                                            $hasCollectionsBonusColumn = ensureCollectionsBonusColumn();
+                                            
+                                            if ($hasCollectionsBonusColumn) {
+                                                // إضافة نسبة التحصيلات إلى collections_bonus والمبلغ الأساسي إلى collections_amount
+                                                $db->execute(
+                                                    "UPDATE salaries 
+                                                     SET collections_bonus = COALESCE(collections_bonus, 0) + ?, 
+                                                         collections_amount = COALESCE(collections_amount, 0) + ?,
+                                                         updated_at = NOW()
+                                                     WHERE id = ?",
+                                                    [$debitCommissionAmount, $effectivePaidAmount, $salaryId]
+                                                );
+                                                
+                                                error_log(sprintf(
+                                                    'Added collection percentage for debit balance customer: effectivePaidAmount=%.2f, commissionAmount=%.2f, invoiceId=%d, customerId=%d, originalBalance=%.2f',
+                                                    $effectivePaidAmount,
+                                                    $debitCommissionAmount,
+                                                    $invoiceId,
+                                                    $customerId,
+                                                    $originalBalance ?? 0
+                                                ));
+                                                
+                                                $commissionApplied = true; // منع الحساب المزدوج
+                                            }
+                                        }
+                                    }
+                                } catch (Throwable $debitCommissionError) {
+                                    error_log('Error adding collection percentage for debit balance customer: ' . $debitCommissionError->getMessage());
+                                }
+                            }
+                        }
+                        
+                        // ملاحظة: تم إزالة الكود المكرر الذي كان يعمل للبيع بالآجل لعميل له رصيد دائن
+                        // لأن هذا الكود كان يعمل قبل الكود المخصص ويُعيّن $commissionApplied = true
+                        // مما يمنع الكود المخصص من التنفيذ
+                        // الآن الكود المخصص للعملاء الذين لديهم سجل مشتريات (السطر 1949) 
+                        // والكود المخصص للعملاء الذين ليس لديهم سجل مشتريات (السطر 1429) سيعملان بشكل صحيح
+                        
+                        // التحقق من أن العميل ليس له سجل مشتريات قبل حساب النسبة
+                        // لعميل له سجل مشتريات: يتم التعامل معه في الكود اللاحق (السطر 1949)
+                        if ($hasCreditBalance && !($hasPreviousPurchases ?? false) && ($paymentType === 'credit' || $paymentType === 'partial') && !$commissionApplied) {
+                            // استخدام قيمة creditUsed التي تم حسابها مسبقاً في السطور 589-622
+                            // هذه القيمة صحيحة لأنها تم حسابها بناءً على الرصيد الأصلي قبل التحديث
+                            
+                            // تحديد المبلغ الأساسي للعمولة
+                            if ($paymentType === 'credit') {
+                                // بالآجل: حساب 2% من المبلغ المدفوع من الرصيد الدائن فقط
+                                // استخدام creditUsed المحسوب مسبقاً (القيمة الصحيحة)
+                                
+                                // إضافة تسجيل تشخيصي مفصل
+                                error_log(sprintf(
+                                    'Credit payment commission check: creditUsed=%.2f, netTotal=%.2f, originalBalance=%.2f, currentBalance=%.2f, baseDueAmount=%.2f, hasCreditBalance=%s',
+                                    $creditUsed, $netTotal, $originalBalance ?? 0, $currentBalance, $baseDueAmount ?? 0, $hasCreditBalance ? 'true' : 'false'
+                                ));
+                                
+                                // التصحيح الهام: عند البيع بالآجل لعميل لديه رصيد دائن
+                                // يجب دائماً إعادة حساب creditUsed بشكل صحيح (طبق النظام بشكل صارم)
+                                // creditUsed = min(netTotal, abs(originalBalance))
+                                if ($hasCreditBalance && $netTotal > 0.0001) {
+                                    // إعادة حساب creditUsed بشكل صحيح: يجب أن يكون = min(netTotal, abs(originalBalance))
+                                    $recalculatedCreditUsed = min($netTotal, abs($originalBalance ?? 0));
+                                    
+                                    // استخدام القيمة المعاد حسابها دائماً (لضمان الدقة)
+                                    if (abs($recalculatedCreditUsed - $creditUsed) > 0.01) {
+                                        error_log(sprintf(
+                                            'RECALCULATING creditUsed for credit payment: Original creditUsed=%.2f, Recalculated creditUsed=%.2f, netTotal=%.2f, originalBalance=%.2f',
+                                            $creditUsed, $recalculatedCreditUsed, $netTotal, $originalBalance ?? 0
+                                        ));
+                                    }
+                                    $creditUsed = $recalculatedCreditUsed;
+                                    
+                                    error_log(sprintf(
+                                        'Final creditUsed for credit payment commission: creditUsed=%.2f, netTotal=%.2f, originalBalance=%.2f',
+                                        $creditUsed, $netTotal, $originalBalance ?? 0
+                                    ));
+                                }
+                                
+                                if ($creditUsed > 0.0001) {
+                                    // تم استخدام الرصيد الدائن، نحسب على creditUsed فقط
+                                    $commissionBase = $creditUsed;
+                                    
+                                    error_log(sprintf(
+                                        'Credit payment commission calculation: creditUsed=%.2f, netTotal=%.2f, commissionBase=%.2f (using calculated creditUsed)',
+                                        $creditUsed, $netTotal, $commissionBase
+                                    ));
+                                } else {
+                                    // لم يتم استخدام الرصيد الدائن (رغم وجود رصيد دائن)
+                                    // في هذه الحالة، لا يتم احتساب عمولة لأن المبلغ لم يُدفع من الرصيد الدائن
+                                    $commissionBase = 0.0;
+                                    
+                                    error_log(sprintf(
+                                        'Credit payment commission calculation: creditUsed=%.2f, netTotal=%.2f, commissionBase=0.0 (no credit used, no commission)',
+                                        $creditUsed, $netTotal
+                                    ));
+                                }
+                            } else {
+                                // جزئي لعميل ليس له سجل مشتريات: حساب 2% من المبلغ المدفوع من الرصيد الدائن فقط
+                                // القاعدة: عند البيع بالتحصيل الجزئي لعميل ليس له سجل مشتريات
+                                // - creditUsed يُضاف إلى amount_added_to_sales لإجمالي المبيعات (صافي)
+                                // - لكن creditUsed لا يُضاف إلى رصيد الخزنة الإجمالي أو التحصيلات
+                                // - سيتم احتساب نسبة 2% من creditUsed فقط (وليس من effectivePaidAmount)
+                                // استخدام creditUsed المحسوب مسبقاً (القيمة الصحيحة)
+                                
+                                // حساب المبلغ الأساسي للعمولة: فقط creditUsed (لعميل ليس له سجل مشتريات)
+                                // لعميل ليس له سجل مشتريات: commissionBase = creditUsed فقط
+                                $commissionBase = $creditUsed > 0.0001 ? $creditUsed : 0.0;
+                                
+                                error_log(sprintf(
+                                    'Partial payment commission calculation (no purchase history): creditUsed=%.2f, effectivePaidAmount=%.2f, commissionBase=%.2f (creditUsed only, as customer has no purchase history)',
+                                    $creditUsed, $effectivePaidAmount, $commissionBase
+                                ));
+                            }
+                            
+                            // حساب نسبة 2%
+                            $creditCommissionAmount = round($commissionBase * 0.02, 2);
+                            
+                            // تسجيل معلومات التشخيص
+                            error_log(sprintf(
+                                'New credit balance commission (no conditions): paymentType=%s, creditUsed=%.2f, effectivePaidAmount=%.2f, netTotal=%.2f, commissionBase=%.2f, commissionAmount=%.2f, invoiceId=%d, customerId=%d, hasCreditBalance=%s',
+                                $paymentType,
+                                $creditUsed,
+                                $effectivePaidAmount,
+                                $netTotal,
+                                $commissionBase,
+                                $creditCommissionAmount,
+                                $invoiceId,
+                                $customerId,
+                                $hasCreditBalance ? 'true' : 'false'
+                            ));
+                            
+                            // تسجيل إضافي للتأكد من أن النظام يعمل
+                            error_log('SUCCESS: New credit balance commission condition met - proceeding with commission calculation');
+                            
+                            if ($creditCommissionAmount > 0) {
+                                // إضافة النسبة إلى collections_bonus والمبلغ الأساسي إلى collections_amount
+                                try {
+                                    $timestamp = strtotime($saleDate) ?: time();
+                                    $targetMonth = (int)date('n', $timestamp);
+                                    $targetYear = (int)date('Y', $timestamp);
+                                    
+                                    $summary = getSalarySummary($currentUser['id'], $targetMonth, $targetYear);
+                                    if (!$summary['exists']) {
+                                        $creation = createOrUpdateSalary($currentUser['id'], $targetMonth, $targetYear);
+                                        if (!($creation['success'] ?? false)) {
+                                            throw new RuntimeException('Failed to create salary record: ' . ($creation['message'] ?? 'Unknown error'));
+                                        }
+                                        $summary = getSalarySummary($currentUser['id'], $targetMonth, $targetYear);
+                                    }
+                                    
+                                    if ($summary['exists']) {
+                                        $salary = $summary['salary'];
+                                        $salaryId = (int)($salary['id'] ?? 0);
+                                        
+                                        if ($salaryId > 0) {
+                                            // التحقق من وجود أعمدة collections_bonus و collections_amount
+                                            $hasCollectionsBonusColumn = ensureCollectionsBonusColumn();
+                                            
+                                            if ($hasCollectionsBonusColumn) {
+                                                // التأكد من أن commissionBase = creditUsed (وليس netTotal)
+                                                // في حالة البيع بالآجل، يجب أن يكون commissionBase = creditUsed فقط
+                                                
+                                                // استخدام creditUsed مباشرة كقيمة نهائية (طبق النظام بشكل صارم)
+                                                $finalCreditUsed = $creditUsed > 0.0001 ? $creditUsed : 0.0;
+                                                
+                                                if ($paymentType === 'credit') {
+                                                    // في حالة البيع بالآجل، يجب استخدام creditUsed فقط
+                                                    if (abs($commissionBase - $finalCreditUsed) > 0.01) {
+                                                        error_log(sprintf(
+                                                            'CORRECTION for credit payment: commissionBase (%.2f) != creditUsed (%.2f)! Using creditUsed (%.2f) instead.',
+                                                            $commissionBase, $finalCreditUsed, $finalCreditUsed
+                                                        ));
+                                                        $commissionBase = $finalCreditUsed;
+                                                        // إعادة حساب العمولة بناءً على creditUsed الصحيح
+                                                        $creditCommissionAmount = round($finalCreditUsed * 0.02, 2);
+                                                    }
+                                                    // التأكد من استخدام creditUsed فقط
+                                                    $finalCommissionBase = $finalCreditUsed;
+                                                } else {
+                                                    // في حالة البيع الجزئي، نستخدم creditUsed فقط أيضاً
+                                                    $finalCommissionBase = $finalCreditUsed;
+                                                }
+                                                
+                                                // تسجيل معلومات التشخيص قبل التطبيق
+                                                error_log(sprintf(
+                                                    'FINAL commission application: paymentType=%s, creditUsed=%.2f, commissionBase=%.2f, finalCommissionBase=%.2f, creditCommissionAmount=%.2f, salaryId=%d',
+                                                    $paymentType, $creditUsed, $commissionBase, $finalCommissionBase, $creditCommissionAmount, $salaryId
+                                                ));
+                                                
+                                                // ملاحظة هامة: creditUsed لا يُضاف إلى collections_amount أو رصيد الخزنة الإجمالي
+                                                // لأنه لم يُحصل فعلياً من العميل (تم خصمه من رصيد دائن)
+                                                // لكن creditUsed يُضاف إلى amount_added_to_sales لإجمالي المبيعات (صافي)
+                                                // يتم إضافة 2% فقط من creditUsed إلى collections_bonus كعمولة/مكافأة
+                                                // ولا يتم إضافة creditUsed نفسه إلى collections_amount أو أي إجمالي خزنة
+                                                $db->execute(
+                                                    "UPDATE salaries SET 
+                                                        collections_bonus = COALESCE(collections_bonus, 0) + ?,
+                                                        total_amount = COALESCE(total_amount, 0) + ?
+                                                     WHERE id = ?",
+                                                    [$creditCommissionAmount, $creditCommissionAmount, $salaryId]
+                                                );
+                                                
+                                                // تسجيل العملية في السجل
+                                                if (function_exists('logAudit')) {
+                                                    logAudit(
+                                                        $currentUser['id'],
+                                                        'credit_balance_commission_no_purchase_history',
+                                                        'salary',
+                                                        $salaryId,
+                                                        null,
+                                                        [
+                                                            'invoice_id' => $invoiceId,
+                                                            'invoice_number' => $invoiceNumber ?? '',
+                                                            'customer_id' => $customerId,
+                                                            'payment_type' => $paymentType,
+                                                            'credit_used' => $creditUsed,
+                                                            'effective_paid_amount' => $effectivePaidAmount,
+                                                            'commission_base' => $finalCommissionBase,
+                                                            'commission_amount' => $creditCommissionAmount,
+                                                            'month' => $targetMonth,
+                                                            'year' => $targetYear,
+                                                            'has_previous_purchases' => ($hasPreviousPurchases ?? false) ? 'true' : 'false',
+                                                            'note' => 'نسبة تحصيل 2% من المبلغ المدفوع من الرصيد الدائن (لعميل لديه رصيد دائن وليس له سجل مشتريات) - creditUsed يُضاف إلى amount_added_to_sales لإجمالي المبيعات (صافي) لكن لا يُضاف إلى رصيد الخزنة الإجمالي أو التحصيلات - تُضاف إلى collections_bonus فقط'
+                                                        ]
+                                                    );
+                                                }
+                                                
+                                                error_log(sprintf(
+                                                    'New credit balance commission applied successfully: salaryId=%d, creditUsed=%.2f, commissionAmount=%.2f (NOTE: creditUsed NOT added to collections_amount or cash register)',
+                                                    $salaryId,
+                                                    $finalCommissionBase,
+                                                    $creditCommissionAmount
+                                                ));
+                                                
+                                                // تم تطبيق نسبة التحصيلات - منع الحساب المزدوج
+                                                $commissionApplied = true;
+                                            } else {
+                                                // إذا لم تكن الأعمدة موجودة، نستخدم bonus كحل بديل
+                                                error_log('Collections bonus columns not available, using bonus as fallback');
+                                                $db->execute(
+                                                    "UPDATE salaries SET bonus = COALESCE(bonus, 0) + ?, total_amount = COALESCE(total_amount, 0) + ? WHERE id = ?",
+                                                    [$creditCommissionAmount, $creditCommissionAmount, $salaryId]
+                                                );
+                                            }
+                                        } else {
+                                            error_log('New credit balance commission: salaryId is invalid or zero');
+                                        }
+                                    } else {
+                                        error_log('New credit balance commission: salary summary does not exist after creation attempt');
+                                    }
+                                } catch (Throwable $creditCommissionError) {
+                                    error_log('Error applying new credit balance commission: ' . $creditCommissionError->getMessage());
+                                    error_log('New credit balance commission error trace: ' . $creditCommissionError->getTraceAsString());
+                                }
+                            } else {
+                                error_log(sprintf(
+                                    'WARNING: New credit balance commission amount is zero or negative: commissionAmount=%.2f, commissionBase=%.2f, invoiceId=%d',
+                                    $creditCommissionAmount,
+                                    $commissionBase,
+                                    $invoiceId
+                                ));
+                            }
+                        } else {
+                            // تسجيل لماذا لم يتم تطبيق النظام الجديد
+                            $reason = [];
+                            if (!$hasCreditBalance) {
+                                $reason[] = 'no credit balance (currentBalance=' . $currentBalance . ')';
+                            }
+                            if ($paymentType !== 'credit' && $paymentType !== 'partial') {
+                                $reason[] = 'payment type is not credit or partial (paymentType=' . ($paymentType ?? 'NULL') . ')';
+                            }
+                            error_log(sprintf(
+                                'DEBUG: New credit balance commission NOT applied: hasCreditBalance=%s, paymentType=%s, currentBalance=%.2f, invoiceId=%d, customerId=%d, reason=%s',
+                                $hasCreditBalance ? 'true' : 'false',
+                                $paymentType ?? 'NULL',
+                                $currentBalance,
+                                $invoiceId,
+                                $customerId,
+                                implode(', ', $reason)
+                            ));
+                        }
+                        
+                        // التحقق من أن العميل لديه سجل مرتجعات
+                        // التأكد من أن $hasReturns تم تحديده بشكل صحيح
+                        // إذا لم يكن محدداً، نحاول التحقق مرة أخرى
+                        if (!isset($hasReturns)) {
+                            $hasReturns = false;
+                            try {
+                                $returnsTableCheck = $db->queryOne("SHOW TABLES LIKE 'invoice_returns'");
+                                if (!empty($returnsTableCheck)) {
+                                    $previousReturnsCount = $db->queryOne(
+                                        "SELECT COUNT(*) as count FROM invoice_returns WHERE customer_id = ?",
+                                        [$customerId]
+                                    );
+                                    $returnsCount = ((int)($previousReturnsCount['count'] ?? 0));
+                                    $hasReturns = ($returnsCount > 0);
+                                }
+                            } catch (Throwable $returnsError) {
+                                error_log('Error re-checking returns for customer ' . $customerId . ': ' . $returnsError->getMessage());
+                                $hasReturns = false;
+                            }
+                        }
+                        $hasReturnsRecord = ($hasReturns === true);
+                        
+                        // تسجيل معلومات التشخيص قبل التحقق
+                        error_log(sprintf(
+                            'Credit balance collections commission check: creditUsed=%.2f, currentBalance=%.2f, hasCreditBalance=%s, hasReturns=%s, hasReturnsRecord=%s, invoiceId=%d, customerId=%d',
+                            $creditUsed,
+                            $currentBalance,
+                            $hasCreditBalance ? 'true' : 'false',
+                            ($hasReturns === true) ? 'true' : 'false',
+                            $hasReturnsRecord ? 'true' : 'false',
+                            $invoiceId,
+                            $customerId
+                        ));
+                        
+                        // التحقق من وجود العميل في جدول returns (أصحاب الرصيد الدائن)
+                        // إذا كان العميل موجوداً في returns، يتم احتساب نسبة 2% من المبلغ المدفوع من الرصيد الدائن
+                        // هذا التحقق يتم فقط إذا لم يتم التحقق مسبقاً (في حالة العميل الجديد)
+                        if (!isset($customerInReturns)) {
+                            $customerInReturns = false;
+                            try {
+                                $returnsCustomers = $db->query("SELECT * FROM `returns` ORDER BY `customer_id` ASC");
+                                $returnsCustomerIds = [];
+                                foreach ($returnsCustomers as $returnRecord) {
+                                    $returnCustomerId = (int)($returnRecord['customer_id'] ?? 0);
+                                    if ($returnCustomerId > 0 && !in_array($returnCustomerId, $returnsCustomerIds)) {
+                                        $returnsCustomerIds[] = $returnCustomerId;
+                                    }
+                                }
+                                $customerInReturns = in_array($customerId, $returnsCustomerIds);
+                                
+                                error_log(sprintf(
+                                    'Returns table check in commission section: customerId=%d, customerInReturns=%s, creditUsed=%.2f',
+                                    $customerId,
+                                    $customerInReturns ? 'true' : 'false',
+                                    $creditUsed
+                                ));
+                            } catch (Throwable $returnsCheckError) {
+                                error_log('Error checking returns table for customer ' . $customerId . ' in commission section: ' . $returnsCheckError->getMessage());
+                                $customerInReturns = false;
+                            }
+                        }
+                        
+                        // تطبيق القاعدة الجديدة: رصيد دائن + سجل مرتجعات
+                        // يجب أن يكون هناك استخدام للرصيد الدائن، وأن يكون للعميل رصيد دائن قبل البيع، وأن يكون لديه سجل مرتجعات
+                        // هذا يعمل بغض النظر عن نوع الدفع (كاش، جزئي، أو آجل)
+                        if ($creditUsed > 0.0001 && $hasCreditBalance && $hasReturnsRecord && !$commissionApplied) {
+                            // حساب نسبة 2% من المبلغ المخصوم من الرصيد الدائن
+                            $creditCommissionAmount = round($creditUsed * 0.02, 2);
+                            
+                            // تسجيل معلومات التشخيص
+                            error_log(sprintf(
+                                'Credit balance collections commission calculation: creditUsed=%.2f, hasCreditBalance=%s, hasReturnsRecord=%s, commissionAmount=%.2f, invoiceId=%d, customerId=%d',
+                                $creditUsed,
+                                $hasCreditBalance ? 'true' : 'false',
+                                $hasReturnsRecord ? 'true' : 'false',
+                                $creditCommissionAmount,
+                                $invoiceId,
+                                $customerId
+                            ));
+                            
+                            if ($creditCommissionAmount > 0) {
+                                // إضافة النسبة إلى collections_bonus والمبلغ الأساسي إلى collections_amount
+                                try {
+                                    $timestamp = strtotime($saleDate) ?: time();
+                                    $targetMonth = (int)date('n', $timestamp);
+                                    $targetYear = (int)date('Y', $timestamp);
+                                    
+                                    $summary = getSalarySummary($currentUser['id'], $targetMonth, $targetYear);
+                                    if (!$summary['exists']) {
+                                        $creation = createOrUpdateSalary($currentUser['id'], $targetMonth, $targetYear);
+                                        if (!($creation['success'] ?? false)) {
+                                            throw new RuntimeException('Failed to create salary record: ' . ($creation['message'] ?? 'Unknown error'));
+                                        }
+                                        $summary = getSalarySummary($currentUser['id'], $targetMonth, $targetYear);
+                                    }
+                                    
+                                    if ($summary['exists']) {
+                                        $salary = $summary['salary'];
+                                        $salaryId = (int)($salary['id'] ?? 0);
+                                        
+                                        if ($salaryId > 0) {
+                                            // التحقق من وجود أعمدة collections_bonus و collections_amount
+                                            $hasCollectionsBonusColumn = ensureCollectionsBonusColumn();
+                                            
+                                            if ($hasCollectionsBonusColumn) {
+                                                // ملاحظة هامة: creditUsed لا يُضاف إلى collections_amount أو خزنة المندوب
+                                                // لأنه لم يُحصل فعلياً من العميل (تم خصمه من رصيد دائن)
+                                                // يتم إضافة 2% فقط من creditUsed إلى collections_bonus كعمولة/مكافأة
+                                                // ولا يتم إضافة creditUsed نفسه إلى collections_amount أو أي إجمالي خزنة
+                                                $db->execute(
+                                                    "UPDATE salaries SET 
+                                                        collections_bonus = COALESCE(collections_bonus, 0) + ?,
+                                                        total_amount = COALESCE(total_amount, 0) + ?
+                                                     WHERE id = ?",
+                                                    [$creditCommissionAmount, $creditCommissionAmount, $salaryId]
+                                                );
+                                                
+                                                // تسجيل العملية في السجل
+                                                if (function_exists('logAudit')) {
+                                                    logAudit(
+                                                        $currentUser['id'],
+                                                        'credit_balance_collections_commission',
+                                                        'salary',
+                                                        $salaryId,
+                                                        null,
+                                                        [
+                                                            'invoice_id' => $invoiceId,
+                                                            'invoice_number' => $invoiceNumber ?? '',
+                                                            'customer_id' => $customerId,
+                                                            'credit_used' => $creditUsed,
+                                                            'commission_amount' => $creditCommissionAmount,
+                                                            'month' => $targetMonth,
+                                                            'year' => $targetYear,
+                                                            'has_credit_balance' => $hasCreditBalance,
+                                                            'has_returns_record' => $hasReturnsRecord,
+                                                            'note' => 'نسبة تحصيل 2% من خصم الرصيد الدائن (لعميل لديه رصيد دائن وسجل مرتجعات) - تُضاف إلى collections_bonus فقط (لا تُضاف إلى collections_amount أو خزنة المندوب لأن المبلغ لم يُحصل فعلياً)'
+                                                        ]
+                                                    );
+                                                }
+                                                
+                                                error_log(sprintf(
+                                                    'Credit balance collections commission applied successfully: salaryId=%d, creditUsed=%.2f, commissionAmount=%.2f (NOTE: creditUsed NOT added to collections_amount or cash register)',
+                                                    $salaryId,
+                                                    $creditUsed,
+                                                    $creditCommissionAmount
+                                                ));
+                                                
+                                                // تم تطبيق نسبة التحصيلات - منع الحساب المزدوج
+                                                $commissionApplied = true;
+                                            } else {
+                                                // إذا لم تكن الأعمدة موجودة، نستخدم bonus كحل بديل
+                                                error_log('Collections bonus columns not available, using bonus as fallback');
+                                                $db->execute(
+                                                    "UPDATE salaries SET bonus = COALESCE(bonus, 0) + ?, total_amount = COALESCE(total_amount, 0) + ? WHERE id = ?",
+                                                    [$creditCommissionAmount, $creditCommissionAmount, $salaryId]
+                                                );
+                                            }
+                                        } else {
+                                            error_log('Credit balance collections commission: salaryId is invalid or zero');
+                                        }
+                                    } else {
+                                        error_log('Credit balance collections commission: salary summary does not exist after creation attempt');
+                                    }
+                                } catch (Throwable $creditCommissionError) {
+                                    error_log('Error applying credit balance collections commission: ' . $creditCommissionError->getMessage());
+                                    error_log('Credit balance collections commission error trace: ' . $creditCommissionError->getTraceAsString());
+                                }
+                            } else {
+                                error_log('Credit balance collections commission: commission amount is zero or negative');
+                            }
+                        }
+                        
+                        // القاعدة المطلوبة: التحقق من وجود العميل في جدول returns (أصحاب الرصيد الدائن)
+                        // إذا كان العميل موجوداً في returns وكان هناك استخدام للرصيد الدائن:
+                        // يتم احتساب نسبة 2% من المبلغ المدفوع من الرصيد الدائن وإضافتها إلى نسبة التحصيلات
+                        // هذا يجب أن يعمل بغض النظر عن الشروط الأخرى (مستقل عن الشرط السابق)
+                        if ($creditUsed > 0.0001 && $customerInReturns && !$commissionApplied) {
+                            // حساب نسبة 2% من المبلغ المدفوع من الرصيد الدائن
+                            $creditCommissionAmount = round($creditUsed * 0.02, 2);
+                            
+                            // تسجيل معلومات التشخيص
+                            error_log(sprintf(
+                                'Returns table commission calculation: creditUsed=%.2f, customerInReturns=%s, commissionAmount=%.2f, invoiceId=%d, customerId=%d',
+                                $creditUsed,
+                                $customerInReturns ? 'true' : 'false',
+                                $creditCommissionAmount,
+                                $invoiceId,
+                                $customerId
+                            ));
+                            
+                            if ($creditCommissionAmount > 0) {
+                                // إضافة النسبة إلى collections_bonus والمبلغ الأساسي إلى collections_amount
+                                try {
+                                    $timestamp = strtotime($saleDate) ?: time();
+                                    $targetMonth = (int)date('n', $timestamp);
+                                    $targetYear = (int)date('Y', $timestamp);
+                                    
+                                    $summary = getSalarySummary($currentUser['id'], $targetMonth, $targetYear);
+                                    if (!$summary['exists']) {
+                                        $creation = createOrUpdateSalary($currentUser['id'], $targetMonth, $targetYear);
+                                        if (!($creation['success'] ?? false)) {
+                                            throw new RuntimeException('Failed to create salary record: ' . ($creation['message'] ?? 'Unknown error'));
+                                        }
+                                        $summary = getSalarySummary($currentUser['id'], $targetMonth, $targetYear);
+                                    }
+                                    
+                                    if ($summary['exists']) {
+                                        $salary = $summary['salary'];
+                                        $salaryId = (int)($salary['id'] ?? 0);
+                                        
+                                        if ($salaryId > 0) {
+                                            // التحقق من وجود أعمدة collections_bonus و collections_amount
+                                            $hasCollectionsBonusColumn = ensureCollectionsBonusColumn();
+                                            
+                                            if ($hasCollectionsBonusColumn) {
+                                                // ملاحظة هامة: creditUsed لا يُضاف إلى collections_amount أو خزنة المندوب
+                                                // لأنه لم يُحصل فعلياً من العميل (تم خصمه من رصيد دائن)
+                                                // يتم إضافة 2% فقط من creditUsed إلى collections_bonus كعمولة/مكافأة
+                                                // ولا يتم إضافة creditUsed نفسه إلى collections_amount أو أي إجمالي خزنة
+                                                $db->execute(
+                                                    "UPDATE salaries SET 
+                                                        collections_bonus = COALESCE(collections_bonus, 0) + ?,
+                                                        total_amount = COALESCE(total_amount, 0) + ?
+                                                     WHERE id = ?",
+                                                    [$creditCommissionAmount, $creditCommissionAmount, $salaryId]
+                                                );
+                                                
+                                                // تسجيل العملية في السجل
+                                                if (function_exists('logAudit')) {
+                                                    logAudit(
+                                                        $currentUser['id'],
+                                                        'returns_table_collections_commission',
+                                                        'salary',
+                                                        $salaryId,
+                                                        null,
+                                                        [
+                                                            'invoice_id' => $invoiceId,
+                                                            'invoice_number' => $invoiceNumber ?? '',
+                                                            'customer_id' => $customerId,
+                                                            'credit_used' => $creditUsed,
+                                                            'commission_amount' => $creditCommissionAmount,
+                                                            'month' => $targetMonth,
+                                                            'year' => $targetYear,
+                                                            'customer_in_returns' => $customerInReturns,
+                                                            'note' => 'نسبة تحصيل 2% من المبلغ المدفوع من الرصيد الدائن (لعميل موجود في جدول returns) - تُضاف إلى collections_bonus فقط (لا تُضاف إلى collections_amount أو خزنة المندوب لأن المبلغ لم يُحصل فعلياً)'
+                                                        ]
+                                                    );
+                                                }
+                                                
+                                                error_log(sprintf(
+                                                    'Returns table collections commission applied successfully: salaryId=%d, creditUsed=%.2f, commissionAmount=%.2f (NOTE: creditUsed NOT added to collections_amount or cash register)',
+                                                    $salaryId,
+                                                    $creditUsed,
+                                                    $creditCommissionAmount
+                                                ));
+                                                
+                                                // تم تطبيق نسبة التحصيلات - منع الحساب المزدوج
+                                                $commissionApplied = true;
+                                            } else {
+                                                // إذا لم تكن الأعمدة موجودة، نستخدم bonus كحل بديل
+                                                error_log('Collections bonus columns not available, using bonus as fallback');
+                                                $db->execute(
+                                                    "UPDATE salaries SET bonus = COALESCE(bonus, 0) + ?, total_amount = COALESCE(total_amount, 0) + ? WHERE id = ?",
+                                                    [$creditCommissionAmount, $creditCommissionAmount, $salaryId]
+                                                );
+                                            }
+                                        } else {
+                                            error_log('Returns table collections commission: salaryId is invalid or zero');
+                                        }
+                                    } else {
+                                        error_log('Returns table collections commission: salary summary does not exist after creation attempt');
+                                    }
+                                } catch (Throwable $creditCommissionError) {
+                                    error_log('Error applying returns table collections commission: ' . $creditCommissionError->getMessage());
+                                    error_log('Returns table collections commission error trace: ' . $creditCommissionError->getTraceAsString());
+                                }
+                            } else {
+                                error_log('Returns table collections commission: commission amount is zero or negative');
+                            }
+                        } elseif ($creditUsed > 0.0001 && ($hasPreviousPurchases ?? false) && !$commissionApplied) {
+                            // القاعدة الجديدة: خصم من الرصيد الدائن لعميل لديه سجل مشتريات
+                            // القاعدة: عند خصم أي مبلغ من الرصيد الدائن لعميل لديه سجل مشتريات سابق
+                            // يتم احتساب نسبة 2% من المبلغ المخصوم وإضافتها إلى collections_bonus
+                            // ملاحظة: creditUsed لا يُضاف إلى collections_amount أو خزنة المندوب
+                            // لأنه لم يُحصل فعلياً من العميل (تم خصمه من رصيد دائن)
+                            // لكن تُضاف نسبة 2% فقط إلى collections_bonus كعمولة/مكافأة
+                            
+                            $creditCommissionAmount = round($creditUsed * 0.02, 2);
+                            
+                            // تسجيل معلومات التشخيص
+                            error_log(sprintf(
+                                'Credit balance commission calculation (with purchase history): creditUsed=%.2f, hasPreviousPurchases=%s, commissionAmount=%.2f, invoiceId=%d, customerId=%d',
+                                $creditUsed,
+                                ($hasPreviousPurchases ?? false) ? 'true' : 'false',
+                                $creditCommissionAmount,
+                                $invoiceId,
+                                $customerId
+                            ));
+                            
+                            if ($creditCommissionAmount > 0) {
+                                // إضافة النسبة إلى collections_bonus
+                                try {
+                                    $timestamp = strtotime($saleDate) ?: time();
+                                    $targetMonth = (int)date('n', $timestamp);
+                                    $targetYear = (int)date('Y', $timestamp);
+                                    
+                                    $summary = getSalarySummary($currentUser['id'], $targetMonth, $targetYear);
+                                    if (!$summary['exists']) {
+                                        $creation = createOrUpdateSalary($currentUser['id'], $targetMonth, $targetYear);
+                                        if (!($creation['success'] ?? false)) {
+                                            throw new RuntimeException('Failed to create salary record: ' . ($creation['message'] ?? 'Unknown error'));
+                                        }
+                                        $summary = getSalarySummary($currentUser['id'], $targetMonth, $targetYear);
+                                    }
+                                    
+                                    if ($summary['exists']) {
+                                        $salary = $summary['salary'];
+                                        $salaryId = (int)($salary['id'] ?? 0);
+                                        
+                                        if ($salaryId > 0) {
+                                            // التحقق من وجود أعمدة collections_bonus
+                                            $hasCollectionsBonusColumn = ensureCollectionsBonusColumn();
+                                            
+                                            if ($hasCollectionsBonusColumn) {
+                                                // ملاحظة هامة: creditUsed لا يُضاف إلى collections_amount أو خزنة المندوب
+                                                // لأنه لم يُحصل فعلياً من العميل (تم خصمه من رصيد دائن)
+                                                // يتم إضافة 2% فقط من creditUsed إلى collections_bonus كعمولة/مكافأة
+                                                // ولا يتم إضافة creditUsed نفسه إلى collections_amount أو أي إجمالي خزنة
+                                                $db->execute(
+                                                    "UPDATE salaries SET 
+                                                        collections_bonus = COALESCE(collections_bonus, 0) + ?,
+                                                        total_amount = COALESCE(total_amount, 0) + ?
+                                                     WHERE id = ?",
+                                                    [$creditCommissionAmount, $creditCommissionAmount, $salaryId]
+                                                );
+                                                
+                                                // تسجيل العملية في السجل
+                                                if (function_exists('logAudit')) {
+                                                    logAudit(
+                                                        $currentUser['id'],
+                                                        'credit_balance_commission_with_purchase_history',
+                                                        'salary',
+                                                        $salaryId,
+                                                        null,
+                                                        [
+                                                            'invoice_id' => $invoiceId,
+                                                            'invoice_number' => $invoiceNumber ?? '',
+                                                            'customer_id' => $customerId,
+                                                            'payment_type' => $paymentType,
+                                                            'credit_used' => $creditUsed,
+                                                            'commission_amount' => $creditCommissionAmount,
+                                                            'month' => $targetMonth,
+                                                            'year' => $targetYear,
+                                                            'has_previous_purchases' => ($hasPreviousPurchases ?? false) ? 'true' : 'false',
+                                                            'note' => 'نسبة تحصيل 2% من المبلغ المدفوع من الرصيد الدائن (لعميل لديه سجل مشتريات) - creditUsed يُضاف إلى amount_added_to_sales لإجمالي المبيعات (صافي) لكن لا يُضاف إلى رصيد الخزنة الإجمالي أو التحصيلات - تُضاف إلى collections_bonus فقط'
+                                                        ]
+                                                    );
+                                                }
+                                                
+                                                error_log(sprintf(
+                                                    'Credit balance commission with purchase history applied successfully: salaryId=%d, creditUsed=%.2f, commissionAmount=%.2f (NOTE: creditUsed NOT added to collections_amount or cash register)',
+                                                    $salaryId,
+                                                    $creditUsed,
+                                                    $creditCommissionAmount
+                                                ));
+                                                
+                                                // تم تطبيق نسبة التحصيلات - منع الحساب المزدوج
+                                                $commissionApplied = true;
+                                            } else {
+                                                // إذا لم تكن الأعمدة موجودة، نستخدم bonus كحل بديل
+                                                error_log('Collections bonus columns not available, using bonus as fallback');
+                                                $db->execute(
+                                                    "UPDATE salaries SET bonus = COALESCE(bonus, 0) + ?, total_amount = COALESCE(total_amount, 0) + ? WHERE id = ?",
+                                                    [$creditCommissionAmount, $creditCommissionAmount, $salaryId]
+                                                );
+                                                $commissionApplied = true;
+                                            }
+                                        } else {
+                                            error_log('Credit balance commission with purchase history: salaryId is invalid or zero');
+                                        }
+                                    } else {
+                                        error_log('Credit balance commission with purchase history: salary summary does not exist after creation attempt');
+                                    }
+                                } catch (Throwable $creditCommissionError) {
+                                    error_log('Error applying credit balance commission with purchase history: ' . $creditCommissionError->getMessage());
+                                    error_log('Credit balance commission with purchase history error trace: ' . $creditCommissionError->getTraceAsString());
+                                }
+                            }
+                        }
+                        
+                        // تحديث عمولة المندوب للحالات العادية
+                        // نسبة التحصيل تضاف للمندوب في الحالات التالية:
+                        //   1. البيع الكاش (full payment) - تُحتسب على كامل المبلغ (وليس على الرصيد الدائن)
+                        //   2. البيع بالتحصيل الجزئي - تُحتسب فقط على المبلغ المحصل (وليس على المبلغ المخصوم من الرصيد الدائن)
+                        //   3. تحصيل من صفحة العملاء - يتم معالجته في صفحة العملاء نفسها
+                        //   4. خصم من الرصيد الدائن - تُحسب النسبة مباشرة في الكود أعلاه (لعميل لديه سجل مشتريات أو ليس له سجل مشتريات)
+                        // 
+                        // ملاحظة مهمة: عند استخدام الرصيد الدائن:
+                        //   - النسبة تُحسب مباشرة وتُضاف إلى collections_bonus في الحالات الخاصة أعلاه
+                        //   - creditUsed لا يُضاف إلى collections_amount أو رصيد الخزنة
+                        
+                        // البيع الكاش: حساب عمولة على كامل المبلغ (فقط إذا لم يكن هناك استخدام للرصيد الدائن)
+                        // إذا كان البيع كاش ولكن تم استخدام الرصيد الدائن، لا نحسب عمولة على الرصيد الدائن هنا
+                        // (لأنها تُحسب في الحالة الخاصة أعلاه)
+                        // ملاحظة: $paymentType يأخذ القيمة 'full' وليس 'cash'
+                        if ($paymentType === 'full' && $effectivePaidAmount > 0.0001) {
+                            // فقط إذا لم يكن هناك استخدام للرصيد الدائن، نحسب العمولة
+                            // إذا كان هناك استخدام للرصيد الدائن، لا نحسب عمولة هنا
+                            // (لأنها تُحسب في الحالة الخاصة أعلاه إذا كان للعميل سجل مشتريات)
+                            if ($creditUsed <= 0.0001) {
+                                // لا يوجد استخدام للرصيد الدائن - بيع كاش عادي
+                                refreshSalesCommissionForUser(
+                                    $currentUser['id'],
+                                    $saleDate,
+                                    'تحديث تلقائي بعد بيع كاش من نقطة البيع'
+                                );
+                            } else {
+                                // هناك استخدام للرصيد الدائن - لا نحسب عمولة هنا
+                                // (لأنها تُحسب في الحالة الخاصة أعلاه إذا كان للعميل سجل مشتريات)
+                                error_log(sprintf(
+                                    'Cash sale with credit balance: skipping refreshSalesCommissionForUser to avoid double calculation. creditUsed=%.2f, invoiceId=%d',
+                                    $creditUsed,
+                                    $invoiceId
+                                ));
+                            }
+                        }
+                        
+                        // البيع بالتحصيل الجزئي: حساب عمولة فقط على المبلغ المحصل (وليس على الرصيد الدائن)
+                        // ملاحظة: حتى لو كان هناك استخدام للرصيد الدائن، نحسب عمولة على المبلغ المحصل فقط
+                        // لأن المبلغ المحصل هو مبلغ نقدي فعلي تم تحصيله من العميل
+                        // ملاحظة: لا نستدعي refreshSalesCommissionForUser هنا لأننا نستخدم applyCollectionInstantReward
+                        // مباشرة بعد تسجيل التحصيل في جدول collections لتجنب الحساب المزدوج
+                        if ($paymentType === 'partial' && $effectivePaidAmount > 0.0001) {
+                            // تم حساب العمولة مباشرة عند تسجيل التحصيل في جدول collections
+                            // لا حاجة لإعادة الحساب هنا لتجنب الحساب المزدوج
+                            error_log(sprintf(
+                                'Partial payment: commission already applied via applyCollectionInstantReward. effectivePaidAmount=%.2f, invoiceId=%d',
+                                $effectivePaidAmount,
+                                $invoiceId
+                            ));
+                        }
+                        
+                        // ملاحظة: البيع بالآجل فقط (credit) بدون كاش أو جزئي:
+                        //   - إذا كان هناك خصم من رصيد دائن لعميل لديه سجل مشتريات: تُحسب النسبة في الحالة الخاصة أعلاه
+                        //   - إذا كان هناك خصم من رصيد دائن لعميل ليس لديه سجل مشتريات: تُحسب النسبة في الحالة الخاصة أعلاه
+                        //   - إذا لم يكن هناك خصم من رصيد دائن: لا تُحسب نسبة (بيع بالآجل فقط بدون استخدام رصيد دائن)
+                        //   - لا يتم استدعاء refreshSalesCommissionForUser هنا لتجنب إضافة المبلغ المدفوع من الرصيد الدائن
+                        
+                        // استدعاء refreshSalesCommissionForUser في جميع الحالات لضمان حساب نسبة التحصيلات من الفواتير المدفوعة بالكامل
+                        // هذه الدالة تحسب نسبة 2% فقط من الفواتير المدفوعة بالكامل (status='paid' و paid_amount = total_amount)
+                        // وتستبعد تلقائياً:
+                        //   - الفواتير المدفوعة من الرصيد الدائن (paid_from_credit > 0)
+                        //   - الفواتير التي أصبحت paid بعد تحصيلات جزئية في نفس الشهر
+                        // لذا يمكن استدعاؤها بأمان دون حدوث حساب مزدوج
+                        try {
+                            refreshSalesCommissionForUser(
+                                $currentUser['id'],
+                                $saleDate,
+                                'تحديث تلقائي بعد بيع من نقطة البيع (حساب نسبة التحصيلات من الفواتير المدفوعة بالكامل)'
+                            );
+                            error_log(sprintf(
+                                'Called refreshSalesCommissionForUser after POS sale: paymentType=%s, invoiceId=%d, userId=%d',
+                                $paymentType ?? 'unknown',
+                                $invoiceId,
+                                $currentUser['id']
+                            ));
+                        } catch (Throwable $refreshError) {
+                            error_log('Error calling refreshSalesCommissionForUser after POS sale: ' . $refreshError->getMessage());
+                            // لا نوقف العملية إذا فشل تحديث نسبة التحصيلات
+                        }
+                    } catch (Throwable $commissionError) {
+                        error_log('Error updating sales commission after POS sale: ' . $commissionError->getMessage());
+                        // لا نوقف العملية إذا فشل تحديث العمولة
+                    }
+                }
+
+                $conn->commit();
+                
+                // تسجيل نجاح commit للمساعدة في التشخيص
+                error_log(sprintf('Transaction committed successfully for invoiceId=%d, invoiceNumber=%s', $invoiceId, $invoiceNumber ?? 'N/A'));
+
+                $success = 'تم إتمام عملية البيع بنجاح. رقم الفاتورة: ' . htmlspecialchars($invoiceNumber);
+                if ($createdCustomerId) {
+                    $success .= ' - تم إنشاء العميل الجديد.';
+                }
+
+                // إعادة تحميل المخزون والإحصائيات
+                $vehicleInventory = getVehicleInventory($vehicle['id']);
+                $inventoryStats = [
+                    'total_products' => 0,
+                    'total_quantity' => 0,
+                    'total_value' => 0,
+                ];
+                foreach ($vehicleInventory as &$item) {
+                    $item['quantity'] = cleanFinancialValue($item['quantity'] ?? 0);
+                    $item['unit_price'] = cleanFinancialValue($item['unit_price'] ?? 0);
+                    $computedTotal = cleanFinancialValue(($item['quantity'] ?? 0) * ($item['unit_price'] ?? 0));
+                    $item['total_value'] = cleanFinancialValue($item['total_value'] ?? $computedTotal);
+                    if (abs($item['total_value'] - $computedTotal) > 0.01) {
+                        $item['total_value'] = $computedTotal;
+                    }
+
+                    $inventoryStats['total_products']++;
+                    $inventoryStats['total_quantity'] += (float) ($item['quantity'] ?? 0);
+                    $inventoryStats['total_value'] += (float) ($item['total_value'] ?? 0);
+                }
+                unset($item);
+
+                // تحديث الخريطة بعد البيع
+                $inventoryByProduct = [];
+                foreach ($vehicleInventory as $item) {
+                    $inventoryByProduct[(int) ($item['product_id'] ?? 0)] = $item;
+                }
+
+            } catch (Throwable $exception) {
+                if (isset($conn)) {
+                    $conn->rollback();
+                }
+                $error = 'حدث خطأ أثناء حفظ عملية البيع: ' . $exception->getMessage();
+                // في حالة حدوث خطأ، لا نستمر في إنشاء الفاتورة
+                $invoiceId = null;
+            }
+            
+            // إنشاء الفاتورة وإرسالها إلى تليجرام بعد نجاح المعاملة (خارج try-catch الرئيسي)
+            // لضمان تنفيذها حتى لو حدث خطأ في مكان آخر بعد commit
+            if (!empty($invoiceId) && $invoiceId > 0 && empty($error)) {
+                try {
+                    error_log(sprintf('Starting invoice document generation (outside main try-catch) for invoiceId=%d', $invoiceId));
+                    
+                    // التأكد من أن جميع المتغيرات المطلوبة موجودة
+                    if (!isset($paymentType)) {
+                        $paymentType = 'full';
+                    }
+                    if (!isset($subtotal)) $subtotal = 0;
+                    if (!isset($discountAmount)) $discountAmount = 0;
+                    if (!isset($prepaidAmount)) $prepaidAmount = 0;
+                    if (!isset($netTotal)) $netTotal = 0;
+                    if (!isset($effectivePaidAmount)) $effectivePaidAmount = 0;
+                    if (!isset($baseDueAmount)) $baseDueAmount = 0;
+                    if (!isset($creditUsed)) $creditUsed = 0;
+                    if (!isset($dueAmount)) $dueAmount = 0;
+                    
+                    $invoiceData = getInvoice($invoiceId);
+                    
+                    if (!$invoiceData) {
+                        error_log(sprintf('ERROR: Failed to get invoice data for invoiceId=%d after POS sale', $invoiceId));
+                        throw new RuntimeException('Failed to retrieve invoice data');
+                    }
+                    
+                    error_log(sprintf('Invoice data retrieved successfully for invoiceId=%d', $invoiceId));
+                    
+                    $invoiceMeta = [
+                        'payment_type' => $paymentType,
+                        'summary' => [
+                            'subtotal' => $subtotal,
+                            'discount' => $discountAmount,
+                            'prepaid' => $prepaidAmount,
+                            'net_total' => $netTotal,
+                            'paid' => $effectivePaidAmount,
+                            'due_before_credit' => $baseDueAmount,
+                            'credit_used' => $creditUsed,
+                            'due' => $dueAmount,
+                        ],
+                    ];
+                    
+                    error_log(sprintf('Calling storeSalesInvoiceDocument for invoiceId=%d', $invoiceId));
+                    $reportInfo = storeSalesInvoiceDocument($invoiceData, $invoiceMeta);
+                    
+                    if (!$reportInfo) {
+                        error_log(sprintf('ERROR: storeSalesInvoiceDocument returned null for invoiceId=%d', $invoiceId));
+                        throw new RuntimeException('Failed to store invoice document');
+                    }
+                    
+                    error_log(sprintf('Invoice document stored successfully for invoiceId=%d', $invoiceId));
+                    
+                    // إرسال الفاتورة إلى تليجرام
+                    error_log(sprintf('Calling sendReportAndDelete for invoiceId=%d', $invoiceId));
+                    $telegramResult = sendReportAndDelete($reportInfo, 'sales_pos_invoice', 'فاتورة نقطة بيع المندوب');
+                    $reportInfo['telegram_sent'] = !empty($telegramResult['success']);
+                    
+                    if (empty($telegramResult['success'])) {
+                        error_log(sprintf('WARNING: Failed to send invoice to Telegram for invoiceId=%d: %s', $invoiceId, $telegramResult['message'] ?? 'Unknown error'));
+                    } else {
+                        error_log(sprintf('SUCCESS: Invoice sent to Telegram for invoiceId=%d', $invoiceId));
+                    }
+                    
+                    $posInvoiceLinks = $reportInfo;
+                    error_log(sprintf('Invoice processing completed successfully for invoiceId=%d', $invoiceId));
+                    
+                } catch (Throwable $invoiceError) {
+                    // تسجيل الخطأ بالتفصيل ولكن عدم إيقاف العملية
+                    error_log(sprintf('CRITICAL ERROR in invoice generation/sending after POS sale (invoiceId=%d): %s', $invoiceId, $invoiceError->getMessage()));
+                    error_log('Invoice error trace: ' . $invoiceError->getTraceAsString());
+                    error_log('Invoice error file: ' . $invoiceError->getFile() . ' line: ' . $invoiceError->getLine());
+                }
+            } else {
+                if (empty($invoiceId)) {
+                    error_log('Skipping invoice generation: invoiceId is empty');
+                }
+                if (!empty($error)) {
+                    error_log('Skipping invoice generation due to error: ' . $error);
+                }
+            }
+        } else {
+            $error = implode('<br>', array_map('htmlspecialchars', $validationErrors));
+        }
+    }
+}
+
+// آخر عمليات البيع للمندوب
+$recentSales = [];
+if (!$error) {
+    $recentSales = $db->query(
+        "SELECT s.*, c.name AS customer_name, p.name AS product_name
+         FROM sales s
+         LEFT JOIN customers c ON s.customer_id = c.id
+         LEFT JOIN products p ON s.product_id = p.id
+         WHERE s.salesperson_id = ?
+         ORDER BY s.created_at DESC
+         LIMIT 10",
+        [$currentUser['id']]
+    );
+}
+?>
+
+<div class="page-header">
+    <h2><i class="bi bi-shop me-2"></i>نقطة بيع المندوب</h2>
+</div>
+
+<?php if ($error): ?>
+    <div class="alert alert-danger alert-dismissible fade show" id="errorAlert" data-auto-refresh="true" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        <?php echo $error; ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+<?php endif; ?>
+
+<?php if ($success): ?>
+    <div class="alert alert-success alert-dismissible fade show" id="successAlert" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i>
+        <?php echo htmlspecialchars($success); ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+<?php endif; ?>
+
+<?php if (!empty($posInvoiceLinks['absolute_report_url'])): ?>
+<!-- Modal عرض الفاتورة بعد البيع -->
+<div class="modal fade" id="posInvoiceModal" tabindex="-1" aria-labelledby="posInvoiceModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-fullscreen">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="posInvoiceModalLabel">
+                    <i class="bi bi-receipt-cutoff me-2"></i>
+                    فاتورة البيع
+                </h5>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-light btn-sm" onclick="printInvoice()">
+                        <i class="bi bi-printer me-1"></i>طباعة
+                    </button>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+                </div>
+            </div>
+            <div class="modal-body p-0" style="height: calc(100vh - 120px);">
+                <iframe id="posInvoiceFrame" src="<?php echo htmlspecialchars($posInvoiceLinks['absolute_report_url']); ?>" style="width: 100%; height: 100%; border: none;"></iframe>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-1"></i>إغلاق
+                </button>
+                <button type="button" class="btn btn-primary" onclick="printInvoice()">
+                    <i class="bi bi-printer me-1"></i>طباعة الفاتورة
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php if (!$vehicle): ?>
+    <div class="empty-state-card">
+        <div class="empty-state-icon"><i class="bi bi-truck"></i></div>
+        <div class="empty-state-title">لا توجد سيارة مرتبطة</div>
+        <div class="empty-state-description">يرجى التواصل مع الإدارة لربط سيارة بحسابك قبل استخدام نقطة البيع.</div>
+    </div>
+<?php elseif ($vehicle): ?>
+    <style>
+        .pos-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        .pos-vehicle-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+        }
+        .pos-summary-card {
+            position: relative;
+            overflow: hidden;
+            border-radius: 18px;
+            padding: 1.5rem;
+            color: #ffffff;
+            background: linear-gradient(135deg, rgba(30,58,95,0.95), rgba(44,82,130,0.88));
+            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.15);
+        }
+        .pos-summary-card .label {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            opacity: 0.8;
+        }
+        .pos-summary-card .value {
+            font-size: 1.45rem;
+            font-weight: 700;
+            margin-top: 0.35rem;
+        }
+        .pos-summary-card .meta {
+            margin-top: 0.35rem;
+            font-size: 0.9rem;
+            opacity: 0.85;
+        }
+        .pos-summary-card .icon {
+            position: absolute;
+            bottom: 1rem;
+            right: 1rem;
+            font-size: 2.4rem;
+            opacity: 0.12;
+        }
+        .pos-content {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 1.5rem;
+        }
+        .pos-panel {
+            background: #fff;
+            border-radius: 18px;
+            padding: 1.5rem;
+            box-shadow: 0 16px 35px rgba(15, 23, 42, 0.12);
+            border: 1px solid rgba(15, 23, 42, 0.05);
+        }
+        .pos-panel-header {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.15rem;
+        }
+        .pos-panel-header h4,
+        .pos-panel-header h5 {
+            margin: 0;
+            font-weight: 700;
+            color: #1f2937;
+        }
+        .pos-panel-header p {
+            margin: 0;
+            color: #64748b;
+            font-size: 0.9rem;
+        }
+        .pos-search {
+            position: relative;
+            flex: 1;
+            min-width: 220px;
+        }
+        .pos-search input {
+            border-radius: 12px;
+            padding-inline-start: 2.75rem;
+            height: 3rem;
+        }
+        .pos-search i {
+            position: absolute;
+            inset-inline-start: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #6b7280;
+            font-size: 1.1rem;
+        }
+        .pos-product-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 1.25rem;
+        }
+        .pos-product-card {
+            border-radius: 18px;
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            padding: 1.15rem;
+            background: #f8fafc;
+            transition: all 0.25s ease;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            position: relative;
+        }
+        .pos-product-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(30, 58, 95, 0.35);
+            box-shadow: 0 18px 40px rgba(30, 58, 95, 0.15);
+        }
+        .pos-product-card.active {
+            border-color: rgba(30, 58, 95, 0.65);
+            background: #ffffff;
+            box-shadow: 0 20px 45px rgba(30, 58, 95, 0.18);
+        }
+        .pos-product-name {
+            font-size: 1.08rem;
+            font-weight: 700;
+            color: #1f2937;
+        }
+        .pos-product-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+            font-size: 0.85rem;
+            color: #475569;
+        }
+        .pos-product-badge {
+            background: rgba(30, 58, 95, 0.08);
+            color: #1e3a5f;
+            border-radius: 999px;
+            font-weight: 600;
+            padding: 0.25rem 0.75rem;
+        }
+        .pos-product-qty {
+            font-weight: 700;
+            color: #059669;
+        }
+        .pos-select-btn {
+            margin-top: auto;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+        .pos-checkout-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+        .pos-selected-product {
+            display: none;
+            border-radius: 18px;
+            padding: 1.25rem;
+            color: #fff;
+            background: linear-gradient(135deg, rgba(6,78,59,0.95), rgba(16,185,129,0.9));
+            box-shadow: 0 18px 40px rgba(6, 78, 59, 0.25);
+        }
+        .pos-selected-product.active {
+            display: block;
+        }
+        .pos-selected-product h5 {
+            margin-bottom: 0.75rem;
+        }
+        .pos-selected-product .meta-row {
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        .pos-selected-product .meta-block span {
+            font-size: 0.8rem;
+            opacity: 0.8;
+            text-transform: uppercase;
+        }
+        .pos-form .form-control,
+        .pos-form .form-select {
+            border-radius: 12px;
+        }
+        .pos-cart-table thead {
+            background: #f1f5f9;
+            font-size: 0.9rem;
+        }
+        .pos-cart-table td {
+            vertical-align: middle;
+        }
+        .pos-qty-control {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        .pos-qty-control .btn {
+            border-radius: 999px;
+            width: 34px;
+            height: 34px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .pos-qty-control input {
+            width: 80px;
+            text-align: center;
+        }
+        .pos-summary-card-neutral {
+            background: #0f172a;
+            color: #fff;
+            border-radius: 16px;
+            padding: 1rem 1.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+        .pos-summary-card-neutral .total {
+            font-size: 1.45rem;
+            font-weight: 700;
+        }
+        .pos-payment-options {
+            display: grid;
+            gap: 0.75rem;
+        }
+        .pos-payment-option {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 0.9rem;
+            padding: 0.85rem 1rem;
+            border: 1px solid rgba(15, 23, 42, 0.12);
+            border-radius: 14px;
+            background: #f8fafc;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        .pos-payment-option:hover {
+            border-color: rgba(30, 64, 175, 0.4);
+            background: #ffffff;
+            box-shadow: 0 10px 24px rgba(30, 64, 175, 0.12);
+        }
+        .pos-payment-option.active {
+            border-color: rgba(22, 163, 74, 0.7);
+            background: rgba(22, 163, 74, 0.08);
+            box-shadow: 0 14px 28px rgba(22, 163, 74, 0.18);
+        }
+        .pos-payment-option .form-check-input {
+            margin: 0;
+            width: 1.1rem;
+            height: 1.1rem;
+            border-width: 2px;
+        }
+        .pos-payment-option-icon {
+            width: 42px;
+            height: 42px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background: rgba(15, 23, 42, 0.08);
+            color: #1f2937;
+            font-size: 1.25rem;
+        }
+        .pos-payment-option.active .pos-payment-option-icon {
+            background: rgba(22, 163, 74, 0.18);
+            color: #15803d;
+        }
+        .pos-payment-option-details {
+            flex: 1;
+        }
+        .pos-payment-option-title {
+            font-weight: 700;
+            color: #111827;
+            display: block;
+        }
+        .pos-payment-option-desc {
+            display: block;
+            margin-top: 0.15rem;
+            font-size: 0.85rem;
+            color: #64748b;
+        }
+        .pos-history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            max-height: 320px;
+            overflow-y: auto;
+        }
+        .pos-sale-card {
+            border-radius: 14px;
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            padding: 0.95rem 1.15rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 1rem;
+        }
+        .pos-sale-card .meta {
+            font-size: 0.85rem;
+            color: #64748b;
+        }
+        .pos-empty {
+            border-radius: 18px;
+            background: #f8fafc;
+            padding: 2.5rem 1.5rem;
+            text-align: center;
+            color: #475569;
+        }
+        .pos-empty-inline {
+            grid-column: 1 / -1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 200px;
+        }
+        .pos-empty i {
+            font-size: 2.6rem;
+            color: #94a3b8;
+        }
+        .pos-cart-empty {
+            text-align: center;
+            padding: 2rem 1rem;
+            color: #6b7280;
+        }
+        .pos-inline-note {
+            font-size: 0.82rem;
+            color: #64748b;
+        }
+        /* تحسين أزرار اختيار نوع العميل */
+        .pos-customer-mode-toggle {
+            display: flex;
+            gap: 0.5rem;
+            border-radius: 12px;
+            padding: 0.25rem;
+            background: #f8f9fa;
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+        }
+        .pos-customer-mode-toggle .btn-check {
+            position: absolute;
+            clip: rect(0, 0, 0, 0);
+            pointer-events: none;
+        }
+        .pos-customer-mode-toggle .btn {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: #64748b;
+            background: transparent;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+        .pos-customer-mode-toggle .btn i {
+            font-size: 1.1rem;
+            transition: transform 0.3s ease;
+        }
+        .pos-customer-mode-toggle .btn:hover {
+            color: #1e40af;
+            background: rgba(30, 64, 175, 0.08);
+            transform: translateY(-1px);
+        }
+        .pos-customer-mode-toggle .btn:hover i {
+            transform: scale(1.1);
+        }
+        .pos-customer-mode-toggle .btn-check:checked + .btn {
+            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+            color: #ffffff;
+            box-shadow: 0 4px 16px rgba(30, 64, 175, 0.35);
+            transform: translateY(-2px);
+        }
+        .pos-customer-mode-toggle .btn-check:checked + .btn i {
+            transform: scale(1.15);
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+        }
+        .pos-customer-mode-toggle .btn-check:focus + .btn {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.25);
+        }
+        .pos-customer-mode-toggle .btn-check:checked + .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 100%);
+            pointer-events: none;
+        }
+        @media (max-width: 992px) {
+            .pos-content {
+                grid-template-columns: 1fr;
+            }
+        }
+        @media (max-width: 768px) {
+            .pos-summary-card {
+                padding: 1rem;
+            }
+            .pos-summary-card .label {
+                font-size: 0.8rem;
+            }
+            .pos-summary-card .value {
+                font-size: 1.5rem;
+            }
+            .pos-panel {
+                padding: 1rem;
+            }
+            .pos-checkout-panel {
+                gap: 1rem;
+            }
+            .pos-cart-table {
+                font-size: 0.9rem;
+            }
+            .pos-cart-table th {
+                font-size: 0.85rem;
+                padding: 0.6rem 0.5rem;
+            }
+            .pos-cart-table td {
+                padding: 0.65rem 0.5rem;
+            }
+            .pos-qty-control {
+                gap: 0.35rem;
+            }
+            .pos-qty-control .btn {
+                width: 32px;
+                height: 32px;
+                font-size: 0.9rem;
+            }
+            .pos-qty-control input {
+                width: 70px;
+                font-size: 0.9rem;
+            }
+            .pos-payment-option {
+                padding: 0.9rem;
+            }
+            .pos-payment-option-icon {
+                width: 38px;
+                height: 38px;
+                font-size: 1.1rem;
+            }
+            .pos-payment-option-title {
+                font-size: 0.95rem;
+            }
+            .pos-payment-option-desc {
+                font-size: 0.8rem;
+            }
+            /* جعل قسم اختيار العميل يأخذ العرض الكامل على الهواتف */
+            .pos-customer-mode-toggle {
+                width: 100% !important;
+            }
+            .pos-customer-mode-toggle .btn {
+                flex: 1 1 auto;
+                min-width: 0;
+                padding: 0.65rem 0.85rem;
+                font-size: 0.9rem;
+            }
+            .pos-customer-mode-toggle .btn i {
+                font-size: 1rem;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            .pos-summary-card {
+                padding: 0.9rem;
+            }
+            .pos-summary-card .label {
+                font-size: 0.75rem;
+            }
+            .pos-summary-card .value {
+                font-size: 1.35rem;
+            }
+            .pos-summary-card .meta {
+                font-size: 0.75rem;
+            }
+            .pos-panel {
+                padding: 0.9rem;
+            }
+            .pos-panel-header h4,
+            .pos-panel-header h5 {
+                font-size: 1.1rem;
+            }
+            .pos-panel-header p {
+                font-size: 0.85rem;
+            }
+            .pos-product-grid {
+                grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+                gap: 0.75rem;
+            }
+            .pos-product-card {
+                padding: 0.85rem;
+            }
+            .pos-product-name {
+                font-size: 0.95rem;
+            }
+            .pos-product-meta {
+                font-size: 0.85rem;
+            }
+            .pos-select-btn {
+                font-size: 0.85rem;
+                padding: 0.5rem 0.75rem;
+            }
+            /* جعل قسم اختيار العميل يأخذ العرض الكامل على الهواتف الصغيرة */
+            .row.g-3 > .col-sm-6:last-child {
+                width: 100%;
+                flex: 0 0 100%;
+                max-width: 100%;
+            }
+            .pos-customer-mode-toggle {
+                width: 100% !important;
+                display: flex;
+                gap: 0.4rem;
+                padding: 0.2rem;
+            }
+            .pos-customer-mode-toggle .btn {
+                flex: 1 1 50%;
+                padding: 0.65rem 0.7rem;
+                font-size: 0.85rem;
+                gap: 0.4rem;
+            }
+            .pos-customer-mode-toggle .btn i {
+                font-size: 0.95rem;
+            }
+            .pos-customer-mode-toggle .btn span {
+                font-size: 0.85rem;
+            }
+        }
+            .pos-cart-empty {
+                padding: 1.5rem 1rem;
+            }
+            .pos-cart-empty i {
+                font-size: 2rem;
+            }
+            .pos-cart-empty p {
+                font-size: 0.9rem;
+            }
+            .pos-cart-table {
+                width: 100%;
+                min-width: 100%;
+                font-size: 0.85rem;
+            }
+            .pos-cart-table thead {
+                display: none;
+            }
+            .pos-cart-table tbody tr {
+                display: flex;
+                flex-direction: column;
+                width: 100%;
+                margin-bottom: 1rem;
+                border: 1px solid rgba(148, 163, 184, 0.35);
+                border-radius: 12px;
+                padding: 1rem;
+                background: #ffffff;
+                box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+                gap: 0.75rem;
+            }
+            .pos-cart-table tbody tr:last-child {
+                margin-bottom: 0;
+            }
+            .pos-cart-table td {
+                display: flex;
+                flex-direction: column;
+                align-items: stretch;
+                gap: 0.5rem;
+                width: 100%;
+                padding: 0;
+                border: none;
+            }
+            .pos-cart-table td::before {
+                content: attr(data-label);
+                font-weight: 600;
+                color: #1f2937;
+                font-size: 0.9rem;
+                margin-bottom: 0.25rem;
+            }
+            .pos-cart-table td[data-label="المنتج"] .fw-semibold {
+                font-size: 1rem;
+                margin-bottom: 0.25rem;
+            }
+            .pos-cart-table td[data-label="المنتج"] .text-muted {
+                font-size: 0.8rem;
+            }
+            .pos-cart-table td[data-label="إجمالي"],
+            .pos-cart-table td[data-label="الإجمالي"] {
+                font-size: 1.1rem;
+                font-weight: 700;
+                color: #059669;
+            }
+            .pos-cart-table td[data-label="إجراءات"] {
+                align-items: flex-end;
+                margin-top: 0.25rem;
+            }
+            .pos-cart-table td .form-control {
+                width: 100%;
+                font-size: 0.9rem;
+                padding: 0.5rem;
+            }
+            .pos-cart-table td .pos-qty-control {
+                width: 100%;
+                justify-content: space-between;
+                gap: 0.5rem;
+            }
+            .pos-cart-table td .pos-qty-control input {
+                flex: 1;
+                min-width: 60px;
+                text-align: center;
+                font-size: 0.95rem;
+                font-weight: 600;
+            }
+            .pos-cart-table td .btn[data-action="decrease"],
+            .pos-cart-table td .btn[data-action="increase"] {
+                flex: 0 0 42px;
+                width: 42px;
+                height: 42px;
+                padding: 0;
+                font-size: 1.1rem;
+                border-radius: 8px;
+            }
+            .pos-cart-table td .btn[data-action="remove"] {
+                font-size: 1.3rem;
+                padding: 0.5rem;
+                width: auto;
+                min-width: 44px;
+                height: 44px;
+            }
+            #posCartTableWrapper {
+                overflow-x: visible;
+                margin: 0 -0.9rem;
+            }
+            .pos-selected-product {
+                padding: 0.75rem;
+            }
+            .pos-selected-product h5 {
+                font-size: 1rem;
+                margin-bottom: 0.75rem;
+            }
+            .meta-row {
+                gap: 0.75rem;
+            }
+            .meta-block span {
+                font-size: 0.8rem;
+            }
+            .meta-block .fw-semibold {
+                font-size: 0.95rem;
+            }
+            .form-label {
+                font-size: 0.875rem;
+            }
+            .form-control,
+            .form-select {
+                font-size: 0.9rem;
+                padding: 0.5rem 0.75rem;
+            }
+            .pos-summary-card-neutral {
+                padding: 1rem;
+            }
+            .pos-summary-card-neutral .small {
+                font-size: 0.75rem;
+            }
+            .pos-summary-card-neutral .total {
+                font-size: 1.5rem;
+            }
+            .pos-payment-option {
+                padding: 0.75rem;
+                gap: 0.75rem;
+            }
+            .pos-payment-option-icon {
+                width: 36px;
+                height: 36px;
+                font-size: 1rem;
+            }
+            .pos-payment-option-title {
+                font-size: 0.9rem;
+            }
+            .pos-payment-option-desc {
+                font-size: 0.75rem;
+                margin-top: 0.1rem;
+            }
+            .pos-inline-note {
+                font-size: 0.75rem;
+            }
+            .btn {
+                font-size: 0.875rem;
+                padding: 0.5rem 1rem;
+            }
+            .btn-sm {
+                font-size: 0.8rem;
+                padding: 0.4rem 0.75rem;
+            }
+            .row.g-3 {
+                --bs-gutter-y: 0.75rem;
+                --bs-gutter-x: 0.75rem;
+            }
+            .col-sm-6 {
+                margin-bottom: 0.75rem;
+            }
+            .pos-vehicle-summary {
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                gap: 0.75rem;
+            }
+            .pos-summary-card {
+                min-height: auto;
+            }
+            .d-flex.justify-content-between.gap-2 {
+                gap: 0.5rem !important;
+            }
+            .d-flex.flex-wrap.gap-2 {
+                gap: 0.5rem !important;
+            }
+            .btn.flex-fill {
+                min-width: 120px;
+            }
+            .pos-cart-table tbody tr {
+                max-width: 100%;
+            }
+            textarea.form-control {
+                font-size: 0.9rem;
+                padding: 0.5rem 0.75rem;
+                resize: vertical;
+            }
+            .pos-search input {
+                font-size: 0.9rem;
+                padding: 0.5rem 0.75rem 0.5rem 2.5rem;
+            }
+            .pos-search i {
+                font-size: 1rem;
+                inset-inline-start: 0.75rem;
+            }
+            .pos-panel-header h4 {
+                font-size: 1.1rem;
+                margin-bottom: 0.25rem;
+            }
+            .pos-panel-header p {
+                font-size: 0.85rem;
+                margin-bottom: 0;
+            }
+            .mb-3 h5 {
+                font-size: 1.1rem;
+            }
+            .mb-3 .d-flex.justify-content-between h5 {
+                font-size: 1rem;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .pos-product-grid {
+                grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+                gap: 0.6rem;
+            }
+            .pos-product-card {
+                padding: 0.75rem;
+                border-radius: 12px;
+            }
+            .pos-product-name {
+                font-size: 0.9rem;
+            }
+            .pos-product-meta {
+                font-size: 0.8rem;
+                gap: 0.3rem;
+            }
+            .pos-select-btn {
+                font-size: 0.8rem;
+                padding: 0.45rem 0.65rem;
+            }
+            .pos-cart-table {
+                font-size: 0.8rem;
+            }
+            .pos-cart-table td::before {
+                font-size: 0.85rem;
+            }
+            .pos-cart-table td[data-label="المنتج"] .fw-semibold {
+                font-size: 0.95rem;
+            }
+            .pos-cart-table td[data-label="إجمالي"],
+            .pos-cart-table td[data-label="الإجمالي"] {
+                font-size: 1rem;
+            }
+            .pos-qty-control .btn {
+                width: 38px;
+                height: 38px;
+                font-size: 1rem;
+            }
+            .pos-qty-control input {
+                font-size: 0.9rem;
+                min-width: 55px;
+            }
+            .pos-summary-card-neutral {
+                padding: 0.85rem;
+            }
+            .pos-summary-card-neutral .total {
+                font-size: 1.35rem;
+            }
+            .pos-summary-card-neutral .fw-semibold {
+                font-size: 1.15rem;
+            }
+        }
+    </style>
+
+    <div class="pos-wrapper">
+        <section class="pos-vehicle-summary">
+            <div class="pos-summary-card">
+                <span class="label">معلومات السيارة</span>
+                <div class="value"><?php echo htmlspecialchars($vehicle['vehicle_number'] ?? '-'); ?></div>
+                <div class="meta">الموديل: <?php echo htmlspecialchars($vehicle['model'] ?? 'غير محدد'); ?></div>
+                <i class="bi bi-truck icon"></i>
+            </div>
+            <div class="pos-summary-card">
+                <span class="label">عدد المنتجات</span>
+                <div class="value"><?php echo number_format($inventoryStats['total_products']); ?></div>
+                <div class="meta">أصناف جاهزة للبيع</div>
+                <i class="bi bi-box-seam icon"></i>
+            </div>
+            <div class="pos-summary-card">
+                <span class="label">إجمالي الكمية</span>
+                <div class="value"><?php echo number_format($inventoryStats['total_quantity'], 2); ?></div>
+                <div class="meta">إجمالي الوحدات في السيارة</div>
+                <i class="bi bi-stack icon"></i>
+            </div>
+            <div class="pos-summary-card">
+                <span class="label">قيمة المخزون</span>
+                <div class="value"><?php echo formatCurrency($inventoryStats['total_value']); ?></div>
+                <div class="meta">التقييم الإجمالي الحالي</div>
+                <i class="bi bi-cash-stack icon"></i>
+            </div>
+        </section>
+
+        <section class="pos-content">
+                <div class="pos-panel" style="grid-column: span 7;">
+                    <div class="pos-panel-header">
+                        <div>
+                            <h4>مخزون السيارة</h4>
+                            <p>اضغط على المنتج لإضافته إلى سلة البيع</p>
+                        </div>
+                        <div class="pos-search">
+                            <i class="bi bi-search"></i>
+                            <input type="text" id="posInventorySearch" class="form-control" placeholder="بحث سريع عن منتج..."<?php echo empty($vehicleInventory) ? ' disabled' : ''; ?>>
+                        </div>
+                    </div>
+                <div class="pos-product-grid" id="posProductGrid">
+                    <?php if (empty($vehicleInventory)): ?>
+                        <div class="pos-empty pos-empty-inline">
+                            <i class="bi bi-box"></i>
+                            <h5 class="mt-3 mb-2">لا يوجد مخزون متاح حالياً</h5>
+                            <p class="mb-0">اطلب تزويد السيارة بالمنتجات لبدء البيع من نقطة البيع الميدانية.</p>
+                        </div>
+                    <?php else: ?>
+                        <?php foreach ($vehicleInventory as $item): ?>
+                            <?php
+                            $batchId = !empty($item['finished_batch_id']) ? (int) $item['finished_batch_id'] : 0;
+                            $batchNumber = !empty($item['finished_batch_number']) ? htmlspecialchars($item['finished_batch_number'], ENT_QUOTES, 'UTF-8') : '';
+                            $uniqueId = $batchId > 0 ? ($item['product_id'] . '_' . $batchId) : (string) $item['product_id'];
+                            ?>
+                            <div class="pos-product-card" data-product-card data-product-id="<?php echo (int) $item['product_id']; ?>" data-unique-id="<?php echo htmlspecialchars($uniqueId, ENT_QUOTES, 'UTF-8'); ?>" data-name="<?php echo htmlspecialchars($item['product_name'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" data-category="<?php echo htmlspecialchars($item['category'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                                <div class="pos-product-name">
+                                    <?php echo htmlspecialchars($item['product_name'] ?? 'منتج'); ?>
+                                    <?php if ($batchNumber): ?>
+                                        <small class="text-muted d-block mt-1">تشغيلة: <?php echo $batchNumber; ?></small>
+                                    <?php endif; ?>
+                                </div>
+                                <?php if (!empty($item['category'])): ?>
+                                    <div class="pos-product-meta">
+                                        <span class="pos-product-badge"><?php echo htmlspecialchars($item['category']); ?></span>
+                                    </div>
+                                <?php endif; ?>
+                                <div class="pos-product-meta">
+                                    <span>سعر الوحدة</span>
+                                    <strong><?php echo formatCurrency((float) ($item['unit_price'] ?? 0)); ?></strong>
+                                </div>
+                                <div class="pos-product-meta">
+                                    <span>الكمية المتاحة</span>
+                                    <span class="pos-product-qty"><?php echo number_format((float) ($item['quantity'] ?? 0), 2); ?></span>
+                                </div>
+                                <div class="pos-product-meta">
+                                    <span>آخر تحديث</span>
+                                    <span><?php echo !empty($item['last_updated_at']) ? formatDateTime($item['last_updated_at']) : '-'; ?></span>
+                                </div>
+                                <button type="button"
+                                        class="btn btn-outline-primary pos-select-btn"
+                                        data-select-product
+                                        data-product-id="<?php echo (int) $item['product_id']; ?>"
+                                        data-unique-id="<?php echo htmlspecialchars($uniqueId, ENT_QUOTES, 'UTF-8'); ?>">
+                                    <i class="bi bi-plus-circle me-2"></i>إضافة إلى السلة
+                                </button>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                    </div>
+                </div>
+
+                <div class="pos-panel pos-checkout-panel" style="grid-column: span 5;">
+                    <div class="pos-selected-product" id="posSelectedProduct">
+                        <h5 class="mb-3">تفاصيل المنتج المختار</h5>
+                        <div class="meta-row">
+                            <div class="meta-block">
+                                <span>المنتج</span>
+                                <div class="fw-semibold" id="posSelectedProductName">-</div>
+                            </div>
+                            <div class="meta-block">
+                                <span>التصنيف</span>
+                                <div class="fw-semibold" id="posSelectedProductCategory">-</div>
+                            </div>
+                        </div>
+                        <div class="meta-row mt-3">
+                            <div class="meta-block">
+                                <span>السعر</span>
+                                <div class="fw-semibold" id="posSelectedProductPrice">-</div>
+                            </div>
+                            <div class="meta-block">
+                                <span>المتوفر</span>
+                                <div class="fw-semibold" id="posSelectedProductStock">-</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pos-panel">
+                        <form method="post" id="posSaleForm" class="pos-form needs-validation" novalidate>
+                            <input type="hidden" name="action" value="create_pos_sale">
+                            <input type="hidden" name="cart_data" id="posCartData">
+                            <input type="hidden" name="paid_amount" id="posPaidField" value="0">
+
+                            <div class="row g-3 mb-3 align-items-end">
+                                <div class="col-12 col-sm-6">
+                                    <label class="form-label">تاريخ العملية</label>
+                                    <input type="date" class="form-control" name="sale_date" id="posSaleDate" value="<?php echo date('Y-m-d'); ?>">
+                                </div>
+                                <div class="col-12 col-sm-6">
+                                    <label class="form-label">اختيار العميل</label>
+                                    <div class="pos-customer-mode-toggle" role="group" aria-label="Customer mode options">
+                                        <input class="btn-check" type="radio" name="customer_mode" id="posCustomerModeExisting" value="existing" autocomplete="off" checked>
+                                        <label class="btn" for="posCustomerModeExisting">
+                                            <i class="bi bi-person-check"></i>
+                                            <span>عميل حالي</span>
+                                        </label>
+                                        <input class="btn-check" type="radio" name="customer_mode" id="posCustomerModeNew" value="new" autocomplete="off">
+                                        <label class="btn" for="posCustomerModeNew">
+                                            <i class="bi bi-person-plus"></i>
+                                            <span>عميل جديد</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3" id="posExistingCustomerWrap">
+                                <label class="form-label">العملاء المسجلون</label>
+                                <select class="form-select" id="posCustomerSelect" name="customer_id" required>
+                                    <option value="">اختر العميل</option>
+                                    <?php foreach ($customers as $customer): ?>
+                                        <option value="<?php echo (int) $customer['id']; ?>" data-balance="<?php echo htmlspecialchars((string)($customer['balance'] ?? 0)); ?>" data-credit-limit="<?php echo htmlspecialchars((string)($customer['credit_limit'] ?? 0)); ?>"><?php echo htmlspecialchars($customer['name']); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            
+                            <!-- معلومات العميل المالية - حقل يتحدث تلقائياً -->
+                            <div class="mb-3">
+                                <label class="form-label">الحالة المالية للعميل</label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="posCustomerBalanceText" 
+                                       readonly 
+                                       value="اختر عميلاً لعرض التفاصيل المالية"
+                                       style="background-color: #f8f9fa; cursor: default;">
+                            </div>
+
+                            <div class="mb-3 d-none" id="posNewCustomerWrap">
+                                <div class="row g-3">
+                                    <div class="col-12">
+                                        <label class="form-label">اسم العميل</label>
+                                        <input type="text" class="form-control" name="new_customer_name" id="posNewCustomerName" placeholder="اسم العميل الجديد">
+                                    </div>
+                                    <div class="col-sm-6">
+                                        <label class="form-label">رقم الهاتف <span class="text-muted">(اختياري)</span></label>
+                                        <input type="text" class="form-control" name="new_customer_phone" placeholder="مثال: 01012345678">
+                                    </div>
+                                    <div class="col-sm-6">
+                                        <label class="form-label">العنوان <span class="text-muted">(اختياري)</span></label>
+                                        <input type="text" class="form-control" name="new_customer_address" placeholder="عنوان العميل">
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">موقع العميل <span class="text-muted">(اختياري)</span></label>
+                                        <div class="d-flex gap-2">
+                                            <input type="text" class="form-control" name="new_customer_latitude" id="posNewCustomerLatitude" placeholder="خط العرض" readonly>
+                                            <input type="text" class="form-control" name="new_customer_longitude" id="posNewCustomerLongitude" placeholder="خط الطول" readonly>
+                                            <button type="button" class="btn btn-outline-primary" id="posGetLocationBtn" title="الحصول على الموقع الحالي">
+                                                <i class="bi bi-geo-alt"></i>
+                                            </button>
+                                        </div>
+                                        <small class="text-muted">اضغط على زر الموقع للحصول على موقعك الحالي</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                                    <h5 class="mb-0">سلة البيع</h5>
+                                    <button type="button" class="btn btn-outline-danger btn-sm d-flex align-items-center gap-1 gap-md-2" id="posClearCartBtn">
+                                        <i class="bi bi-trash"></i>
+                                        <span class="d-none d-sm-inline">تفريغ السلة</span>
+                                    </button>
+                                </div>
+                                <div class="pos-cart-empty" id="posCartEmpty">
+                                    <i class="bi bi-basket3"></i>
+                                    <p class="mt-2 mb-0">لم يتم اختيار أي منتجات بعد. اضغط على البطاقة لإضافتها.</p>
+                                </div>
+                                <div class="table-responsive d-none" id="posCartTableWrapper">
+                                    <table class="table pos-cart-table align-middle">
+                                        <thead>
+                                            <tr>
+                                                <th>المنتج</th>
+                                                <th width="180">الكمية</th>
+                                                <th width="160">سعر الوحدة</th>
+                                                <th width="160">الإجمالي</th>
+                                                <th width="70"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="posCartBody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">الخصم <span class="text-muted">(اختياري)</span></label>
+                                <input type="number" step="1" min="0" class="form-control" id="posDiscountInput" name="discount_amount" placeholder="0">
+                                <small class="text-muted">سيتم خصم هذا المبلغ من إجمالي تكلفة المنتجات في السلة</small>
+                            </div>
+
+                            <div class="row g-2 g-md-3 align-items-start mb-3">
+                                <div class="col-12 col-sm-6">
+                                    <div class="pos-summary-card-neutral">
+                                        <span class="small text-uppercase opacity-75">الإجمالي بعد الخصم</span>
+                                        <span class="total" id="posNetTotal">0</span>
+                                        <span class="small text-uppercase opacity-75 mt-2">المتبقي على العميل</span>
+                                        <span class="fw-semibold" id="posDueAmount">0</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">طريقة الدفع</label>
+                            <div class="pos-payment-options">
+                                <label class="pos-payment-option active" for="posPaymentFull" data-payment-option>
+                                    <input class="form-check-input" type="radio" name="payment_type" id="posPaymentFull" value="full" checked>
+                                    <div class="pos-payment-option-icon">
+                                        <i class="bi bi-cash-stack"></i>
+                                    </div>
+                                    <div class="pos-payment-option-details">
+                                        <span class="pos-payment-option-title">دفع كامل الآن</span>
+                                        <span class="pos-payment-option-desc">تحصيل المبلغ بالكامل فوراً دون أي ديون.</span>
+                                    </div>
+                                </label>
+                                <label class="pos-payment-option" for="posPaymentPartial" data-payment-option>
+                                    <input class="form-check-input" type="radio" name="payment_type" id="posPaymentPartial" value="partial">
+                                    <div class="pos-payment-option-icon">
+                                        <i class="bi bi-cash-coin"></i>
+                                    </div>
+                                    <div class="pos-payment-option-details">
+                                        <span class="pos-payment-option-title">تحصيل جزئي الآن</span>
+                                        <span class="pos-payment-option-desc">استلام جزء من المبلغ حالياً وتسجيل المتبقي كدين.</span>
+                                    </div>
+                                </label>
+                                <label class="pos-payment-option" for="posPaymentCredit" data-payment-option>
+                                    <input class="form-check-input" type="radio" name="payment_type" id="posPaymentCredit" value="credit">
+                                    <div class="pos-payment-option-icon">
+                                        <i class="bi bi-receipt"></i>
+                                    </div>
+                                    <div class="pos-payment-option-details">
+                                        <span class="pos-payment-option-title">بيع بالآجل</span>
+                                        <span class="pos-payment-option-desc">تمويل كامل للعميل دون تحصيل فوري، مع متابعة الدفعات لاحقاً.</span>
+                                    </div>
+                                </label>
+                                </div>
+                                <div id="posCreditLimitWarning" class="alert alert-warning d-none mt-3" role="alert">
+                                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                    <strong>تحذير:</strong> لا يمكنك البيع بالأجل أو بتحصيل جزئي للعميل الحالي، قم بالتحصيل أولاً لتخفيف ديون العميل المستحقة للشركة لتتمكن من البيع له، متاح البيع بدفع كامل فقط.
+                                </div>
+                                <div class="mt-3 d-none" id="posPartialWrapper">
+                                    <label class="form-label">مبلغ التحصيل الجزئي</label>
+                                    <input type="number" class="form-control text-muted" id="posPartialAmount" placeholder="0" step="1">
+                                </div>
+                                <div class="mt-3 d-none" id="posDueDateWrapper">
+                                    <label class="form-label">تاريخ الاستحقاق <span class="text-muted">(اختياري)</span></label>
+                                    <input type="date" class="form-control" name="due_date" id="posDueDate" placeholder="YYYY-MM-DD">
+                                    <small class="text-muted">اتركه فارغاً لطباعة "أجل غير مسمى"</small>
+                                </div>
+                            </div>
+                            <div class="d-flex flex-wrap gap-2 justify-content-between">
+                                <button type="button" class="btn btn-outline-secondary btn-sm flex-fill flex-md-none" id="posResetFormBtn">
+                                    <i class="bi bi-arrow-repeat me-1 me-md-2"></i><span class="d-none d-sm-inline">إعادة تعيين</span>
+                                </button>
+                                <button type="submit" class="btn btn-success flex-fill flex-md-auto" id="posSubmitBtn" disabled>
+                                    <i class="bi bi-check-circle me-1 me-md-2"></i>إتمام عملية البيع
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="pos-panel">
+                        <div class="pos-panel-header">
+                            <div>
+                                <h5>آخر عمليات البيع</h5>
+                                <p>أحدث عملياتك خلال الفترة الأخيرة</p>
+                            </div>
+                        </div>
+                        <?php if (empty($recentSales)): ?>
+                            <div class="pos-empty mb-0">
+                                <div class="empty-state-icon mb-2"><i class="bi bi-receipt"></i></div>
+                                <div class="empty-state-title">لا توجد عمليات بيع مسجلة</div>
+                                <div class="empty-state-description">ابدأ ببيع منتجات مخزون السيارة ليظهر السجل هنا.</div>
+                            </div>
+                        <?php else: ?>
+                            <div class="pos-history-list">
+                                <?php foreach ($recentSales as $sale): ?>
+                                    <div class="pos-sale-card">
+                                        <div>
+                                            <div class="fw-semibold"><?php echo htmlspecialchars($sale['product_name'] ?? '-'); ?></div>
+                                            <div class="meta">
+                                                <?php echo formatDate($sale['date']); ?> • <?php echo htmlspecialchars($sale['customer_name'] ?? '-'); ?>
+                                            </div>
+                                        </div>
+                                        <div class="text-end">
+                                            <div class="fw-semibold mb-1"><?php echo formatCurrency((float) ($sale['total'] ?? 0)); ?></div>
+                                            <span class="badge bg-success">مكتمل</span>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+        </section>
+    </div>
+<?php endif; ?>
+
+<?php if ($vehicle): ?>
+<script>
+(function () {
+    const locale = <?php echo json_encode($pageDirection === 'rtl' ? 'ar-EG' : 'en-US'); ?>;
+    const currencySymbolRaw = <?php echo json_encode(CURRENCY_SYMBOL); ?>;
+    const isSalesRep = <?php echo json_encode(($currentUser['role'] ?? '') === 'sales'); ?>;
+    const inventory = <?php
+        $inventoryForJs = [];
+        foreach ($vehicleInventory as $item) {
+            $snapshot = null;
+            if (!empty($item['product_snapshot'])) {
+                $decodedSnapshot = json_decode($item['product_snapshot'], true);
+                if (json_last_error() === JSON_ERROR_NONE) {
+                    $snapshot = $decodedSnapshot;
+                }
+            }
+
+            $batchId = !empty($item['finished_batch_id']) ? (int) $item['finished_batch_id'] : 0;
+            $batchNumber = !empty($item['finished_batch_number']) ? $item['finished_batch_number'] : '';
+            
+            // إنشاء معرف فريد لكل منتج+تشغيلة
+            $uniqueId = $batchId > 0 ? ($item['product_id'] . '_' . $batchId) : (string) $item['product_id'];
+            
+            $inventoryForJs[] = [
+                'product_id' => (int) ($item['product_id'] ?? 0),
+                'finished_batch_id' => $batchId,
+                'finished_batch_number' => $batchNumber,
+                'unique_id' => $uniqueId, // معرف فريد للمنتج+التشغيلة
+                'name' => $item['product_name'] ?? '',
+                'category' => $item['category'] ?? ($item['product_category'] ?? ''),
+                'quantity' => (float) ($item['quantity'] ?? 0),
+                'unit_price' => (float) ($item['unit_price'] ?? 0),
+                'unit' => $item['unit'] ?? ($item['product_unit'] ?? ''),
+                'total_value' => (float) ($item['total_value'] ?? 0),
+                'last_updated_at' => $item['last_updated_at'] ?? null,
+                'snapshot' => $snapshot,
+            ];
+        }
+        echo json_encode($inventoryForJs, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    ?>;
+
+    inventory.forEach((item) => {
+        item.quantity = sanitizeNumber(item.quantity);
+        item.unit_price = sanitizeNumber(item.unit_price);
+        item.total_value = sanitizeNumber(item.total_value);
+    });
+
+    // استخدام unique_id كمفتاح للتمييز بين التشغيلات المختلفة لنفس المنتج
+    const inventoryMap = new Map(inventory.map((item) => [item.unique_id || item.product_id, item]));
+    const cart = [];
+
+    const elements = {
+        form: document.getElementById('posSaleForm'),
+        cartData: document.getElementById('posCartData'),
+        paidField: document.getElementById('posPaidField'),
+        cartBody: document.getElementById('posCartBody'),
+        cartEmpty: document.getElementById('posCartEmpty'),
+        cartTableWrapper: document.getElementById('posCartTableWrapper'),
+        clearCart: document.getElementById('posClearCartBtn'),
+        resetForm: document.getElementById('posResetFormBtn'),
+        netTotal: document.getElementById('posNetTotal'),
+        dueAmount: document.getElementById('posDueAmount'),
+        prepaidInput: document.getElementById('posPrepaidInput'),
+        discountInput: document.getElementById('posDiscountInput'),
+        paymentOptionCards: document.querySelectorAll('[data-payment-option]'),
+        paymentRadios: document.querySelectorAll('input[name="payment_type"]'),
+        partialWrapper: document.getElementById('posPartialWrapper'),
+        partialInput: document.getElementById('posPartialAmount'),
+        dueDateWrapper: document.getElementById('posDueDateWrapper'),
+        dueDateInput: document.getElementById('posDueDate'),
+        submitBtn: document.getElementById('posSubmitBtn'),
+        customerModeRadios: document.querySelectorAll('input[name="customer_mode"]'),
+        existingCustomerWrap: document.getElementById('posExistingCustomerWrap'),
+        customerSelect: document.getElementById('posCustomerSelect'),
+        newCustomerWrap: document.getElementById('posNewCustomerWrap'),
+        newCustomerName: document.getElementById('posNewCustomerName'),
+        inventoryCards: document.querySelectorAll('[data-product-card]'),
+        inventoryButtons: document.querySelectorAll('[data-select-product]'),
+        inventorySearch: document.getElementById('posInventorySearch'),
+        selectedPanel: document.getElementById('posSelectedProduct'),
+        selectedName: document.getElementById('posSelectedProductName'),
+        selectedCategory: document.getElementById('posSelectedProductCategory'),
+        selectedPrice: document.getElementById('posSelectedProductPrice'),
+        selectedStock: document.getElementById('posSelectedProductStock'),
+    };
+
+    function roundTwo(value) {
+        return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+    }
+
+    function sanitizeCurrencySymbol(value) {
+        if (typeof value !== 'string') {
+            value = value == null ? '' : String(value);
+        }
+        const cleaned = value
+            .replace(/262145/gi, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+        return cleaned || 'ج.م';
+    }
+
+    const currencySymbol = sanitizeCurrencySymbol(currencySymbolRaw);
+
+    function sanitizeNumber(value) {
+        if (value === null || value === undefined) {
+            return 0;
+        }
+        if (typeof value === 'string') {
+            const stripped = value
+                .replace(/262145/gi, '')
+                .replace(/[^\d.\-]/g, '');
+            value = parseFloat(stripped);
+        }
+        if (!Number.isFinite(value)) {
+            return 0;
+        }
+        if (Math.abs(value - 262145) < 0.01 || value > 10000000 || value < 0) {
+            return 0;
+        }
+        return roundTwo(value);
+    }
+
+    function formatCurrency(value) {
+        const sanitized = sanitizeNumber(value);
+        return sanitized.toLocaleString(locale, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        }) + ' ' + currencySymbol;
+    }
+
+    function formatPartialAmount(value) {
+        const sanitized = sanitizeNumber(value);
+        if (sanitized === 0) {
+            return '0';
+        }
+        // إذا كان الرقم صحيحاً (بدون كسور)، اعرضه بدون كسور
+        if (sanitized % 1 === 0) {
+            return sanitized.toString();
+        }
+        // إذا كان يحتوي على كسور، اعرضه مع كسور
+        return sanitized.toFixed(2);
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>\"']/g, function (char) {
+            const escapeMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+            return escapeMap[char] || char;
+        });
+    }
+
+    function renderSelectedProduct(product) {
+        if (!product || !elements.selectedPanel) {
+            return;
+        }
+        elements.selectedPanel.classList.add('active');
+        elements.selectedName.textContent = product.name || '-';
+        elements.selectedCategory.textContent = product.category || 'غير مصنف';
+        elements.selectedPrice.textContent = formatCurrency(product.unit_price || 0);
+        elements.selectedStock.textContent = (product.quantity ?? 0).toFixed(2);
+    }
+
+    function syncCartData() {
+        const payload = cart.map((item) => ({
+            product_id: item.product_id,
+            finished_batch_id: item.finished_batch_id || null,
+            quantity: sanitizeNumber(item.quantity),
+            unit_price: sanitizeNumber(item.unit_price),
+        }));
+        elements.cartData.value = JSON.stringify(payload);
+    }
+
+    function refreshPaymentOptionStates() {
+        if (!elements.paymentOptionCards) {
+            return;
+        }
+        elements.paymentOptionCards.forEach((card) => {
+            const input = card.querySelector('input[type="radio"]');
+            const isChecked = Boolean(input && input.checked);
+            card.classList.toggle('active', isChecked);
+        });
+    }
+
+    function sanitizeSummaryDisplays() {
+        // لا حاجة لإعادة التنسيق لأن updateSummary() تقوم بذلك بالفعل
+        // هذه الدالة محفوظة للتوافق مع الكود القديم
+    }
+
+    function updateSummary() {
+        const subtotal = cart.reduce((total, item) => {
+            const qty = sanitizeNumber(item.quantity);
+            const price = sanitizeNumber(item.unit_price);
+            return total + (qty * price);
+        }, 0);
+        
+        // الحصول على الخصم
+        let discount = sanitizeNumber(elements.discountInput ? elements.discountInput.value : '0');
+        let sanitizedSubtotal = sanitizeNumber(subtotal);
+        
+        // التأكد من أن الخصم لا يتجاوز المجموع الفرعي ولا يكون سالباً
+        if (discount < 0) {
+            discount = 0;
+        }
+        if (discount > sanitizedSubtotal) {
+            discount = sanitizedSubtotal;
+        }
+        if (elements.discountInput) {
+            elements.discountInput.value = discount.toFixed(2);
+        }
+        
+        // حساب الإجمالي بعد خصم الخصم
+        const subtotalAfterDiscount = sanitizeNumber(sanitizedSubtotal - discount);
+        
+        // الحصول على المبلغ المدفوع مسبقاً
+        let prepaid = sanitizeNumber(elements.prepaidInput ? elements.prepaidInput.value : '0');
+
+        // التأكد من أن المبلغ المدفوع مسبقاً لا يتجاوز المجموع الفرعي بعد الخصم
+        if (prepaid < 0) {
+            prepaid = 0;
+        }
+        if (prepaid > subtotalAfterDiscount) {
+            prepaid = subtotalAfterDiscount;
+        }
+        if (elements.prepaidInput) {
+            elements.prepaidInput.value = prepaid.toFixed(2);
+        }
+
+        const netTotal = sanitizeNumber(subtotalAfterDiscount - prepaid);
+        let paidAmount = 0;
+        const paymentType = Array.from(elements.paymentRadios).find((radio) => radio.checked)?.value || 'full';
+
+        if (paymentType === 'full') {
+            paidAmount = netTotal;
+            elements.partialWrapper.classList.add('d-none');
+            elements.partialInput.value = '';
+            // إزالة required من حقل الدفع الجزئي عند اختيار الدفع الكامل
+            if (elements.partialInput) {
+                elements.partialInput.removeAttribute('required');
+            }
+            if (elements.dueDateWrapper) {
+                elements.dueDateWrapper.classList.add('d-none');
+            }
+        } else if (paymentType === 'partial') {
+            elements.partialWrapper.classList.remove('d-none');
+            // إضافة required لحقل الدفع الجزئي عند اختيار الدفع الجزئي
+            if (elements.partialInput) {
+                elements.partialInput.setAttribute('required', 'required');
+            }
+            if (elements.dueDateWrapper) {
+                elements.dueDateWrapper.classList.remove('d-none');
+            }
+            let partialValue = sanitizeNumber(elements.partialInput.value);
+            const inputValue = elements.partialInput.value.trim();
+            const isInputFocused = document.activeElement === elements.partialInput;
+            
+            if (isNaN(partialValue) || partialValue <= 0) {
+                // لا نمسح الحقل أثناء الكتابة، فقط نتركه كما هو
+                if (!isInputFocused && (inputValue === '' || inputValue === '0' || inputValue === '0.' || inputValue === '0.00')) {
+                    elements.partialInput.value = '';
+                }
+                paidAmount = 0;
+            } else {
+                if (partialValue >= netTotal && netTotal > 0) {
+                    partialValue = Math.max(0, netTotal - 0);
+                }
+                // لا نطبق التنسيق أثناء الكتابة، فقط عند blur أو change
+                if (!isInputFocused) {
+                    elements.partialInput.value = formatPartialAmount(partialValue);
+                }
+                paidAmount = partialValue;
+            }
+        } else {
+            elements.partialWrapper.classList.add('d-none');
+            elements.partialInput.value = '';
+            // إزالة required من حقل الدفع الجزئي عند اختيار البيع بالآجل
+            if (elements.partialInput) {
+                elements.partialInput.removeAttribute('required');
+            }
+            if (elements.dueDateWrapper) {
+                elements.dueDateWrapper.classList.remove('d-none');
+            }
+            paidAmount = 0;
+        }
+
+        // حساب المتبقي بعد خصم الرصيد الدائن إن وجد
+        let dueAmount = sanitizeNumber(Math.max(0, netTotal - paidAmount));
+        
+        // الحصول على رصيد العميل المحدد (إذا كان موجوداً)
+        let customerCreditBalance = 0;
+        if (elements.customerSelect && elements.customerSelect.value) {
+            const selectedOption = elements.customerSelect.options[elements.customerSelect.selectedIndex];
+            if (selectedOption) {
+                const balance = parseFloat(selectedOption.getAttribute('data-balance') || '0');
+                // إذا كان الرصيد سالب (رصيد دائن)، نخصمه من المتبقي
+                if (balance < 0) {
+                    customerCreditBalance = Math.abs(balance); // القيمة المطلقة للرصيد الدائن
+                    // خصم الرصيد الدائن من المتبقي
+                    dueAmount = sanitizeNumber(Math.max(0, dueAmount - customerCreditBalance));
+                }
+            }
+        }
+        
+        // تحديث العناصر في الواجهة بشكل فوري
+        if (elements.netTotal) {
+            elements.netTotal.textContent = formatCurrency(netTotal);
+        }
+        if (elements.dueAmount) {
+            elements.dueAmount.textContent = formatCurrency(dueAmount);
+        }
+
+        if (elements.paidField) {
+            elements.paidField.value = paidAmount.toFixed(2);
+        }
+        if (elements.submitBtn) {
+            const hasCartItems = cart.length > 0;
+            const hasValidCustomer = (() => {
+                const customerMode = Array.from(elements.customerModeRadios).find((radio) => radio.checked)?.value || 'existing';
+                if (customerMode === 'existing') {
+                    return elements.customerSelect && elements.customerSelect.value && elements.customerSelect.value !== '';
+                } else {
+                    return elements.newCustomerName && elements.newCustomerName.value && elements.newCustomerName.value.trim() !== '';
+                }
+            })();
+            elements.submitBtn.disabled = !hasCartItems || !hasValidCustomer;
+        }
+        syncCartData();
+        refreshPaymentOptionStates();
+    }
+
+    function renderCart() {
+        if (!elements.cartBody || !elements.cartTableWrapper || !elements.cartEmpty) {
+            return;
+        }
+
+        if (!cart.length) {
+            elements.cartBody.innerHTML = '';
+            elements.cartTableWrapper.classList.add('d-none');
+            elements.cartEmpty.classList.remove('d-none');
+            updateSummary();
+            return;
+        }
+
+        elements.cartTableWrapper.classList.remove('d-none');
+        elements.cartEmpty.classList.add('d-none');
+
+        const rows = cart.map((item) => {
+            const sanitizedQty = sanitizeNumber(item.quantity);
+            const sanitizedPrice = sanitizeNumber(item.unit_price);
+            const sanitizedAvailable = sanitizeNumber(item.available);
+            const uniqueId = item.unique_id || item.product_id;
+            const batchInfo = item.finished_batch_id ? ` • تشغيلة: ${escapeHtml(item.finished_batch_number || item.finished_batch_id)}` : '';
+            return `
+                <tr data-cart-row data-unique-id="${uniqueId}">
+                    <td data-label="المنتج">
+                        <div class="fw-semibold">${escapeHtml(item.name)}</div>
+                        <div class="text-muted small">${escapeHtml(item.category || 'غير مصنف')}${batchInfo} • متاح: ${sanitizedAvailable.toFixed(2)}</div>
+                    </td>
+                    <td data-label="الكمية">
+                        <div class="pos-qty-control">
+                            <button type="button" class="btn btn-light border" data-action="decrease" data-unique-id="${uniqueId}" aria-label="تقليل الكمية"><i class="bi bi-dash"></i></button>
+                            <input type="number" step="0.01" min="0" max="${sanitizedAvailable.toFixed(2)}" class="form-control" data-cart-qty data-unique-id="${uniqueId}" value="${sanitizedQty.toFixed(2)}" aria-label="الكمية">
+                            <button type="button" class="btn btn-light border" data-action="increase" data-unique-id="${uniqueId}" aria-label="زيادة الكمية"><i class="bi bi-plus"></i></button>
+                        </div>
+                    </td>
+                    <td data-label="سعر الوحدة">
+                        <input type="number" step="0.01" min="0" class="form-control" data-cart-price data-unique-id="${uniqueId}" value="${sanitizedPrice.toFixed(2)}" aria-label="سعر الوحدة" ${isSalesRep ? 'readonly style="background-color: #f8f9fa; cursor: not-allowed;"' : ''}>
+                    </td>
+                    <td data-label="الإجمالي" class="fw-semibold">${formatCurrency(sanitizedQty * sanitizedPrice)}</td>
+                    <td data-label="إجراءات" class="text-end">
+                        <button type="button" class="btn btn-link text-danger p-0" data-action="remove" data-unique-id="${uniqueId}" aria-label="حذف المنتج"><i class="bi bi-x-circle"></i></button>
+                    </td>
+                </tr>`;
+        }).join('');
+
+        elements.cartBody.innerHTML = rows;
+        syncCartData(); // تحديث البيانات المرسلة للخادم
+        updateSummary();
+    }
+
+    function addToCart(uniqueId) {
+        const product = inventoryMap.get(uniqueId);
+        if (!product) {
+            return;
+        }
+        product.quantity = sanitizeNumber(product.quantity);
+        product.unit_price = sanitizeNumber(product.unit_price);
+        const existing = cart.find((item) => item.unique_id === uniqueId);
+        if (existing) {
+            const maxQty = sanitizeNumber(product.quantity);
+            const newQty = sanitizeNumber(existing.quantity + 1);
+            if (newQty > maxQty) {
+                existing.quantity = maxQty;
+            } else {
+                existing.quantity = newQty;
+            }
+        } else {
+            if (product.quantity <= 0) {
+                return;
+            }
+            cart.push({
+                product_id: product.product_id,
+                finished_batch_id: product.finished_batch_id || null,
+                unique_id: product.unique_id || product.product_id,
+                name: product.name,
+                category: product.category,
+                quantity: Math.min(1, sanitizeNumber(product.quantity)),
+                available: sanitizeNumber(product.quantity),
+                unit_price: sanitizeNumber(product.unit_price),
+            });
+        }
+        renderSelectedProduct(product);
+        renderCart();
+    }
+
+    function removeFromCart(uniqueId) {
+        const index = cart.findIndex((item) => item.unique_id === uniqueId);
+        if (index >= 0) {
+            cart.splice(index, 1);
+            renderCart();
+        }
+    }
+
+    function adjustQuantity(uniqueId, delta) {
+        const item = cart.find((entry) => entry.unique_id === uniqueId);
+        const product = inventoryMap.get(uniqueId);
+        if (!item || !product) {
+            return;
+        }
+        let newQuantity = sanitizeNumber(item.quantity + delta);
+        if (newQuantity <= 0) {
+            removeFromCart(uniqueId);
+            return;
+        }
+        const maxQty = sanitizeNumber(product.quantity);
+        if (newQuantity > maxQty) {
+            newQuantity = maxQty;
+        }
+        item.quantity = newQuantity;
+        renderCart(); // renderCart() تستدعي updateSummary() تلقائياً
+    }
+
+    function updateQuantity(uniqueId, value) {
+        const item = cart.find((entry) => entry.unique_id === uniqueId);
+        const product = inventoryMap.get(uniqueId);
+        if (!item || !product) {
+            return;
+        }
+        let qty = sanitizeNumber(value);
+        if (qty <= 0) {
+            removeFromCart(uniqueId);
+            return;
+        }
+        const maxQty = sanitizeNumber(product.quantity);
+        if (qty > maxQty) {
+            qty = maxQty;
+        }
+        item.quantity = qty;
+        renderCart(); // renderCart() تستدعي updateSummary() تلقائياً
+    }
+
+    function updateUnitPrice(uniqueId, value) {
+        const item = cart.find((entry) => entry.unique_id === uniqueId);
+        if (!item) {
+            return;
+        }
+        let price = sanitizeNumber(value);
+        if (price < 0) {
+            price = 0;
+        }
+        item.unit_price = price;
+        renderCart(); // renderCart() تستدعي updateSummary() تلقائياً
+    }
+
+    elements.inventoryButtons.forEach((button) => {
+        button.addEventListener('click', function (event) {
+            event.stopPropagation();
+            const uniqueId = this.dataset.uniqueId || this.dataset.productId;
+            addToCart(uniqueId);
+        });
+    });
+
+    elements.inventoryCards.forEach((card) => {
+        card.addEventListener('click', function () {
+            const uniqueId = this.dataset.uniqueId || this.dataset.productId;
+            elements.inventoryCards.forEach((c) => c.classList.remove('active'));
+            this.classList.add('active');
+            renderSelectedProduct(inventoryMap.get(uniqueId));
+        });
+    });
+
+    if (elements.inventorySearch) {
+        elements.inventorySearch.addEventListener('input', function () {
+            const term = (this.value || '').toLowerCase().trim();
+            elements.inventoryCards.forEach((card) => {
+                const name = (card.dataset.name || '').toLowerCase();
+                const category = (card.dataset.category || '').toLowerCase();
+                const matches = !term || name.includes(term) || category.includes(term);
+                card.style.display = matches ? '' : 'none';
+            });
+        });
+    }
+
+    if (elements.cartBody) {
+        elements.cartBody.addEventListener('click', function (event) {
+            const action = event.target.closest('[data-action]');
+            if (!action) {
+                return;
+            }
+            const uniqueId = action.dataset.uniqueId || action.dataset.productId;
+            switch (action.dataset.action) {
+                case 'increase':
+                    adjustQuantity(uniqueId, 1);
+                    break;
+                case 'decrease':
+                    adjustQuantity(uniqueId, -1);
+                    break;
+                case 'remove':
+                    removeFromCart(uniqueId);
+                    break;
+            }
+        });
+
+        elements.cartBody.addEventListener('input', function (event) {
+            const qtyInput = event.target.matches('[data-cart-qty]') ? event.target : null;
+            const priceInput = event.target.matches('[data-cart-price]') ? event.target : null;
+            const uniqueId = event.target.dataset.uniqueId || event.target.dataset.productId;
+            if (qtyInput) {
+                updateQuantity(uniqueId, qtyInput.value);
+                // renderCart() تستدعي updateSummary() تلقائياً
+            }
+            if (priceInput) {
+                // منع تعديل السعر للمندوبين
+                if (!isSalesRep) {
+                    updateUnitPrice(uniqueId, priceInput.value);
+                    // renderCart() تستدعي updateSummary() تلقائياً
+                } else {
+                    // إعادة تعيين السعر الأصلي للمندوبين
+                    const item = cart.find((entry) => entry.unique_id === uniqueId);
+                    if (item) {
+                        const product = inventoryMap.get(uniqueId);
+                        if (product) {
+                            priceInput.value = sanitizeNumber(product.unit_price).toFixed(2);
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    if (elements.clearCart) {
+        elements.clearCart.addEventListener('click', function () {
+            cart.length = 0;
+            renderCart();
+        });
+    }
+
+    if (elements.resetForm) {
+        elements.resetForm.addEventListener('click', function () {
+            cart.length = 0;
+            renderCart();
+            elements.form?.reset();
+            elements.partialWrapper?.classList.add('d-none');
+            elements.submitBtn.disabled = true;
+            elements.selectedPanel?.classList.remove('active');
+        });
+    }
+
+    if (elements.prepaidInput) {
+        elements.prepaidInput.addEventListener('input', function() {
+            updateSummary(); // تحديث فوري عند تغيير المبلغ المدفوع مسبقاً
+        });
+        elements.prepaidInput.addEventListener('change', function() {
+            updateSummary(); // تحديث عند تغيير المبلغ المدفوع مسبقاً
+        });
+    }
+
+    if (elements.discountInput) {
+        // عند التركيز على الحقل، إذا كانت القيمة "0" أو فارغة، امسحها للسماح بالكتابة المباشرة
+        elements.discountInput.addEventListener('focus', function() {
+            const currentValue = this.value.trim();
+            if (currentValue === '0' || currentValue === '') {
+                this.value = '';
+            }
+            // وضع المؤشر في نهاية النص
+            setTimeout(() => {
+                this.setSelectionRange(this.value.length, this.value.length);
+            }, 0);
+        });
+        
+        // عند فقدان التركيز، إذا كان الحقل فارغاً، ضع "0"
+        elements.discountInput.addEventListener('blur', function() {
+            const currentValue = this.value.trim();
+            if (currentValue === '' || currentValue === '0') {
+                this.value = '';
+            }
+            updateSummary();
+        });
+        
+        elements.discountInput.addEventListener('input', function() {
+            updateSummary(); // تحديث فوري عند تغيير الخصم
+        });
+        
+        elements.discountInput.addEventListener('change', function() {
+            updateSummary(); // تحديث عند تغيير الخصم
+        });
+    }
+
+    if (elements.partialInput) {
+        let previousValue = '';
+        let isUserTyping = false;
+        let cursorPosition = 0;
+        
+        // تتبع ما إذا كان المستخدم يكتب
+        elements.partialInput.addEventListener('focus', function() {
+            isUserTyping = true;
+            previousValue = this.value;
+        });
+        
+        // حفظ موضع المؤشر قبل التحديث
+        elements.partialInput.addEventListener('keydown', function(e) {
+            cursorPosition = this.selectionStart || 0;
+            
+            // معالجة الأسهم (step) - عند الضغط على الأسهم والحقل فارغ، ابدأ من 1
+            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                const currentValue = sanitizeNumber(this.value);
+                if (isNaN(currentValue) || currentValue === 0 || this.value === '' || this.value === '0') {
+                    e.preventDefault();
+                    if (e.key === 'ArrowUp') {
+                        this.value = '1';
+                        updateSummary();
+                    } else {
+                        this.value = '';
+                        updateSummary();
+                    }
+                }
+            }
+        });
+        
+        // تحديث عند الكتابة (بدون تطبيق التنسيق أثناء الكتابة)
+        let inputTimeout = null;
+        elements.partialInput.addEventListener('input', function() {
+            const currentValue = this.value;
+            
+            // إلغاء أي تحديث سابق معلق
+            if (inputTimeout) {
+                clearTimeout(inputTimeout);
+            }
+            
+            // إذا كان المستخدم يكتب، لا نطبق التنسيق ولا نغير قيمة الحقل
+            if (isUserTyping && currentValue !== '' && currentValue !== '0' && currentValue !== '0.') {
+                // تأجيل تحديث الملخص لتجنب التداخل مع الكتابة
+                inputTimeout = setTimeout(function() {
+                    updateSummary();
+                }, 100);
+            } else {
+                // إذا كانت القيمة 0 أو فارغة، امسحها
+                if (currentValue === '0' || currentValue === '0.00' || currentValue === '0.') {
+                    this.value = '';
+                }
+                updateSummary();
+            }
+        });
+        
+        // تطبيق التنسيق عند فقدان التركيز
+        elements.partialInput.addEventListener('blur', function() {
+            isUserTyping = false;
+            // إلغاء أي تحديث معلق
+            if (inputTimeout) {
+                clearTimeout(inputTimeout);
+                inputTimeout = null;
+            }
+            const value = sanitizeNumber(this.value);
+            if (!isNaN(value) && value > 0) {
+                this.value = formatPartialAmount(value);
+            } else if (this.value === '' || this.value === '0' || this.value === '0.' || this.value === '0.00') {
+                this.value = '';
+            }
+            updateSummary();
+        });
+        
+        // معالجة الأسهم (step arrows) - عند النقر على الأسهم في المتصفح
+        elements.partialInput.addEventListener('change', function() {
+            const value = sanitizeNumber(this.value);
+            if (!isNaN(value) && value > 0) {
+                // إذا كانت القيمة 0، ابدأ من 1
+                if (value === 0 && previousValue === '') {
+                    this.value = '1';
+                } else {
+                    this.value = formatPartialAmount(value);
+                }
+            } else if (this.value === '' || this.value === '0' || this.value === '0.' || this.value === '0.00') {
+                this.value = '';
+            }
+            previousValue = this.value;
+            updateSummary();
+        });
+        
+        // معالجة النقر على الأسهم (step arrows) - استخدام mouseup للكشف
+        elements.partialInput.addEventListener('mouseup', function() {
+            setTimeout(function() {
+                const value = sanitizeNumber(elements.partialInput.value);
+                if (value === 0 && elements.partialInput.value === '0') {
+                    elements.partialInput.value = '';
+                    updateSummary();
+                } else if (!isNaN(value) && value > 0) {
+                    elements.partialInput.value = formatPartialAmount(value);
+                    updateSummary();
+                }
+            }, 10);
+        });
+    }
+
+    elements.paymentRadios.forEach((radio) => {
+        radio.addEventListener('change', function() {
+            // التحقق من الحد الائتماني قبل السماح بتغيير طريقة الدفع
+            const creditLimitExceeded = checkCreditLimit();
+            if (creditLimitExceeded && (this.value === 'partial' || this.value === 'credit')) {
+                // منع اختيار partial أو credit إذا تم تجاوز الحد
+                const paymentFullRadio = document.getElementById('posPaymentFull');
+                if (paymentFullRadio) {
+                    paymentFullRadio.checked = true;
+                }
+                alert('لا يمكنك البيع بالأجل أو بتحصيل جزئي للعميل الحالي. يرجى التحصيل أولاً لتخفيف ديون العميل.');
+                return;
+            }
+            updateSummary();
+        });
+    });
+
+    elements.customerModeRadios.forEach((radio) => {
+        radio.addEventListener('change', function () {
+            const mode = this.value;
+            if (mode === 'existing') {
+                elements.existingCustomerWrap?.classList.remove('d-none');
+                elements.customerSelect?.setAttribute('required', 'required');
+                elements.newCustomerWrap?.classList.add('d-none');
+                elements.newCustomerName?.removeAttribute('required');
+            } else {
+                elements.existingCustomerWrap?.classList.add('d-none');
+                elements.customerSelect?.removeAttribute('required');
+                elements.newCustomerWrap?.classList.remove('d-none');
+                elements.newCustomerName?.setAttribute('required', 'required');
+            }
+            updateSummary(); // تحديث حالة الزر عند تغيير وضع العميل
+        });
+    });
+
+    // دالة التحقق من الحد الائتماني
+    function checkCreditLimit() {
+        if (!elements.customerSelect) {
+            return false;
+        }
+        
+        const selectedOption = elements.customerSelect.options[elements.customerSelect.selectedIndex];
+        if (!selectedOption || !selectedOption.value) {
+            return false;
+        }
+        
+        const balance = parseFloat(selectedOption.getAttribute('data-balance') || '0');
+        const creditLimit = parseFloat(selectedOption.getAttribute('data-credit-limit') || '0');
+        
+        // إذا كان الرصيد المدين >= الحد الائتماني والحد الائتماني > 0، تم تجاوز الحد
+        if (balance >= creditLimit && creditLimit > 0) {
+            return true;
+        }
+        
+        return false;
+    }
+    
+    // دالة تحديث حالة رصيد العميل والتحقق من الحد الائتماني
+    function updateCustomerBalance() {
+        const balanceText = document.getElementById('posCustomerBalanceText');
+        
+        if (!elements.customerSelect || !balanceText) {
+            return;
+        }
+        
+        const selectedOption = elements.customerSelect.options[elements.customerSelect.selectedIndex];
+        if (!selectedOption || !selectedOption.value) {
+            // عرض رسالة افتراضية عند عدم اختيار عميل
+            balanceText.value = 'اختر عميلاً لعرض التفاصيل المالية';
+            balanceText.className = 'form-control';
+            balanceText.style.backgroundColor = '#f8f9fa';
+            balanceText.style.borderColor = '#dee2e6';
+            // إخفاء رسالة التحذير
+            const warningDiv = document.getElementById('posCreditLimitWarning');
+            if (warningDiv) {
+                warningDiv.classList.add('d-none');
+            }
+            // تفعيل أزرار الدفع
+            refreshPaymentOptionStates();
+            return;
+        }
+        
+        const balance = parseFloat(selectedOption.getAttribute('data-balance') || '0');
+        
+        if (balance > 0) {
+            balanceText.value = 'ديون العميل: ' + formatCurrency(balance);
+            balanceText.className = 'form-control border-warning';
+            balanceText.style.backgroundColor = '#fff3cd';
+            balanceText.style.borderColor = '#ffc107';
+        } else if (balance < 0) {
+            balanceText.value = 'رصيد دائن: ' + formatCurrency(Math.abs(balance));
+            balanceText.className = 'form-control border-success';
+            balanceText.style.backgroundColor = '#d1e7dd';
+            balanceText.style.borderColor = '#198754';
+        } else {
+            balanceText.value = 'الرصيد: 0';
+            balanceText.className = 'form-control border-info';
+            balanceText.style.backgroundColor = '#cff4fc';
+            balanceText.style.borderColor = '#0dcaf0';
+        }
+        
+        // التحقق من الحد الائتماني
+        const creditLimitExceeded = checkCreditLimit();
+        const warningDiv = document.getElementById('posCreditLimitWarning');
+        const paymentFullRadio = document.getElementById('posPaymentFull');
+        const paymentPartialRadio = document.getElementById('posPaymentPartial');
+        const paymentCreditRadio = document.getElementById('posPaymentCredit');
+        const paymentPartialLabel = paymentPartialRadio ? paymentPartialRadio.closest('label') : null;
+        const paymentCreditLabel = paymentCreditRadio ? paymentCreditRadio.closest('label') : null;
+        
+        if (creditLimitExceeded) {
+            // إظهار رسالة التحذير
+            if (warningDiv) {
+                warningDiv.classList.remove('d-none');
+            }
+            
+            // تعطيل أزرار البيع بالأجل والتحصيل الجزئي
+            if (paymentPartialRadio) {
+                paymentPartialRadio.disabled = true;
+            }
+            if (paymentCreditRadio) {
+                paymentCreditRadio.disabled = true;
+            }
+            
+            // إضافة opacity على labels
+            if (paymentPartialLabel) {
+                paymentPartialLabel.classList.add('opacity-50');
+                paymentPartialLabel.style.pointerEvents = 'none';
+            }
+            if (paymentCreditLabel) {
+                paymentCreditLabel.classList.add('opacity-50');
+                paymentCreditLabel.style.pointerEvents = 'none';
+            }
+            
+            // اختيار الدفع الكامل تلقائياً إذا كان محدداً خيار آخر
+            if (paymentFullRadio && (!paymentFullRadio.checked)) {
+                paymentFullRadio.checked = true;
+                // تحديث الملخص
+                updateSummary();
+            }
+        } else {
+            // إخفاء رسالة التحذير
+            if (warningDiv) {
+                warningDiv.classList.add('d-none');
+            }
+            
+            // تفعيل أزرار الدفع
+            if (paymentPartialRadio) {
+                paymentPartialRadio.disabled = false;
+            }
+            if (paymentCreditRadio) {
+                paymentCreditRadio.disabled = false;
+            }
+            
+            // إزالة opacity من labels
+            if (paymentPartialLabel) {
+                paymentPartialLabel.classList.remove('opacity-50');
+                paymentPartialLabel.style.pointerEvents = '';
+            }
+            if (paymentCreditLabel) {
+                paymentCreditLabel.classList.remove('opacity-50');
+                paymentCreditLabel.style.pointerEvents = '';
+            }
+        }
+        
+        // تحديث حالة أزرار الدفع
+        refreshPaymentOptionStates();
+    }
+    
+    // إضافة مستمعين لحقول العميل لتحديث حالة الزر
+    if (elements.customerSelect) {
+        elements.customerSelect.addEventListener('change', function() {
+            updateCustomerBalance(); // هذا يستدعي checkCreditLimit داخلياً
+            updateSummary();
+        });
+        elements.customerSelect.addEventListener('input', function() {
+            updateCustomerBalance(); // هذا يستدعي checkCreditLimit داخلياً
+            updateSummary();
+        });
+    }
+    if (elements.newCustomerName) {
+        elements.newCustomerName.addEventListener('input', updateSummary);
+        elements.newCustomerName.addEventListener('change', updateSummary);
+    }
+
+    if (elements.form) {
+        elements.form.addEventListener('submit', function (event) {
+            if (!cart.length) {
+                event.preventDefault();
+                event.stopPropagation();
+                alert('يرجى إضافة منتجات إلى السلة قبل إتمام العملية.');
+                return;
+            }
+            updateSummary();
+            if (!elements.form.checkValidity()) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            elements.form.classList.add('was-validated');
+        });
+    }
+
+    // دالة الحصول على موقع المستخدم
+    const getLocationBtn = document.getElementById('posGetLocationBtn');
+    const latitudeInput = document.getElementById('posNewCustomerLatitude');
+    const longitudeInput = document.getElementById('posNewCustomerLongitude');
+    
+    if (getLocationBtn && latitudeInput && longitudeInput) {
+        getLocationBtn.addEventListener('click', function() {
+            if (!navigator.geolocation) {
+                alert('المتصفح لا يدعم الحصول على الموقع');
+                return;
+            }
+            
+            getLocationBtn.disabled = true;
+            getLocationBtn.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+            
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    latitudeInput.value = position.coords.latitude.toFixed(8);
+                    longitudeInput.value = position.coords.longitude.toFixed(8);
+                    getLocationBtn.disabled = false;
+                    getLocationBtn.innerHTML = '<i class="bi bi-geo-alt"></i>';
+                },
+                function(error) {
+                    alert('فشل الحصول على الموقع: ' + error.message);
+                    getLocationBtn.disabled = false;
+                    getLocationBtn.innerHTML = '<i class="bi bi-geo-alt"></i>';
+                }
+            );
+        });
+    }
+    
+    // تهيئة أولية للقيم
+    refreshPaymentOptionStates();
+    renderCart();
+    sanitizeSummaryDisplays();
+    
+    // عرض معلومات العميل المالية عند تحميل الصفحة
+    // استخدام setTimeout لضمان تحميل جميع العناصر
+    setTimeout(function() {
+        updateCustomerBalance();
+    }, 500);
+    
+    window.posDebugInfo = {
+        sanitizeNumber,
+        sanitizeSummaryDisplays,
+        formatCurrency,
+        elements,
+        cart,
+        inventory,
+        currencySymbol
+    };
+    console.info('[POS] Initialized', {
+        netTotal: elements.netTotal?.textContent,
+        dueAmount: elements.dueAmount?.textContent,
+        inventoryCount: inventory.length
+    });
+})();
+</script>
+
+<?php endif; ?>
+
+<!-- إدارة Modal الفاتورة ومنع Refresh -->
+<script>
+(function() {
+    <?php if (!empty($posInvoiceLinks['absolute_report_url'])): ?>
+    const invoiceUrl = <?php echo json_encode($posInvoiceLinks['absolute_report_url'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+    const invoicePrintUrl = <?php echo !empty($posInvoiceLinks['absolute_print_url']) ? json_encode($posInvoiceLinks['absolute_print_url'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : 'null'; ?>;
+    <?php else: ?>
+    const invoiceUrl = null;
+    const invoicePrintUrl = null;
+    <?php endif; ?>
+    
+    // دالة الطباعة
+    window.printInvoice = function() {
+        if (invoicePrintUrl) {
+            const printWindow = window.open(invoicePrintUrl, '_blank');
+            if (printWindow) {
+                printWindow.onload = function() {
+                    setTimeout(function() {
+                        printWindow.print();
+                    }, 500);
+                };
+            }
+        } else if (invoiceUrl) {
+            const printUrl = invoiceUrl + (invoiceUrl.includes('?') ? '&' : '?') + 'print=1';
+            const printWindow = window.open(printUrl, '_blank');
+            if (printWindow) {
+                printWindow.onload = function() {
+                    setTimeout(function() {
+                        printWindow.print();
+                    }, 500);
+                };
+            }
+        }
+    };
+    
+    // الانتظار حتى يتم تحميل DOM بالكامل
+    function initInvoiceModal() {
+        const invoiceModal = document.getElementById('posInvoiceModal');
+        
+        if (invoiceModal && invoiceUrl) {
+            // الانتظار حتى يتم تحميل Bootstrap
+            if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                // فتح Modal تلقائياً
+                try {
+                    const modal = new bootstrap.Modal(invoiceModal, {
+                        backdrop: 'static',
+                        keyboard: false
+                    });
+                    
+                    // طباعة الفاتورة تلقائياً عند فتح الـ modal
+                    invoiceModal.addEventListener('shown.bs.modal', function() {
+                        // تأخير بسيط للتأكد من تحميل المحتوى
+                        setTimeout(function() {
+                            if (typeof window.printInvoice === 'function') {
+                                console.log('[POS Invoice] Auto-printing invoice...');
+                                window.printInvoice();
+                            }
+                        }, 1000);
+                    }, { once: true });
+                    
+                    modal.show();
+                    
+                    console.log('[POS Invoice] Modal opened successfully');
+                    
+                    // عند إغلاق Modal، تنظيف URL لمنع refresh
+                    invoiceModal.addEventListener('hidden.bs.modal', function() {
+                        const currentUrl = new URL(window.location.href);
+                        currentUrl.searchParams.delete('success');
+                        currentUrl.searchParams.delete('error');
+                        window.history.replaceState({}, '', currentUrl.toString());
+                    });
+                } catch (error) {
+                    console.error('[POS Invoice] Error opening modal:', error);
+                    // محاولة مرة أخرى بعد قليل
+                    setTimeout(initInvoiceModal, 200);
+                }
+            } else {
+                // إذا لم يكن Bootstrap جاهزاً، ننتظر قليلاً ثم نحاول مرة أخرى
+                console.log('[POS Invoice] Waiting for Bootstrap...');
+                setTimeout(initInvoiceModal, 100);
+            }
+        }
+        
+        // منع refresh تلقائي عند وجود فاتورة
+        const successAlert = document.getElementById('successAlert');
+        const errorAlert = document.getElementById('errorAlert');
+        
+        // فقط إذا لم تكن هناك فاتورة، نفعل auto-refresh
+        if (!invoiceModal && (successAlert || errorAlert)) {
+            const alertElement = successAlert || errorAlert;
+            if (alertElement && alertElement.dataset.autoRefresh === 'true') {
+                setTimeout(function() {
+                    const currentUrl = new URL(window.location.href);
+                    currentUrl.searchParams.delete('success');
+                    currentUrl.searchParams.delete('error');
+                    window.location.href = currentUrl.toString();
+                }, 3000);
+            }
+        }
+    }
+    
+    // تشغيل الكود عند تحميل الصفحة
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initInvoiceModal);
+    } else {
+        // DOM محمّل بالفعل
+        initInvoiceModal();
+    }
+})();
+</script>
+

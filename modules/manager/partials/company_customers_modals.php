@@ -1,0 +1,186 @@
+<?php
+/**
+ * Modals for managing company customers (add / edit / delete).
+ */
+// التأكد من وجود المتغيرات المطلوبة
+if (!isset($dashboardScript)) {
+    $dashboardScript = basename($_SERVER['PHP_SELF'] ?? 'manager.php');
+}
+$formAction = getRelativeUrl($dashboardScript);
+?>
+
+<!-- Add Customer Modal -->
+<div class="modal fade" id="addCustomerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <form id="addCustomerForm" method="POST" action="<?php echo htmlspecialchars($formAction); ?>">
+                <input type="hidden" name="page" value="customers">
+                <input type="hidden" name="section" value="company">
+                <input type="hidden" name="action" value="add_company_customer">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-person-plus me-2"></i>إضافة عميل جديد</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">اسم العميل <span class="text-danger">*</span></label>
+                        <input type="text" name="name" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">رقم الهاتف</label>
+                        <input type="text" name="phone" class="form-control" maxlength="20">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">العنوان</label>
+                        <textarea name="address" class="form-control" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">الرصيد الحالي</label>
+                        <input type="number" name="balance" class="form-control" step="0.01" value="0">
+                        <div class="form-text">أدخل قيمة موجبة للديون الحالية (إن وجدت).</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">حفظ العميل</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Customer Modal -->
+<div class="modal fade" id="editCustomerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <form method="POST" action="<?php echo htmlspecialchars($formAction); ?>">
+                <input type="hidden" name="page" value="customers">
+                <input type="hidden" name="section" value="company">
+                <input type="hidden" name="action" value="edit_company_customer">
+                <input type="hidden" name="customer_id" value="">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>تعديل بيانات العميل</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">اسم العميل <span class="text-danger">*</span></label>
+                        <input type="text" name="name" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">رقم الهاتف</label>
+                        <input type="text" name="phone" class="form-control" maxlength="20">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">العنوان</label>
+                        <textarea name="address" class="form-control" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">الرصيد الحالي</label>
+                        <input type="number" name="balance" class="form-control" step="0.01">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">حفظ التعديلات</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Customer Modal -->
+<div class="modal fade" id="deleteCustomerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <form method="POST" action="<?php echo htmlspecialchars($formAction); ?>">
+                <input type="hidden" name="page" value="customers">
+                <input type="hidden" name="section" value="company">
+                <input type="hidden" name="action" value="delete_company_customer">
+                <input type="hidden" name="customer_id" value="">
+                <div class="modal-header">
+                    <h5 class="modal-title text-danger"><i class="bi bi-trash3 me-2"></i>حذف العميل</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-0">هل أنت متأكد من حذف العميل <strong class="delete-customer-name">-</strong>؟ لا يمكن التراجع عن هذه العملية.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-danger">تأكيد الحذف</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var editModal = document.getElementById('editCustomerModal');
+    var deleteModal = document.getElementById('deleteCustomerModal');
+    var addModal = document.getElementById('addCustomerModal');
+    var addForm = document.getElementById('addCustomerForm');
+
+    if (!editModal || !deleteModal) {
+        console.warn('Company customers modals not found in DOM');
+        return;
+    }
+
+    // معالجة إرسال نموذج إضافة العميل
+    if (addForm) {
+        addForm.addEventListener('submit', function(e) {
+            // التأكد من صحة البيانات قبل الإرسال
+            var nameInput = addForm.querySelector('input[name="name"]');
+            if (!nameInput || !nameInput.value || nameInput.value.trim() === '') {
+                e.preventDefault();
+                alert('يجب إدخال اسم العميل');
+                nameInput.focus();
+                return false;
+            }
+            
+            // السماح بإرسال النموذج بشكل طبيعي
+            return true;
+        });
+    }
+
+    // إعادة تعيين النموذج عند إغلاق الـ modal
+    if (addModal && addForm) {
+        addModal.addEventListener('hidden.bs.modal', function () {
+            addForm.reset();
+        });
+    }
+
+    editModal.addEventListener('show.bs.modal', function (event) {
+        var button = event.relatedTarget;
+        if (!button) {
+            return;
+        }
+
+        var customerId = button.getAttribute('data-customer-id') || '';
+        var customerName = button.getAttribute('data-customer-name') || '';
+        var customerPhone = button.getAttribute('data-customer-phone') || '';
+        var customerAddress = button.getAttribute('data-customer-address') || '';
+        var customerBalance = button.getAttribute('data-customer-balance') || '';
+
+        var modal = this;
+        modal.querySelector('input[name="customer_id"]').value = customerId;
+        modal.querySelector('input[name="name"]').value = customerName;
+        modal.querySelector('input[name="phone"]').value = customerPhone;
+        modal.querySelector('textarea[name="address"]').value = customerAddress;
+        modal.querySelector('input[name="balance"]').value = customerBalance;
+    });
+
+    deleteModal.addEventListener('show.bs.modal', function (event) {
+        var button = event.relatedTarget;
+        if (!button) {
+            return;
+        }
+        var customerId = button.getAttribute('data-customer-id') || '';
+        var customerName = button.getAttribute('data-customer-name') || '-';
+        var modal = this;
+        modal.querySelector('input[name="customer_id"]').value = customerId;
+        modal.querySelector('.delete-customer-name').textContent = customerName;
+    });
+});
+</script>
+

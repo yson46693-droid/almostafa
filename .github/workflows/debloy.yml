@@ -1,0 +1,56 @@
+name: Deploy to Thamara Cloud
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Deploy via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+        with:
+          server: 213.239.220.209
+          username: osama74
+          password: EqOxmFpp7rgu5!*9
+
+          protocol: ftp
+          port: 21
+          security: loose
+          timeout: 120000
+          log-level: standard
+
+          server-dir: /httpdocs/
+
+
+          # مهم: لا يحذف ملفات السيرفر 
+          dangerous-clean-slate: false
+
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/.github/**
+            **/node_modules/**
+            **/.env
+            **/.env.*
+            **/.vscode/**
+            **/.idea/**
+            **/README.md
+            **/*.log
+            **/backups/**
+            **/temp/**
+            **/tmp/**
+            **/.DS_Store
+            **/Thumbs.db
+            .gitignore
+            .editorconfig
+

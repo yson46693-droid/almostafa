@@ -1,0 +1,5865 @@
+<?php
+/**
+ * صفحة المنتجات النهائية - تعرض ما تم إنتاجه من خطوط الإنتاج
+ */
+
+if (!defined('ACCESS_ALLOWED')) {
+    die('Direct access not allowed');
+}
+
+require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/path_helper.php';
+require_once __DIR__ . '/../../includes/table_styles.php';
+require_once __DIR__ . '/../../includes/vehicle_inventory.php';
+require_once __DIR__ . '/../../includes/audit_log.php';
+
+requireRole(['production', 'accountant', 'manager', 'developer']);
+
+$currentUser = getCurrentUser();
+$db = db();
+$isManager = isset($currentUser['role']) && in_array($currentUser['role'], ['manager', 'developer'], true);
+$managerInventoryUrl = getRelativeUrl('manager.php?page=final_products');
+$productionInventoryUrl = getRelativeUrl('production.php?page=inventory');
+$finalProductsUrl = getRelativeUrl('production.php?page=final_products');
+$error = '';
+$success = '';
+
+if (!function_exists('productionSafeRedirect')) {
+    function productionSafeRedirect(string $url, array $redirectParams = [], ?string $role = null): void
+    {
+        $redirectUrl = (!empty($redirectParams) || $role !== null) ? null : $url;
+        preventDuplicateSubmission(null, $redirectParams, $redirectUrl, $role);
+    }
+}
+
+$sessionErrorKey = 'production_inventory_error';
+$sessionSuccessKey = 'production_inventory_success';
+
+// إنشاء token لمنع duplicate submission
+if (!isset($_SESSION['transfer_submission_token'])) {
+    $_SESSION['transfer_submission_token'] = bin2hex(random_bytes(32));
+}
+
+if (!empty($_SESSION[$sessionErrorKey])) {
+    $error = $_SESSION[$sessionErrorKey];
+    unset($_SESSION[$sessionErrorKey]);
+}
+
+if (!empty($_SESSION[$sessionSuccessKey])) {
+    $success = $_SESSION[$sessionSuccessKey];
+    unset($_SESSION[$sessionSuccessKey]);
+}
+
+// Ensure new columns for external products
+try {
+    $productTypeColumn = $db->queryOne("SHOW COLUMNS FROM products LIKE 'product_type'");
+    if (empty($productTypeColumn)) {
+        $db->execute("ALTER TABLE `products` ADD COLUMN `product_type` ENUM('internal','external') DEFAULT 'internal' AFTER `category`");
+        $db->execute("UPDATE products SET product_type = 'internal' WHERE product_type IS NULL OR product_type = ''");
+    }
+} catch (Exception $e) {
+    error_log('final_products: failed ensuring product_type column -> ' . $e->getMessage());
+}
+
+try {
+    $externalChannelColumn = $db->queryOne("SHOW COLUMNS FROM products LIKE 'external_channel'");
+    if (empty($externalChannelColumn)) {
+        $db->execute("ALTER TABLE `products` ADD COLUMN `external_channel` ENUM('company','delegate','other') DEFAULT NULL AFTER `product_type`");
+    }
+} catch (Exception $e) {
+    error_log('final_products: failed ensuring external_channel column -> ' . $e->getMessage());
+}
+
+$currentPageSlug = $_GET['page'] ?? 'inventory';
+$currentSection = $_GET['section'] ?? null;
+$baseQueryString = '?page=' . urlencode($currentPageSlug);
+if ($currentSection !== null && $currentSection !== '') {
+    $baseQueryString .= '&section=' . urlencode($currentSection);
+}
+
+$productionRedirectParams = [
+    'page' => $currentPageSlug ?: 'inventory',
+];
+if ($currentSection !== null && $currentSection !== '') {
+    $productionRedirectParams['section'] = $currentSection;
+}
+$productionRedirectRole = $currentUser['role'] ?? 'production';
+
+$managerRedirectParams = [
+    'page' => 'final_products',
+];
+if ($currentSection !== null && $currentSection !== '') {
+    $managerRedirectParams['section'] = $currentSection;
+}
+$managerRedirectRole = 'manager';
+
+// معالجة AJAX لجلب المنتجات من مخزن سيارة المندوب
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'get_vehicle_inventory' && isset($_GET['vehicle_id'])) {
+    header('Content-Type: application/json');
+    $salesRepId = intval($_GET['vehicle_id']);
+    
+    // الحصول على سيارة المندوب
+    $vehicle = $db->queryOne(
+        "SELECT v.id as vehicle_id FROM vehicles v WHERE v.driver_id = ? AND v.status = 'active'",
+        [$salesRepId]
+    );
+    
+    if (!$vehicle) {
+        echo json_encode(['success' => false, 'message' => 'لم يتم العثور على سيارة للمندوب']);
+        exit;
+    }
+    
+    $vehicleId = $vehicle['vehicle_id'];
+    $inventory = getVehicleInventory($vehicleId);
+    
+    // تحويل البيانات إلى تنسيق مناسب
+    $products = [];
+    foreach ($inventory as $item) {
+        $products[] = [
+            'product_id' => $item['product_id'] ?? 0,
+            'batch_id' => $item['finished_batch_id'] ?? 0,
+            'batch_number' => $item['finished_batch_number'] ?? $item['batch_number'] ?? '',
+            'product_name' => $item['product_name'] ?? 'غير محدد',
+            'quantity' => floatval($item['quantity'] ?? 0),
+            'unit' => $item['unit'] ?? $item['product_unit'] ?? 'قطعة'
+        ];
+    }
+    
+    echo json_encode(['success' => true, 'products' => $products]);
+    exit;
+}
+
+// معالجة طلبات AJAX لتحميل المنتجات
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'load_products') {
+    // تنظيف أي output buffer موجود
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-cache, must-revalidate');
+    
+    $warehouseId = isset($_GET['warehouse_id']) ? intval($_GET['warehouse_id']) : null;
+    
+    try {
+        // التأكد من تحميل الدوال المطلوبة
+        if (!function_exists('getFinishedProductBatchOptions')) {
+            require_once __DIR__ . '/../../includes/vehicle_inventory.php';
+        }
+        
+        $products = getFinishedProductBatchOptions(true, $warehouseId);
+        
+        // إضافة المنتجات الخارجية إلى القائمة
+        try {
+            $externalProducts = $db->query(
+                "SELECT id, name, quantity, unit, unit_price, status
+                 FROM products
+                 WHERE product_type = 'external' AND status = 'active' AND quantity > 0
+                 ORDER BY name ASC"
+            );
+            
+            foreach ($externalProducts as $extProduct) {
+                $productId = (int)($extProduct['id'] ?? 0);
+                $availableQuantity = (float)($extProduct['quantity'] ?? 0);
+                
+                // خصم الكمية المحجوزة في طلبات النقل المعلقة
+                if ($productId > 0 && $warehouseId && $availableQuantity > 0) {
+                    $pendingTransfers = $db->queryOne(
+                        "SELECT COALESCE(SUM(wti.quantity), 0) AS pending_quantity
+                         FROM warehouse_transfer_items wti
+                         INNER JOIN warehouse_transfers wt ON wt.id = wti.transfer_id
+                         WHERE wti.product_id = ? AND wti.batch_id IS NULL AND wt.from_warehouse_id = ? AND wt.status = 'pending'",
+                        [$productId, $warehouseId]
+                    );
+                    $availableQuantity -= (float)($pendingTransfers['pending_quantity'] ?? 0);
+                }
+                
+                if ($availableQuantity > 0) {
+                    $products[] = [
+                        'batch_id' => null,
+                        'product_id' => $productId,
+                        'product_name' => ($extProduct['name'] ?? '') . ' (منتج خارجي)',
+                        'batch_number' => '',
+                        'production_date' => null,
+                        'quantity_produced' => (float)($extProduct['quantity'] ?? 0),
+                        'quantity_available' => max(0, $availableQuantity),
+                        'warehouse_id' => $warehouseId,
+                        'is_external' => true,
+                        'unit' => $extProduct['unit'] ?? 'قطعة',
+                    ];
+                }
+            }
+        } catch (Exception $e) {
+            error_log('Error adding external products to AJAX response: ' . $e->getMessage());
+        }
+        
+        echo json_encode([
+            'success' => true,
+            'products' => $products
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    } catch (Exception $e) {
+        echo json_encode([
+            'success' => false,
+            'message' => $e->getMessage()
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+    exit;
+}
+
+/**
+ * دالة البحث عن كمية تشغيلة فعلية من جدول batch_numbers
+ * @param string $batchNumber رقم التشغيلة
+ * @return float|null الكمية الفعلية أو null إذا لم يتم العثور على التشغيلة
+ */
+if (!function_exists('getBatchActualQuantity')) {
+    function getBatchActualQuantity($batchNumber) {
+        if (empty($batchNumber) || !is_string($batchNumber)) {
+            return null;
+        }
+        
+        try {
+            $db = db();
+            
+            // التحقق من وجود جدول batch_numbers
+            $tableExists = $db->queryOne("SHOW TABLES LIKE 'batch_numbers'");
+            if (empty($tableExists)) {
+                error_log('getBatchActualQuantity: batch_numbers table does not exist');
+                return null;
+            }
+            
+            // البحث عن الكمية الفعلية للتشغيلة
+            $batch = $db->queryOne(
+                "SELECT `quantity` 
+                 FROM `batch_numbers` 
+                 WHERE `batch_number` = ? 
+                 ORDER BY `batch_numbers`.`quantity` ASC 
+                 LIMIT 1",
+                [trim($batchNumber)]
+            );
+            
+            if ($batch && isset($batch['quantity'])) {
+                $quantity = floatval($batch['quantity']);
+                return $quantity > 0 ? $quantity : null;
+            }
+            
+            return null;
+        } catch (Exception $e) {
+            error_log('getBatchActualQuantity error: ' . $e->getMessage());
+            return null;
+        }
+    }
+}
+
+/**
+ * دالة تحديث product_id في finished_products من batch_numbers
+ * لحل مشكلة التضارب عندما يكون product_id في finished_products = null
+ * @return int عدد السجلات المحدثة
+ */
+if (!function_exists('syncFinishedProductsProductId')) {
+    function syncFinishedProductsProductId() {
+        try {
+            $db = db();
+            
+            // التحقق من وجود الجداول
+            $finishedExists = $db->queryOne("SHOW TABLES LIKE 'finished_products'");
+            $batchExists = $db->queryOne("SHOW TABLES LIKE 'batch_numbers'");
+            
+            if (empty($finishedExists) || empty($batchExists)) {
+                return 0;
+            }
+            
+            // تحديث product_id في finished_products من batch_numbers بناءً على batch_number
+            $result = $db->execute(
+                "UPDATE finished_products fp
+                 INNER JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
+                 SET fp.product_id = bn.product_id
+                 WHERE fp.product_id IS NULL 
+                   AND bn.product_id IS NOT NULL 
+                   AND bn.product_id > 0"
+            );
+            
+            $updated = $result['affected_rows'] ?? 0;
+            
+            if ($updated > 0) {
+                error_log("syncFinishedProductsProductId: Updated {$updated} records in finished_products");
+            }
+            
+            return $updated;
+        } catch (Exception $e) {
+            error_log('syncFinishedProductsProductId error: ' . $e->getMessage());
+            return 0;
+        }
+    }
+}
+
+// معالجة تحديث السعر اليدوي للمنتجات النهائية
+
+// مزامنة product_id من batch_numbers إلى finished_products لحل التضارب
+syncFinishedProductsProductId();
+
+// التحقق من وجود عمود date أو production_date
+$dateColumnCheck = $db->queryOne("SHOW COLUMNS FROM production LIKE 'date'");
+$productionDateColumnCheck = $db->queryOne("SHOW COLUMNS FROM production LIKE 'production_date'");
+$hasDateColumn = !empty($dateColumnCheck);
+$hasProductionDateColumn = !empty($productionDateColumnCheck);
+$dateColumn = $hasDateColumn ? 'date' : ($hasProductionDateColumn ? 'production_date' : 'created_at');
+
+// التحقق من وجود عمود user_id أو worker_id
+$userIdColumnCheck = $db->queryOne("SHOW COLUMNS FROM production LIKE 'user_id'");
+$workerIdColumnCheck = $db->queryOne("SHOW COLUMNS FROM production LIKE 'worker_id'");
+$hasUserIdColumn = !empty($userIdColumnCheck);
+$hasWorkerIdColumn = !empty($workerIdColumnCheck);
+$userIdColumn = $hasUserIdColumn ? 'user_id' : ($hasWorkerIdColumn ? 'worker_id' : null);
+
+// معالجة طلبات AJAX لتفاصيل المنتج قبل أي إخراج
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'product_details') {
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+
+    header('Content-Type: application/json; charset=utf-8');
+
+    try {
+        $productId = intval($_GET['product_id'] ?? 0);
+        if ($productId <= 0) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'معرف المنتج غير صالح'
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $whereDetails = ["p.product_id = ?", "(p.status = 'completed' OR p.status = 'approved')"];
+        $detailsParams = [$productId];
+
+        $detailsSql = "SELECT 
+                            p.id,
+                            p.quantity,
+                            p.$dateColumn as production_date,
+                            p.created_at,
+                            p.status" .
+                        ($userIdColumn
+                            ? ", u.full_name as worker_name, u.username as worker_username"
+                            : ", 'غير محدد' as worker_name, 'غير محدد' as worker_username"
+                        ) .
+                        " FROM production p";
+
+        if ($userIdColumn) {
+            $detailsSql .= " LEFT JOIN users u ON p.$userIdColumn = u.id";
+        }
+
+        $detailsSql .= " WHERE " . implode(' AND ', $whereDetails) . "
+                         ORDER BY p.$dateColumn ASC";
+
+        $details = $db->query($detailsSql, $detailsParams);
+
+        $statusLabels = [
+            'pending' => 'معلق',
+            'approved' => 'موافق عليه',
+            'completed' => 'مكتمل',
+            'rejected' => 'مرفوض'
+        ];
+
+        $formattedDetails = array_map(function($detail) use ($statusLabels) {
+            return [
+                'id' => $detail['id'],
+                'quantity' => $detail['quantity'],
+                'date' => formatDate($detail['production_date'] ?? $detail['created_at']),
+                'worker' => $detail['worker_name'] ?? $detail['worker_username'] ?? 'غير محدد',
+                'status' => $detail['status'],
+                'status_text' => $statusLabels[$detail['status']] ?? $detail['status']
+            ];
+        }, $details ?? []);
+
+        echo json_encode([
+            'success' => true,
+            'details' => $formattedDetails
+        ], JSON_UNESCAPED_UNICODE);
+    } catch (Exception $e) {
+        error_log('Final products AJAX error: ' . $e->getMessage());
+        echo json_encode([
+            'success' => false,
+            'message' => 'حدث خطأ أثناء تحميل تفاصيل المنتج'
+        ], JSON_UNESCAPED_UNICODE);
+    }
+    exit;
+}
+
+// التحقق من وجود جدول production_lines وإنشاءه إذا لم يكن موجوداً
+$lineTableCheck = $db->queryOne("SHOW TABLES LIKE 'production_lines'");
+if (empty($lineTableCheck)) {
+    try {
+        $db->execute("
+            CREATE TABLE IF NOT EXISTS `production_lines` (
+              `id` int(11) NOT NULL AUTO_INCREMENT,
+              `line_name` varchar(100) NOT NULL,
+              `product_id` int(11) NOT NULL,
+              `target_quantity` decimal(10,2) DEFAULT 0.00,
+              `priority` enum('low','medium','high') DEFAULT 'medium',
+              `start_date` date DEFAULT NULL,
+              `end_date` date DEFAULT NULL,
+              `worker_id` int(11) DEFAULT NULL,
+              `created_by` int(11) NOT NULL,
+              `notes` text DEFAULT NULL,
+              `status` enum('pending','active','completed','paused','cancelled') DEFAULT 'pending',
+              `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              `updated_at` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+              PRIMARY KEY (`id`),
+              KEY `product_id` (`product_id`),
+              KEY `worker_id` (`worker_id`),
+              KEY `created_by` (`created_by`),
+              KEY `status` (`status`),
+              CONSTRAINT `production_lines_ibfk_1` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE,
+              CONSTRAINT `production_lines_ibfk_2` FOREIGN KEY (`worker_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+              CONSTRAINT `production_lines_ibfk_3` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+    } catch (Exception $e) {
+        error_log("Error creating production_lines table: " . $e->getMessage());
+    }
+}
+
+// التحقق من وجود عمود production_line_id في جدول production
+$productionLineIdColumn = $db->queryOne("SHOW COLUMNS FROM production LIKE 'production_line_id'");
+if (empty($productionLineIdColumn)) {
+    try {
+        $db->execute("ALTER TABLE `production` ADD COLUMN `production_line_id` int(11) DEFAULT NULL COMMENT 'خط الإنتاج'");
+        $db->execute("ALTER TABLE `production` ADD KEY `production_line_id` (`production_line_id`)");
+        $db->execute("ALTER TABLE `production` ADD CONSTRAINT `production_ibfk_line` FOREIGN KEY (`production_line_id`) REFERENCES `production_lines` (`id`) ON DELETE SET NULL");
+    } catch (Exception $e) {
+        error_log("Error adding production_line_id column: " . $e->getMessage());
+    }
+}
+
+$warehousesTableExists = $db->queryOne("SHOW TABLES LIKE 'warehouses'");
+$primaryWarehouse = null;
+$transferWarehouses = [];
+$destinationWarehouses = [];
+$finishedProductOptions = [];
+$hasDestinationWarehouses = false;
+$hasFinishedBatches = false;
+$canCreateTransfers = false;
+
+if (!empty($warehousesTableExists)) {
+    try {
+        $primaryWarehouse = $db->queryOne(
+            "SELECT id, name, location, description, warehouse_type, status
+             FROM warehouses
+             WHERE warehouse_type = 'main'
+             ORDER BY status = 'active' DESC, id ASC
+             LIMIT 1"
+        );
+
+        if (!$primaryWarehouse) {
+            $db->execute(
+                "INSERT INTO warehouses (name, location, description, warehouse_type, status)
+                 VALUES (?, ?, ?, 'main', 'active')",
+                [
+                    'المخزن الرئيسي',
+                    'الموقع الرئيسي للشركة',
+                    'تم إنشاء هذا المخزن تلقائياً كمخزن رئيسي للنظام'
+                ]
+            );
+
+            $primaryWarehouseId = $db->getLastInsertId();
+            $primaryWarehouse = $db->queryOne(
+                "SELECT id, name, location, description, warehouse_type, status
+                 FROM warehouses
+                 WHERE id = ?",
+                [$primaryWarehouseId]
+            );
+
+            if (!empty($currentUser['id'])) {
+                logAudit($currentUser['id'], 'create_warehouse', 'warehouse', $primaryWarehouseId, null, [
+                    'auto_created' => true,
+                    'source' => 'production_inventory'
+                ]);
+            }
+        }
+
+        if ($primaryWarehouse) {
+            $productsWithoutWarehouse = $db->queryOne(
+                "SELECT COUNT(*) as total FROM products WHERE warehouse_id IS NULL AND (product_type IS NULL OR product_type = 'internal')"
+            );
+
+            if (($productsWithoutWarehouse['total'] ?? 0) > 0) {
+                $db->execute(
+                    "UPDATE products SET warehouse_id = ? WHERE warehouse_id IS NULL AND (product_type IS NULL OR product_type = 'internal')",
+                    [$primaryWarehouse['id']]
+                );
+            }
+        }
+
+        $transferWarehouses = $db->query(
+            "SELECT w.id, w.name, w.warehouse_type, w.status,
+                    v.vehicle_number, v.driver_id,
+                    u.full_name as rep_name, u.username as rep_username
+             FROM warehouses w
+             LEFT JOIN vehicles v ON w.vehicle_id = v.id AND w.warehouse_type = 'vehicle'
+             LEFT JOIN users u ON v.driver_id = u.id
+             WHERE w.status = 'active'
+             ORDER BY (w.id = ?) DESC, w.warehouse_type ASC, w.name ASC",
+            [$primaryWarehouse['id'] ?? 0]
+        );
+
+        if (is_array($transferWarehouses)) {
+            foreach ($transferWarehouses as $warehouse) {
+                if ($primaryWarehouse && intval($warehouse['id']) === intval($primaryWarehouse['id'])) {
+                    continue;
+                }
+                $destinationWarehouses[] = $warehouse;
+            }
+        }
+
+        $finishedProductOptions = [];
+        if ($primaryWarehouse && !empty($primaryWarehouse['id'])) {
+            // استخدام quantity_produced مباشرة من finished_products لأنها تحتوي على الكمية الصحيحة
+            // نخصم فقط الكميات المحجوزة في طلبات النقل المعلقة (pending)
+            $finishedExists = $db->queryOne("SHOW TABLES LIKE 'finished_products'");
+            if (!empty($finishedExists)) {
+                $finishedProductsRows = $db->query("
+                    SELECT
+                        fp.id AS batch_id,
+                        COALESCE(fp.product_id, bn.product_id) AS product_id,
+                        COALESCE(NULLIF(TRIM(fp.product_name), ''), p.name, 'غير محدد') AS product_name,
+                        fp.batch_number,
+                        fp.production_date,
+                        fp.quantity_produced,
+                        p.name AS original_product_name
+                    FROM finished_products fp
+                    LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
+                    LEFT JOIN products p ON COALESCE(fp.product_id, bn.product_id) = p.id
+                    WHERE fp.quantity_produced > 0
+                    GROUP BY fp.id, COALESCE(fp.product_id, bn.product_id), fp.product_name, fp.batch_number, fp.production_date, fp.quantity_produced, p.name
+                    ORDER BY fp.production_date DESC, product_name ASC, fp.batch_number ASC
+                ") ?? [];
+                
+                foreach ($finishedProductsRows as $row) {
+                    $batchId = (int)$row['batch_id'];
+                    $productId = isset($row['product_id']) && $row['product_id'] !== null ? (int)$row['product_id'] : null;
+                    $availableQuantity = (float)($row['quantity_produced'] ?? 0);
+                    
+                    // خصم فقط الكمية المحجوزة في طلبات النقل المعلقة (pending) من المخزن الرئيسي
+                    if ($batchId > 0 && $availableQuantity > 0) {
+                        $pendingTransfers = $db->queryOne(
+                            "SELECT COALESCE(SUM(wti.quantity), 0) AS pending_quantity
+                             FROM warehouse_transfer_items wti
+                             INNER JOIN warehouse_transfers wt ON wt.id = wti.transfer_id
+                             WHERE wti.batch_id = ? AND wt.from_warehouse_id = ? AND wt.status = 'pending'",
+                            [$batchId, $primaryWarehouse['id']]
+                        );
+                        $availableQuantity -= (float)($pendingTransfers['pending_quantity'] ?? 0);
+                    }
+                    
+                    // استخدام اسم المنتج من finished_products أو products
+                    $productName = $row['product_name'] ?? 'غير محدد';
+                    if ($productName === 'غير محدد' && !empty($row['original_product_name'])) {
+                        $productName = $row['original_product_name'];
+                    }
+                    
+                    if ($availableQuantity > 0) {
+                        $finishedProductOptions[] = [
+                            'batch_id' => $batchId,
+                            'product_id' => $productId,
+                            'product_name' => $productName,
+                            'batch_number' => $row['batch_number'] ?? '',
+                            'production_date' => $row['production_date'] ?? null,
+                            'quantity_produced' => (float)$row['quantity_produced'],
+                            'quantity_available' => max(0, $availableQuantity),
+                            'warehouse_id' => $primaryWarehouse['id'],
+                        ];
+                    }
+                }
+            }
+            
+            // إضافة المنتجات الخارجية إلى قائمة المنتجات المتاحة للنقل
+            if ($primaryWarehouse && !empty($primaryWarehouse['id'])) {
+                try {
+                    $externalProductsForTransfer = $db->query(
+                        "SELECT id, name, quantity, unit, unit_price, status
+                         FROM products
+                         WHERE product_type = 'external' AND status = 'active' AND quantity > 0
+                         ORDER BY name ASC"
+                    );
+                    
+                    foreach ($externalProductsForTransfer as $extProduct) {
+                        $productId = (int)($extProduct['id'] ?? 0);
+                        $availableQuantity = (float)($extProduct['quantity'] ?? 0);
+                        
+                        // خصم الكمية المحجوزة في طلبات النقل المعلقة
+                        if ($productId > 0 && $availableQuantity > 0) {
+                            $pendingTransfers = $db->queryOne(
+                                "SELECT COALESCE(SUM(wti.quantity), 0) AS pending_quantity
+                                 FROM warehouse_transfer_items wti
+                                 INNER JOIN warehouse_transfers wt ON wt.id = wti.transfer_id
+                                 WHERE wti.product_id = ? AND wti.batch_id IS NULL AND wt.from_warehouse_id = ? AND wt.status = 'pending'",
+                                [$productId, $primaryWarehouse['id']]
+                            );
+                            $availableQuantity -= (float)($pendingTransfers['pending_quantity'] ?? 0);
+                        }
+                        
+                        if ($availableQuantity > 0) {
+                            $finishedProductOptions[] = [
+                                'batch_id' => null, // المنتجات الخارجية لا تحتوي على batch_id
+                                'product_id' => $productId,
+                                'product_name' => ($extProduct['name'] ?? '') . ' (منتج خارجي)',
+                                'batch_number' => '', // لا يوجد رقم تشغيلة
+                                'production_date' => null,
+                                'quantity_produced' => (float)($extProduct['quantity'] ?? 0),
+                                'quantity_available' => max(0, $availableQuantity),
+                                'warehouse_id' => $primaryWarehouse['id'],
+                                'is_external' => true, // علامة للمنتجات الخارجية
+                                'unit' => $extProduct['unit'] ?? 'قطعة',
+                            ];
+                        }
+                    }
+                } catch (Exception $e) {
+                    error_log('Error adding external products to transfer options: ' . $e->getMessage());
+                }
+            }
+        }
+        $hasDestinationWarehouses = !empty($destinationWarehouses);
+        $hasFinishedBatches = !empty($finishedProductOptions);
+
+        $canCreateTransfers = !empty($primaryWarehouse) && $hasDestinationWarehouses && $hasFinishedBatches;
+    } catch (Exception $warehouseException) {
+        error_log('Production inventory warehouse setup error: ' . $warehouseException->getMessage());
+    }
+}
+
+// الحصول على قائمة المندوبين (sales reps) الذين لديهم سيارات
+$salesReps = [];
+try {
+    $salesReps = $db->query(
+        "SELECT DISTINCT u.id, u.full_name, u.username, v.id as vehicle_id, v.vehicle_number
+         FROM users u
+         INNER JOIN vehicles v ON v.driver_id = u.id
+         WHERE u.role = 'sales' AND u.status = 'active' AND v.status = 'active'
+         ORDER BY u.full_name ASC"
+    );
+} catch (Exception $e) {
+    error_log('Error fetching sales reps: ' . $e->getMessage());
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $postAction = $_POST['action'] ?? '';
+
+    if ($postAction === 'create_transfer') {
+        // التحقق من duplicate submission باستخدام session token
+        $submissionToken = $_POST['transfer_token'] ?? '';
+        $sessionTokenKey = 'transfer_submission_token';
+        $storedToken = $_SESSION[$sessionTokenKey] ?? null;
+        
+        if ($submissionToken === '' || $submissionToken !== $storedToken) {
+            // إما لم يتم إرسال token أو token غير صحيح (duplicate submission)
+            $errorMessage = 'تم إرسال هذا الطلب مسبقاً. يرجى عدم إعادة تحميل الصفحة.';
+            
+            // التحقق من أن الطلب هو AJAX request
+            $isAjaxRequest = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && 
+                            strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+            
+            if ($isAjaxRequest) {
+                // تنظيف أي output buffer موجود قبل إرسال JSON
+                while (ob_get_level() > 0) {
+                    ob_end_clean();
+                }
+                header('Content-Type: application/json; charset=utf-8');
+                http_response_code(400);
+                echo json_encode([
+                    'success' => false,
+                    'message' => $errorMessage
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
+            } else {
+                $_SESSION[$sessionErrorKey] = $errorMessage;
+                productionSafeRedirect($productionInventoryUrl, $productionRedirectParams, $productionRedirectRole);
+                exit;
+            }
+        }
+        
+        // حذف token فوراً بعد التحقق منه لمنع الإرسال المزدوج
+        unset($_SESSION[$sessionTokenKey]);
+        
+        $transferErrors = [];
+
+        if (!$canCreateTransfers || !$primaryWarehouse) {
+            $transferErrors[] = 'لا يمكن إنشاء طلب النقل حالياً بسبب عدم توفر مخزن رئيسي أو مخازن وجهة نشطة.';
+        } else {
+            $fromWarehouseId = intval($primaryWarehouse['id']);
+            $toWarehouseId = intval($_POST['to_warehouse_id'] ?? 0);
+            $transferDate = $_POST['transfer_date'] ?? date('Y-m-d');
+            $reason = trim((string)($_POST['reason'] ?? ''));
+            $notes = trim((string)($_POST['notes'] ?? ''));
+
+            if ($toWarehouseId <= 0) {
+                $transferErrors[] = 'يرجى اختيار المخزن الوجهة.';
+            }
+
+            if ($toWarehouseId === $fromWarehouseId) {
+                $transferErrors[] = 'لا يمكن النقل من وإلى نفس المخزن.';
+            }
+
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $transferDate)) {
+                $transferDate = date('Y-m-d');
+            }
+
+            $rawItems = $_POST['items'] ?? [];
+            $transferItems = [];
+
+            if (is_array($rawItems)) {
+                foreach ($rawItems as $item) {
+                    $productId = isset($item['product_id']) ? intval($item['product_id']) : 0;
+                    $quantity = isset($item['quantity']) ? floatval($item['quantity']) : 0.0;
+                    $itemNotes = isset($item['notes']) ? trim((string)$item['notes']) : null;
+                    $batchId = isset($item['batch_id']) ? intval($item['batch_id']) : 0;
+                    $batchNumber = isset($item['batch_number']) ? trim((string)$item['batch_number']) : '';
+
+                    if ($quantity > 0 && ($productId > 0 || $batchId > 0)) {
+                        $transferItems[] = [
+                            'product_id' => $productId > 0 ? $productId : null,
+                            'batch_id' => $batchId > 0 ? $batchId : null,
+                            'batch_number' => $batchNumber !== '' ? $batchNumber : null,
+                            'quantity' => round($quantity, 4),
+                            'notes' => $itemNotes !== '' ? $itemNotes : null,
+                        ];
+                    }
+                }
+            }
+
+            if (empty($transferItems)) {
+                $transferErrors[] = 'أضف منتجاً واحداً على الأقل مع كمية صالحة.';
+            }
+
+            if (empty($transferErrors)) {
+                // محاولة تعيين معرف المنتج تلقائياً للتشغيلات المختارة إن لم يتم إرساله من الواجهة
+                $resolveBatchIds = [];
+                foreach ($transferItems as $transferItem) {
+                    $productId = isset($transferItem['product_id']) ? (int)$transferItem['product_id'] : 0;
+                    $batchId = isset($transferItem['batch_id']) ? (int)$transferItem['batch_id'] : 0;
+                    if ($productId <= 0 && $batchId > 0) {
+                        $resolveBatchIds[$batchId] = $batchId;
+                    }
+                }
+
+                $batchProductMap = [];
+                if (!empty($resolveBatchIds)) {
+                    $placeholders = implode(',', array_fill(0, count($resolveBatchIds), '?'));
+                    $batchRows = $db->query(
+                        "SELECT id, product_id FROM finished_products WHERE id IN ($placeholders)",
+                        array_values($resolveBatchIds)
+                    );
+                    foreach ($batchRows as $batchRow) {
+                        $batchId = (int)($batchRow['id'] ?? 0);
+                        $productId = (int)($batchRow['product_id'] ?? 0);
+                        if ($batchId > 0 && $productId > 0) {
+                            $batchProductMap[$batchId] = $productId;
+                        }
+                    }
+                }
+
+                foreach ($transferItems as &$transferItem) {
+                    $productId = isset($transferItem['product_id']) ? (int)$transferItem['product_id'] : 0;
+                    if ($productId > 0) {
+                        continue;
+                    }
+                    $batchId = isset($transferItem['batch_id']) ? (int)$transferItem['batch_id'] : 0;
+                    if ($batchId > 0 && isset($batchProductMap[$batchId])) {
+                        $transferItem['product_id'] = $batchProductMap[$batchId];
+                        continue;
+                    }
+                    if ($batchId <= 0) {
+                        $transferErrors[] = 'المنتج المحدد غير صالح للنقل.';
+                        break;
+                    }
+
+                    // إبقاء المنتج بدون معرف، وسيتم ربطه لاحقاً أثناء إنشاء طلب النقل
+                    $transferItem['product_id'] = null;
+                }
+                unset($transferItem);
+
+                if (empty($transferErrors)) {
+                    // حساب الكمية المتاحة لكل منتج/تشغيلة
+                    $availabilityMap = [];
+                    
+                    foreach ($transferItems as $transferItem) {
+                        $productId = isset($transferItem['product_id']) ? (int)$transferItem['product_id'] : 0;
+                        $batchId = isset($transferItem['batch_id']) ? (int)($transferItem['batch_id'] ?? 0) : 0;
+                        
+                        if ($productId <= 0 && $batchId <= 0) {
+                            continue;
+                        }
+                        
+                        $availableQuantity = 0.0;
+                        $productName = 'منتج غير معروف';
+                        
+                        // إذا كان هناك batch_id، نستخدم quantity_produced من finished_products أولاً
+                        // لأن الكمية الفعلية للمنتجات النهائية موجودة في finished_products وليس في products
+                        if ($batchId > 0) {
+                            $finishedRow = $db->queryOne(
+                                "SELECT fp.quantity_produced, 
+                                        COALESCE(p.name, fp.product_name) as product_name,
+                                        fp.product_id
+                                 FROM finished_products fp
+                                 LEFT JOIN products p ON fp.product_id = p.id
+                                 WHERE fp.id = ?",
+                                [$batchId]
+                            );
+                            
+                            if ($finishedRow) {
+                                // quantity_produced يحتوي بالفعل على الكمية الفعلية المتبقية بعد جميع النقلات والإرجاعات
+                                // لأنه يتم تحديثه عند النقل (خصم) وعند الإرجاع (إضافة)
+                                // لذلك نستخدمه مباشرة دون خصم النقلات المعتمدة
+                                $availableQuantity = (float)($finishedRow['quantity_produced'] ?? 0);
+                                $productName = $finishedRow['product_name'] ?? 'منتج غير محدد';
+                                
+                                // إذا لم يكن هناك product_id، نستخدم product_id من finished_products
+                                if ($productId <= 0 && !empty($finishedRow['product_id'])) {
+                                    $productId = (int)$finishedRow['product_id'];
+                                }
+                                
+                                // خصم فقط الكمية المحجوزة في طلبات النقل المعلقة (pending) من نفس المخزن
+                                // لأن الكميات المنقولة (approved أو completed) تم خصمها بالفعل من quantity_produced
+                                // والكميات المرجعة تم إضافتها بالفعل إلى quantity_produced
+                                $pendingTransfers = $db->queryOne(
+                                    "SELECT COALESCE(SUM(wti.quantity), 0) AS pending_quantity
+                                     FROM warehouse_transfer_items wti
+                                     INNER JOIN warehouse_transfers wt ON wt.id = wti.transfer_id
+                                     WHERE wti.batch_id = ? AND wt.from_warehouse_id = ? AND wt.status = 'pending'",
+                                    [$batchId, $fromWarehouseId]
+                                );
+                                $availableQuantity -= (float)($pendingTransfers['pending_quantity'] ?? 0);
+                                
+                                $availabilityMap[$productId . '_' . $batchId] = [
+                                    'product_id' => $productId,
+                                    'batch_id' => $batchId,
+                                    'available' => max(0, $availableQuantity),
+                                    'name' => $productName
+                                ];
+                            } else {
+                                // إذا لم يكن هناك batch، نستخدم products.quantity كبديل (يشمل المنتجات الداخلية والخارجية)
+                                if ($productId > 0) {
+                                    $productRow = $db->queryOne(
+                                        "SELECT id, name, quantity, product_type FROM products WHERE id = ? AND status = 'active'",
+                                        [$productId]
+                                    );
+                                    
+                                    if ($productRow) {
+                                        $availableQuantity = (float)($productRow['quantity'] ?? 0);
+                                        $productName = $productRow['name'] ?? '';
+                                        $isExternal = ($productRow['product_type'] ?? '') === 'external';
+                                        
+                                        // خصم الكمية المحجوزة في طلبات النقل المعلقة (pending) من نفس المخزن
+                                        // للمنتجات الخارجية، نتحقق من batch_id IS NULL
+                                        if ($isExternal) {
+                                            $pendingTransfers = $db->queryOne(
+                                                "SELECT COALESCE(SUM(wti.quantity), 0) AS pending_quantity
+                                                 FROM warehouse_transfer_items wti
+                                                 INNER JOIN warehouse_transfers wt ON wt.id = wti.transfer_id
+                                                 WHERE wti.product_id = ? AND wti.batch_id IS NULL AND wt.from_warehouse_id = ? AND wt.status = 'pending'",
+                                                [$productId, $fromWarehouseId]
+                                            );
+                                        } else {
+                                            $pendingTransfers = $db->queryOne(
+                                                "SELECT COALESCE(SUM(wti.quantity), 0) AS pending_quantity
+                                                 FROM warehouse_transfer_items wti
+                                                 INNER JOIN warehouse_transfers wt ON wt.id = wti.transfer_id
+                                                 WHERE wti.product_id = ? AND wt.from_warehouse_id = ? AND wt.status = 'pending'",
+                                                [$productId, $fromWarehouseId]
+                                            );
+                                        }
+                                        $availableQuantity -= (float)($pendingTransfers['pending_quantity'] ?? 0);
+                                        
+                                        $availabilityMap[$productId . '_' . $batchId] = [
+                                            'product_id' => $productId,
+                                            'batch_id' => $batchId,
+                                            'available' => max(0, $availableQuantity),
+                                            'name' => $productName
+                                        ];
+                                    }
+                                }
+                            }
+                        } elseif ($productId > 0) {
+                            // إذا لم يكن هناك batch_id، نستخدم products.quantity (يشمل المنتجات الداخلية والخارجية)
+                            $productRow = $db->queryOne(
+                                "SELECT id, name, quantity, product_type FROM products WHERE id = ? AND status = 'active'",
+                                [$productId]
+                            );
+                            
+                            if ($productRow) {
+                                $availableQuantity = (float)($productRow['quantity'] ?? 0);
+                                $productName = $productRow['name'] ?? '';
+                                $isExternal = ($productRow['product_type'] ?? '') === 'external';
+                                
+                                // خصم الكمية المحجوزة في طلبات النقل المعلقة (pending) من نفس المخزن
+                                // للمنتجات الخارجية، نتحقق من batch_id IS NULL
+                                if ($isExternal) {
+                                    $pendingTransfers = $db->queryOne(
+                                        "SELECT COALESCE(SUM(wti.quantity), 0) AS pending_quantity
+                                         FROM warehouse_transfer_items wti
+                                         INNER JOIN warehouse_transfers wt ON wt.id = wti.transfer_id
+                                         WHERE wti.product_id = ? AND wti.batch_id IS NULL AND wt.from_warehouse_id = ? AND wt.status = 'pending'",
+                                        [$productId, $fromWarehouseId]
+                                    );
+                                } else {
+                                    $pendingTransfers = $db->queryOne(
+                                        "SELECT COALESCE(SUM(wti.quantity), 0) AS pending_quantity
+                                         FROM warehouse_transfer_items wti
+                                         INNER JOIN warehouse_transfers wt ON wt.id = wti.transfer_id
+                                         WHERE wti.product_id = ? AND wt.from_warehouse_id = ? AND wt.status = 'pending'",
+                                        [$productId, $fromWarehouseId]
+                                    );
+                                }
+                                $availableQuantity -= (float)($pendingTransfers['pending_quantity'] ?? 0);
+                                
+                                $availabilityMap[$productId . '_' . $batchId] = [
+                                    'product_id' => $productId,
+                                    'batch_id' => $batchId,
+                                    'available' => max(0, $availableQuantity),
+                                    'name' => $productName
+                                ];
+                            }
+                        }
+                    }
+                    
+                    // التحقق من الكميات المتاحة
+                    foreach ($transferItems as $transferItem) {
+                        $productId = isset($transferItem['product_id']) ? (int)$transferItem['product_id'] : 0;
+                        $batchId = isset($transferItem['batch_id']) ? (int)($transferItem['batch_id'] ?? 0) : 0;
+                        $requestedQuantity = (float)($transferItem['quantity'] ?? 0);
+                        
+                        if ($productId <= 0 && $batchId <= 0) {
+                            $transferErrors[] = 'المنتج المحدد غير صالح للنقل.';
+                            break;
+                        }
+                        
+                        $key = $productId . '_' . $batchId;
+                        if (!isset($availabilityMap[$key])) {
+                            $transferErrors[] = 'المنتج المحدد غير موجود في المخزن الرئيسي.';
+                            break;
+                        }
+                        
+                        $available = $availabilityMap[$key]['available'];
+                        $productName = $availabilityMap[$key]['name'];
+                        
+                        if ($requestedQuantity > $available + 0.0001) { // إضافة هامش صغير للأخطاء العشرية
+                            $transferErrors[] = sprintf(
+                                'الكمية المطلوبة للمنتج "%s" (%.2f) غير متاحة في المخزون الحالي. المتاح: %.2f',
+                                $productName,
+                                $requestedQuantity,
+                                $available
+                            );
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (empty($transferErrors)) {
+                $result = createWarehouseTransfer(
+                    $fromWarehouseId,
+                    $toWarehouseId,
+                    $transferDate,
+                    array_map(static function ($item) {
+                        return [
+                            'product_id' => $item['product_id'],
+                            'batch_id' => $item['batch_id'] ?? null,
+                            'batch_number' => $item['batch_number'] ?? null,
+                            'quantity' => $item['quantity'],
+                            'notes' => $item['notes'] ?? null,
+                        ];
+                    }, $transferItems),
+                    $reason !== '' ? $reason : null,
+                    $notes !== '' ? $notes : null,
+                    $currentUser['id'] ?? null
+                );
+
+                // التحقق من نجاح العملية - التحقق أولاً من وجود transfer_id و transfer_number
+                $transferId = $result['transfer_id'] ?? null;
+                $transferNumber = $result['transfer_number'] ?? null;
+                
+                // التحقق من إدراج العناصر بشكل صحيح
+                if (!empty($transferId)) {
+                    $insertedItemsCheck = $db->queryOne(
+                        "SELECT COUNT(*) as count FROM warehouse_transfer_items WHERE transfer_id = ?",
+                        [$transferId]
+                    );
+                    $insertedCount = (int)($insertedItemsCheck['count'] ?? 0);
+                    $expectedCount = count($transferItems);
+                    
+                    error_log("Transfer created - ID: $transferId, Items inserted: $insertedCount out of $expectedCount");
+                    
+                    // إذا لم يتم إدراج العناصر، نحاول إدراجها يدوياً
+                    if ($insertedCount === 0 && !empty($transferItems)) {
+                        error_log("WARNING: No items were inserted for transfer ID $transferId! Attempting manual insertion...");
+                        
+                        foreach ($transferItems as $item) {
+                            $productId = isset($item['product_id']) ? (int)$item['product_id'] : null;
+                            $batchId = isset($item['batch_id']) ? (int)$item['batch_id'] : null;
+                            $quantity = (float)($item['quantity'] ?? 0);
+                            $batchNumber = isset($item['batch_number']) ? trim((string)$item['batch_number']) : null;
+                            $itemNotes = isset($item['notes']) ? trim((string)$item['notes']) : null;
+                            
+                            if ($quantity <= 0) {
+                                continue;
+                            }
+                            
+                            // إذا لم يكن هناك product_id، نحاول الحصول عليه من batch_id
+                            if ($productId <= 0 && $batchId > 0) {
+                                $batchRow = $db->queryOne("SELECT product_id FROM finished_products WHERE id = ?", [$batchId]);
+                                if ($batchRow && !empty($batchRow['product_id'])) {
+                                    $productId = (int)$batchRow['product_id'];
+                                }
+                            }
+                            
+                            // إذا لم يكن هناك product_id، نحاول إنشاؤه من batch
+                            if ($productId <= 0 && $batchId > 0) {
+                                $batchRow = $db->queryOne(
+                                    "SELECT product_name FROM finished_products WHERE id = ?",
+                                    [$batchId]
+                                );
+                                if ($batchRow && !empty($batchRow['product_name'])) {
+                                    $batchProductName = trim($batchRow['product_name']);
+                                    $existingProduct = $db->queryOne(
+                                        "SELECT id FROM products WHERE name = ? LIMIT 1",
+                                        [$batchProductName]
+                                    );
+                                    if ($existingProduct && !empty($existingProduct['id'])) {
+                                        $productId = (int)$existingProduct['id'];
+                                    } else {
+                                        // إنشاء منتج جديد
+                                        $productTypeColumnExists = $db->queryOne("SHOW COLUMNS FROM products LIKE 'product_type'");
+                                        $productTypeColumnExists = !empty($productTypeColumnExists);
+                                        
+                                        $columns = ['name', 'category', 'quantity', 'unit', 'description', 'status'];
+                                        $placeholders = ['?', "'منتجات نهائية'", '0', "'قطعة'", "'تم إنشاؤه تلقائياً من تشغيلات الإنتاج'", "'active'"];
+                                        $values = [$batchProductName];
+                                        
+                                        if ($productTypeColumnExists) {
+                                            $columns[] = 'product_type';
+                                            $placeholders[] = '?';
+                                            $values[] = 'internal';
+                                        }
+                                        
+                                        $insertSql = sprintf(
+                                            "INSERT INTO products (%s) VALUES (%s)",
+                                            implode(', ', $columns),
+                                            implode(', ', $placeholders)
+                                        );
+                                        $insertResult = $db->execute($insertSql, $values);
+                                        $productId = (int)($insertResult['insert_id'] ?? 0);
+                                    }
+                                }
+                            }
+                            
+                            // إذا كان هناك product_id الآن، نقوم بإدراج العنصر
+                            if ($productId > 0) {
+                                try {
+                                    $db->execute(
+                                        "INSERT INTO warehouse_transfer_items (transfer_id, product_id, batch_id, batch_number, quantity, notes)
+                                         VALUES (?, ?, ?, ?, ?, ?)",
+                                        [
+                                            $transferId,
+                                            $productId,
+                                            $batchId ?: null,
+                                            $batchNumber ?: null,
+                                            $quantity,
+                                            $itemNotes ?: null
+                                        ]
+                                    );
+                                    error_log("Manually inserted item for transfer ID $transferId: product_id=$productId, batch_id=" . ($batchId ?? 'NULL') . ", quantity=$quantity");
+                                } catch (Exception $insertError) {
+                                    error_log("Error manually inserting item for transfer ID $transferId: " . $insertError->getMessage());
+                                }
+                            } else {
+                                error_log("WARNING: Could not determine product_id for item in transfer ID $transferId. Batch ID: " . ($batchId ?? 'NULL'));
+                            }
+                        }
+                        
+                        // التحقق مرة أخرى بعد الإدراج اليدوي
+                        $finalItemsCheck = $db->queryOne(
+                            "SELECT COUNT(*) as count FROM warehouse_transfer_items WHERE transfer_id = ?",
+                            [$transferId]
+                        );
+                        $finalCount = (int)($finalItemsCheck['count'] ?? 0);
+                        error_log("After manual insertion - Transfer ID $transferId has $finalCount items");
+                    }
+                }
+                
+                // التحقق من قاعدة البيانات للتأكد من وجود الطلب فعلياً
+                // حتى لو كان success => false، نتحقق من قاعدة البيانات
+                $verifyTransfer = null;
+                if (!empty($transferId)) {
+                    $verifyTransfer = $db->queryOne(
+                        "SELECT id, transfer_number FROM warehouse_transfers WHERE id = ?",
+                        [$transferId]
+                    );
+                } elseif (!empty($transferNumber)) {
+                    // إذا لم يكن هناك transfer_id، نحاول البحث بـ transfer_number
+                    $verifyTransfer = $db->queryOne(
+                        "SELECT id, transfer_number FROM warehouse_transfers WHERE transfer_number = ?",
+                        [$transferNumber]
+                    );
+                }
+                
+                if ($verifyTransfer) {
+                    // الطلب موجود في قاعدة البيانات - نجح الإنشاء فعلياً
+                    $transferId = (int)$verifyTransfer['id'];
+                    $transferNumber = $verifyTransfer['transfer_number'];
+                    error_log("Transfer verified in database: ID=$transferId, Number=$transferNumber");
+                } else {
+                    // الطلب غير موجود - نستخدم القيم من النتيجة إذا كانت موجودة
+                    if (empty($transferId) && empty($transferNumber)) {
+                        // لا توجد قيم على الإطلاق - فشل حقيقي
+                        error_log("No transfer ID or number in result: " . json_encode($result));
+                    } else {
+                        // قد يكون هناك تأخير في قاعدة البيانات - نستخدم القيم من النتيجة
+                        error_log("Transfer not found in database but ID/Number exists in result. ID=$transferId, Number=$transferNumber");
+                    }
+                }
+                
+                // إذا كان الطلب تم إنشاؤه بنجاح (يوجد transfer_id و transfer_number)
+                if (!empty($transferId) && !empty($transferNumber)) {
+                    $isManagerInitiator = isset($currentUser['role']) && in_array($currentUser['role'], ['manager', 'developer'], true);
+
+                    if ($isManagerInitiator && !empty($transferId)) {
+                        try {
+                            ensureWarehouseTransferBatchColumns();
+                            
+                            // لا نخصم الكمية هنا - سيتم الخصم عند تنفيذ النقل في executeWarehouseTransferDirectly
+                            // فقط نغير الحالة إلى 'approved' وليس 'completed' حتى يتم تنفيذ النقل بشكل صحيح
+                            $db->execute(
+                                "UPDATE warehouse_transfers
+                                 SET status = 'approved',
+                                     approved_by = ?,
+                                     approved_at = NOW(),
+                                     notes = CONCAT(IFNULL(notes, ''), '\\n(الموافقة من نفس المدير المُنشئ)')
+                                 WHERE id = ?",
+                                [$currentUser['id'] ?? null, $transferId]
+                            );
+                            
+                            // تنفيذ النقل مباشرة بعد الموافقة
+                            require_once __DIR__ . '/../../includes/vehicle_inventory.php';
+                            $transferResult = executeWarehouseTransferDirectly($transferId, $currentUser['id'] ?? null);
+                            
+                            if (empty($transferResult['success'])) {
+                                throw new Exception($transferResult['message'] ?? 'فشل تنفيذ النقل');
+                            }
+                            
+                            // تغيير الحالة إلى 'completed' بعد تنفيذ النقل بنجاح
+                            $db->execute(
+                                "UPDATE warehouse_transfers SET status = 'completed' WHERE id = ?",
+                                [$transferId]
+                            );
+
+                            if (!empty($currentUser['id'])) {
+                                try {
+                                    logAudit(
+                                        $currentUser['id'],
+                                        'warehouse_transfer_auto_approved',
+                                        'warehouse_transfer',
+                                        $transferId,
+                                        null,
+                                        [
+                                            'transfer_number' => $transferNumber,
+                                            'auto_approved' => true,
+                                            'initiator_role' => $currentUser['role'] ?? null,
+                                        ]
+                                    );
+                                } catch (Exception $auditException) {
+                                    // لا نسمح لفشل تسجيل التدقيق بإلغاء نجاح العملية
+                                    error_log('final_products audit log exception: ' . $auditException->getMessage());
+                                }
+                            }
+
+                            $successMessage = sprintf(
+                                'تم تنفيذ نقل المنتجات رقم %s بواسطة المدير بنجاح دون الحاجة للموافقة.',
+                                $transferNumber
+                            );
+                            
+                            // التحقق من أن الطلب هو AJAX request
+                            $isAjaxRequest = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && 
+                                            strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+                            
+                            if ($isAjaxRequest) {
+                                // تنظيف أي output buffer موجود قبل إرسال JSON
+                                while (ob_get_level() > 0) {
+                                    ob_end_clean();
+                                }
+                                // إرجاع JSON للـ AJAX request
+                                header('Content-Type: application/json; charset=utf-8');
+                                echo json_encode([
+                                    'success' => true,
+                                    'message' => $successMessage,
+                                    'transfer_number' => $transferNumber,
+                                    'transfer_id' => $transferId
+                                ], JSON_UNESCAPED_UNICODE);
+                                // حذف token بعد نجاح الطلب لمنع إعادة الإرسال
+                                unset($_SESSION[$sessionTokenKey]);
+                                exit;
+                            } else {
+                                // إرجاع HTML عادي (POST redirect)
+                                $_SESSION[$sessionSuccessKey] = $successMessage;
+                                // حذف token بعد نجاح الطلب لمنع إعادة الإرسال
+                                unset($_SESSION[$sessionTokenKey]);
+                                productionSafeRedirect($productionInventoryUrl, $productionRedirectParams, $productionRedirectRole);
+                            }
+                        } catch (Throwable $autoApprovalError) {
+                            error_log('final_products auto-approval transfer error: ' . $autoApprovalError->getMessage());
+                            $_SESSION[$sessionErrorKey] = sprintf(
+                                'تم حفظ طلب النقل رقم %s لكن تعذر تنفيذه تلقائياً. يرجى المراجعة اليدوية.',
+                                $transferNumber
+                            );
+                            // حذف token بعد فشل الموافقة التلقائية (الطلب موجود لكن فشل التنفيذ)
+                            unset($_SESSION[$sessionTokenKey]);
+                            productionSafeRedirect($productionInventoryUrl, $productionRedirectParams, $productionRedirectRole);
+                        }
+                    } else {
+                        // المستخدم ليس مديراً - الطلب تم إنشاؤه بنجاح وتم إرساله للموافقة
+                        $successMessage = sprintf(
+                            'تم إرسال طلب النقل رقم %s إلى المدير للموافقة عليه.',
+                            $transferNumber
+                        );
+                        
+                        // التحقق من أن الطلب هو AJAX request
+                        $isAjaxRequest = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && 
+                                        strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+                        
+                        if ($isAjaxRequest) {
+                            // تنظيف أي output buffer موجود قبل إرسال JSON
+                            while (ob_get_level() > 0) {
+                                ob_end_clean();
+                            }
+                            // إرجاع JSON للـ AJAX request
+                            header('Content-Type: application/json; charset=utf-8');
+                            echo json_encode([
+                                'success' => true,
+                                'message' => $successMessage,
+                                'transfer_number' => $transferNumber,
+                                'transfer_id' => $transferId
+                            ], JSON_UNESCAPED_UNICODE);
+                            // حذف token بعد نجاح الطلب لمنع إعادة الإرسال
+                            unset($_SESSION[$sessionTokenKey]);
+                            exit;
+                        } else {
+                            // إرجاع HTML عادي (POST redirect)
+                            $_SESSION[$sessionSuccessKey] = $successMessage;
+                            // حذف token بعد نجاح الطلب لمنع إعادة الإرسال
+                            unset($_SESSION[$sessionTokenKey]);
+                            productionSafeRedirect($productionInventoryUrl, $productionRedirectParams, $productionRedirectRole);
+                        }
+                    }
+                } else {
+                    // الطلب لم يتم إنشاؤه بنجاح حسب الشرط - التحقق مرة أخرى من قاعدة البيانات
+                    // قد يكون الطلب موجوداً في قاعدة البيانات رغم فشل الشرط
+                    $verificationTransferId = $result['transfer_id'] ?? null;
+                    $verificationTransferNumber = $result['transfer_number'] ?? null;
+                    
+                    // محاولة العثور على الطلب في قاعدة البيانات بجميع الطرق الممكنة
+                    $verifyTransfer = null;
+                    
+                    // البحث بـ transfer_id أولاً
+                    if (!empty($verificationTransferId)) {
+                        $verifyTransfer = $db->queryOne(
+                            "SELECT id, transfer_number FROM warehouse_transfers WHERE id = ?",
+                            [$verificationTransferId]
+                        );
+                    }
+                    
+                    // إذا لم نجد، نبحث بـ transfer_number
+                    if (!$verifyTransfer && !empty($verificationTransferNumber)) {
+                        $verifyTransfer = $db->queryOne(
+                            "SELECT id, transfer_number FROM warehouse_transfers WHERE transfer_number = ?",
+                            [$verificationTransferNumber]
+                        );
+                    }
+                    
+                    // إذا لم نجد، نبحث عن آخر طلب نقل تم إنشاؤه من نفس المستخدم في آخر دقيقة
+                    if (!$verifyTransfer && !empty($currentUser['id'])) {
+                        $verifyTransfer = $db->queryOne(
+                            "SELECT id, transfer_number FROM warehouse_transfers 
+                             WHERE requested_by = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 1 MINUTE)
+                             ORDER BY id DESC LIMIT 1",
+                            [$currentUser['id']]
+                        );
+                    }
+                    
+                    if ($verifyTransfer) {
+                        // الطلب موجود في قاعدة البيانات! كان هناك خطأ في الإرجاع من createWarehouseTransfer
+                        error_log("Warning: Transfer was created (ID: {$verifyTransfer['id']}, Number: {$verifyTransfer['transfer_number']}) but createWarehouseTransfer may have returned error. Details: " . json_encode($result));
+                        $successMessage = sprintf(
+                            'تم إرسال طلب النقل رقم %s إلى المدير للموافقة عليه.',
+                            $verifyTransfer['transfer_number']
+                        );
+                        
+                        // التحقق من أن الطلب هو AJAX request
+                        $isAjaxRequest = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && 
+                                        strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+                        
+                        if ($isAjaxRequest) {
+                            // تنظيف أي output buffer موجود قبل إرسال JSON
+                            while (ob_get_level() > 0) {
+                                ob_end_clean();
+                            }
+                            header('Content-Type: application/json; charset=utf-8');
+                            echo json_encode([
+                                'success' => true,
+                                'message' => $successMessage,
+                                'transfer_number' => $verifyTransfer['transfer_number'],
+                                'transfer_id' => $verifyTransfer['id']
+                            ], JSON_UNESCAPED_UNICODE);
+                            unset($_SESSION[$sessionTokenKey]);
+                            exit;
+                        } else {
+                            $_SESSION[$sessionSuccessKey] = $successMessage;
+                            unset($_SESSION[$sessionTokenKey]);
+                            productionSafeRedirect($productionInventoryUrl, $productionRedirectParams, $productionRedirectRole);
+                        }
+                    } else {
+                        // الطلب غير موجود - هناك خطأ حقيقي
+                        $errorMessage = $result['message'] ?? 'تعذر إنشاء طلب النقل.';
+                        error_log("Failed to create warehouse transfer. Error: $errorMessage. Result: " . json_encode($result));
+                        $transferErrors[] = $errorMessage;
+                        // إعادة إنشاء token للسماح بإعادة المحاولة
+                        $_SESSION[$sessionTokenKey] = bin2hex(random_bytes(32));
+                    }
+                }
+            }
+        }
+
+        if (!empty($transferErrors)) {
+            $error = implode(' | ', array_unique($transferErrors));
+            
+            // التحقق من أن الطلب هو AJAX request
+            $isAjaxRequest = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && 
+                            strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+            
+            if ($isAjaxRequest) {
+                // تنظيف أي output buffer موجود قبل إرسال JSON
+                while (ob_get_level() > 0) {
+                    ob_end_clean();
+                }
+                header('Content-Type: application/json; charset=utf-8');
+                http_response_code(400);
+                echo json_encode([
+                    'success' => false,
+                    'message' => $error
+                ], JSON_UNESCAPED_UNICODE);
+                // إعادة إنشاء token للسماح بإعادة المحاولة في حالة وجود أخطاء
+                $_SESSION[$sessionTokenKey] = bin2hex(random_bytes(32));
+                exit;
+            } else {
+                // إعادة إنشاء token للسماح بإعادة المحاولة في حالة وجود أخطاء
+                $_SESSION[$sessionTokenKey] = bin2hex(random_bytes(32));
+            }
+        }
+    } elseif ($isProductionRole && $postAction === 'transfer_external_product') {
+        // معالج نقل المنتجات الخارجية لعمال الإنتاج فقط
+        $submissionToken = $_POST['transfer_token'] ?? '';
+        $sessionTokenKey = 'transfer_submission_token';
+        $storedToken = $_SESSION[$sessionTokenKey] ?? null;
+        
+        // التحقق من أن الطلب هو AJAX request
+        $isAjaxRequest = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && 
+                        strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+        
+        // تنظيف أي output buffer موجود قبل إرسال JSON
+        if ($isAjaxRequest) {
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+        }
+        
+        if ($submissionToken === '' || $submissionToken !== $storedToken) {
+            $errorMessage = 'تم إرسال هذا الطلب مسبقاً. يرجى عدم إعادة تحميل الصفحة.';
+            
+            if ($isAjaxRequest) {
+                header('Content-Type: application/json; charset=utf-8');
+                http_response_code(400);
+                echo json_encode([
+                    'success' => false,
+                    'message' => $errorMessage
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
+            } else {
+                $_SESSION[$sessionErrorKey] = $errorMessage;
+                productionSafeRedirect($productionInventoryUrl, $productionRedirectParams, $productionRedirectRole);
+                exit;
+            }
+        }
+        
+        unset($_SESSION[$sessionTokenKey]);
+        
+        $transferErrors = [];
+        
+        if (!$canCreateTransfers || !$primaryWarehouse) {
+            $transferErrors[] = 'لا يمكن إنشاء طلب النقل حالياً بسبب عدم توفر مخزن رئيسي أو مخازن وجهة نشطة.';
+        } else {
+            $fromWarehouseId = intval($primaryWarehouse['id']);
+            $toWarehouseId = intval($_POST['to_warehouse_id'] ?? 0);
+            $productId = intval($_POST['product_id'] ?? 0);
+            $quantity = floatval($_POST['quantity'] ?? 0);
+            $transferDate = $_POST['transfer_date'] ?? date('Y-m-d');
+            $notes = trim((string)($_POST['notes'] ?? ''));
+            
+            if ($productId <= 0) {
+                $transferErrors[] = 'يرجى اختيار منتج صالح.';
+            }
+            
+            if ($quantity <= 0) {
+                $transferErrors[] = 'يرجى إدخال كمية صالحة أكبر من الصفر.';
+            }
+            
+            if ($toWarehouseId <= 0) {
+                $transferErrors[] = 'يرجى اختيار المخزن الوجهة.';
+            }
+            
+            if ($toWarehouseId === $fromWarehouseId) {
+                $transferErrors[] = 'لا يمكن النقل من وإلى نفس المخزن.';
+            }
+            
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $transferDate)) {
+                $transferDate = date('Y-m-d');
+            }
+            
+            // التحقق من المنتج الخارجي والكمية المتاحة
+            if ($productId > 0 && $quantity > 0) {
+                $externalProduct = $db->queryOne(
+                    "SELECT id, name, quantity, status FROM products WHERE id = ? AND product_type = 'external' AND status = 'active'",
+                    [$productId]
+                );
+                
+                if (!$externalProduct) {
+                    $transferErrors[] = 'المنتج المحدد غير موجود أو غير نشط.';
+                } else {
+                    $availableQuantity = (float)($externalProduct['quantity'] ?? 0);
+                    
+                    // خصم الكمية المحجوزة في طلبات النقل المعلقة
+                    $pendingTransfers = $db->queryOne(
+                        "SELECT COALESCE(SUM(wti.quantity), 0) AS pending_quantity
+                         FROM warehouse_transfer_items wti
+                         INNER JOIN warehouse_transfers wt ON wt.id = wti.transfer_id
+                         WHERE wti.product_id = ? AND wt.from_warehouse_id = ? AND wt.status = 'pending'",
+                        [$productId, $fromWarehouseId]
+                    );
+                    $availableQuantity -= (float)($pendingTransfers['pending_quantity'] ?? 0);
+                    
+                    if ($quantity > $availableQuantity) {
+                        $transferErrors[] = 'الكمية المطلوبة (' . number_format($quantity, 2) . ') أكبر من الكمية المتاحة (' . number_format($availableQuantity, 2) . ') للمنتج ' . htmlspecialchars($externalProduct['name'] ?? '');
+                    }
+                }
+            }
+            
+            if (empty($transferErrors)) {
+                try {
+                    // استخدام vehicle_inventory.php الذي يحتوي على createWarehouseTransfer
+                    if (!function_exists('createWarehouseTransfer')) {
+                        require_once __DIR__ . '/../../includes/vehicle_inventory.php';
+                    }
+                    
+                    $transferItems = [[
+                        'product_id' => $productId,
+                        'batch_id' => null,
+                        'batch_number' => null,
+                        'quantity' => round($quantity, 4),
+                        'notes' => $notes !== '' ? $notes : null,
+                    ]];
+                    
+                    $result = createWarehouseTransfer(
+                        $fromWarehouseId,
+                        $toWarehouseId,
+                        $transferDate,
+                        'نقل منتج خارجي',
+                        $transferItems,
+                        $currentUser['id'] ?? null,
+                        $notes !== '' ? $notes : null
+                    );
+                    
+                    if (!empty($result['success']) && !empty($result['transfer_id'])) {
+                        $transferId = (int)$result['transfer_id'];
+                        $transferNumber = $result['transfer_number'] ?? '';
+                        
+                        logAudit(
+                            $currentUser['id'] ?? null,
+                            'transfer_external_product',
+                            'warehouse_transfer',
+                            $transferId,
+                            null,
+                            [
+                                'product_id' => $productId,
+                                'quantity' => $quantity,
+                                'from_warehouse_id' => $fromWarehouseId,
+                                'to_warehouse_id' => $toWarehouseId,
+                                'transfer_number' => $transferNumber
+                            ]
+                        );
+                        
+                        $successMessage = sprintf(
+                            'تم إرسال طلب نقل المنتج الخارجي رقم %s إلى المدير للموافقة عليه.',
+                            $transferNumber
+                        );
+                        
+                        if ($isAjaxRequest) {
+                            // تنظيف أي output buffer موجود قبل إرسال JSON
+                            while (ob_get_level() > 0) {
+                                ob_end_clean();
+                            }
+                            header('Content-Type: application/json; charset=utf-8');
+                            echo json_encode([
+                                'success' => true,
+                                'message' => $successMessage,
+                                'transfer_number' => $transferNumber
+                            ], JSON_UNESCAPED_UNICODE);
+                            exit;
+                        } else {
+                            $_SESSION[$sessionSuccessKey] = $successMessage;
+                        }
+                    } else {
+                        $errorMessage = $result['message'] ?? 'تعذر إنشاء طلب النقل.';
+                        
+                        if ($isAjaxRequest) {
+                            // تنظيف أي output buffer موجود قبل إرسال JSON
+                            while (ob_get_level() > 0) {
+                                ob_end_clean();
+                            }
+                            header('Content-Type: application/json; charset=utf-8');
+                            http_response_code(400);
+                            echo json_encode([
+                                'success' => false,
+                                'message' => $errorMessage
+                            ], JSON_UNESCAPED_UNICODE);
+                            exit;
+                        } else {
+                            $_SESSION[$sessionErrorKey] = $errorMessage;
+                        }
+                    }
+                } catch (Exception $e) {
+                    error_log('transfer_external_product error: ' . $e->getMessage());
+                    $errorMessage = 'حدث خطأ أثناء إنشاء طلب النقل. يرجى المحاولة لاحقاً.';
+                    
+                    if ($isAjaxRequest) {
+                        // تنظيف أي output buffer موجود قبل إرسال JSON
+                        while (ob_get_level() > 0) {
+                            ob_end_clean();
+                        }
+                        header('Content-Type: application/json; charset=utf-8');
+                        http_response_code(500);
+                        echo json_encode([
+                            'success' => false,
+                            'message' => $errorMessage
+                        ], JSON_UNESCAPED_UNICODE);
+                        exit;
+                    } else {
+                        $_SESSION[$sessionErrorKey] = $errorMessage;
+                    }
+                }
+            }
+        }
+        
+        // معالجة الأخطاء (سواء كانت من التحقق الأولي أو من معالجة النقل)
+        if (!empty($transferErrors)) {
+            $errorMessage = implode('<br>', $transferErrors);
+            
+            if ($isAjaxRequest) {
+                header('Content-Type: application/json; charset=utf-8');
+                http_response_code(400);
+                echo json_encode([
+                    'success' => false,
+                    'message' => $errorMessage
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
+            } else {
+                $_SESSION[$sessionErrorKey] = $errorMessage;
+            }
+        }
+        
+        // إعادة التوجيه فقط للطلبات غير AJAX
+        if (!$isAjaxRequest) {
+            productionSafeRedirect($productionInventoryUrl, $productionRedirectParams, $productionRedirectRole);
+            exit;
+        } else {
+            // حماية إضافية: إذا كان الطلب AJAX ولم يتم إرسال response بعد، أرسل response افتراضي
+            // (يجب ألا يصل الكود إلى هنا في الحالة الطبيعية)
+            // تنظيف أي output buffer موجود
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+            
+            if (!headers_sent()) {
+                header('Content-Type: application/json; charset=utf-8');
+                http_response_code(500);
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'حدث خطأ غير متوقع أثناء معالجة الطلب.'
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
+            } else {
+                // إذا تم إرسال headers بالفعل، لا يمكن إرسال JSON
+                // لكن يجب التأكد من عدم استمرار التنفيذ
+                exit;
+            }
+        }
+        
+    } elseif ($postAction === 'create_transfer_from_sales_rep') {
+        // التحقق من duplicate submission
+        $submissionToken = $_POST['transfer_token'] ?? '';
+        $sessionTokenKey = 'transfer_submission_token';
+        $storedToken = $_SESSION[$sessionTokenKey] ?? null;
+        
+        if ($submissionToken === '' || $submissionToken !== $storedToken) {
+            $_SESSION[$sessionErrorKey] = 'تم إرسال هذا الطلب مسبقاً. يرجى عدم إعادة تحميل الصفحة.';
+            productionSafeRedirect($productionInventoryUrl, $productionRedirectParams, $productionRedirectRole);
+            exit;
+        }
+        
+        unset($_SESSION[$sessionTokenKey]);
+        
+        $transferErrors = [];
+        
+        if (!$primaryWarehouse) {
+            $transferErrors[] = 'لا يمكن إنشاء طلب الاستلام حالياً بسبب عدم توفر مخزن رئيسي.';
+        } else {
+            $toWarehouseId = intval($primaryWarehouse['id']);
+            $salesRepId = intval($_POST['sales_rep_id'] ?? 0);
+            $transferDate = $_POST['transfer_date'] ?? date('Y-m-d');
+            $reason = trim((string)($_POST['reason'] ?? ''));
+            $notes = trim((string)($_POST['notes'] ?? ''));
+            
+            // الحصول على سيارة المندوب ومخزنها
+            $vehicle = $db->queryOne(
+                "SELECT v.id as vehicle_id, w.id as warehouse_id, u.full_name as sales_rep_name
+                 FROM vehicles v
+                 LEFT JOIN warehouses w ON w.vehicle_id = v.id AND w.warehouse_type = 'vehicle'
+                 LEFT JOIN users u ON v.driver_id = u.id
+                 WHERE v.driver_id = ? AND v.status = 'active'",
+                [$salesRepId]
+            );
+            
+            if (!$vehicle || empty($vehicle['warehouse_id'])) {
+                $transferErrors[] = 'لم يتم العثور على مخزن سيارة للمندوب المحدد.';
+            } else {
+                $fromWarehouseId = $vehicle['warehouse_id'];
+                $salesRepName = $vehicle['sales_rep_name'] ?? 'مندوب';
+                
+                if ($fromWarehouseId === $toWarehouseId) {
+                    $transferErrors[] = 'لا يمكن النقل من وإلى نفس المخزن.';
+                }
+                
+                if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $transferDate)) {
+                    $transferDate = date('Y-m-d');
+                }
+                
+                $rawItems = $_POST['items'] ?? [];
+                $transferItems = [];
+                
+                if (is_array($rawItems)) {
+                    foreach ($rawItems as $item) {
+                        $productId = isset($item['product_id']) ? intval($item['product_id']) : 0;
+                        $quantity = isset($item['quantity']) ? floatval($item['quantity']) : 0.0;
+                        $itemNotes = isset($item['notes']) ? trim((string)$item['notes']) : null;
+                        $batchId = isset($item['batch_id']) ? intval($item['batch_id']) : 0;
+                        $batchNumber = isset($item['batch_number']) ? trim((string)$item['batch_number']) : '';
+                        
+                        if ($quantity > 0 && ($productId > 0 || $batchId > 0)) {
+                            $transferItems[] = [
+                                'product_id' => $productId > 0 ? $productId : null,
+                                'batch_id' => $batchId > 0 ? $batchId : null,
+                                'batch_number' => $batchNumber ?: null,
+                                'quantity' => $quantity,
+                                'notes' => $itemNotes
+                            ];
+                        }
+                    }
+                }
+                
+                if (empty($transferItems)) {
+                    $transferErrors[] = 'يجب إضافة منتج واحد على الأقل.';
+                }
+                
+                if (empty($transferErrors)) {
+                    try {
+                        $result = createWarehouseTransfer(
+                            $fromWarehouseId,
+                            $toWarehouseId,
+                            $transferDate,
+                            $transferItems,
+                            $reason ?: "طلب استلام منتجات من بضاعة المندوب ({$salesRepName})",
+                            $notes,
+                            $currentUser['id']
+                        );
+                        
+                        if ($result['success']) {
+                            $transferInfo = $db->queryOne(
+                                "SELECT status FROM warehouse_transfers WHERE id = ?",
+                                [$result['transfer_id']]
+                            );
+                            
+                            if ($transferInfo && $transferInfo['status'] === 'completed') {
+                                $_SESSION[$sessionSuccessKey] = 'تم استلام المنتجات بنجاح. تم نقل المنتجات إلى المخزن الرئيسي مباشرة.';
+                            } else {
+                                $_SESSION[$sessionSuccessKey] = 'تم إنشاء طلب الاستلام بنجاح. سيتم مراجعته و الموافقة عليه من قبل المدير.';
+                            }
+                        } else {
+                            $_SESSION[$sessionErrorKey] = $result['message'] ?? 'حدث خطأ أثناء إنشاء طلب الاستلام.';
+                        }
+                    } catch (Exception $e) {
+                        error_log('Error creating transfer from sales rep: ' . $e->getMessage());
+                        $_SESSION[$sessionErrorKey] = 'حدث خطأ أثناء إنشاء طلب الاستلام: ' . $e->getMessage();
+                    }
+                } else {
+                    $_SESSION[$sessionErrorKey] = implode(' ', $transferErrors);
+                }
+            }
+        }
+        
+        productionSafeRedirect($productionInventoryUrl, $productionRedirectParams, $productionRedirectRole);
+        exit;
+    }
+    
+    if ($isManager && $postAction === 'create_external_product') {
+        $name = trim((string)($_POST['external_name'] ?? ''));
+        $channel = $_POST['external_channel'] ?? 'company';
+        $initialQuantity = max(0, floatval($_POST['external_quantity'] ?? 0));
+        $unitPrice = max(0, floatval($_POST['external_price'] ?? 0));
+        $unit = trim((string)($_POST['external_unit'] ?? 'قطعة'));
+        $notesValue = trim((string)($_POST['external_description'] ?? ''));
+
+        if ($name === '') {
+            $_SESSION[$sessionErrorKey] = 'يرجى إدخال اسم المنتج الخارجي.';
+            productionSafeRedirect($managerInventoryUrl, $managerRedirectParams, $managerRedirectRole);
+        }
+
+        if (!in_array($channel, ['company', 'delegate', 'other'], true)) {
+            $channel = 'company';
+        }
+
+        try {
+            $insertResult = $db->execute(
+                "INSERT INTO products (name, category, product_type, external_channel, quantity, unit, unit_price, description, status)
+                 VALUES (?, ?, 'external', ?, ?, ?, ?, ?, 'active')",
+                [
+                    $name,
+                    $channel === 'company' ? 'بيع داخلي' : ($channel === 'delegate' ? 'مندوب مبيعات' : 'خارجي'),
+                    $channel,
+                    $initialQuantity,
+                    $unit !== '' ? $unit : 'قطعة',
+                    $unitPrice,
+                    $notesValue !== '' ? $notesValue : null,
+                ]
+            );
+
+            $productId = $insertResult['insert_id'] ?? null;
+            if (!empty($productId) && !empty($currentUser['id'])) {
+                logAudit(
+                    $currentUser['id'],
+                    'external_product_create',
+                    'product',
+                    $productId,
+                    null,
+                    [
+                        'name' => $name,
+                        'channel' => $channel,
+                        'quantity' => $initialQuantity,
+                        'unit_price' => $unitPrice,
+                    ]
+                );
+            }
+
+            $_SESSION[$sessionSuccessKey] = 'تم إضافة المنتج الخارجي بنجاح.';
+        } catch (Exception $e) {
+            error_log('create_external_product error: ' . $e->getMessage());
+            $_SESSION[$sessionErrorKey] = 'تعذر إضافة المنتج الخارجي. يرجى المحاولة لاحقاً.';
+        }
+
+        productionSafeRedirect($managerInventoryUrl, $managerRedirectParams, $managerRedirectRole);
+    } elseif ($isManager && $postAction === 'adjust_external_stock') {
+        $productId = intval($_POST['product_id'] ?? 0);
+        $operation = $_POST['operation'] ?? 'add';
+        $amount = max(0, floatval($_POST['quantity'] ?? 0));
+        $note = trim((string)($_POST['note'] ?? ''));
+
+        if ($productId <= 0 || $amount <= 0) {
+            $_SESSION[$sessionErrorKey] = 'يرجى اختيار منتج وإدخال كمية صالحة.';
+            productionSafeRedirect($managerInventoryUrl, $managerRedirectParams, $managerRedirectRole);
+        }
+
+        try {
+            $productRow = $db->queryOne(
+                "SELECT id, name, quantity FROM products WHERE id = ? AND product_type = 'external' LIMIT 1",
+                [$productId]
+            );
+
+            if (!$productRow) {
+                $_SESSION[$sessionErrorKey] = 'المنتج المطلوب غير موجود أو ليس منتجاً خارجياً.';
+                productionSafeRedirect($managerInventoryUrl, $managerRedirectParams, $managerRedirectRole);
+            }
+
+            $oldQuantity = floatval($productRow['quantity'] ?? 0);
+            $newQuantity = $oldQuantity;
+
+            if ($operation === 'discard') {
+                if ($amount > $oldQuantity) {
+                    $_SESSION[$sessionErrorKey] = 'الكمية المراد إتلافها أكبر من الكمية المتاحة.';
+                    productionSafeRedirect($managerInventoryUrl, $managerRedirectParams, $managerRedirectRole);
+                }
+                $newQuantity = $oldQuantity - $amount;
+            } else {
+                $newQuantity = $oldQuantity + $amount;
+                $operation = 'add';
+            }
+
+            $db->execute(
+                "UPDATE products SET quantity = ?, updated_at = NOW() WHERE id = ? AND product_type = 'external'",
+                [$newQuantity, $productId]
+            );
+
+            if (!empty($currentUser['id'])) {
+                logAudit(
+                    $currentUser['id'],
+                    $operation === 'add' ? 'external_product_increase' : 'external_product_discard',
+                    'product',
+                    $productId,
+                    ['quantity' => $oldQuantity],
+                    [
+                        'quantity' => $newQuantity,
+                        'change' => $amount,
+                        'note' => $note !== '' ? $note : null,
+                    ]
+                );
+            }
+
+            $_SESSION[$sessionSuccessKey] = $operation === 'add'
+                ? 'تم زيادة كمية المنتج الخارجي بنجاح.'
+                : 'تم إتلاف الكمية المحددة من المنتج الخارجي.';
+        } catch (Exception $e) {
+            error_log('adjust_external_stock error: ' . $e->getMessage());
+            $_SESSION[$sessionErrorKey] = 'تعذر تحديث كمية المنتج الخارجي.';
+        }
+
+        productionSafeRedirect($managerInventoryUrl, $managerRedirectParams, $managerRedirectRole);
+    } elseif ($isManager && $postAction === 'update_external_product') {
+        // منع المحاسب من التعديل على المنتجات الخارجية
+        if ($currentUser['role'] === 'accountant') {
+            $_SESSION[$sessionErrorKey] = 'ليس لديك صلاحية لتعديل المنتجات الخارجية.';
+            productionSafeRedirect($managerInventoryUrl, $managerRedirectParams, $managerRedirectRole);
+        }
+        
+        $productId = intval($_POST['product_id'] ?? 0);
+        $name = trim((string)($_POST['edit_name'] ?? ''));
+        $channel = $_POST['edit_channel'] ?? 'company';
+        $unitPrice = max(0, floatval($_POST['edit_price'] ?? 0));
+        $unit = trim((string)($_POST['edit_unit'] ?? 'قطعة'));
+        $description = trim((string)($_POST['edit_description'] ?? ''));
+
+        if ($productId <= 0 || $name === '') {
+            $_SESSION[$sessionErrorKey] = 'يرجى اختيار منتج صالح وتحديد الاسم.';
+            productionSafeRedirect($managerInventoryUrl, $managerRedirectParams, $managerRedirectRole);
+        }
+
+        if (!in_array($channel, ['company', 'delegate', 'other'], true)) {
+            $channel = 'company';
+        }
+
+        try {
+            $existing = $db->queryOne(
+                "SELECT id, name, external_channel, unit_price, unit, description
+                 FROM products WHERE id = ? AND product_type = 'external' LIMIT 1",
+                [$productId]
+            );
+
+            if (!$existing) {
+                $_SESSION[$sessionErrorKey] = 'المنتج المطلوب غير موجود أو ليس منتجاً خارجياً.';
+                productionSafeRedirect($managerInventoryUrl, $managerRedirectParams, $managerRedirectRole);
+            }
+
+            $db->execute(
+                "UPDATE products
+                 SET name = ?, category = ?, external_channel = ?, unit_price = ?, unit = ?, description = ?, updated_at = NOW()
+                 WHERE id = ? AND product_type = 'external'",
+                [
+                    $name,
+                    $channel === 'company' ? 'بيع داخلي' : ($channel === 'delegate' ? 'مندوب مبيعات' : 'خارجي'),
+                    $channel,
+                    $unitPrice,
+                    $unit !== '' ? $unit : 'قطعة',
+                    $description !== '' ? $description : null,
+                    $productId,
+                ]
+            );
+
+            if (!empty($currentUser['id'])) {
+                logAudit(
+                    $currentUser['id'],
+                    'external_product_update',
+                    'product',
+                    $productId,
+                    [
+                        'name' => $existing['name'] ?? null,
+                        'channel' => $existing['external_channel'] ?? null,
+                        'unit_price' => $existing['unit_price'] ?? null,
+                        'unit' => $existing['unit'] ?? null,
+                    ],
+                    [
+                        'name' => $name,
+                        'channel' => $channel,
+                        'unit_price' => $unitPrice,
+                        'unit' => $unit,
+                    ]
+                );
+            }
+
+            $_SESSION[$sessionSuccessKey] = 'تم تحديث بيانات المنتج الخارجي بنجاح.';
+        } catch (Exception $e) {
+            error_log('update_external_product error: ' . $e->getMessage());
+            $_SESSION[$sessionErrorKey] = 'تعذر تحديث بيانات المنتج الخارجي.';
+        }
+
+        productionSafeRedirect($managerInventoryUrl, $managerRedirectParams, $managerRedirectRole);
+    }
+}
+
+// Pagination
+$pageNum = isset($_GET['p']) ? max(1, intval($_GET['p'])) : 1;
+$perPage = 20;
+$offset = ($pageNum - 1) * $perPage;
+
+// البحث والفلترة
+$search = $_GET['search'] ?? '';
+$productId = $_GET['product_id'] ?? '';
+$status = $_GET['status'] ?? '';
+$dateFrom = $_GET['date_from'] ?? '';
+$dateTo = $_GET['date_to'] ?? '';
+
+// بناء استعلام البحث
+$whereConditions = ['1=1'];
+$params = [];
+
+// التحقق من وجود عمود date أو production_date
+$dateColumnCheck = $db->queryOne("SHOW COLUMNS FROM production LIKE 'date'");
+$productionDateColumnCheck = $db->queryOne("SHOW COLUMNS FROM production LIKE 'production_date'");
+$hasDateColumn = !empty($dateColumnCheck);
+$hasProductionDateColumn = !empty($productionDateColumnCheck);
+$dateColumn = $hasDateColumn ? 'date' : ($hasProductionDateColumn ? 'production_date' : 'created_at');
+
+if ($search) {
+    $searchParam = '%' . $search . '%';
+    if ($userIdColumn) {
+        $whereConditions[] = "(p.id LIKE ? OR pr.name LIKE ? OR u.full_name LIKE ? OR u.username LIKE ?)";
+        $params[] = $searchParam;
+        $params[] = $searchParam;
+        $params[] = $searchParam;
+        $params[] = $searchParam;
+    } else {
+        $whereConditions[] = "(p.id LIKE ? OR pr.name LIKE ?)";
+        $params[] = $searchParam;
+        $params[] = $searchParam;
+    }
+}
+
+if ($productId) {
+    $whereConditions[] = "p.product_id = ?";
+    $params[] = intval($productId);
+}
+
+if ($status) {
+    $whereConditions[] = "p.status = ?";
+    $params[] = $status;
+}
+
+if ($dateFrom) {
+    $whereConditions[] = "DATE(p.$dateColumn) >= ?";
+    $params[] = $dateFrom;
+}
+
+if ($dateTo) {
+    $whereConditions[] = "DATE(p.$dateColumn) <= ?";
+    $params[] = $dateTo;
+}
+
+// فقط المنتجات المكتملة أو الموافق عليها
+$whereConditions[] = "(p.status = 'completed' OR p.status = 'approved')";
+
+$whereClause = implode(' AND ', $whereConditions);
+
+// حساب العدد الإجمالي
+$countSql = "SELECT COUNT(*) as total 
+             FROM production p
+             LEFT JOIN products pr ON p.product_id = pr.id";
+             
+// إضافة JOIN مع users فقط إذا كان العمود موجوداً
+if ($userIdColumn) {
+    $countSql .= " LEFT JOIN users u ON p.$userIdColumn = u.id";
+}
+
+$countSql .= " WHERE $whereClause";
+
+$totalResult = $db->queryOne($countSql, $params);
+$totalProducts = $totalResult['total'] ?? 0;
+$totalPages = ceil($totalProducts / $perPage);
+
+// الحصول على البيانات مع تجميع حسب المنتج وخط الإنتاج
+$sql = "SELECT 
+            p.id,
+            p.product_id,
+            pr.name as product_name,
+            pr.category as product_category,
+            pr.unit_price,
+            pr.quantity as available_quantity,
+            SUM(p.quantity) as total_produced,
+            COUNT(DISTINCT p.id) as production_count,
+            MIN(p.$dateColumn) as first_production_date,
+            MAX(p.$dateColumn) as last_production_date,
+            " . ($userIdColumn ? "GROUP_CONCAT(DISTINCT u.full_name SEPARATOR ', ') as workers," : "'غير محدد' as workers,") . "
+            p.status as production_status
+        FROM production p
+        LEFT JOIN products pr ON p.product_id = pr.id";
+        
+// إضافة JOIN مع users فقط إذا كان العمود موجوداً
+if ($userIdColumn) {
+    $sql .= " LEFT JOIN users u ON p.$userIdColumn = u.id";
+}
+
+$sql .= " WHERE $whereClause
+        GROUP BY p.product_id
+        ORDER BY MIN(p.$dateColumn) ASC, pr.name ASC
+        LIMIT ? OFFSET ?";
+
+$params[] = $perPage;
+$params[] = $offset;
+
+$finalProducts = $db->query($sql, $params);
+
+$totalAvailableSum = 0.0;
+$totalProducedSum = 0.0;
+$totalProductionCountSum = 0;
+if (is_array($finalProducts)) {
+    foreach ($finalProducts as $product) {
+        $availableQuantity = (float)($product['available_quantity'] ?? 0);
+        $producedQuantity = (float)($product['total_produced'] ?? 0);
+        $productOperations = (int)($product['production_count'] ?? 0);
+        $productUnitPrice = isset($product['unit_price']) ? (float)$product['unit_price'] : 0.0;
+
+        $totalAvailableSum += $availableQuantity;
+        $totalProducedSum += $producedQuantity;
+        $totalProductionCountSum += $productOperations;
+    }
+}
+
+$statusLabels = [
+    'pending' => 'معلّق',
+    'approved' => 'موافق عليه',
+    'completed' => 'مكتمل',
+    'rejected' => 'مرفوض'
+];
+
+$finishedProductsRows = [];
+$finishedProductsCount = 0;
+$finishedProductsTableExists = $db->queryOne("SHOW TABLES LIKE 'finished_products'");
+
+// Pagination لجدول finished_products
+$finishedProductsPageNum = isset($_GET['fp']) ? max(1, intval($_GET['fp'])) : 1;
+$finishedProductsPerPage = 20;
+$finishedProductsOffset = ($finishedProductsPageNum - 1) * $finishedProductsPerPage;
+
+// معاملات البحث والفلترة
+$searchQuery = isset($_GET['search']) ? trim($_GET['search']) : '';
+$filterDateFrom = isset($_GET['date_from']) ? trim($_GET['date_from']) : '';
+$filterDateTo = isset($_GET['date_to']) ? trim($_GET['date_to']) : '';
+
+if (!empty($finishedProductsTableExists)) {
+    // حذف حقل manager_unit_price إذا كان موجوداً
+    try {
+        $managerPriceColumn = $db->queryOne("SHOW COLUMNS FROM finished_products LIKE 'manager_unit_price'");
+        if (!empty($managerPriceColumn)) {
+            $db->execute("ALTER TABLE `finished_products` DROP COLUMN `manager_unit_price`");
+        }
+    } catch (Exception $priceColumnError) {
+        error_log('Finished products drop manager_unit_price column error: ' . $priceColumnError->getMessage());
+    }
+    
+    // إضافة حقل unit_price (سعر الوحدة)
+    try {
+        $unitPriceColumn = $db->queryOne("SHOW COLUMNS FROM finished_products LIKE 'unit_price'");
+        if (empty($unitPriceColumn)) {
+            $db->execute("ALTER TABLE `finished_products` ADD COLUMN `unit_price` DECIMAL(12,2) NULL DEFAULT NULL COMMENT 'سعر الوحدة من القالب' AFTER `quantity_produced`");
+        }
+    } catch (Exception $e) {
+        error_log('Failed to ensure unit_price column in finished_products: ' . $e->getMessage());
+    }
+    
+    // إضافة حقل total_price (السعر الإجمالي)
+    try {
+        $totalPriceColumn = $db->queryOne("SHOW COLUMNS FROM finished_products LIKE 'total_price'");
+        if (empty($totalPriceColumn)) {
+            $db->execute("ALTER TABLE `finished_products` ADD COLUMN `total_price` DECIMAL(12,2) NULL DEFAULT NULL COMMENT 'السعر الإجمالي (unit_price × quantity_produced)' AFTER `unit_price`");
+        }
+    } catch (Exception $e) {
+        error_log('Failed to ensure total_price column in finished_products: ' . $e->getMessage());
+    }
+    
+    // التأكد من وجود الأعمدة المطلوبة في جدول product_templates
+    try {
+        $productIdColumn = $db->queryOne("SHOW COLUMNS FROM product_templates LIKE 'product_id'");
+        if (empty($productIdColumn)) {
+            $db->execute("ALTER TABLE `product_templates` ADD COLUMN `product_id` int(11) NULL DEFAULT NULL AFTER `id`");
+            $db->execute("ALTER TABLE `product_templates` ADD KEY `product_id` (`product_id`)");
+        }
+    } catch (Exception $e) {
+        error_log('Failed to ensure product_id column in product_templates: ' . $e->getMessage());
+    }
+    
+    try {
+        $unitPriceColumn = $db->queryOne("SHOW COLUMNS FROM product_templates LIKE 'unit_price'");
+        if (empty($unitPriceColumn)) {
+            $db->execute("ALTER TABLE `product_templates` ADD COLUMN `unit_price` DECIMAL(12,2) NULL DEFAULT NULL COMMENT 'سعر الوحدة بالجنيه'");
+        }
+    } catch (Exception $e) {
+        error_log('Failed to ensure unit_price column in product_templates: ' . $e->getMessage());
+    }
+    
+    // حساب العدد الإجمالي للمنتجات مع دعم البحث والفلترة
+    try {
+        $countWhereConditions = [];
+        $countWhereParams = [];
+        
+        // فلترة حسب البحث
+        if (!empty($searchQuery)) {
+            $countWhereConditions[] = "(fp.batch_number LIKE ? OR EXISTS (
+                SELECT 1 FROM products pr WHERE pr.id = COALESCE(fp.product_id, (SELECT bn.product_id FROM batch_numbers bn WHERE bn.batch_number = fp.batch_number LIMIT 1))
+                AND pr.name LIKE ?
+            ) OR fp.product_name LIKE ?)";
+            $searchPattern = '%' . $searchQuery . '%';
+            $countWhereParams[] = $searchPattern;
+            $countWhereParams[] = $searchPattern;
+            $countWhereParams[] = $searchPattern;
+        }
+        
+        // فلترة حسب تاريخ الإنتاج
+        if (!empty($filterDateFrom)) {
+            $countWhereConditions[] = "DATE(fp.production_date) >= ?";
+            $countWhereParams[] = $filterDateFrom;
+        }
+        
+        if (!empty($filterDateTo)) {
+            $countWhereConditions[] = "DATE(fp.production_date) <= ?";
+            $countWhereParams[] = $filterDateTo;
+        }
+        
+        $countWhereClause = !empty($countWhereConditions) 
+            ? " AND " . implode(" AND ", $countWhereConditions)
+            : "";
+        
+        $finishedProductsCountResult = $db->queryOne("
+            SELECT COUNT(DISTINCT fp.id) as total
+            FROM finished_products fp
+            WHERE (fp.quantity_produced IS NULL OR fp.quantity_produced > 0)
+            $countWhereClause
+        ", $countWhereParams);
+        $finishedProductsCount = isset($finishedProductsCountResult['total']) ? (int)$finishedProductsCountResult['total'] : 0;
+    } catch (Exception $e) {
+        error_log('Failed to count finished products: ' . $e->getMessage());
+        $finishedProductsCount = 0;
+    }
+    
+    try {
+        // بناء شروط البحث والفلترة
+        $whereConditions = [];
+        $whereParams = [];
+        
+        // فلترة حسب البحث
+        if (!empty($searchQuery)) {
+            $whereConditions[] = "(fp.batch_number LIKE ? OR COALESCE(NULLIF(TRIM(fp.product_name), ''), pr.name) LIKE ?)";
+            $searchPattern = '%' . $searchQuery . '%';
+            $whereParams[] = $searchPattern;
+            $whereParams[] = $searchPattern;
+        }
+        
+        // فلترة حسب تاريخ الإنتاج
+        if (!empty($filterDateFrom)) {
+            $whereConditions[] = "DATE(fp.production_date) >= ?";
+            $whereParams[] = $filterDateFrom;
+        }
+        
+        if (!empty($filterDateTo)) {
+            $whereConditions[] = "DATE(fp.production_date) <= ?";
+            $whereParams[] = $filterDateTo;
+        }
+        
+        $whereClause = "";
+        if (!empty($whereConditions)) {
+            $whereClause = " AND " . implode(" AND ", $whereConditions);
+        }
+        
+        $finishedProductsRows = $db->query("
+            SELECT 
+                fp.id,
+                fp.batch_id,
+                fp.batch_number,
+                COALESCE(fp.product_id, bn.product_id) AS product_id,
+                COALESCE(NULLIF(TRIM(fp.product_name), ''), pr.name, 'غير محدد') AS product_name,
+                fp.production_date,
+                fp.quantity_produced,
+                fp.unit_price,
+                fp.total_price,
+                (SELECT pt.unit_price 
+                 FROM product_templates pt 
+                 WHERE pt.status = 'active' 
+                   AND pt.unit_price IS NOT NULL 
+                   AND pt.unit_price > 0
+                   AND pt.unit_price <= 10000
+                   AND (
+                       -- مطابقة product_id أولاً (الأكثر دقة)
+                       (
+                           COALESCE(fp.product_id, bn.product_id) IS NOT NULL 
+                           AND COALESCE(fp.product_id, bn.product_id) > 0
+                           AND pt.product_id IS NOT NULL 
+                           AND pt.product_id > 0 
+                           AND pt.product_id = COALESCE(fp.product_id, bn.product_id)
+                       )
+                       -- مطابقة product_name (مطابقة دقيقة أو جزئية)
+                       OR (
+                           pt.product_name IS NOT NULL 
+                           AND pt.product_name != ''
+                           AND COALESCE(NULLIF(TRIM(fp.product_name), ''), pr.name) IS NOT NULL
+                           AND COALESCE(NULLIF(TRIM(fp.product_name), ''), pr.name) != ''
+                           AND (
+                               LOWER(TRIM(pt.product_name)) = LOWER(TRIM(COALESCE(NULLIF(TRIM(fp.product_name), ''), pr.name)))
+                               OR LOWER(TRIM(pt.product_name)) LIKE CONCAT('%', LOWER(TRIM(COALESCE(NULLIF(TRIM(fp.product_name), ''), pr.name))), '%')
+                               OR LOWER(TRIM(COALESCE(NULLIF(TRIM(fp.product_name), ''), pr.name))) LIKE CONCAT('%', LOWER(TRIM(pt.product_name)), '%')
+                           )
+                       )
+                       -- إذا لم يكن هناك product_id في القالب، نبحث فقط بالاسم
+                       OR (
+                           (pt.product_id IS NULL OR pt.product_id = 0)
+                           AND pt.product_name IS NOT NULL 
+                           AND pt.product_name != ''
+                           AND COALESCE(NULLIF(TRIM(fp.product_name), ''), pr.name) IS NOT NULL
+                           AND COALESCE(NULLIF(TRIM(fp.product_name), ''), pr.name) != ''
+                           AND (
+                               LOWER(TRIM(pt.product_name)) = LOWER(TRIM(COALESCE(NULLIF(TRIM(fp.product_name), ''), pr.name)))
+                               OR LOWER(TRIM(pt.product_name)) LIKE CONCAT('%', LOWER(TRIM(COALESCE(NULLIF(TRIM(fp.product_name), ''), pr.name))), '%')
+                               OR LOWER(TRIM(COALESCE(NULLIF(TRIM(fp.product_name), ''), pr.name))) LIKE CONCAT('%', LOWER(TRIM(pt.product_name)), '%')
+                           )
+                       )
+                   )
+                 ORDER BY pt.unit_price DESC
+                 LIMIT 1) AS template_unit_price,
+                GROUP_CONCAT(DISTINCT u.full_name ORDER BY u.full_name SEPARATOR ', ') AS workers
+            FROM finished_products fp
+            LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
+            LEFT JOIN products pr ON COALESCE(fp.product_id, bn.product_id) = pr.id
+            LEFT JOIN batch_workers bw ON fp.batch_id = bw.batch_id
+            LEFT JOIN users u ON bw.employee_id = u.id
+            WHERE (fp.quantity_produced IS NULL OR fp.quantity_produced > 0)
+            $whereClause
+            GROUP BY fp.id
+            ORDER BY fp.production_date DESC, fp.id DESC
+            LIMIT ? OFFSET ?
+        ", array_merge($whereParams, [$finishedProductsPerPage, $finishedProductsOffset]));
+        
+        // تحديث الحقول unit_price و total_price للمنتجات التي لا تحتوي عليها
+        if (is_array($finishedProductsRows)) {
+            foreach ($finishedProductsRows as $row) {
+                $fpId = (int)($row['id'] ?? 0);
+                $templatePrice = isset($row['template_unit_price']) && $row['template_unit_price'] !== null 
+                    ? (float)$row['template_unit_price'] 
+                    : null;
+                $currentUnitPrice = isset($row['unit_price']) && $row['unit_price'] !== null 
+                    ? (float)$row['unit_price'] 
+                    : null;
+                $quantity = (float)($row['quantity_produced'] ?? 0);
+                
+                // إذا كان هناك سعر قالب ولم يكن هناك unit_price محفوظ، قم بتحديثه
+                if ($templatePrice !== null && $templatePrice > 0 && $templatePrice <= 10000 && $currentUnitPrice === null) {
+                    $totalPrice = $templatePrice * $quantity;
+                    try {
+                        $db->execute(
+                            "UPDATE finished_products SET unit_price = ?, total_price = ? WHERE id = ?",
+                            [$templatePrice, $totalPrice, $fpId]
+                        );
+                        // تحديث القيم في المصفوفة للعرض
+                        $row['unit_price'] = $templatePrice;
+                        $row['total_price'] = $totalPrice;
+                    } catch (Exception $e) {
+                        error_log('Failed to update unit_price and total_price for finished_product ' . $fpId . ': ' . $e->getMessage());
+                    }
+                }
+                // إذا كان هناك unit_price ولكن لا يوجد total_price، قم بحسابه
+                elseif ($currentUnitPrice !== null && $currentUnitPrice > 0 && $quantity > 0) {
+                    $currentTotalPrice = isset($row['total_price']) && $row['total_price'] !== null 
+                        ? (float)$row['total_price'] 
+                        : null;
+                    if ($currentTotalPrice === null) {
+                        $totalPrice = $currentUnitPrice * $quantity;
+                        try {
+                            $db->execute(
+                                "UPDATE finished_products SET total_price = ? WHERE id = ?",
+                                [$totalPrice, $fpId]
+                            );
+                            $row['total_price'] = $totalPrice;
+                        } catch (Exception $e) {
+                            error_log('Failed to update total_price for finished_product ' . $fpId . ': ' . $e->getMessage());
+                        }
+                    }
+                }
+            }
+        }
+        
+        // لا تقم بتحديث $finishedProductsCount هنا - القيمة الصحيحة تم حسابها بالفعل في السطر 1623
+        // $finishedProductsCount = is_array($finishedProductsRows) ? count($finishedProductsRows) : 0;
+    } catch (Exception $finishedProductsError) {
+        error_log('Finished products query error: ' . $finishedProductsError->getMessage());
+    }
+}
+
+$productDetailsMap = [];
+if (!empty($finalProducts)) {
+    $productIds = array_column($finalProducts, 'product_id');
+    $productIds = array_values(array_filter(array_map('intval', $productIds)));
+
+    if (!empty($productIds)) {
+        $placeholders = implode(',', array_fill(0, count($productIds), '?'));
+        $detailsSql = "SELECT 
+                            p.product_id,
+                            p.id,
+                            p.quantity,
+                            p.$dateColumn as production_date,
+                            p.status,
+                            p.production_line_id,
+                            pl.line_name,
+                            " . ($userIdColumn ? "u.full_name as worker_name, u.username as worker_username" : "NULL as worker_name, NULL as worker_username") . "
+                       FROM production p
+                       LEFT JOIN production_lines pl ON p.production_line_id = pl.id";
+
+        if ($userIdColumn) {
+            $detailsSql .= " LEFT JOIN users u ON p.$userIdColumn = u.id";
+        }
+
+        $detailsSql .= " WHERE p.product_id IN ($placeholders)
+                         AND (p.status = 'completed' OR p.status = 'approved')
+                         ORDER BY p.product_id, p.$dateColumn ASC";
+
+        $detailsRows = $db->query($detailsSql, $productIds);
+
+        foreach ($detailsRows as $detailRow) {
+            $workerName = $detailRow['worker_name'] ?? $detailRow['worker_username'] ?? null;
+            $productDetailsMap[$detailRow['product_id']][] = [
+                'id' => (int)$detailRow['id'],
+                'quantity' => (float)($detailRow['quantity'] ?? 0),
+                'date' => $detailRow['production_date'] ?? null,
+                'status' => $detailRow['status'] ?? 'completed',
+                'worker' => $workerName ? trim($workerName) : 'غير محدد',
+                'line_name' => $detailRow['line_name'] ?? null,
+            ];
+        }
+    }
+}
+
+// الحصول على المنتجات وخطوط الإنتاج للفلترة
+$products = $db->query("SELECT id, name, category FROM products WHERE status = 'active' AND (product_type IS NULL OR product_type = 'internal') ORDER BY name");
+// حساب الإحصائيات
+$statsSql = "SELECT 
+                COUNT(DISTINCT p.product_id) as total_products,
+                COUNT(DISTINCT p.id) as total_production_records
+             FROM production p
+             WHERE (p.status = 'completed' OR p.status = 'approved')";
+$stats = $db->queryOne($statsSql);
+
+if ($dateFrom || $dateTo) {
+    $statsWhere = ["(p.status = 'completed' OR p.status = 'approved')"];
+    if ($dateFrom) {
+        $statsWhere[] = "DATE(p.$dateColumn) >= ?";
+    }
+    if ($dateTo) {
+        $statsWhere[] = "DATE(p.$dateColumn) <= ?";
+    }
+    $statsParams = [];
+    if ($dateFrom) $statsParams[] = $dateFrom;
+    if ($dateTo) $statsParams[] = $dateTo;
+    
+    $statsSql = "SELECT 
+                    COUNT(DISTINCT p.product_id) as total_products,
+                    COUNT(DISTINCT p.id) as total_production_records
+                 FROM production p
+                 WHERE " . implode(' AND ', $statsWhere);
+    $stats = $db->queryOne($statsSql, $statsParams);
+}
+
+require_once __DIR__ . '/../../includes/lang/' . getCurrentLanguage() . '.php';
+$lang = isset($translations) ? $translations : [];
+
+$externalProducts = [];
+$externalProductsForProduction = []; // للمنتجات الخارجية لعمال الإنتاج
+$externalChannelLabels = [
+    'company' => 'بيع داخل الشركة',
+    'delegate' => 'مندوب مبيعات',
+    'other' => 'متنوع',
+    '' => 'غير محدد',
+    null => 'غير محدد',
+];
+
+if ($isManager) {
+    try {
+        $externalProducts = $db->query(
+            "SELECT id, name, external_channel, quantity, unit_price, unit, updated_at, created_at, description
+             FROM products
+             WHERE product_type = 'external'
+             ORDER BY updated_at DESC, created_at DESC"
+        );
+    } catch (Exception $e) {
+        error_log('final_products: failed loading external products -> ' . $e->getMessage());
+        $externalProducts = [];
+    }
+}
+
+// جلب المنتجات الخارجية لعمال الإنتاج (الرؤية والنقل فقط)
+$isProductionRole = isset($currentUser['role']) && $currentUser['role'] === 'production';
+if ($isProductionRole) {
+    try {
+        $externalProductsForProduction = $db->query(
+            "SELECT id, name, external_channel, quantity, unit_price, unit, updated_at, created_at, description, status
+             FROM products
+             WHERE product_type = 'external' AND status = 'active' AND quantity > 0
+             ORDER BY name ASC"
+        );
+    } catch (Exception $e) {
+        error_log('final_products: failed loading external products for production -> ' . $e->getMessage());
+        $externalProductsForProduction = [];
+    }
+}
+?>
+
+<div class="header">
+    <i class="bi bi-box-seam" style="font-size: 24px;"></i>
+    <span>منتجات المصنع</span>
+    <?php if (!$isProductionRole): ?>
+    <div style="margin-right: auto; margin-left: 20px;">
+        <button
+            type="button"
+            class="btn btn-primary"
+            style="background: #0c2c80; color: white; padding: 12px 24px; border-radius: 8px; border: none; font-weight: bold; display: inline-flex; align-items: center; gap: 8px; cursor: pointer;<?php echo $canCreateTransfers ? '' : ' opacity: 0.5; cursor: not-allowed;'; ?>"
+            data-bs-toggle="modal"
+            data-bs-target="#requestTransferModal"
+            <?php if (!$canCreateTransfers): ?>
+            onclick="event.preventDefault(); return false;"
+            <?php endif; ?>
+            title="<?php echo $canCreateTransfers ? '' : 'يرجى التأكد من وجود مخازن وجهة نشطة.'; ?>"
+        >
+            <i class="bi bi-arrow-left-right"></i>
+            طلب نقل منتجات
+        </button>
+    </div>
+    <?php endif; ?>
+</div>
+
+<!-- حقول البحث والفلترة -->
+<?php
+$searchQuery = isset($_GET['search']) ? trim($_GET['search']) : '';
+$filterDateFrom = isset($_GET['date_from']) ? trim($_GET['date_from']) : '';
+$filterDateTo = isset($_GET['date_to']) ? trim($_GET['date_to']) : '';
+$filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) : '';
+?>
+<div class="card shadow-sm mb-4" style="margin: 0 25px 25px;">
+    <div class="card-header bg-light">
+        <h6 class="mb-0"><i class="bi bi-funnel me-2"></i>البحث والفلترة</h6>
+    </div>
+    <div class="card-body">
+        <form method="GET" action="" id="filterForm" class="row g-3">
+            <input type="hidden" name="page" value="inventory">
+            <input type="hidden" name="fp" value="1">
+            
+            <div class="col-md-4">
+                <label for="search" class="form-label"><i class="bi bi-search me-1"></i>البحث</label>
+                <input type="text" 
+                       class="form-control" 
+                       id="search" 
+                       name="search" 
+                       value="<?php echo htmlspecialchars($searchQuery); ?>" 
+                       placeholder="ابحث عن اسم المنتج أو رقم التشغيلة...">
+            </div>
+            
+            <div class="col-md-3">
+                <label for="date_from" class="form-label"><i class="bi bi-calendar-event me-1"></i>من تاريخ</label>
+                <input type="date" 
+                       class="form-control" 
+                       id="date_from" 
+                       name="date_from" 
+                       value="<?php echo htmlspecialchars($filterDateFrom); ?>">
+            </div>
+            
+            <div class="col-md-3">
+                <label for="date_to" class="form-label"><i class="bi bi-calendar-event me-1"></i>إلى تاريخ</label>
+                <input type="date" 
+                       class="form-control" 
+                       id="date_to" 
+                       name="date_to" 
+                       value="<?php echo htmlspecialchars($filterDateTo); ?>">
+            </div>
+            
+            <div class="col-md-2">
+                <label class="form-label d-block">&nbsp;</label>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary flex-fill">
+                        <i class="bi bi-search me-1"></i>بحث
+                    </button>
+                    <?php if ($searchQuery || $filterDateFrom || $filterDateTo): ?>
+                    <a href="?page=inventory" class="btn btn-outline-secondary">
+                        <i class="bi bi-x-circle"></i>
+                    </a>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<?php if ($primaryWarehouse): ?>
+    
+<?php elseif (!empty($warehousesTableExists)): ?>
+    <div class="alert alert-warning d-flex align-items-center gap-2">
+        <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+        <div>
+            لم يتم العثور على مخزن رئيسي نشط. يرجى إنشاء مخزن رئيسي من إعدادات المخازن لضمان ظهور المخزون في باقي الصفحات.
+        </div>
+    </div>
+<?php endif; ?>
+
+<?php if ($error): ?>
+    <div class="alert alert-danger alert-dismissible fade show" id="errorAlert" data-auto-refresh="true">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        <?php echo htmlspecialchars($error); ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+<?php endif; ?>
+
+<?php if ($success): ?>
+    <div class="alert alert-success alert-dismissible fade show" id="successAlert" data-auto-refresh="true">
+        <i class="bi bi-check-circle-fill me-2"></i>
+        <?php echo htmlspecialchars($success); ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+<?php endif; ?>
+
+<style>
+/* إصلاح مشكلة عرض القوائم المنسدلة بشكل نصف واضح في النماذج */
+.modal {
+    overflow: visible !important;
+}
+
+.modal-dialog {
+    overflow: visible !important;
+}
+
+.modal-content {
+    overflow: visible !important;
+}
+
+/* السماح للقوائم المنسدلة بالظهور خارج modal-body */
+.modal-body {
+    position: relative;
+    overflow-y: auto;
+    overflow-x: visible;
+}
+
+/* ضمان ظهور القوائم المنسدلة بشكل كامل */
+.modal-body select.form-select,
+.modal-body select {
+    position: relative;
+    z-index: 1055;
+}
+
+/* عند فتح القائمة المنسدلة */
+.modal-body select.form-select:focus,
+.modal-body select:focus {
+    z-index: 1060;
+    position: relative;
+}
+
+/* إصلاح خاص للقوائم المنسدلة في النماذج */
+.modal.show .modal-body {
+    overflow-y: auto;
+    overflow-x: visible;
+}
+
+/* ضمان أن القائمة المنسدلة تظهر فوق كل شيء */
+.modal.show select.form-select:focus,
+.modal.show select:focus {
+    z-index: 1065 !important;
+}
+
+/* إصلاح خاص للنماذج الكبيرة */
+.modal-body[style*="max-height"] {
+    overflow-y: auto !important;
+    overflow-x: visible !important;
+}
+
+/* عند فتح select، نسمح للقائمة بالظهور */
+.modal-body select.form-select option,
+.modal-body select option {
+    padding: 0.5rem;
+    white-space: normal;
+}
+
+/* إصلاح ظهور الأزرار السفلية للمودال على الهاتف */
+@media (max-width: 991.98px) {
+    /* Modal طلب نقل منتجات من المخزن الرئيسي */
+    #requestTransferModal .modal-dialog {
+        margin: 0 !important;
+        max-width: 100% !important;
+        width: 100% !important;
+        max-height: 100vh !important;
+        height: 100vh !important;
+        display: flex;
+        flex-direction: column;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+    }
+    
+    #requestTransferModal {
+        padding: 0 !important;
+    }
+    
+    #requestTransferModal .modal-dialog.modal-dialog-centered {
+        margin: 0 !important;
+    }
+    
+    #requestTransferModal .modal-dialog.modal-dialog-scrollable {
+        overflow: hidden !important;
+    }
+    
+    #requestTransferModal .modal-content {
+        max-height: 100vh !important;
+        height: 100vh !important;
+        display: flex;
+        flex-direction: column;
+        border-radius: 0 !important;
+        margin: 0 !important;
+        border: none !important;
+    }
+    
+    #requestTransferModal .modal-header {
+        flex-shrink: 0;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        padding: 1rem;
+    }
+    
+    #requestTransferModal .modal-body {
+        max-height: none !important;
+        height: auto !important;
+        flex: 1 1 auto;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        -webkit-overflow-scrolling: touch;
+        padding: 1rem;
+        padding-bottom: 1rem;
+    }
+    
+    /* تحسين عرض العناصر في النموذج على الهاتف */
+    #requestTransferModal .transfer-item .col-md-5,
+    #requestTransferModal .transfer-item .col-md-4,
+    #requestTransferModal .transfer-item .col-md-3 {
+        width: 100%;
+        flex: 0 0 100%;
+        max-width: 100%;
+        margin-bottom: 0.75rem;
+    }
+    
+    #requestTransferModal .transfer-item .col-md-3:last-child {
+        margin-bottom: 0;
+    }
+    
+    /* تحسين عرض الحقول الأخرى */
+    #requestTransferModal .row.g-3 > .col-md-6 {
+        width: 100%;
+        flex: 0 0 100%;
+        max-width: 100%;
+        margin-bottom: 1rem;
+    }
+    
+    /* تحسين حجم الخط في القوائم المنسدلة */
+    #requestTransferModal .form-select {
+        font-size: 16px !important; /* منع التكبير التلقائي على iOS */
+        padding: 0.75rem !important;
+    }
+    
+    /* تحسين حجم الخط في الحقول */
+    #requestTransferModal .form-control {
+        font-size: 16px !important;
+        padding: 0.75rem !important;
+    }
+    
+    #requestTransferModal .modal-footer {
+        flex-shrink: 0;
+        background: rgba(255, 255, 255, 0.98) !important;
+        backdrop-filter: blur(6px);
+        border-top: 1px solid rgba(0, 0, 0, 0.1);
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        padding: 1rem;
+        box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+        margin-top: 0;
+        position: relative;
+        z-index: 10;
+    }
+    
+    #requestTransferModal .modal-footer .btn {
+        width: 100%;
+        margin: 0;
+        padding: 0.75rem 1rem;
+        font-size: 1rem;
+    }
+}
+
+/* إصلاحات إضافية للشاشات الصغيرة جداً */
+@media (max-width: 575.98px) {
+    #requestTransferModal .modal-header {
+        padding: 0.75rem;
+    }
+    
+    #requestTransferModal .modal-body {
+        padding: 0.75rem;
+    }
+    
+    #requestTransferModal .modal-footer {
+        padding: 0.75rem;
+    }
+}
+
+/* تحسين عرض القائمة المنسدلة على الهواتف */
+@media (max-width: 767.98px) {
+    .modal-body:not(#requestTransferModal .modal-body) {
+        max-height: calc(100vh - 200px) !important;
+        overflow-y: auto !important;
+        overflow-x: visible !important;
+    }
+    
+    .modal-body select.form-select,
+    .modal-body select {
+        font-size: 1rem !important; /* منع التكبير التلقائي على iOS */
+        padding: 0.5rem !important;
+    }
+}
+    body {
+        font-family: 'Cairo', sans-serif;
+    }
+
+    .header {
+        padding: 25px;
+        font-size: 30px;
+        font-weight: bold;
+        color: #0c2c80;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .grid {
+        padding: 25px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+        gap: 20px;
+    }
+
+    .card {
+        background: white;
+        padding: 25px;
+        border-radius: 18px;
+        box-shadow: 0px 4px 20px rgba(0,0,0,0.07);
+        border: 1px solid #e2e6f3;
+        position: relative;
+    }
+
+    .status {
+        position: absolute;
+        top: 15px;
+        left: 15px;
+        background: #2e89ff;
+        padding: 6px 14px;
+        border-radius: 20px;
+        color: white;
+        font-size: 12px;
+        font-weight: bold;
+    }
+
+    .prod-name {
+        font-size: 18px;
+        font-weight: bold;
+        color: #0d2f66;
+        margin-bottom: 6px;
+    }
+
+    .prod-id {
+        color: #2767ff;
+        font-weight: bold;
+        text-decoration: none;
+    }
+
+    .barcode-box {
+        background: #f8faff;
+        border: 1px solid #d7e1f3;
+        padding: 15px;
+        border-radius: 12px;
+        text-align: center;
+        margin: 15px 0;
+    }
+
+    .barcode-id {
+        font-weight: bold;
+        margin-top: 8px;
+        color: #123c90;
+    }
+
+    .detail-row {
+        font-size: 14px;
+        margin-top: 5px;
+        color: #4b5772;
+        display: flex;
+        justify-content: space-between;
+    }
+
+    .btn-view {
+        margin-top: 15px;
+        display: inline-block;
+        padding: 10px 16px;
+        background: #0c2c80;
+        color: white;
+        border-radius: 10px;
+        text-decoration: none;
+        font-weight: bold;
+        font-size: 13px;
+    }
+
+    .btn-view:hover {
+        background: #0a2466;
+        color: white;
+    }
+
+    .btn-view.js-print-barcode:hover {
+        background: #218838;
+    }
+
+    .barcode-container {
+        width: 100%;
+        min-height: 60px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .barcode-container svg {
+        max-width: 100%;
+        height: auto;
+    }
+
+    /* إصلاح مشكلة عرض القوائم المنسدلة بشكل نصف واضح في النماذج */
+    .modal {
+        overflow: visible !important;
+    }
+
+    .modal-dialog {
+        overflow: visible !important;
+    }
+
+    .modal-content {
+        overflow: visible !important;
+    }
+
+    /* السماح للقوائم المنسدلة بالظهور خارج modal-body */
+    .modal-body {
+        position: relative;
+        overflow-y: auto;
+        overflow-x: visible;
+    }
+
+    /* ضمان ظهور القوائم المنسدلة بشكل كامل */
+    .modal-body select.form-select,
+    .modal-body select {
+        position: relative;
+        z-index: 1055;
+    }
+
+    /* عند فتح القائمة المنسدلة */
+    .modal-body select.form-select:focus,
+    .modal-body select:focus {
+        z-index: 1060;
+        position: relative;
+    }
+
+    /* إصلاح خاص للقوائم المنسدلة في النماذج */
+    .modal.show .modal-body {
+        overflow-y: auto;
+        overflow-x: visible;
+    }
+
+    /* ضمان أن القائمة المنسدلة تظهر فوق كل شيء */
+    .modal.show select.form-select:focus,
+    .modal.show select:focus {
+        z-index: 1065 !important;
+    }
+
+    /* حل جذري - إزالة overflow من modal-body عند وجود select */
+    .modal.show .modal-body:has(select),
+    .modal.show .modal-body:has(select.form-select),
+    .modal.show .modal-body.select-container {
+        overflow: visible !important;
+        overflow-y: visible !important;
+        overflow-x: visible !important;
+        max-height: none !important;
+    }
+
+    /* إزالة overflow من modal-content و modal-dialog */
+    .modal.show .modal-content:has(.modal-body select),
+    .modal.show .modal-dialog:has(.modal-body select),
+    .modal.show .modal-content.select-container-parent,
+    .modal.show .modal-dialog.select-container-parent {
+        overflow: visible !important;
+    }
+
+    /* إزالة overflow من modal-body عند وجود select */
+    .modal-body[style*="max-height"]:has(select),
+    .modal-body[style*="overflow"]:has(select),
+    .modal-body.select-container {
+        overflow: visible !important;
+        overflow-y: visible !important;
+        overflow-x: visible !important;
+    }
+
+    /* عند فتح select، نسمح للقائمة بالظهور */
+    .modal-body select.form-select option,
+    .modal-body select option {
+        padding: 0.5rem;
+        white-space: normal;
+    }
+
+    /* تحسين عرض القائمة المنسدلة على الهواتف */
+    @media (max-width: 767.98px) {
+        .modal-body {
+            max-height: calc(100vh - 200px) !important;
+            overflow-y: auto !important;
+            overflow-x: visible !important;
+        }
+        
+        .modal-body select.form-select,
+        .modal-body select {
+            font-size: 1rem !important; /* منع التكبير التلقائي على iOS */
+            padding: 0.5rem !important;
+        }
+    }
+</style>
+
+<!-- تحميل مكتبة JsBarcode -->
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+
+<?php if (!empty($finishedProductsRows)): ?>
+    <div class="grid">
+        <?php foreach ($finishedProductsRows as $finishedRow): ?>
+            <?php
+                $batchNumber = $finishedRow['batch_number'] ?? '';
+                $productName = htmlspecialchars($finishedRow['product_name'] ?? 'غير محدد');
+                $productionDate = !empty($finishedRow['production_date']) ? htmlspecialchars(formatDate($finishedRow['production_date'])) : '—';
+                $quantity = number_format((float)($finishedRow['quantity_produced'] ?? 0), 2);
+                $viewUrl = $batchNumber
+                    ? getRelativeUrl('production.php?page=batch_numbers&batch_number=' . urlencode($batchNumber))
+                    : '#';
+                
+                // Generate barcode image URL
+                $barcodeImageUrl = 'https://www.free-barcode-generator.net/wp-content/themes/barcode/images/barcode-img.png';
+                if ($batchNumber && function_exists('generateBarcodeHTML')) {
+                    // Use the barcode generation function if available
+                    $barcodeHtml = generateBarcodeHTML($batchNumber);
+                }
+            ?>
+            <div class="card">
+                <div class="status">
+                    <i class="bi bi-check-circle me-1"></i>finished
+                </div>
+
+                <div class="prod-name"><?php echo $productName; ?></div>
+                <?php if ($batchNumber): ?>
+                    <a href="#" class="prod-id"><?php echo htmlspecialchars($batchNumber); ?></a>
+                <?php else: ?>
+                    <span class="prod-id">—</span>
+                <?php endif; ?>
+
+                <div class="barcode-box">
+                    <?php if ($batchNumber): ?>
+                        <div class="barcode-container" data-batch="<?php echo htmlspecialchars($batchNumber); ?>">
+                            <svg class="barcode-svg" style="width: 100%; height: 50px;"></svg>
+                        </div>
+                        <div class="barcode-id"><?php echo htmlspecialchars($batchNumber); ?></div>
+                    <?php else: ?>
+                        <div class="barcode-id" style="color: #999;">لا يوجد باركود</div>
+                    <?php endif; ?>
+                </div>
+
+                <div class="detail-row"><span>تاريخ الإنتاج:</span> <span><?php echo $productionDate; ?></span></div>
+                <div class="detail-row"><span>الكمية:</span> <span><?php echo $quantity; ?></span></div>
+
+                <?php if ($batchNumber): ?>
+                    <div style="display: flex; gap: 10px; margin-top: 15px;">
+                        <button type="button" 
+                                class="btn-view js-batch-details" 
+                                style="border: none; cursor: pointer; flex: 1;"
+                                data-batch="<?php echo htmlspecialchars($batchNumber); ?>"
+                                data-product="<?php echo htmlspecialchars($finishedRow['product_name'] ?? ''); ?>"
+                                data-view-url="<?php echo htmlspecialchars($viewUrl); ?>">
+                            <i class="bi bi-eye me-1"></i>عرض التفاصيل
+                        </button>
+                        <button type="button" 
+                                class="btn-view js-print-barcode" 
+                                style="border: none; cursor: pointer; flex: 1; background: #28a745;"
+                                data-batch="<?php echo htmlspecialchars($batchNumber); ?>"
+                                data-product="<?php echo htmlspecialchars($finishedRow['product_name'] ?? ''); ?>"
+                                data-quantity="<?php echo htmlspecialchars($quantity); ?>">
+                            <i class="bi bi-printer me-1"></i>طباعة الباركود
+                        </button>
+                    </div>
+                <?php else: ?>
+                    <span class="btn-view" style="opacity: 0.5; cursor: not-allowed; display: inline-block; margin-top: 15px;">
+                        <i class="bi bi-eye me-1"></i>عرض التفاصيل
+                    </span>
+                <?php endif; ?>
+            </div>
+        <?php endforeach; ?>
+    </div>
+    
+    <!-- توليد الباركودات -->
+    <script>
+    (function() {
+        var maxRetries = 50;
+        var retryCount = 0;
+        
+        function generateAllBarcodes() {
+            if (typeof JsBarcode === 'undefined') {
+                retryCount++;
+                if (retryCount < maxRetries) {
+                    // إعادة المحاولة بعد 100ms
+                    setTimeout(generateAllBarcodes, 100);
+                } else {
+                    console.error('JsBarcode library failed to load');
+                    // عرض أرقام التشغيلة كنص بديل
+                    document.querySelectorAll('.barcode-container[data-batch]').forEach(function(container) {
+                        var batchNumber = container.getAttribute('data-batch');
+                        var svg = container.querySelector('svg');
+                        if (svg) {
+                            svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" font-size="14" fill="#666" font-family="Arial">' + batchNumber + '</text>';
+                        }
+                    });
+                }
+                return;
+            }
+            
+            // توليد الباركود لكل بطاقة
+            var containers = document.querySelectorAll('.barcode-container[data-batch]');
+            if (containers.length === 0) {
+                return;
+            }
+            
+            containers.forEach(function(container) {
+                var batchNumber = container.getAttribute('data-batch');
+                var svg = container.querySelector('svg.barcode-svg');
+                
+                if (svg && batchNumber && batchNumber.trim() !== '') {
+                    try {
+                        // مسح محتوى SVG أولاً
+                        svg.innerHTML = '';
+                        
+                        // توليد الباركود
+                        JsBarcode(svg, batchNumber, {
+                            format: "CODE128",
+                            width: 2,
+                            height: 50,
+                            displayValue: false,
+                            margin: 5,
+                            background: "#ffffff",
+                            lineColor: "#000000"
+                        });
+                    } catch (error) {
+                        console.error('Error generating barcode for ' + batchNumber + ':', error);
+                        svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" font-size="12" fill="#666" font-family="Arial">' + batchNumber + '</text>';
+                    }
+                }
+            });
+        }
+        
+        // تشغيل بعد تحميل الصفحة
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                setTimeout(generateAllBarcodes, 200);
+            });
+        } else {
+            setTimeout(generateAllBarcodes, 200);
+        }
+    })();
+    </script>
+    
+    <?php 
+    // حساب عدد الصفحات الإجمالي
+    $finishedProductsTotalPages = max(1, (int) ceil($finishedProductsCount / $finishedProductsPerPage));
+    
+    // بناء رابط الصفحة الحالية مع الحفاظ على المعاملات الأخرى
+    $queryParams = [];
+    foreach ($_GET as $key => $value) {
+        if ($key !== 'fp') {
+            $queryParams[$key] = $value;
+        }
+    }
+    // التأكد من وجود page=inventory في المعاملات
+    if (!isset($queryParams['page'])) {
+        $queryParams['page'] = 'inventory';
+    }
+    
+    // دالة مساعدة لبناء رابط الصفحة
+    $buildPageUrl = function($pageNum) use ($queryParams) {
+        $params = $queryParams;
+        $params['fp'] = $pageNum;
+        // استخدام رابط نسبي يبدأ بـ ? لأننا في dashboard/production.php
+        return '?' . http_build_query($params);
+    };
+    ?>
+    
+    <?php if ($finishedProductsTotalPages > 1): ?>
+    <div style="padding: 0 25px 25px;">
+        <nav aria-label="صفحات جدول المنتجات" class="mt-4">
+            <ul class="pagination justify-content-center flex-wrap mb-0">
+                <li class="page-item <?php echo $finishedProductsPageNum <= 1 ? 'disabled' : ''; ?>">
+                    <a class="page-link" href="<?php echo htmlspecialchars($buildPageUrl($finishedProductsPageNum - 1)); ?>" 
+                       <?php echo $finishedProductsPageNum <= 1 ? 'tabindex="-1" aria-disabled="true"' : ''; ?>>
+                        <i class="bi bi-chevron-right"></i> السابق
+                    </a>
+                </li>
+                
+                <?php
+                // عرض أرقام الصفحات
+                $startPage = max(1, $finishedProductsPageNum - 2);
+                $endPage = min($finishedProductsTotalPages, $finishedProductsPageNum + 2);
+                
+                if ($startPage > 1): ?>
+                    <li class="page-item">
+                        <a class="page-link" href="<?php echo htmlspecialchars($buildPageUrl(1)); ?>">1</a>
+                    </li>
+                    <?php if ($startPage > 2): ?>
+                        <li class="page-item disabled">
+                            <span class="page-link">...</span>
+                        </li>
+                    <?php endif; ?>
+                <?php endif; ?>
+                
+                <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
+                    <li class="page-item <?php echo $i === $finishedProductsPageNum ? 'active' : ''; ?>">
+                        <a class="page-link" href="<?php echo htmlspecialchars($buildPageUrl($i)); ?>">
+                            <?php echo $i; ?>
+                        </a>
+                    </li>
+                <?php endfor; ?>
+                
+                <?php if ($endPage < $finishedProductsTotalPages): ?>
+                    <?php if ($endPage < $finishedProductsTotalPages - 1): ?>
+                        <li class="page-item disabled">
+                            <span class="page-link">...</span>
+                        </li>
+                    <?php endif; ?>
+                    <li class="page-item">
+                        <a class="page-link" href="<?php echo htmlspecialchars($buildPageUrl($finishedProductsTotalPages)); ?>">
+                            <?php echo $finishedProductsTotalPages; ?>
+                        </a>
+                    </li>
+                <?php endif; ?>
+                
+                <li class="page-item <?php echo $finishedProductsPageNum >= $finishedProductsTotalPages ? 'disabled' : ''; ?>">
+                    <a class="page-link" href="<?php echo htmlspecialchars($buildPageUrl($finishedProductsPageNum + 1)); ?>"
+                       <?php echo $finishedProductsPageNum >= $finishedProductsTotalPages ? 'tabindex="-1" aria-disabled="true"' : ''; ?>>
+                        التالي <i class="bi bi-chevron-left"></i>
+                    </a>
+                </li>
+            </ul>
+            <div class="text-center text-muted small mt-2">
+                عرض <?php echo number_format($finishedProductsOffset + 1); ?> - <?php echo number_format(min($finishedProductsOffset + $finishedProductsPerPage, $finishedProductsCount)); ?> 
+                من أصل <?php echo number_format($finishedProductsCount); ?> منتج
+            </div>
+        </nav>
+    </div>
+    <?php elseif ($finishedProductsCount > 0): ?>
+    <div style="padding: 0 25px 25px; text-align: center; color: #666; font-size: 14px; margin-top: 15px;">
+        عرض جميع <?php echo number_format($finishedProductsCount); ?> منتج
+    </div>
+    <?php endif; ?>
+<?php else: ?>
+    <div style="padding: 25px;">
+        <div class="alert alert-info mb-0">
+            <i class="bi bi-info-circle me-2"></i>
+            لا توجد بيانات متاحة حالياً.
+        </div>
+    </div>
+<?php endif; ?>
+
+<!-- Modal طباعة الباركود -->
+<div class="modal fade" id="printBarcodesModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="bi bi-printer me-2"></i>طباعة الباركود</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-success">
+                    <i class="bi bi-check-circle me-2"></i>
+                    جاهز للطباعة
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">اسم المنتج</label>
+                    <input type="text" class="form-control" id="barcode_product_name" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">عدد الباركودات المراد طباعتها</label>
+                    <input type="number" class="form-control" id="barcode_print_quantity" min="1" value="1">
+                    <small class="text-muted">سيتم طباعة نفس رقم التشغيلة بعدد المرات المحدد</small>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">أرقام التشغيلة</label>
+                    <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;">
+                        <div id="batch_numbers_list"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+                <button type="button" class="btn btn-primary" onclick="printBarcodes()">
+                    <i class="bi bi-printer me-2"></i>طباعة
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<?php if ($isManager): ?>
+<div class="card shadow-sm mt-4">
+    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-cart4 me-2"></i>المنتجات الخارجية (لا تؤثر على مخزون الشركة)</h5>
+        <span class="badge bg-light text-dark"><?php echo number_format(is_countable($externalProducts) ? count($externalProducts) : 0); ?> منتج</span>
+    </div>
+    <div class="card-body">
+        <?php if (!empty($externalProducts)): ?>
+        <div class="table-responsive dashboard-table-wrapper">
+            <table class="table dashboard-table align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>اسم المنتج</th>
+                        <th>نوع البيع</th>
+                        <th>الكمية المتاحة</th>
+                        <th>سعر البيع</th>
+                        <th>آخر تحديث</th>
+                        <th>إجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($externalProducts as $externalProduct): ?>
+                    <tr>
+                        <td>
+                            <strong><?php echo htmlspecialchars($externalProduct['name'] ?? ''); ?></strong>
+                            <?php if (!empty($externalProduct['description'])): ?>
+                                <br><small class="text-muted"><?php echo htmlspecialchars($externalProduct['description']); ?></small>
+                            <?php endif; ?>
+                        </td>
+                        <td><?php
+                            $channelKey = $externalProduct['external_channel'] ?? null;
+                            echo htmlspecialchars($externalChannelLabels[$channelKey] ?? $externalChannelLabels[null]);
+                        ?></td>
+                        <td><?php echo number_format((float)($externalProduct['quantity'] ?? 0), 2); ?> <?php echo htmlspecialchars($externalProduct['unit'] ?? ''); ?></td>
+                        <td><?php echo formatCurrency($externalProduct['unit_price'] ?? 0); ?></td>
+                        <td>
+                            <?php
+                                $updatedAt = $externalProduct['updated_at'] ?? $externalProduct['created_at'] ?? null;
+                                echo $updatedAt ? htmlspecialchars(formatDateTime($updatedAt)) : '—';
+                            ?>
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <button
+                                    type="button"
+                                    class="btn btn-outline-success js-external-adjust"
+                                    data-mode="add"
+                                    data-product="<?php echo intval($externalProduct['id']); ?>"
+                                    data-name="<?php echo htmlspecialchars($externalProduct['name'] ?? '', ENT_QUOTES); ?>"
+                                >
+                                    <i class="bi bi-plus-circle"></i>
+                                    إضافة كمية
+                                </button>
+                                <button
+                                    type="button"
+                                    class="btn btn-outline-danger js-external-adjust"
+                                    data-mode="discard"
+                                    data-product="<?php echo intval($externalProduct['id']); ?>"
+                                    data-name="<?php echo htmlspecialchars($externalProduct['name'] ?? '', ENT_QUOTES); ?>"
+                                >
+                                    <i class="bi bi-trash3"></i>
+                                    إتلاف
+                                </button>
+                                <?php if ($isManager): ?>
+                                <button
+                                    type="button"
+                                    class="btn btn-outline-primary js-external-edit"
+                                    data-product="<?php echo intval($externalProduct['id']); ?>"
+                                    data-name="<?php echo htmlspecialchars($externalProduct['name'] ?? '', ENT_QUOTES); ?>"
+                                    data-channel="<?php echo htmlspecialchars($externalProduct['external_channel'] ?? '', ENT_QUOTES); ?>"
+                                    data-price="<?php echo htmlspecialchars($externalProduct['unit_price'] ?? 0, ENT_QUOTES); ?>"
+                                    data-unit="<?php echo htmlspecialchars($externalProduct['unit'] ?? 'قطعة', ENT_QUOTES); ?>"
+                                    data-description="<?php echo htmlspecialchars($externalProduct['description'] ?? '', ENT_QUOTES); ?>"
+                                >
+                                    <i class="bi bi-pencil-square"></i>
+                                    تعديل
+                                </button>
+                                <?php endif; ?>
+                            </div>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        <?php else: ?>
+        <div class="alert alert-info mb-0">
+            <i class="bi bi-info-circle me-2"></i>
+            لم يتم إضافة منتجات خارجية بعد.
+        </div>
+        <?php endif; ?>
+    </div>
+<?php endif; ?>
+
+<?php if ($isProductionRole && !empty($externalProductsForProduction)): ?>
+<!-- قسم المنتجات الخارجية لعمال الإنتاج -->
+<div class="card shadow-sm mt-4">
+    <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-box-seam me-2"></i>المنتجات الخارجية</h5>
+        <span class="badge bg-light text-dark"><?php echo number_format(count($externalProductsForProduction)); ?> منتج</span>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive dashboard-table-wrapper">
+            <table class="table dashboard-table align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>اسم المنتج</th>
+                        <th>كمية المنتج</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($externalProductsForProduction as $externalProduct): ?>
+                    <tr>
+                        <td>
+                            <strong><?php echo htmlspecialchars($externalProduct['name'] ?? ''); ?></strong>
+                        </td>
+                        <td>
+                            <?php 
+                            $productId = (int)($externalProduct['id'] ?? 0);
+                            $availableQty = (float)($externalProduct['quantity'] ?? 0);
+                            
+                            // حساب الكمية المحجوزة في طلبات النقل المعلقة
+                            if ($primaryWarehouse && $productId > 0) {
+                                $pendingTransfers = $db->queryOne(
+                                    "SELECT COALESCE(SUM(wti.quantity), 0) AS pending_quantity
+                                     FROM warehouse_transfer_items wti
+                                     INNER JOIN warehouse_transfers wt ON wt.id = wti.transfer_id
+                                     WHERE wti.product_id = ? AND wt.from_warehouse_id = ? AND wt.status = 'pending'",
+                                    [$productId, $primaryWarehouse['id']]
+                                );
+                                $availableQty -= (float)($pendingTransfers['pending_quantity'] ?? 0);
+                                $availableQty = max(0, $availableQty);
+                            }
+                            
+                            echo number_format($availableQty, 2); 
+                            ?>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal نقل منتج خارجي -->
+<div class="modal fade" id="transferExternalProductModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog">
+        <form class="modal-content" method="POST" id="transferExternalProductForm">
+            <input type="hidden" name="action" value="transfer_external_product">
+            <input type="hidden" name="transfer_token" value="<?php echo htmlspecialchars($_SESSION['transfer_submission_token'] ?? ''); ?>">
+            <input type="hidden" name="product_id" id="transferExternalProductId" value="">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="bi bi-arrow-left-right me-2"></i>نقل منتج خارجي</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">اسم المنتج</label>
+                    <input type="text" class="form-control" id="transferExternalProductName" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">الكمية المتاحة</label>
+                    <input type="text" class="form-control" id="transferExternalAvailableQty" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">المخزن الوجهة <span class="text-danger">*</span></label>
+                    <select class="form-select" name="to_warehouse_id" required>
+                        <option value="">اختر المخزن الوجهة</option>
+                        <?php if (!empty($destinationWarehouses)): ?>
+                            <?php foreach ($destinationWarehouses as $warehouse): ?>
+                                <option value="<?php echo (int)$warehouse['id']; ?>">
+                                    <?php if ($warehouse['warehouse_type'] === 'vehicle' && !empty($warehouse['rep_name'])): ?>
+                                        <?php 
+                                        $repName = htmlspecialchars($warehouse['rep_name'] ?? '');
+                                        $repUsername = htmlspecialchars($warehouse['rep_username'] ?? '');
+                                        $vehicleNumber = htmlspecialchars($warehouse['vehicle_number'] ?? '');
+                                        echo $repName . ' - ' . $repUsername . ' - ' . $vehicleNumber;
+                                        ?>
+                                    <?php else: ?>
+                                        <?php echo htmlspecialchars($warehouse['name']); ?>
+                                        <?php if (!empty($warehouse['warehouse_type'])): ?>
+                                            (<?php echo htmlspecialchars($warehouse['warehouse_type']); ?>)
+                                        <?php endif; ?>
+                                    <?php endif; ?>
+                                </option>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">الكمية المراد نقلها <span class="text-danger">*</span></label>
+                    <input type="number" class="form-control" name="quantity" id="transferExternalQuantity" step="0.01" min="0.01" required>
+                    <small class="text-muted">الحد الأقصى: <span id="transferExternalMaxQty">0</span></small>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">تاريخ النقل</label>
+                    <input type="date" class="form-control" name="transfer_date" value="<?php echo date('Y-m-d'); ?>">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">ملاحظات</label>
+                    <textarea class="form-control" name="notes" rows="2" placeholder="ملاحظات إضافية (اختياري)"></textarea>
+                </div>
+                <div class="alert alert-warning mb-0">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    سيتم إرسال طلب النقل إلى المدير للموافقة عليه.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                <button type="submit" class="btn btn-primary">إرسال طلب النقل</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+(function() {
+    const transferButtons = document.querySelectorAll('.js-transfer-external-product');
+    const transferModal = document.getElementById('transferExternalProductModal');
+    const transferForm = document.getElementById('transferExternalProductForm');
+    const productIdInput = document.getElementById('transferExternalProductId');
+    const productNameInput = document.getElementById('transferExternalProductName');
+    const availableQtyInput = document.getElementById('transferExternalAvailableQty');
+    const quantityInput = document.getElementById('transferExternalQuantity');
+    const maxQtySpan = document.getElementById('transferExternalMaxQty');
+    
+    if (!transferModal || !transferForm) return;
+    
+    transferButtons.forEach(function(button) {
+        button.addEventListener('click', function() {
+            const productId = this.getAttribute('data-product-id');
+            const productName = this.getAttribute('data-product-name');
+            const availableQty = parseFloat(this.getAttribute('data-available-qty') || '0');
+            const unit = this.getAttribute('data-unit') || 'قطعة';
+            
+            if (productIdInput) productIdInput.value = productId;
+            if (productNameInput) productNameInput.value = productName;
+            if (availableQtyInput) availableQtyInput.value = availableQty.toFixed(2) + ' ' + unit;
+            if (maxQtySpan) maxQtySpan.textContent = availableQty.toFixed(2) + ' ' + unit;
+            if (quantityInput) {
+                quantityInput.value = '';
+                quantityInput.max = availableQty.toFixed(2);
+            }
+            
+            const bsModal = new bootstrap.Modal(transferModal);
+            bsModal.show();
+        });
+    });
+    
+    if (quantityInput) {
+        quantityInput.addEventListener('input', function() {
+            const maxQty = parseFloat(this.max || '0');
+            const currentQty = parseFloat(this.value || '0');
+            if (currentQty > maxQty) {
+                this.value = maxQty.toFixed(2);
+            }
+        });
+    }
+    
+    // معالج إرسال النموذج عبر AJAX
+    let isSubmitting = false;
+    transferForm.addEventListener('submit', async function(event) {
+        event.preventDefault();
+        
+        if (isSubmitting) {
+            return;
+        }
+        
+        // التحقق من صحة البيانات
+        const toWarehouseId = transferForm.querySelector('select[name="to_warehouse_id"]').value;
+        const quantity = parseFloat(quantityInput.value || '0');
+        const maxQty = parseFloat(quantityInput.max || '0');
+        
+        if (!toWarehouseId) {
+            showErrorMessage('يرجى اختيار المخزن الوجهة.');
+            return;
+        }
+        
+        if (quantity <= 0) {
+            showErrorMessage('يرجى إدخال كمية صالحة أكبر من الصفر.');
+            return;
+        }
+        
+        if (quantity > maxQty) {
+            showErrorMessage('الكمية المطلوبة تتجاوز الكمية المتاحة.');
+            return;
+        }
+        
+        isSubmitting = true;
+        const submitButton = transferForm.querySelector('button[type="submit"]');
+        const originalButtonText = submitButton ? submitButton.innerHTML : 'إرسال طلب النقل';
+        
+        if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>جارٍ الإرسال...';
+        }
+        
+        try {
+            const formData = new FormData(transferForm);
+            
+            const response = await fetch(window.location.href, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: formData,
+                credentials: 'same-origin'
+            });
+            
+            // التحقق من حالة الاستجابة
+            if (!response.ok && response.status !== 400 && response.status !== 500) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const contentType = response.headers.get('content-type') || '';
+            let result;
+            
+            // محاولة قراءة الاستجابة كـ JSON أولاً
+            const responseText = await response.text();
+            
+            if (contentType.includes('application/json')) {
+                try {
+                    // إزالة أي whitespace أو HTML قبل وبعد JSON
+                    const trimmedText = responseText.trim();
+                    // محاولة استخراج JSON من النص إذا كان هناك HTML قبل
+                    const jsonMatch = trimmedText.match(/\{[\s\S]*\}/);
+                    const jsonText = jsonMatch ? jsonMatch[0] : trimmedText;
+                    result = JSON.parse(jsonText);
+                } catch (parseError) {
+                    console.error('Error parsing JSON response:', parseError);
+                    console.error('Response text:', responseText.substring(0, 500));
+                    throw new Error('خطأ في قراءة استجابة الخادم: ' + parseError.message);
+                }
+            } else {
+                // إذا لم تكن JSON، قد تكون HTML (redirect response)
+                console.log('Non-JSON response received:', responseText.substring(0, 200));
+                
+                // إذا كان status 200 وليس JSON، قد يعني أن الطلب نجح لكن الخادم لم يعد JSON
+                if (response.ok) {
+                    showSuccessMessage('تم إرسال طلب النقل بنجاح! سيتم مراجعته والموافقة عليه.');
+                    
+                    const modal = bootstrap.Modal.getInstance(transferModal);
+                    if (modal) {
+                        modal.hide();
+                    }
+                    
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                    return;
+                } else {
+                    throw new Error('حدث خطأ في الخادم');
+                }
+            }
+            
+            // معالجة النتيجة
+            if (result && result.success) {
+                let successMsg = result.message || 'تم إرسال طلب النقل بنجاح!';
+                if (result.transfer_number) {
+                    successMsg += '\nرقم الطلب: ' + result.transfer_number;
+                }
+                
+                showSuccessMessage(successMsg);
+                
+                const modal = bootstrap.Modal.getInstance(transferModal);
+                if (modal) {
+                    modal.hide();
+                }
+                
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
+            } else {
+                isSubmitting = false;
+                if (submitButton) {
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = originalButtonText;
+                }
+                const errorMsg = result ? (result.message || result.error || 'حدث خطأ أثناء إرسال الطلب.') : 'حدث خطأ غير معروف.';
+                showErrorMessage(errorMsg);
+            }
+        } catch (error) {
+            console.error('Error submitting transfer form:', error);
+            isSubmitting = false;
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalButtonText;
+            }
+            const errorMessage = error.message || 'حدث خطأ في الاتصال بالخادم. يرجى المحاولة مرة أخرى.';
+            showErrorMessage(errorMessage);
+        }
+    });
+    
+    // دالة لإظهار رسالة النجاح
+    function showSuccessMessage(message) {
+        let toastContainer = document.getElementById('toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.id = 'toast-container';
+            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+            toastContainer.style.zIndex = '9999';
+            document.body.appendChild(toastContainer);
+        }
+        
+        const toastId = 'success-toast-' + Date.now();
+        const toastHtml = `
+            <div id="${toastId}" class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="true" data-bs-delay="5000">
+                <div class="d-flex">
+                    <div class="toast-body">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="bi bi-check-circle-fill fs-4 me-2"></i>
+                            <strong class="me-auto">تمت العملية بنجاح!</strong>
+                        </div>
+                        <div class="small" style="white-space: pre-line;">${message.replace(/\n/g, '<br>')}</div>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        `;
+        
+        toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+        const toastElement = document.getElementById(toastId);
+        if (toastElement && typeof bootstrap !== 'undefined' && bootstrap.Toast) {
+            const toast = new bootstrap.Toast(toastElement);
+            toast.show();
+            
+            toastElement.addEventListener('hidden.bs.toast', function() {
+                toastElement.remove();
+            });
+        }
+    }
+    
+    // دالة لإظهار رسالة الخطأ
+    function showErrorMessage(message) {
+        let toastContainer = document.getElementById('toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.id = 'toast-container';
+            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+            toastContainer.style.zIndex = '9999';
+            document.body.appendChild(toastContainer);
+        }
+        
+        const toastId = 'error-toast-' + Date.now();
+        const toastHtml = `
+            <div id="${toastId}" class="toast align-items-center text-white bg-danger border-0" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="true" data-bs-delay="5000">
+                <div class="d-flex">
+                    <div class="toast-body">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="bi bi-exclamation-triangle-fill fs-4 me-2"></i>
+                            <strong class="me-auto">خطأ!</strong>
+                        </div>
+                        <div class="small">${message}</div>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        `;
+        
+        toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+        const toastElement = document.getElementById(toastId);
+        if (toastElement && typeof bootstrap !== 'undefined' && bootstrap.Toast) {
+            const toast = new bootstrap.Toast(toastElement);
+            toast.show();
+            
+            toastElement.addEventListener('hidden.bs.toast', function() {
+                toastElement.remove();
+            });
+        }
+    }
+})();
+</script>
+<?php endif; ?>
+
+<?php if ($isManager): ?>
+<div class="modal fade" id="addExternalProductModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog">
+        <form class="modal-content" method="POST">
+            <input type="hidden" name="action" value="create_external_product">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>إضافة منتج خارجي جديد</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label" for="externalProductName">اسم المنتج <span class="text-danger">*</span></label>
+                    <input type="text" id="externalProductName" name="external_name" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="externalProductChannel">نوع البيع <span class="text-danger">*</span></label>
+                    <select id="externalProductChannel" name="external_channel" class="form-select" required>
+                        <option value="company">بيع داخل الشركة</option>
+                        <option value="delegate">مندوب المبيعات</option>
+                        <option value="other">أخرى</option>
+                    </select>
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label" for="externalProductQuantity">الكمية الابتدائية</label>
+                        <input type="number" id="externalProductQuantity" name="external_quantity" class="form-control" min="0" step="0.01" value="0">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="externalProductUnit">الوحدة</label>
+                        <input type="text" id="externalProductUnit" name="external_unit" class="form-control" value="قطعة">
+                    </div>
+                </div>
+                <div class="row g-3 mt-0">
+                    <div class="col-md-6">
+                        <label class="form-label" for="externalProductPrice">سعر البيع</label>
+                        <input type="number" id="externalProductPrice" name="external_price" class="form-control" min="0" step="0.01" value="0.00">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="externalProductDescription">وصف مختصر</label>
+                        <input type="text" id="externalProductDescription" name="external_description" class="form-control" placeholder="اختياري">
+                    </div>
+                </div>
+                <div class="alert alert-info mt-3">
+                    <i class="bi bi-info-circle me-2"></i>
+                    هذه المنتجات لا تؤثر على مخزون الشركة وتُستخدم للمنتجات الخارجية التي يتم بيعها داخلياً أو عبر المناديب.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                <button type="submit" class="btn btn-success">حفظ المنتج</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal fade" id="externalStockModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog">
+        <form class="modal-content" method="POST">
+            <input type="hidden" name="action" value="adjust_external_stock">
+            <input type="hidden" name="product_id" value="">
+            <input type="hidden" name="operation" value="add">
+            <div class="modal-header">
+                <h5 class="modal-title js-external-stock-title">تحديث كمية المنتج الخارجي</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label" for="externalStockProductName">اسم المنتج</label>
+                    <input type="text" id="externalStockProductName" class="form-control js-external-stock-name" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label js-external-stock-label" for="externalStockQuantity">الكمية المراد إضافتها</label>
+                    <input type="number" id="externalStockQuantity" name="quantity" class="form-control" min="0" step="0.01" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="externalStockNote">ملاحظة</label>
+                    <textarea id="externalStockNote" name="note" class="form-control" rows="2" placeholder="اختياري"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                <button type="submit" class="btn btn-primary js-external-stock-submit">حفظ</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal fade" id="editExternalProductModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog">
+        <form class="modal-content" method="POST">
+            <input type="hidden" name="action" value="update_external_product">
+            <input type="hidden" name="product_id" value="">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>تعديل بيانات المنتج الخارجي</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label" for="editExternalProductName">اسم المنتج <span class="text-danger">*</span></label>
+                    <input type="text" id="editExternalProductName" name="edit_name" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="editExternalProductChannel">نوع البيع <span class="text-danger">*</span></label>
+                    <select id="editExternalProductChannel" name="edit_channel" class="form-select" required>
+                        <option value="company">بيع داخل الشركة</option>
+                        <option value="delegate">مندوب المبيعات</option>
+                        <option value="other">أخرى</option>
+                    </select>
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label" for="editExternalProductPrice">سعر البيع</label>
+                        <input type="number" id="editExternalProductPrice" name="edit_price" class="form-control" min="0" step="0.01">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="editExternalProductUnit">الوحدة</label>
+                        <input type="text" id="editExternalProductUnit" name="edit_unit" class="form-control">
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <label class="form-label" for="editExternalProductDescription">ملاحظات</label>
+                    <textarea id="editExternalProductDescription" name="edit_description" class="form-control" rows="2" placeholder="اختياري"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                <button type="submit" class="btn btn-primary">حفظ التعديلات</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal fade" id="setManualPriceModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog">
+        <form class="modal-content" method="POST">
+            <input type="hidden" name="action" value="update_manual_price">
+            <input type="hidden" name="finished_product_id" id="manualPriceProductId" value="">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>تحديد السعر اليدوي</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <div class="form-label fw-bold">المنتج</div>
+                    <div class="form-control-plaintext" id="manualPriceProductName">—</div>
+                </div>
+                <div class="mb-3">
+                    <div class="form-label fw-bold">رقم التشغيلة</div>
+                    <div class="form-control-plaintext" id="manualPriceBatchNumber">—</div>
+                </div>
+                <div class="mb-3">
+                    <div class="form-label fw-bold">الكمية في التشغيلة</div>
+                    <div class="form-control-plaintext" id="manualPriceQuantity">—</div>
+                </div>
+                <div class="mb-3">
+                    <div class="form-label text-muted small">سعر القالب (للحدة الواحدة)</div>
+                    <div class="form-control-plaintext small" id="manualPriceTemplatePrice">—</div>
+                </div>
+                <div class="mb-3">
+                    <div class="form-label text-muted small">السعر المحسوب تلقائياً (الكمية × سعر القالب)</div>
+                    <div class="form-control-plaintext small text-primary fw-semibold" id="manualPriceCalculated">—</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="manualPriceInput">السعر اليدوي الإجمالي للتشغيلة <span class="text-danger">*</span></label>
+                    <input type="number" 
+                           name="manual_price" 
+                           id="manualPriceInput" 
+                           class="form-control" 
+                           min="0" 
+                           max="10000000" 
+                           step="0.01" 
+                           placeholder="أدخل السعر الإجمالي للتشغيلة">
+                    <small class="form-text text-muted">
+                        هذا السعر هو السعر الإجمالي للتشغيلة (وليس للوحدة الواحدة). سيتم استخدامه بدلاً من الحساب التلقائي (الكمية × سعر القالب). اتركه فارغاً لإزالة السعر اليدوي والعودة للحساب التلقائي.
+                    </small>
+                </div>
+                <div class="mb-3">
+                    <div class="form-label text-muted small">السعر اليدوي الحالي</div>
+                    <div class="form-control-plaintext small" id="manualPriceCurrentPrice">—</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                <button type="submit" class="btn btn-info">حفظ السعر</button>
+            </div>
+        </form>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php if ($primaryWarehouse): ?>
+<div class="modal fade" id="requestTransferModal" tabindex="-1" aria-labelledby="requestTransferModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-arrow-left-right me-2"></i>
+                    طلب نقل منتجات من المخزن الرئيسي
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <form method="POST" id="mainWarehouseTransferForm">
+                <input type="hidden" name="action" value="create_transfer">
+                <input type="hidden" name="from_warehouse_id" value="<?php echo intval($primaryWarehouse['id']); ?>">
+                <input type="hidden" name="transfer_token" id="transferToken" value="">
+                <div class="modal-body">
+                    <?php if (!$canCreateTransfers): ?>
+                        <div class="alert alert-warning d-flex align-items-center gap-2 mb-0">
+                            <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+                            <div>
+                                <?php if (empty($primaryWarehouse)): ?>
+                                    لا يوجد مخزن رئيسي معرف بعد. يرجى إنشاء المخزن الرئيسي أولاً.
+                                <?php elseif (!$hasDestinationWarehouses): ?>
+                                    لا توجد مخازن وجهة نشطة متاحة حالياً. يرجى إنشاء أو تفعيل مخزن وجهة قبل إرسال طلب النقل.
+                                <?php elseif (!$hasFinishedBatches): ?>
+                                    لا توجد تشغيلات جاهزة للنقل حالياً. تأكد من إضافة منتجات نهائية بتشغيلاتها في جدول الإنتاج.
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    <?php else: ?>
+                        <div class="row g-3 mb-3">
+                            <div class="col-12 col-md-6">
+                                <div class="form-control-plaintext fw-semibold" id="transferFromWarehouse">
+                                    <?php echo htmlspecialchars($primaryWarehouse['name']); ?> (مخزن رئيسي)
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label" for="transferToWarehouse">إلى المخزن <span class="text-danger">*</span></label>
+                                <select class="form-select" name="to_warehouse_id" id="transferToWarehouse" required>
+                                    <option value="">اختر المخزن الوجهة</option>
+                                    <?php foreach ($destinationWarehouses as $warehouse): ?>
+                                        <option value="<?php echo intval($warehouse['id']); ?>">
+                                            <?php if ($warehouse['warehouse_type'] === 'vehicle' && !empty($warehouse['rep_name'])): ?>
+                                                <?php 
+                                                $repName = htmlspecialchars($warehouse['rep_name'] ?? '');
+                                                $vehicleNumber = htmlspecialchars($warehouse['vehicle_number'] ?? '');
+                                                echo $repName . ' - ' . $vehicleNumber;
+                                                ?>
+                                            <?php else: ?>
+                                                <?php echo htmlspecialchars($warehouse['name']); ?>
+                                                (<?php echo $warehouse['warehouse_type'] === 'vehicle' ? 'مخزن سيارة' : 'مخزن'; ?>)
+                                            <?php endif; ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-12 col-md-6">
+                                <input type="date" id="transferDate" class="form-control" name="transfer_date" value="<?php echo date('Y-m-d'); ?>" required>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="form-label">عناصر النقل <span class="text-danger">*</span></div>
+                            <div id="mainWarehouseTransferItems">
+                                <div class="transfer-item row g-2 align-items-end mb-2">
+                                    <div class="col-12 col-md-5">
+                                        <label class="form-label small text-muted" for="transferProduct0">المنتج</label>
+                                        <select id="transferProduct0" class="form-select product-select" name="items[0][product_select]" required>
+                                            <option value="">اختر المنتج</option>
+                                            <?php foreach ($finishedProductOptions as $option): ?>
+                                                <?php
+                                                $isExternal = isset($option['is_external']) && $option['is_external'] === true;
+                                                $displayText = htmlspecialchars($option['product_name'] ?? '');
+                                                if (!$isExternal && !empty($option['batch_number'])) {
+                                                    $displayText .= ' - تشغيلة ' . htmlspecialchars($option['batch_number']);
+                                                }
+                                                $displayText .= ' (متاح: ' . number_format((float)$option['quantity_available'], 2) . ')';
+                                                ?>
+                                                <option value="<?php echo intval($option['product_id'] ?? 0); ?>"
+                                                        data-product-id="<?php echo intval($option['product_id'] ?? 0); ?>"
+                                                        data-batch-id="<?php echo $isExternal ? '' : intval($option['batch_id'] ?? 0); ?>"
+                                                        data-batch-number="<?php echo htmlspecialchars($option['batch_number'] ?? ''); ?>"
+                                                        data-available="<?php echo number_format((float)$option['quantity_available'], 2, '.', ''); ?>"
+                                                        data-is-external="<?php echo $isExternal ? '1' : '0'; ?>">
+                                                    <?php echo $displayText; ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    <div class="col-12 col-md-4">
+                                        <label class="form-label small text-muted" for="transferQuantity0">الكمية</label>
+                                        <input type="number" id="transferQuantity0" step="0.01" min="0.01" class="form-control quantity-input" name="items[0][quantity]" placeholder="الكمية" required>
+                                    </div>
+                                    <div class="col-12 col-md-3">
+                                        <label class="form-label small text-muted d-block">&nbsp;</label>
+                                        <button type="button" class="btn btn-outline-danger btn-sm w-100 remove-transfer-item" title="حذف العنصر">
+                                            <i class="bi bi-trash"></i> حذف
+                                        </button>
+                                    </div>
+                                    <div class="col-12">
+                                        <small class="text-muted available-hint d-block"></small>
+                                        <input type="hidden" id="transferProductId0" name="items[0][product_id]" class="selected-product-id">
+                                        <input type="hidden" id="transferBatchId0" name="items[0][batch_id]" class="selected-batch-id">
+                                        <input type="hidden" id="transferBatchNumber0" name="items[0][batch_number]" class="selected-batch-number">
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="addTransferItemBtn">
+                                <i class="bi bi-plus-circle me-1"></i>
+                                إضافة منتج آخر
+                            </button>
+                        </div>
+
+                        <div class="alert alert-info d-flex align-items-center gap-2">
+                            <i class="bi bi-info-circle-fill fs-5"></i>
+                            <div>
+                                سيتم إرسال طلب النقل للمدير للمراجعة والموافقة قبل خصم الكميات من المخزن الرئيسي.
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary" id="submitTransferBtn" <?php echo $canCreateTransfers ? '' : 'disabled'; ?>>
+                        إرسال الطلب
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<script>
+// كود نظيف تماماً بدون أي event listeners معقدة
+if (!window.transferFormInitialized) {
+    window.transferFormInitialized = true;
+    
+    document.addEventListener('DOMContentLoaded', function () {
+        const transferForm = document.getElementById('mainWarehouseTransferForm');
+        const itemsContainer = document.getElementById('mainWarehouseTransferItems');
+        const addItemButton = document.getElementById('addTransferItemBtn');
+        
+        if (!transferForm || !itemsContainer) {
+            return;
+        }
+
+        let transferItemIndex = 1;
+        let allFinishedProductOptions = <?php echo json_encode($finishedProductOptions ?? []); ?>;
+
+        // استخدام event delegation - لا نضيف listeners لكل عنصر
+        itemsContainer.addEventListener('change', function(e) {
+            if (e.target.classList.contains('product-select')) {
+                const select = e.target;
+                const row = select.closest('.transfer-item');
+                if (!row) return;
+                
+                const selectedOption = select.options[select.selectedIndex];
+                const available = selectedOption ? parseFloat(selectedOption.dataset.available || '0') : 0;
+                const productIdInput = row.querySelector('.selected-product-id');
+                const batchIdInput = row.querySelector('.selected-batch-id');
+                const batchNumberInput = row.querySelector('.selected-batch-number');
+                const availableHint = row.querySelector('.available-hint');
+                const quantityInput = row.querySelector('.quantity-input');
+                
+                if (productIdInput) {
+                    productIdInput.value = selectedOption ? parseInt(selectedOption.dataset.productId || '0', 10) : '';
+                }
+                if (batchIdInput) {
+                    const isExternal = selectedOption ? (selectedOption.dataset.isExternal === '1') : false;
+                    if (isExternal) {
+                        batchIdInput.value = ''; // المنتجات الخارجية لا تحتوي على batch_id
+                    } else {
+                        batchIdInput.value = selectedOption ? parseInt(selectedOption.dataset.batchId || '0', 10) : '';
+                    }
+                }
+                if (batchNumberInput) {
+                    const isExternal = selectedOption ? (selectedOption.dataset.isExternal === '1') : false;
+                    if (isExternal) {
+                        batchNumberInput.value = ''; // المنتجات الخارجية لا تحتوي على batch_number
+                    } else {
+                        batchNumberInput.value = selectedOption ? selectedOption.dataset.batchNumber || '' : '';
+                    }
+                }
+                
+                if (availableHint) {
+                    if (selectedOption && selectedOption.value) {
+                        availableHint.textContent = `الكمية المتاحة: ${available.toLocaleString('ar-EG')} وحدة`;
+                    } else {
+                        availableHint.textContent = '';
+                    }
+                }
+                
+                if (quantityInput) {
+                    if (available > 0) {
+                        quantityInput.setAttribute('max', available);
+                        if (parseFloat(quantityInput.value || '0') > available) {
+                            quantityInput.value = available;
+                        }
+                    } else {
+                        quantityInput.removeAttribute('max');
+                    }
+                }
+            }
+        });
+
+        function buildItemRow(index) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'transfer-item row g-2 align-items-end mb-2';
+            
+            let optionsHtml = '<option value="">اختر المنتج</option>';
+            allFinishedProductOptions.forEach(function(option) {
+                const productId = parseInt(option.product_id || 0, 10);
+                const batchId = option.batch_id ? parseInt(option.batch_id, 10) : 0;
+                const batchNumber = (option.batch_number || '').replace(/"/g, '&quot;');
+                const productName = (option.product_name || 'غير محدد').replace(/"/g, '&quot;');
+                const available = parseFloat(option.quantity_available || 0);
+                const availableFormatted = available.toLocaleString('ar-EG', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                const isExternal = option.is_external === true || option.is_external === '1' || option.is_external === 1;
+                
+                let displayText = productName;
+                if (!isExternal && batchNumber) {
+                    displayText += ' - تشغيلة ' + batchNumber;
+                }
+                displayText += ' (متاح: ' + availableFormatted + ')';
+                
+                optionsHtml += `<option value="${productId}"
+                        data-product-id="${productId}"
+                        data-batch-id="${isExternal ? '' : batchId}"
+                        data-batch-number="${batchNumber}"
+                        data-available="${available.toFixed(2)}"
+                        data-is-external="${isExternal ? '1' : '0'}">
+                    ${displayText}
+                </option>`;
+            });
+            
+            wrapper.innerHTML = `
+                <div class="col-12 col-md-5">
+                    <label class="form-label small text-muted" for="transferProduct${index}">المنتج</label>
+                    <select id="transferProduct${index}" class="form-select product-select" name="items[${index}][product_select]" required>
+                        ${optionsHtml}
+                    </select>
+                </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label small text-muted" for="transferQuantity${index}">الكمية</label>
+                    <input type="number" id="transferQuantity${index}" step="0.01" min="0.01" class="form-control quantity-input" name="items[${index}][quantity]" placeholder="الكمية" required>
+                </div>
+                <div class="col-12 col-md-3">
+                    <label class="form-label small text-muted d-block">&nbsp;</label>
+                    <button type="button" class="btn btn-outline-danger btn-sm w-100 remove-transfer-item" title="حذف العنصر">
+                        <i class="bi bi-trash"></i> حذف
+                    </button>
+                </div>
+                <div class="col-12">
+                    <small class="text-muted available-hint d-block"></small>
+                    <input type="hidden" id="transferProductId${index}" name="items[${index}][product_id]" class="selected-product-id">
+                    <input type="hidden" id="transferBatchId${index}" name="items[${index}][batch_id]" class="selected-batch-id">
+                    <input type="hidden" id="transferBatchNumber${index}" name="items[${index}][batch_number]" class="selected-batch-number">
+                </div>
+            `;
+            return wrapper;
+        }
+
+        if (addItemButton) {
+            addItemButton.addEventListener('click', () => {
+                const newRow = buildItemRow(transferItemIndex);
+                itemsContainer.appendChild(newRow);
+                transferItemIndex += 1;
+            });
+        }
+
+        // استخدام event delegation لحذف العناصر
+        itemsContainer.addEventListener('click', (event) => {
+            const removeButton = event.target.closest('.remove-transfer-item');
+            if (!removeButton) {
+                return;
+            }
+
+            const rows = itemsContainer.querySelectorAll('.transfer-item');
+            if (rows.length <= 1) {
+                return;
+            }
+
+            removeButton.closest('.transfer-item').remove();
+        });
+
+        // تهيئة العناصر الموجودة مسبقاً
+        itemsContainer.querySelectorAll('.product-select').forEach(select => {
+            const row = select.closest('.transfer-item');
+            if (row) {
+                const selectedOption = select.options[select.selectedIndex];
+                if (selectedOption && selectedOption.value) {
+                    const available = parseFloat(selectedOption.dataset.available || '0');
+                    const quantityInput = row.querySelector('.quantity-input');
+                    if (quantityInput && available > 0) {
+                        quantityInput.setAttribute('max', available);
+                    }
+                }
+            }
+        });
+
+        // إدارة نموذج طلب النقل من المخزن الرئيسي
+        const requestTransferModal = document.getElementById('requestTransferModal');
+        if (requestTransferModal) {
+            // تحميل المنتجات من المخزن الرئيسي عند فتح النموذج لأول مرة (مثل صفحة مخزون السيارات)
+            if (allFinishedProductOptions.length === 0 && <?php echo $primaryWarehouse ? 'true' : 'false'; ?>) {
+                const loadProductsOnce = function() {
+                    if (allFinishedProductOptions.length > 0) {
+                        return; // تم التحميل بالفعل
+                    }
+
+                    const currentUrl = new URL(window.location.href);
+                    currentUrl.searchParams.set('ajax', 'load_products');
+                    currentUrl.searchParams.set('warehouse_id', <?php echo $primaryWarehouse['id'] ?? 'null'; ?>);
+
+                    fetch(currentUrl.toString())
+                        .then(response => {
+                            const contentType = response.headers.get('content-type');
+                            if (!contentType || !contentType.includes('application/json')) {
+                                return response.text().then(text => {
+                                    throw new Error('Expected JSON but got: ' + text.substring(0, 100));
+                                });
+                            }
+                            return response.json();
+                        })
+                        .then(data => {
+                            if (data.success && data.products) {
+                                allFinishedProductOptions = data.products;
+                                // تحديث القوائم بدون إعادة ربط الأحداث
+                                if (itemsContainer) {
+                                    itemsContainer.querySelectorAll('.product-select').forEach(select => {
+                                        const currentValue = select.value;
+                                        select.innerHTML = '<option value="">اختر المنتج</option>';
+                                        allFinishedProductOptions.forEach(option => {
+                                            const optionElement = document.createElement('option');
+                                            const isExternal = option.is_external === true || option.is_external === '1' || option.is_external === 1;
+                                            optionElement.value = option.product_id || 0;
+                                            optionElement.dataset.productId = option.product_id || 0;
+                                            optionElement.dataset.batchId = isExternal ? '' : (option.batch_id || 0);
+                                            optionElement.dataset.batchNumber = isExternal ? '' : (option.batch_number || '');
+                                            optionElement.dataset.available = parseFloat(option.quantity_available || 0).toFixed(2);
+                                            optionElement.dataset.isExternal = isExternal ? '1' : '0';
+                                            
+                                            let displayText = option.product_name || 'غير محدد';
+                                            if (!isExternal && option.batch_number) {
+                                                displayText += ' - تشغيلة ' + (option.batch_number || 'بدون');
+                                            }
+                                            displayText += ' (متاح: ' + parseFloat(option.quantity_available || 0).toFixed(2) + ')';
+                                            optionElement.textContent = displayText;
+                                            
+                                            if (currentValue && option.product_id == currentValue) {
+                                                optionElement.selected = true;
+                                            }
+                                            select.appendChild(optionElement);
+                                        });
+                                    });
+                                }
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error loading products:', error);
+                        });
+                };
+
+                // استدعاء التحميل عند فتح النموذج مرة واحدة فقط
+                requestTransferModal.addEventListener('show.bs.modal', loadProductsOnce, { once: true });
+            }
+
+            // تحديث token عند فتح النموذج
+            const transferTokenInput = document.getElementById('transferToken');
+            if (transferTokenInput) {
+                requestTransferModal.addEventListener('show.bs.modal', function() {
+                    if (transferTokenInput.value === '') {
+                        transferTokenInput.value = '<?php echo htmlspecialchars($_SESSION['transfer_submission_token'] ?? '', ENT_QUOTES); ?>';
+                    }
+                });
+            }
+            
+            // إصلاح تموضع الـ modal عند فتحه
+            requestTransferModal.addEventListener('shown.bs.modal', function() {
+                // التأكد من وجود backdrop واحد فقط
+                const backdrops = document.querySelectorAll('.modal-backdrop');
+                if (backdrops.length > 1) {
+                    for (let i = 1; i < backdrops.length; i++) {
+                        backdrops[i].remove();
+                    }
+                }
+                
+                // فقط على الشاشات الكبيرة (أكبر من 992px) - لا نعدل styles على الهاتف
+                if (window.innerWidth > 991.98) {
+                    const modalDialog = requestTransferModal.querySelector('.modal-dialog');
+                    if (modalDialog) {
+                        modalDialog.style.margin = '1.75rem auto';
+                    }
+                }
+            });
+            
+            // تنظيف عند إغلاق النموذج
+            requestTransferModal.addEventListener('hidden.bs.modal', function() {
+                // إزالة أي styles يدوية تم إضافتها
+                requestTransferModal.style.position = '';
+                requestTransferModal.style.top = '';
+                requestTransferModal.style.left = '';
+                requestTransferModal.style.zIndex = '';
+                requestTransferModal.style.width = '';
+                requestTransferModal.style.height = '';
+                requestTransferModal.style.display = '';
+                requestTransferModal.style.padding = '';
+                
+                const modalDialog = requestTransferModal.querySelector('.modal-dialog');
+                if (modalDialog) {
+                    modalDialog.style.position = '';
+                    modalDialog.style.zIndex = '';
+                    modalDialog.style.margin = '';
+                }
+                
+                const modalContent = requestTransferModal.querySelector('.modal-content');
+                if (modalContent) {
+                    modalContent.style.position = '';
+                    modalContent.style.zIndex = '';
+                }
+                
+                // تنظيف backdrops
+                const backdrops = document.querySelectorAll('.modal-backdrop');
+                backdrops.forEach(backdrop => backdrop.remove());
+                
+                // إزالة class modal-open من body إذا لم تكن هناك modals أخرى
+                const otherModals = document.querySelectorAll('.modal.show');
+                if (otherModals.length === 0) {
+                    document.body.classList.remove('modal-open');
+                    document.body.style.overflow = '';
+                    document.body.style.paddingRight = '';
+                }
+            });
+        }
+
+        // تعطيل زر الإرسال بعد النقر لمنع double-click
+        let isSubmitting = false;
+        transferForm.addEventListener('submit', async (event) => {
+            event.preventDefault(); // منع الإرسال العادي
+            
+            if (isSubmitting) {
+                return;
+            }
+            
+            isSubmitting = true;
+            const submitButton = transferForm.querySelector('button[type="submit"]');
+            const originalButtonText = submitButton ? submitButton.innerHTML : 'إرسال الطلب';
+            if (submitButton) {
+                submitButton.disabled = true;
+                submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>جارٍ الإرسال...';
+            }
+
+            const rows = itemsContainer.querySelectorAll('.transfer-item');
+            if (!rows.length) {
+                isSubmitting = false;
+                if (submitButton) {
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = originalButtonText;
+                }
+                showErrorMessage('أضف منتجاً واحداً على الأقل قبل إرسال الطلب.');
+                return;
+            }
+
+            for (const row of rows) {
+                const select = row.querySelector('.product-select');
+                const quantityInput = row.querySelector('.quantity-input');
+
+                if (!select || !quantityInput) {
+                    isSubmitting = false;
+                    if (submitButton) {
+                        submitButton.disabled = false;
+                        submitButton.innerHTML = originalButtonText;
+                    }
+                    showErrorMessage('يرجى التأكد من إدخال بيانات صحيحة لكل منتج.');
+                    return;
+                }
+
+                if (!select.value) {
+                    isSubmitting = false;
+                    if (submitButton) {
+                        submitButton.disabled = false;
+                        submitButton.innerHTML = originalButtonText;
+                    }
+                    showErrorMessage('اختر المنتج المراد نقله.');
+                    return;
+                }
+
+                const max = parseFloat(quantityInput.getAttribute('max') || '0');
+                const min = parseFloat(quantityInput.getAttribute('min') || '0');
+                const value = parseFloat(quantityInput.value || '0');
+
+                if (value < min) {
+                    isSubmitting = false;
+                    if (submitButton) {
+                        submitButton.disabled = false;
+                        submitButton.innerHTML = originalButtonText;
+                    }
+                    showErrorMessage('يرجى إدخال كمية أكبر من الصفر.');
+                    return;
+                }
+
+                if (max > 0 && value > max) {
+                    isSubmitting = false;
+                    if (submitButton) {
+                        submitButton.disabled = false;
+                        submitButton.innerHTML = originalButtonText;
+                    }
+                    showErrorMessage('الكمية المطلوبة تتجاوز المتاح في المخزن الرئيسي.');
+                    return;
+                }
+            }
+
+            const destinationSelect = document.getElementById('transferToWarehouse');
+            if (destinationSelect && !destinationSelect.value) {
+                isSubmitting = false;
+                if (submitButton) {
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = originalButtonText;
+                }
+                showErrorMessage('يرجى اختيار المخزن الوجهة قبل إرسال الطلب.');
+                return;
+            }
+
+            // إرسال النموذج باستخدام AJAX
+            try {
+                const formData = new FormData(transferForm);
+                
+                const response = await fetch(window.location.href, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: formData,
+                    credentials: 'same-origin'
+                });
+
+                const contentType = response.headers.get('content-type');
+                let result;
+                
+                if (contentType && contentType.includes('application/json')) {
+                    // الاستجابة JSON
+                    result = await response.json();
+                } else {
+                    // الاستجابة HTML - يعني أن الطلب تم بنجاح لكن الخادم لم يعد JSON
+                    // في هذه الحالة، نعرض رسالة نجاح عامة
+                    showSuccessMessage('تم إرسال طلب النقل بنجاح! سيتم مراجعته والموافقة عليه.');
+                    
+                    // إغلاق النموذج وإعادة تحميل الصفحة بعد ثانيتين
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('requestTransferModal'));
+                    if (modal) {
+                        modal.hide();
+                    }
+                    
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                    return;
+                }
+
+                if (result.success) {
+                    // بناء رسالة النجاح
+                    let successMsg = result.message || 'تم إرسال طلب النقل بنجاح!';
+                    if (result.transfer_number) {
+                        successMsg += '\nرقم الطلب: ' + result.transfer_number;
+                    }
+                    
+                    showSuccessMessage(successMsg);
+                    
+                    // إغلاق النموذج
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('requestTransferModal'));
+                    if (modal) {
+                        modal.hide();
+                    }
+                    
+                    // إعادة تحميل الصفحة بعد ثانيتين لضمان تحديث البيانات
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    isSubmitting = false;
+                    if (submitButton) {
+                        submitButton.disabled = false;
+                        submitButton.innerHTML = originalButtonText;
+                    }
+                    showErrorMessage(result.message || result.error || 'حدث خطأ أثناء إرسال الطلب.');
+                }
+            } catch (error) {
+                console.error('Error submitting transfer form:', error);
+                isSubmitting = false;
+                if (submitButton) {
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = originalButtonText;
+                }
+                showErrorMessage('حدث خطأ في الاتصال بالخادم. يرجى المحاولة مرة أخرى.');
+            }
+        });
+        
+        // دالة لإظهار رسالة النجاح
+        function showSuccessMessage(message) {
+            // إنشاء حاوية Toast إذا لم تكن موجودة
+            let toastContainer = document.getElementById('toast-container');
+            if (!toastContainer) {
+                toastContainer = document.createElement('div');
+                toastContainer.id = 'toast-container';
+                toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+                toastContainer.style.zIndex = '9999';
+                document.body.appendChild(toastContainer);
+            }
+            
+            const toastId = 'success-toast-' + Date.now();
+            const toastHtml = `
+                <div id="${toastId}" class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="true" data-bs-delay="5000">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            <div class="d-flex align-items-center mb-2">
+                                <i class="bi bi-check-circle-fill fs-4 me-2"></i>
+                                <strong class="me-auto">تمت العملية بنجاح!</strong>
+                            </div>
+                            <div class="small" style="white-space: pre-line;">${message.replace(/\n/g, '<br>')}</div>
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                </div>
+            `;
+            
+            toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+            const toastElement = document.getElementById(toastId);
+            if (toastElement && typeof bootstrap !== 'undefined' && bootstrap.Toast) {
+                const toast = new bootstrap.Toast(toastElement);
+                toast.show();
+                
+                // إزالة العنصر بعد إخفائه
+                toastElement.addEventListener('hidden.bs.toast', function() {
+                    toastElement.remove();
+                });
+            }
+        }
+        
+        // دالة لإظهار رسالة الخطأ
+        function showErrorMessage(message) {
+            // إنشاء حاوية Toast إذا لم تكن موجودة
+            let toastContainer = document.getElementById('toast-container');
+            if (!toastContainer) {
+                toastContainer = document.createElement('div');
+                toastContainer.id = 'toast-container';
+                toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+                toastContainer.style.zIndex = '9999';
+                document.body.appendChild(toastContainer);
+            }
+            
+            const toastId = 'error-toast-' + Date.now();
+            const toastHtml = `
+                <div id="${toastId}" class="toast align-items-center text-white bg-danger border-0" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="true" data-bs-delay="5000">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            <div class="d-flex align-items-center mb-2">
+                                <i class="bi bi-exclamation-triangle-fill fs-4 me-2"></i>
+                                <strong class="me-auto">خطأ!</strong>
+                            </div>
+                            <div class="small">${message}</div>
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                </div>
+            `;
+            
+            toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+            const toastElement = document.getElementById(toastId);
+            if (toastElement && typeof bootstrap !== 'undefined' && bootstrap.Toast) {
+                const toast = new bootstrap.Toast(toastElement);
+                toast.show();
+                
+                // إزالة العنصر بعد إخفائه
+                toastElement.addEventListener('hidden.bs.toast', function() {
+                    toastElement.remove();
+                });
+            }
+        }
+    });
+}
+</script>
+
+<div class="modal fade" id="batchDetailsModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">تفاصيل التشغيلة</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <div id="batchDetailsLoading" class="d-flex justify-content-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">جارٍ التحميل...</span>
+                    </div>
+                </div>
+                <div id="batchDetailsError" class="alert alert-danger d-none" role="alert"></div>
+                <div id="batchDetailsContent" class="d-none">
+                    <div id="batchSummarySection" class="mb-4"></div>
+                    <div id="batchMaterialsSection" class="mb-4"></div>
+                    <div id="batchRawMaterialsSection" class="mb-4"></div>
+                    <div id="batchWorkersSection" class="mb-0"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // منع التهيئة المتعددة
+    if (window.finalProductsInitialized) {
+        console.warn('Final products script already initialized, skipping duplicate initialization');
+    } else {
+        window.finalProductsInitialized = true;
+        
+    // دالة لعرض رسائل Toast (مشتركة بين جميع الأقسام)
+    function showToast(message, type = 'warning') {
+        const toastContainer = document.getElementById('toastContainer') || (function() {
+            const container = document.createElement('div');
+            container.id = 'toastContainer';
+            container.className = 'toast-container position-fixed top-0 end-0 p-3';
+            container.style.zIndex = '11000';
+            document.body.appendChild(container);
+            return container;
+        })();
+        
+        const toastId = 'toast-' + Date.now();
+        const bgClass = type === 'error' || type === 'danger' ? 'bg-danger' : 
+                       type === 'success' ? 'bg-success' : 'bg-warning';
+        
+        const toastHtml = `
+            <div id="${toastId}" class="toast ${bgClass} text-white" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="toast-header ${bgClass} text-white border-0">
+                    <strong class="me-auto">${type === 'success' ? 'نجح' : type === 'error' || type === 'danger' ? 'خطأ' : 'تحذير'}</strong>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="إغلاق"></button>
+                </div>
+                <div class="toast-body">
+                    ${message}
+                </div>
+            </div>
+        `;
+        
+        toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+        const toastElement = document.getElementById(toastId);
+        
+        if (typeof bootstrap !== 'undefined' && typeof bootstrap.Toast !== 'undefined') {
+            const toast = new bootstrap.Toast(toastElement, {
+                autohide: true,
+                delay: 5000
+            });
+            toast.show();
+            
+            toastElement.addEventListener('hidden.bs.toast', function() {
+                toastElement.remove();
+            });
+        } else {
+            // Fallback إذا لم يكن Bootstrap متاحاً
+            setTimeout(function() {
+                if (toastElement && toastElement.parentNode) {
+                    toastElement.remove();
+                }
+            }, 5000);
+        }
+    }
+    
+    // جعل الدالة متاحة عالمياً
+    window.showToast = showToast;
+        
+    // ========== إدارة نماذج تفاصيل التشغيلة ==========
+    const batchDetailsEndpoint = <?php echo json_encode(getRelativeUrl('api/production/get_batch_details.php')); ?>;
+    let batchDetailsIsLoading = false;
+
+    // تخزين مؤقت (Cache) لتفاصيل التشغيلات
+    const batchDetailsCache = new Map();
+    const CACHE_DURATION = 10 * 60 * 1000; // 10 دقائق بالملي ثانية
+    const MAX_CACHE_SIZE = 50; // أقصى عدد من التشغيلات في cache
+
+    /**
+     * تنظيف cache من البيانات المنتهية الصلاحية
+     */
+    function cleanBatchDetailsCache() {
+        const now = Date.now();
+        const keysToDelete = [];
+        
+        batchDetailsCache.forEach((value, key) => {
+            if (now - value.timestamp > CACHE_DURATION) {
+                keysToDelete.push(key);
+            }
+        });
+        
+        keysToDelete.forEach(key => batchDetailsCache.delete(key));
+        
+        // إذا كان حجم cache كبيراً، احذف أقدم العناصر
+        if (batchDetailsCache.size > MAX_CACHE_SIZE) {
+            const entries = Array.from(batchDetailsCache.entries());
+            entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+            
+            const toRemove = entries.slice(0, entries.length - MAX_CACHE_SIZE);
+            toRemove.forEach(([key]) => batchDetailsCache.delete(key));
+        }
+    }
+
+    /**
+     * الحصول على تفاصيل التشغيلة من cache
+     */
+    function getBatchDetailsFromCache(batchNumber) {
+        cleanBatchDetailsCache();
+        const cached = batchDetailsCache.get(batchNumber);
+        
+        if (cached) {
+            const now = Date.now();
+            if (now - cached.timestamp < CACHE_DURATION) {
+                return cached.data;
+            } else {
+                // حذف البيانات المنتهية الصلاحية
+                batchDetailsCache.delete(batchNumber);
+            }
+        }
+        
+        return null;
+    }
+
+    /**
+     * حفظ تفاصيل التشغيلة في cache
+     */
+    function setBatchDetailsInCache(batchNumber, data) {
+        cleanBatchDetailsCache();
+        batchDetailsCache.set(batchNumber, {
+            data: data,
+            timestamp: Date.now()
+        });
+    }
+
+    function createBatchDetailsModal() {
+        let modalElement = document.getElementById('batchDetailsModal');
+        
+        // إذا كان Modal موجوداً، التحقق من وجود جميع العناصر الداخلية
+        if (modalElement) {
+            const loader = modalElement.querySelector('#batchDetailsLoading');
+            const errorAlert = modalElement.querySelector('#batchDetailsError');
+            const contentWrapper = modalElement.querySelector('#batchDetailsContent');
+            const summarySection = modalElement.querySelector('#batchSummarySection');
+            
+            // إذا كانت العناصر الأساسية موجودة، لا حاجة لإعادة الإنشاء
+            if (loader && errorAlert && contentWrapper && summarySection) {
+                return; // النموذج موجود بالفعل مع جميع العناصر
+            }
+            
+            // إذا كانت العناصر مفقودة، احذف Modal القديم وأنشئ واحداً جديداً
+            try {
+                const modalInstance = bootstrap.Modal.getInstance(modalElement);
+                if (modalInstance) {
+                    modalInstance.dispose();
+                }
+            } catch (e) {
+                // تجاهل الأخطاء عند التخلص من Modal
+            }
+            modalElement.remove();
+        }
+        
+        // إنشاء Modal جديد
+        const modal = document.createElement('div');
+        modal.id = 'batchDetailsModal';
+        modal.className = 'modal fade';
+        modal.setAttribute('tabindex', '-1');
+        modal.setAttribute('aria-hidden', 'true');
+        modal.innerHTML = `
+            <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">تفاصيل التشغيلة</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="batchDetailsLoading" class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">جارٍ التحميل...</span>
+                            </div>
+                        </div>
+                        <div id="batchDetailsError" class="alert alert-danger d-none"></div>
+                        <div id="batchDetailsContent" class="d-none">
+                            <div id="batchSummarySection" class="mb-4"></div>
+                            <div id="batchMaterialsSection" class="mb-4"></div>
+                            <div id="batchRawMaterialsSection" class="mb-4"></div>
+                            <div id="batchWorkersSection" class="mb-0"></div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    function formatDateValue(value) {
+        return value ? value : '—';
+    }
+
+    function formatQuantity(value, unit) {
+        if (value === null || value === undefined || value === '') {
+            return '';
+        }
+        const numeric = Number(value);
+        const formatted = Number.isFinite(numeric)
+            ? numeric.toLocaleString('ar-EG')
+            : value;
+        return unit ? `${formatted} ${unit}` : `${formatted}`;
+    }
+
+    function renderBatchDetails(data) {
+        const summarySection = document.getElementById('batchSummarySection');
+        const materialsSection = document.getElementById('batchMaterialsSection');
+        const rawMaterialsSection = document.getElementById('batchRawMaterialsSection');
+        const workersSection = document.getElementById('batchWorkersSection');
+        
+        // التحقق من وجود العناصر قبل استخدامها
+        if (!summarySection || !materialsSection || !rawMaterialsSection || !workersSection) {
+            console.error('Batch details sections not found', {
+                summarySection: !!summarySection,
+                materialsSection: !!materialsSection,
+                rawMaterialsSection: !!rawMaterialsSection,
+                workersSection: !!workersSection
+            });
+            return;
+        }
+
+        const batchNumber = data.batch_number ?? '—';
+        const summaryRows = [
+            ['رقم التشغيلة', batchNumber],
+            ['المنتج', data.product_name ?? '—'],
+            ['تاريخ الإنتاج', formatDateValue(data.production_date)],
+            ['الكمية المنتجة', data.quantity_produced ?? data.quantity ?? '—']
+        ];
+
+        if (data.honey_supplier_name) {
+            summaryRows.push(['مورد العسل', data.honey_supplier_name]);
+        }
+        
+        // عرض موردين أدوات التعبئة - دعم أكثر من مورد
+        let packagingSuppliersDisplay = '—';
+        if (data.packaging_suppliers_list && Array.isArray(data.packaging_suppliers_list) && data.packaging_suppliers_list.length > 0) {
+            // استخدام قائمة الموردين من packaging_materials
+            packagingSuppliersDisplay = data.packaging_suppliers_list.join('، ');
+        } else if (data.packaging_supplier_name) {
+            // استخدام المورد الافتراضي إذا لم تكن هناك قائمة
+            packagingSuppliersDisplay = data.packaging_supplier_name;
+        }
+        
+        if (packagingSuppliersDisplay !== '—') {
+            summaryRows.push(['مورد أدوات التعبئة', packagingSuppliersDisplay]);
+        }
+        if (data.notes) {
+            summaryRows.push(['ملاحظات', data.notes]);
+        }
+
+        summarySection.innerHTML = `
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>ملخص التشغيلة</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive dashboard-table-wrapper">
+                        <table class="table dashboard-table dashboard-table--compact align-middle mb-0">
+                            <tbody>
+                                ${summaryRows.map(([label, value]) => `
+                                    <tr>
+                                        <th class="w-25">${label}</th>
+                                        <td>${value}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const packagingItems = Array.isArray(data.packaging_materials) ? data.packaging_materials : [];
+        if (packagingItems.length > 0) {
+            materialsSection.innerHTML = `
+                <div class="card shadow-sm">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0"><i class="bi bi-box-seam me-2"></i>مواد التعبئة المستخدمة</h6>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-unstyled mb-0">
+                            ${packagingItems.map(item => `
+                                <li class="mb-2">
+                                    <strong>${item.name ?? '—'}</strong>
+                                    <div class="text-muted small">
+                                        ${formatQuantity(item.quantity_used, item.unit ?? '')}
+                                        ${item.supplier_name ? ` • المورد: ${item.supplier_name}` : ''}
+                                    </div>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                </div>
+            `;
+        } else {
+            materialsSection.innerHTML = '';
+        }
+
+        const rawItems = Array.isArray(data.raw_materials) ? data.raw_materials : [];
+        if (rawItems.length > 0) {
+            rawMaterialsSection.innerHTML = `
+                <div class="card shadow-sm">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0"><i class="bi bi-droplet-half me-2"></i>المواد الخام المستخدمة</h6>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-unstyled mb-0">
+                            ${rawItems.map(item => `
+                                <li class="mb-2">
+                                    <strong>${item.name ?? '—'}</strong>
+                                    <div class="text-muted small">
+                                        ${formatQuantity(item.quantity_used, item.unit ?? '')}
+                                        ${item.supplier_name ? ` • المورد: ${item.supplier_name}` : ''}
+                                    </div>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                </div>
+            `;
+        } else {
+            rawMaterialsSection.innerHTML = '';
+        }
+
+        const workers = Array.isArray(data.workers) ? data.workers : [];
+        if (workers.length > 0) {
+            workersSection.innerHTML = `
+                <div class="card shadow-sm">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0"><i class="bi bi-people-fill me-2"></i>فريق الإنتاج</h6>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-unstyled mb-0">
+                            ${workers.map(worker => `
+                                <li class="mb-2">
+                                    <strong>${worker.full_name ?? worker.username ?? '—'}</strong>
+                                    <div class="text-muted small">${worker.role ?? 'عامل إنتاج'}</div>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                </div>
+            `;
+        } else {
+            workersSection.innerHTML = '';
+        }
+    }
+
+    function showBatchDetailsModal(batchNumber, productName) {
+        if (!batchNumber || typeof batchNumber !== 'string' || batchNumber.trim() === '') {
+            console.error('Invalid batch number');
+            return;
+        }
+        
+        if (batchDetailsIsLoading) {
+            return; // منع الطلبات المتعددة
+        }
+        
+        if (typeof bootstrap === 'undefined' || typeof bootstrap.Modal === 'undefined') {
+            alert('تعذر فتح تفاصيل التشغيلة. يرجى تحديث الصفحة.');
+            return;
+        }
+        
+        createBatchDetailsModal();
+        
+        const modalElement = document.getElementById('batchDetailsModal');
+        if (!modalElement) {
+            console.error('Failed to create batch details modal');
+            return;
+        }
+        
+        const modalInstance = bootstrap.Modal.getOrCreateInstance(modalElement);
+        const loader = modalElement.querySelector('#batchDetailsLoading');
+        const errorAlert = modalElement.querySelector('#batchDetailsError');
+        const contentWrapper = modalElement.querySelector('#batchDetailsContent');
+        const modalTitle = modalElement.querySelector('.modal-title');
+        
+        // التحقق من وجود العناصر المطلوبة
+        if (!loader || !contentWrapper) {
+            console.error('Required modal elements not found', {
+                loader: !!loader,
+                errorAlert: !!errorAlert,
+                contentWrapper: !!contentWrapper
+            });
+            alert('تعذر فتح تفاصيل التشغيلة. يرجى تحديث الصفحة.');
+            return;
+        }
+        
+        if (modalTitle) {
+            modalTitle.textContent = productName ? `تفاصيل التشغيلة - ${productName}` : 'تفاصيل التشغيلة';
+        }
+        
+        // التحقق من وجود البيانات في cache
+        const cachedData = getBatchDetailsFromCache(batchNumber);
+        if (cachedData) {
+            // استخدام البيانات من cache مباشرة
+            if (loader) loader.classList.add('d-none');
+            if (errorAlert) errorAlert.classList.add('d-none');
+            renderBatchDetails(cachedData);
+            if (contentWrapper) contentWrapper.classList.remove('d-none');
+            modalInstance.show();
+            return;
+        }
+        
+        // إذا لم تكن البيانات موجودة في cache، جلبها من الخادم
+        if (loader) loader.classList.remove('d-none');
+        if (errorAlert) errorAlert.classList.add('d-none');
+        if (contentWrapper) contentWrapper.classList.add('d-none');
+        batchDetailsIsLoading = true;
+        
+        modalInstance.show();
+        
+        // تحميل البيانات
+        fetch(batchDetailsEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ batch_number: batchNumber })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (loader) loader.classList.add('d-none');
+            batchDetailsIsLoading = false;
+            
+            if (data.success && data.batch) {
+                // حفظ البيانات في cache
+                setBatchDetailsInCache(batchNumber, data.batch);
+                
+                renderBatchDetails(data.batch);
+                if (contentWrapper) contentWrapper.classList.remove('d-none');
+            } else {
+                if (errorAlert) {
+                    errorAlert.textContent = data.message || 'تعذر تحميل تفاصيل التشغيلة';
+                    errorAlert.classList.remove('d-none');
+                }
+            }
+        })
+        .catch(error => {
+            if (loader) loader.classList.add('d-none');
+            if (errorAlert) {
+                errorAlert.textContent = 'حدث خطأ أثناء تحميل التفاصيل';
+                errorAlert.classList.remove('d-none');
+            }
+            batchDetailsIsLoading = false;
+            console.error('Error loading batch details:', error);
+        });
+    }
+
+
+    // ========== ربط الأحداث للأزرار ==========
+    function attachClickEvents() {
+        // منع التهيئة المتعددة
+        if (window.finalProductsClickEventsAttached) {
+            return;
+        }
+        window.finalProductsClickEventsAttached = true;
+        
+        document.addEventListener('click', function(event) {
+            // زر تفاصيل التشغيلة
+            const detailsButton = event.target.closest('.js-batch-details');
+            if (detailsButton) {
+                event.preventDefault();
+                event.stopPropagation();
+                const batchNumber = detailsButton.getAttribute('data-batch') || detailsButton.dataset.batch;
+                const productName = detailsButton.getAttribute('data-product') || detailsButton.dataset.product || '';
+                if (batchNumber && batchNumber.trim() !== '') {
+                    if (typeof showBatchDetailsModal === 'function') {
+                        showBatchDetailsModal(batchNumber, productName);
+                    } else {
+                        console.error('showBatchDetailsModal function not found');
+                        // Fallback: الانتقال إلى صفحة التفاصيل
+                        const viewUrl = detailsButton.getAttribute('data-view-url') || detailsButton.dataset.viewUrl;
+                        if (viewUrl) {
+                            window.location.href = viewUrl;
+                        }
+                    }
+                }
+                return;
+            }
+            
+            // زر طباعة الباركود
+            const printButton = event.target.closest('.js-print-barcode');
+            if (printButton) {
+                event.preventDefault();
+                event.stopPropagation();
+                const batchNumber = printButton.getAttribute('data-batch') || printButton.dataset.batch;
+                const productName = printButton.getAttribute('data-product') || printButton.dataset.product || '';
+                const quantity = parseInt(printButton.getAttribute('data-quantity') || printButton.dataset.quantity || '1', 10);
+                
+                if (batchNumber && batchNumber.trim() !== '') {
+                    if (typeof window.showBarcodePrintModal === 'function') {
+                        window.showBarcodePrintModal(batchNumber, productName, quantity);
+                    } else {
+                        console.error('showBarcodePrintModal function not found');
+                        // Fallback: فتح صفحة الطباعة مباشرة
+                        const printUrl = `${window.PRINT_BARCODE_URL || 'print_barcode.php'}?batch=${encodeURIComponent(batchNumber)}&quantity=${quantity}&print=1`;
+                        window.open(printUrl, '_blank');
+                    }
+                } else {
+                    alert('رقم التشغيلة غير متوفر للطباعة.');
+                }
+                return;
+            }
+            
+            // فتح نموذج إضافة منتج خارجي
+            const addExternalBtn = event.target.closest('.js-open-add-external-modal');
+            if (addExternalBtn) {
+                event.preventDefault();
+                event.stopPropagation();
+                const modal = document.getElementById('addExternalProductModal');
+                if (modal) {
+                    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                        const modalInstance = bootstrap.Modal.getOrCreateInstance(modal);
+                        modalInstance.show();
+                    } else {
+                        // Fallback إذا لم يكن Bootstrap متاحاً
+                        modal.style.display = 'block';
+                        modal.classList.add('show');
+                        document.body.classList.add('modal-open');
+                        const backdrop = document.createElement('div');
+                        backdrop.className = 'modal-backdrop fade show';
+                        document.body.appendChild(backdrop);
+                    }
+                } else {
+                    console.error('Modal addExternalProductModal not found');
+                }
+                return;
+            }
+
+            const copyButton = event.target.closest('.js-copy-batch');
+            if (copyButton) {
+                const batchNumber = copyButton.dataset.batch;
+                if (!batchNumber) {
+                    return;
+                }
+
+                const originalHtml = copyButton.innerHTML;
+                const originalClasses = copyButton.className;
+
+                function showCopiedFeedback(success) {
+                    copyButton.className = success ? 'btn btn-success btn-sm' : 'btn btn-warning btn-sm';
+                    copyButton.innerHTML = success
+                        ? '<i class="bi bi-check-circle"></i> تم النسخ'
+                        : '<i class="bi bi-exclamation-triangle"></i> تعذر النسخ';
+
+                    setTimeout(() => {
+                        copyButton.className = originalClasses;
+                        copyButton.innerHTML = originalHtml;
+                    }, 2000);
+                }
+
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(batchNumber)
+                        .then(() => showCopiedFeedback(true))
+                        .catch(() => showCopiedFeedback(false));
+                } else {
+                    const tempInput = document.createElement('input');
+                    tempInput.style.position = 'fixed';
+                    tempInput.style.opacity = '0';
+                    tempInput.value = batchNumber;
+                    document.body.appendChild(tempInput);
+                    tempInput.select();
+                    try {
+                        const successful = document.execCommand('copy');
+                        showCopiedFeedback(successful);
+                    } catch (err) {
+                        showCopiedFeedback(false);
+                    }
+                    document.body.removeChild(tempInput);
+                }
+                return;
+            }
+
+            // زر تعديل كمية المنتج الخارجي
+            const adjustButton = event.target.closest('.js-external-adjust');
+            if (adjustButton) {
+                event.preventDefault();
+                event.stopPropagation();
+                const modal = document.getElementById('externalStockModal');
+                if (!modal || typeof bootstrap === 'undefined' || !bootstrap.Modal) {
+                    return;
+                }
+                
+                const form = modal.querySelector('form');
+                if (!form) return;
+                
+                const productId = adjustButton.dataset.product || '';
+                const productName = adjustButton.dataset.name || '';
+                const mode = adjustButton.dataset.mode === 'discard' ? 'discard' : 'add';
+                
+                // تحديث حقول النموذج
+                const productIdInput = form.querySelector('input[name="product_id"]');
+                const operationInput = form.querySelector('input[name="operation"]');
+                const nameField = modal.querySelector('.js-external-stock-name');
+                const title = modal.querySelector('.js-external-stock-title');
+                const label = modal.querySelector('.js-external-stock-label');
+                const submitButton = modal.querySelector('.js-external-stock-submit');
+                
+                if (productIdInput) productIdInput.value = productId;
+                if (operationInput) operationInput.value = mode;
+                if (nameField) nameField.value = productName;
+                if (title) title.textContent = mode === 'discard' ? 'إتلاف كمية من المنتج الخارجي' : 'إضافة كمية للمنتج الخارجي';
+                if (label) label.textContent = mode === 'discard' ? 'الكمية المراد إتلافها' : 'الكمية المراد إضافتها';
+                if (submitButton) {
+                    submitButton.textContent = mode === 'discard' ? 'تأكيد الإتلاف' : 'حفظ الكمية';
+                    submitButton.className = mode === 'discard' ? 'btn btn-danger js-external-stock-submit' : 'btn btn-primary js-external-stock-submit';
+                }
+                
+                bootstrap.Modal.getOrCreateInstance(modal).show();
+                return;
+            }
+
+            // زر تعديل المنتج الخارجي
+            const editButton = event.target.closest('.js-external-edit');
+            if (editButton) {
+                event.preventDefault();
+                event.stopPropagation();
+                const modal = document.getElementById('editExternalProductModal');
+                if (!modal || typeof bootstrap === 'undefined' || !bootstrap.Modal) {
+                    return;
+                }
+                
+                const form = modal.querySelector('form');
+                if (!form) return;
+                
+                // تحديث حقول النموذج
+                const productIdInput = form.querySelector('input[name="product_id"]');
+                const nameInput = form.querySelector('input[name="edit_name"]');
+                const channelSelect = form.querySelector('select[name="edit_channel"]');
+                const priceInput = form.querySelector('input[name="edit_price"]');
+                const unitInput = form.querySelector('input[name="edit_unit"]');
+                const descriptionInput = form.querySelector('textarea[name="edit_description"]');
+                
+                if (productIdInput) productIdInput.value = editButton.dataset.product || '';
+                if (nameInput) nameInput.value = editButton.dataset.name || '';
+                if (channelSelect) {
+                    const channelValue = editButton.dataset.channel || 'company';
+                    channelSelect.value = ['company', 'delegate', 'other'].includes(channelValue) ? channelValue : 'company';
+                }
+                if (priceInput) priceInput.value = editButton.dataset.price || '0';
+                if (unitInput) unitInput.value = editButton.dataset.unit || 'قطعة';
+                if (descriptionInput) descriptionInput.value = editButton.dataset.description || '';
+                
+                bootstrap.Modal.getOrCreateInstance(modal).show();
+                return;
+            }
+        });
+    }
+    
+    // جعل الدالة متاحة عالمياً
+    // دالة لمسح cache يدوياً
+    function clearBatchDetailsCache(batchNumber = null) {
+        if (batchNumber) {
+            // مسح تشغيلة محددة
+            batchDetailsCache.delete(batchNumber);
+        } else {
+            // مسح جميع البيانات من cache
+            batchDetailsCache.clear();
+        }
+    }
+
+    // تنظيف cache تلقائياً كل 5 دقائق
+    setInterval(() => {
+        cleanBatchDetailsCache();
+    }, 5 * 60 * 1000); // 5 دقائق
+
+    // تنظيف cache عند تحميل الصفحة
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', cleanBatchDetailsCache);
+    } else {
+        cleanBatchDetailsCache();
+    }
+
+    window.showBatchDetailsModal = showBatchDetailsModal;
+    window.clearBatchDetailsCache = clearBatchDetailsCache;
+    
+    // تهيئة الأحداث عند تحميل الصفحة
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', attachClickEvents);
+    } else {
+        attachClickEvents();
+    }
+}
+</script>
+
+<script>
+// وظيفة طباعة الباركود - يجب أن تكون متاحة عالمياً
+const PRINT_BARCODE_URL = <?php echo json_encode(getRelativeUrl('print_barcode.php')); ?>;
+
+// جعل المتغير متاحاً عالمياً
+window.PRINT_BARCODE_URL = PRINT_BARCODE_URL;
+
+function showBarcodePrintModal(batchNumber, productName, defaultQuantity) {
+    const modalElement = document.getElementById('printBarcodesModal');
+    if (!modalElement) {
+        console.error('Modal printBarcodesModal not found');
+        // Fallback: فتح صفحة الطباعة مباشرة
+        const quantity = defaultQuantity > 0 ? defaultQuantity : 1;
+        const fallbackUrl = `${PRINT_BARCODE_URL}?batch=${encodeURIComponent(batchNumber)}&quantity=${quantity}&print=1`;
+        window.open(fallbackUrl, '_blank');
+        return;
+    }
+    
+    const quantity = defaultQuantity > 0 ? defaultQuantity : 1;
+
+    window.batchNumbersToPrint = [batchNumber];
+
+    const productNameInput = document.getElementById('barcode_product_name');
+    if (productNameInput) {
+        productNameInput.value = productName || '';
+    }
+
+    const quantityText = document.getElementById('barcode_quantity');
+    if (quantityText) {
+        quantityText.textContent = quantity;
+    }
+
+    const quantityInput = document.getElementById('barcode_print_quantity');
+    if (quantityInput) {
+        quantityInput.value = quantity;
+    }
+
+    const batchListContainer = document.getElementById('batch_numbers_list');
+    if (batchListContainer) {
+        batchListContainer.innerHTML = `
+            <div class="alert alert-info mb-0">
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>رقم التشغيلة:</strong> ${batchNumber}<br>
+                <small>ستتم طباعة نفس رقم التشغيلة بعدد ${quantity} باركود</small>
+            </div>
+        `;
+    }
+
+    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+        const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+        modal.show();
+    } else {
+        const fallbackUrl = `${PRINT_BARCODE_URL}?batch=${encodeURIComponent(batchNumber)}&quantity=${quantity}&print=1`;
+        window.open(fallbackUrl, '_blank');
+    }
+}
+
+function printBarcodes() {
+    const batchNumbers = window.batchNumbersToPrint || [];
+    if (batchNumbers.length === 0) {
+        alert('لا توجد أرقام تشغيلة للطباعة');
+        return;
+    }
+
+    const quantityInput = document.getElementById('barcode_print_quantity');
+    const printQuantity = quantityInput ? parseInt(quantityInput.value, 10) : 1;
+    
+    if (!printQuantity || printQuantity < 1) {
+        alert('يرجى إدخال عدد صحيح للطباعة');
+        return;
+    }
+
+    const batchNumber = batchNumbers[0];
+    const printUrl = `${PRINT_BARCODE_URL}?batch=${encodeURIComponent(batchNumber)}&quantity=${printQuantity}&print=1`;
+    window.open(printUrl, '_blank');
+}
+
+// جعل الدوال متاحة عالمياً
+window.showBarcodePrintModal = showBarcodePrintModal;
+window.printBarcodes = printBarcodes;
+</script>
+
+<!-- Modal طلب استلام منتجات من بضاعة المندوب -->
+<div class="modal fade" id="receiveFromSalesRepModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="bi bi-truck me-2"></i>طلب استلام منتجات من بضاعة المندوب</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" id="receiveFromSalesRepForm">
+                <input type="hidden" name="action" value="create_transfer_from_sales_rep">
+                <input type="hidden" name="transfer_token" value="<?php echo htmlspecialchars($_SESSION['transfer_submission_token'] ?? ''); ?>">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">المندوب <span class="text-danger">*</span></label>
+                        <select class="form-select" name="sales_rep_id" id="sales_rep_id_receive" required>
+                            <option value="">-- اختر المندوب --</option>
+                            <?php foreach ($salesReps as $rep): ?>
+                                <option value="<?php echo $rep['id']; ?>">
+                                    <?php echo htmlspecialchars($rep['full_name'] ?? $rep['username']); ?>
+                                    <?php if (!empty($rep['vehicle_number'])): ?>
+                                        (<?php echo htmlspecialchars($rep['vehicle_number']); ?>)
+                                    <?php endif; ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">تاريخ الاستلام <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" name="transfer_date" value="<?php echo date('Y-m-d'); ?>" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">السبب</label>
+                        <input type="text" class="form-control" name="reason" placeholder="سبب الاستلام (اختياري)">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">ملاحظات</label>
+                        <textarea class="form-control" name="notes" rows="2" placeholder="ملاحظات إضافية (اختياري)"></textarea>
+                    </div>
+                    
+                    <hr>
+                    <h6 class="mb-3">المنتجات المراد استلامها:</h6>
+                    
+                    <div id="salesRepProductsContainerReceive">
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            يرجى اختيار المندوب أولاً لعرض المنتجات المتاحة في مخزن سيارته.
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-success" id="submitReceiveSalesRepBtn" disabled>
+                        <i class="bi bi-check-circle me-2"></i>إنشاء طلب الاستلام
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// معالجة modal طلب استلام منتجات من بضاعة المندوب
+document.addEventListener('DOMContentLoaded', function() {
+    const salesRepSelectReceive = document.getElementById('sales_rep_id_receive');
+    const productsContainerReceive = document.getElementById('salesRepProductsContainerReceive');
+    
+    if (salesRepSelectReceive) {
+        salesRepSelectReceive.addEventListener('change', function() {
+            const salesRepId = this.value;
+            productsContainerReceive.innerHTML = '<div class="text-center py-3"><div class="spinner-border" role="status"><span class="visually-hidden">جاري التحميل...</span></div></div>';
+            
+            if (salesRepId) {
+                // جلب المنتجات من مخزن سيارة المندوب
+                const currentUrl = window.location.href.split('?')[0];
+                const urlParams = new URLSearchParams(window.location.search);
+                urlParams.set('ajax', 'get_vehicle_inventory');
+                urlParams.set('vehicle_id', salesRepId);
+                fetch(currentUrl + '?' + urlParams.toString())
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success && data.products) {
+                            displaySalesRepProductsReceive(data.products);
+                        } else {
+                            productsContainerReceive.innerHTML = '<div class="alert alert-info">لا توجد منتجات في مخزن سيارة هذا المندوب.</div>';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        productsContainerReceive.innerHTML = '<div class="alert alert-danger">حدث خطأ أثناء جلب المنتجات.</div>';
+                    });
+            } else {
+                productsContainerReceive.innerHTML = '<div class="alert alert-info">يرجى اختيار المندوب أولاً.</div>';
+            }
+        });
+    }
+    
+    function displaySalesRepProductsReceive(products) {
+        if (products.length === 0) {
+            productsContainerReceive.innerHTML = '<div class="alert alert-info">لا توجد منتجات في مخزن سيارة هذا المندوب.</div>';
+            return;
+        }
+        
+        let html = '<div class="table-responsive" style="max-height: 400px; overflow-y: auto;">';
+        html += '<table class="table table-sm table-bordered">';
+        html += '<thead class="table-light sticky-top"><tr>';
+        html += '<th width="30px"></th>';
+        html += '<th>رقم التشغيلة</th>';
+        html += '<th>اسم المنتج</th>';
+        html += '<th>المتاح</th>';
+        html += '<th>الكمية</th>';
+        html += '</tr></thead><tbody>';
+        
+        products.forEach(product => {
+            const availableQty = parseFloat(product.quantity || 0);
+            const batchNumber = product.finished_batch_number || product.batch_number || '-';
+            const productName = product.product_name || 'غير محدد';
+            const unit = product.unit || product.product_unit || 'قطعة';
+            const productId = product.product_id || 0;
+            const batchId = product.finished_batch_id || product.batch_id || 0;
+            
+            html += '<tr>';
+            html += '<td><input type="checkbox" class="form-check-input product-checkbox-receive" ';
+            html += `data-product-id="${productId}" `;
+            html += `data-batch-id="${batchId}" `;
+            html += `data-batch-number="${batchNumber}" `;
+            html += `data-product-name="${productName.replace(/"/g, '&quot;')}" `;
+            html += `data-available="${availableQty}"></td>`;
+            html += `<td>${batchNumber}</td>`;
+            html += `<td>${productName}</td>`;
+            html += `<td>${availableQty.toFixed(2)} ${unit}</td>`;
+            html += `<td><input type="number" step="0.01" min="0" max="${availableQty}" `;
+            html += `class="form-control form-control-sm quantity-input-receive" `;
+            html += `data-product-id="${productId}" `;
+            html += `data-batch-id="${batchId}" disabled></td>`;
+            html += '</tr>';
+        });
+        
+        html += '</tbody></table></div>';
+        productsContainerReceive.innerHTML = html;
+        
+        // إضافة معالجات الأحداث
+        document.querySelectorAll('.product-checkbox-receive').forEach(cb => {
+            cb.addEventListener('change', function() {
+                const quantityInput = this.closest('tr').querySelector('.quantity-input-receive');
+                quantityInput.disabled = !this.checked;
+                if (!this.checked) {
+                    quantityInput.value = '';
+                }
+                updateReceiveSubmitButton();
+            });
+        });
+        
+        // إضافة معالجات للكميات
+        document.querySelectorAll('.quantity-input-receive').forEach(input => {
+            input.addEventListener('input', function() {
+                updateReceiveSubmitButton();
+            });
+        });
+        
+        updateReceiveSubmitButton();
+    }
+    
+    function updateReceiveSubmitButton() {
+        const submitBtn = document.getElementById('submitReceiveSalesRepBtn');
+        if (!submitBtn) return;
+        
+        const checkedBoxes = document.querySelectorAll('.product-checkbox-receive:checked');
+        let hasValidQuantity = false;
+        
+        checkedBoxes.forEach(cb => {
+            const quantityInput = cb.closest('tr').querySelector('.quantity-input-receive');
+            const quantity = parseFloat(quantityInput.value) || 0;
+            if (quantity > 0) {
+                hasValidQuantity = true;
+            }
+        });
+        
+        submitBtn.disabled = checkedBoxes.length === 0 || !hasValidQuantity;
+    }
+    
+    // معالجة إرسال النموذج
+    const receiveForm = document.getElementById('receiveFromSalesRepForm');
+    if (receiveForm) {
+        receiveForm.addEventListener('submit', function(e) {
+            const checkedBoxes = this.querySelectorAll('.product-checkbox-receive:checked');
+            if (checkedBoxes.length === 0) {
+                e.preventDefault();
+                alert('يرجى اختيار منتج واحد على الأقل.');
+                return false;
+            }
+            
+            checkedBoxes.forEach((cb, index) => {
+                const quantityInput = cb.closest('tr').querySelector('.quantity-input-receive');
+                const quantity = parseFloat(quantityInput.value) || 0;
+                
+                if (quantity <= 0) {
+                    e.preventDefault();
+                    alert('يرجى إدخال كمية صحيحة للمنتج: ' + cb.dataset.productName);
+                    return false;
+                }
+                
+                const productId = cb.dataset.productId || '';
+                const batchId = cb.dataset.batchId || '';
+                const batchNumber = cb.dataset.batchNumber || '';
+                
+                const itemPrefix = `items[${index}]`;
+                const productIdInput = document.createElement('input');
+                productIdInput.type = 'hidden';
+                productIdInput.name = `${itemPrefix}[product_id]`;
+                productIdInput.value = productId;
+                this.appendChild(productIdInput);
+                
+                if (batchId) {
+                    const batchIdInput = document.createElement('input');
+                    batchIdInput.type = 'hidden';
+                    batchIdInput.name = `${itemPrefix}[batch_id]`;
+                    batchIdInput.value = batchId;
+                    this.appendChild(batchIdInput);
+                }
+                
+                if (batchNumber) {
+                    const batchNumberInput = document.createElement('input');
+                    batchNumberInput.type = 'hidden';
+                    batchNumberInput.name = `${itemPrefix}[batch_number]`;
+                    batchNumberInput.value = batchNumber;
+                    this.appendChild(batchNumberInput);
+                }
+                
+                const quantityInput = document.createElement('input');
+                quantityInput.type = 'hidden';
+                quantityInput.name = `${itemPrefix}[quantity]`;
+                quantityInput.value = quantity;
+                this.appendChild(quantityInput);
+            });
+        });
+        
+        // تنظيف النموذج عند إغلاق الـ modal
+        const receiveModal = document.getElementById('receiveFromSalesRepModal');
+        if (receiveModal) {
+            receiveModal.addEventListener('hidden.bs.modal', function() {
+                receiveForm.reset();
+                productsContainerReceive.innerHTML = '<div class="alert alert-info">يرجى اختيار المندوب أولاً.</div>';
+                receiveForm.querySelectorAll('input[type="hidden"][name^="items"]').forEach(input => input.remove());
+            });
+        }
+    }
+});
+
+</script>
+
+<!-- إعادة تحميل الصفحة تلقائياً بعد أي رسالة (نجاح أو خطأ) لمنع تكرار الطلبات -->
+<script>
+// إعادة تحميل الصفحة تلقائياً بعد أي رسالة (نجاح أو خطأ) لمنع تكرار الطلبات
+(function() {
+    const successAlert = document.getElementById('successAlert');
+    const errorAlert = document.getElementById('errorAlert');
+    
+    // التحقق من وجود رسالة نجاح أو خطأ
+    const alertElement = successAlert || errorAlert;
+    
+    if (alertElement && alertElement.dataset.autoRefresh === 'true') {
+        // انتظار 3 ثوانٍ لإعطاء المستخدم وقتاً لرؤية الرسالة
+        setTimeout(function() {
+            // إعادة تحميل الصفحة بدون معاملات GET لمنع تكرار الطلبات
+            const currentUrl = new URL(window.location.href);
+            // إزالة معاملات success و error من URL
+            currentUrl.searchParams.delete('success');
+            currentUrl.searchParams.delete('error');
+            // إعادة تحميل الصفحة
+            window.location.href = currentUrl.toString();
+        }, 3000);
+    }
+})();
+</script>
+
+<!-- حل نهائي - إزالة overflow مباشرة عند النقر على select -->
+<script>
+(function() {
+    'use strict';
+    
+    // استخدام event delegation على document level
+    document.addEventListener('mousedown', function(e) {
+        const target = e.target;
+        if (target && (target.tagName === 'SELECT' || target.closest('select'))) {
+            const select = target.tagName === 'SELECT' ? target : target.closest('select');
+            const modalBody = select.closest('.modal-body');
+            
+            if (modalBody) {
+                // حفظ القيم الأصلية
+                const originalOverflow = modalBody.style.overflow || '';
+                const originalOverflowY = modalBody.style.overflowY || '';
+                const originalOverflowX = modalBody.style.overflowX || '';
+                const originalMaxHeight = modalBody.style.maxHeight || '';
+                
+                // إزالة overflow بشكل فوري وقسري
+                modalBody.style.setProperty('overflow', 'visible', 'important');
+                modalBody.style.setProperty('overflow-y', 'visible', 'important');
+                modalBody.style.setProperty('overflow-x', 'visible', 'important');
+                modalBody.style.setProperty('max-height', 'none', 'important');
+                
+                // إزالة overflow من العناصر الأب
+                const modalContent = modalBody.closest('.modal-content');
+                const modalDialog = modalBody.closest('.modal-dialog');
+                
+                if (modalContent) {
+                    modalContent.style.setProperty('overflow', 'visible', 'important');
+                }
+                if (modalDialog) {
+                    modalDialog.style.setProperty('overflow', 'visible', 'important');
+                }
+                
+                // إعادة overflow بعد إغلاق القائمة
+                const restoreOverflow = function() {
+                    setTimeout(function() {
+                        if (originalOverflow) {
+                            modalBody.style.overflow = originalOverflow;
+                        } else {
+                            modalBody.style.removeProperty('overflow');
+                        }
+                        if (originalOverflowY) {
+                            modalBody.style.overflowY = originalOverflowY;
+                        } else {
+                            modalBody.style.removeProperty('overflow-y');
+                        }
+                        if (originalOverflowX) {
+                            modalBody.style.overflowX = originalOverflowX;
+                        } else {
+                            modalBody.style.removeProperty('overflow-x');
+                        }
+                        if (originalMaxHeight) {
+                            modalBody.style.maxHeight = originalMaxHeight;
+                        } else {
+                            modalBody.style.removeProperty('max-height');
+                        }
+                        
+                        if (modalContent) {
+                            modalContent.style.removeProperty('overflow');
+                        }
+                        if (modalDialog) {
+                            modalDialog.style.removeProperty('overflow');
+                        }
+                    }, 300);
+                };
+                
+                // إعادة overflow عند change أو blur
+                select.addEventListener('change', restoreOverflow, { once: true });
+                select.addEventListener('blur', restoreOverflow, { once: true });
+                
+                // أيضاً عند click خارج select
+                document.addEventListener('click', function clickHandler(e) {
+                    if (!select.contains(e.target) && e.target !== select) {
+                        restoreOverflow();
+                        document.removeEventListener('click', clickHandler);
+                    }
+                }, { once: true });
+            }
+        }
+    }, true); // استخدام capture phase
+    
+    // أيضاً عند focus
+    document.addEventListener('focus', function(e) {
+        const target = e.target;
+        if (target && target.tagName === 'SELECT') {
+            const modalBody = target.closest('.modal-body');
+            if (modalBody) {
+                modalBody.style.setProperty('overflow', 'visible', 'important');
+                modalBody.style.setProperty('overflow-y', 'visible', 'important');
+                modalBody.style.setProperty('overflow-x', 'visible', 'important');
+                modalBody.style.setProperty('max-height', 'none', 'important');
+                
+                const modalContent = modalBody.closest('.modal-content');
+                const modalDialog = modalBody.closest('.modal-dialog');
+                
+                if (modalContent) {
+                    modalContent.style.setProperty('overflow', 'visible', 'important');
+                }
+                if (modalDialog) {
+                    modalDialog.style.setProperty('overflow', 'visible', 'important');
+                }
+            }
+        }
+    }, true);
+})();
+
+// إصلاح ظهور الأزرار السفلية للمودال على الهاتف عند فتح لوحة المفاتيح
+(function() {
+    'use strict';
+    
+    function fixModalForMobile(modalId) {
+        const modal = document.getElementById(modalId);
+        if (!modal) return;
+        
+        const modalBody = modal.querySelector('.modal-body');
+        const modalFooter = modal.querySelector('.modal-footer');
+        if (!modalBody || !modalFooter) return;
+        
+        // عند فتح المودال
+        modal.addEventListener('shown.bs.modal', function() {
+            // التأكد من إضافة padding في الأسفل للمحتوى
+            const lastElement = modalBody.lastElementChild;
+            if (lastElement && !lastElement.classList.contains('mb-footer-spacer')) {
+                const spacer = document.createElement('div');
+                spacer.className = 'mb-footer-spacer';
+                spacer.style.height = '1rem';
+                modalBody.appendChild(spacer);
+            }
+        });
+        
+        // عند focus على input/select/textarea
+        modal.addEventListener('focusin', function(e) {
+            if (e.target && (e.target.tagName === 'INPUT' || 
+                            e.target.tagName === 'SELECT' || 
+                            e.target.tagName === 'TEXTAREA')) {
+                // Scroll إلى العنصر لضمان ظهوره
+                setTimeout(function() {
+                    e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    
+                    // التأكد من أن modal-footer مرئي
+                    if (modalFooter) {
+                        modalFooter.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                    }
+                }, 300);
+            }
+        }, true);
+        
+        // عند فتح لوحة المفاتيح (visualViewport API)
+        if (window.visualViewport) {
+            function handleViewportResize() {
+                const viewport = window.visualViewport;
+                const viewportHeight = viewport.height;
+                const windowHeight = window.innerHeight;
+                
+                // إذا كانت لوحة المفاتيح مفتوحة
+                if (viewportHeight < windowHeight * 0.75) {
+                    const keyboardHeight = windowHeight - viewportHeight;
+                    
+                    // تعديل max-height للمودال
+                    const modalDialog = modal.querySelector('.modal-dialog');
+                    if (modalDialog) {
+                        modalDialog.style.maxHeight = viewportHeight + 'px';
+                    }
+                    
+                    // التأكد من أن modal-footer مرئي
+                    if (modalFooter) {
+                        modalFooter.style.position = 'sticky';
+                        modalFooter.style.bottom = '0';
+                        modalFooter.style.zIndex = '1000';
+                    }
+                } else {
+                    // إعادة القيم الافتراضية
+                    const modalDialog = modal.querySelector('.modal-dialog');
+                    if (modalDialog) {
+                        modalDialog.style.maxHeight = '';
+                    }
+                }
+            }
+            
+            window.visualViewport.addEventListener('resize', handleViewportResize);
+            
+            // تنظيف عند إغلاق المودال
+            modal.addEventListener('hidden.bs.modal', function() {
+                window.visualViewport.removeEventListener('resize', handleViewportResize);
+            });
+        }
+    }
+    
+    // تطبيق الإصلاح على مودال نقل المنتجات
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+            fixModalForMobile('requestTransferModal');
+        });
+    } else {
+        fixModalForMobile('requestTransferModal');
+    }
+})();
+</script>
+
+
+
