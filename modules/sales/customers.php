@@ -1698,6 +1698,9 @@ $summaryTotalDebt = $customerStats['total_debt'] ?? 0.0;
 $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
 ?>
 
+<!-- Responsive Modals CSS - يجب أن يكون في البداية قبل أي محتوى -->
+<link rel="stylesheet" href="<?php echo getRelativeUrl('assets/css/responsive-modals.css'); ?>">
+
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3">
     <h2 class="mb-2 mb-md-0">
         <i class="bi bi-people me-2"></i><?php echo $isSalesUser ? 'عملائي' : 'العملاء'; ?>
@@ -5401,7 +5404,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
 <!-- Modal إضافة عميل جديد -->
 <div class="modal fade" id="addCustomerModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-scrollable modal-fullscreen-md-down">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-md-down">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">إضافة عميل جديد</h5>
@@ -5743,12 +5746,6 @@ if (!$isSalesUser && !$isCompanySection && in_array($currentRole, ['manager', 'd
                         <button type="button" class="btn btn-primary btn-sm" id="printExcelBtn">
                             <i class="bi bi-printer me-2"></i>طباعة
                         </button>
-                        <button type="button" class="btn btn-success btn-sm" id="downloadExcelBtn">
-                            <i class="bi bi-download me-2"></i>تحميل الملف
-                        </button>
-                        <button type="button" class="btn btn-info btn-sm" id="shareExcelBtn">
-                            <i class="bi bi-share me-2"></i>مشاركة
-                        </button>
                     </div>
                 </div>
             </div>
@@ -5797,6 +5794,119 @@ if (!$isSalesUser && !$isCompanySection && in_array($currentRole, ['manager', 'd
     #customerExportModal .table th,
     #customerExportModal .table td {
         padding: 0.5rem 0.25rem;
+    }
+}
+
+/* ===== تنسيقات نموذج إضافة عميل جديد - نفس أبعاد نموذج local_customers ===== */
+@media (min-width: 769px) {
+    #addCustomerModal .modal-dialog.modal-dialog-centered {
+        margin: 0.5rem auto;
+        display: flex;
+        flex-direction: column;
+        max-height: calc(100vh - 1rem);
+    }
+
+    #addCustomerModal .modal-content {
+        display: flex !important;
+        flex-direction: column !important;
+        height: auto !important;
+        max-height: 100% !important;
+        overflow: hidden !important;
+    }
+
+    /* إصلاح المساحة البيضاء - منع modal-body من التمدد */
+    #addCustomerModal .modal-body {
+        flex: 0 1 auto !important; /* منع التمدد التلقائي */
+        flex-grow: 0 !important;
+        flex-shrink: 1 !important;
+        flex-basis: auto !important;
+        min-height: 0 !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        padding-bottom: 1rem !important;
+        margin-bottom: 0 !important;
+    }
+}
+
+/* قواعد عامة للـ header والـ footer (لا تتعارض مع media queries) */
+#addCustomerModal .modal-header {
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
+}
+
+#addCustomerModal .modal-footer {
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    border-top: 1px solid #dee2e6 !important;
+}
+
+/* padding للـ header والـ footer على الشاشات الكبيرة فقط */
+@media (min-width: 769px) {
+    #addCustomerModal .modal-footer {
+        padding-top: 1rem !important;
+        padding-bottom: 1rem !important;
+    }
+}
+
+/* إزالة أي pseudo-elements قد تسبب مساحة فارغة */
+#addCustomerModal .modal-content::after,
+#addCustomerModal .modal-content::before {
+    display: none !important;
+    content: none !important;
+}
+
+/* إصلاح خاص لـ modal-dialog-scrollable (للشاشات الكبيرة فقط) */
+@media (min-width: 769px) {
+    #addCustomerModal .modal-dialog.modal-dialog-scrollable .modal-content {
+        max-height: 100% !important;
+        overflow: hidden !important;
+    }
+
+    #addCustomerModal .modal-dialog.modal-dialog-scrollable .modal-body {
+        flex: 0 1 auto !important;
+        overflow-y: auto !important;
+        max-height: calc(100vh - 250px) !important;
+    }
+}
+
+/* تنسيقات للشاشات الصغيرة */
+@media (max-width: 768px) {
+    #addCustomerModal .modal-dialog {
+        margin: 0.5rem !important;
+        max-width: calc(100% - 1rem) !important;
+        max-height: calc(100vh - 1rem) !important;
+        height: auto !important;
+    }
+    
+    #addCustomerModal .modal-content {
+        max-height: calc(100vh - 1rem) !important;
+        height: auto !important;
+    }
+    
+    #addCustomerModal .modal-body {
+        flex: 0 1 auto !important;
+        flex-grow: 0 !important;
+        padding-bottom: 1rem !important;
+        max-height: none !important;
+        height: auto !important;
+        overflow-y: visible !important;
+    }
+    
+    #addCustomerModal .modal-footer {
+        flex-shrink: 0 !important;
+        flex-grow: 0 !important;
+        margin-top: 0 !important;
+        padding-top: 1rem !important;
+        padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
+    }
+    
+    #addCustomerModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body {
+        overflow-y: visible !important;
+        max-height: none !important;
     }
 }
 </style>
