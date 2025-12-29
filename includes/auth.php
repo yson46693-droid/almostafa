@@ -188,22 +188,85 @@ function ensureRememberTokensTable() {
 }
 
 /**
- * دالة فارغة للتوافق مع الملفات القديمة
+ * التحقق من وجود جدول sessions وإنشاؤه إذا لم يكن موجوداً
  */
 function ensureSessionsTable() {
-    return true; // الجلسات تعمل تلقائياً في PHP
+    try {
+        $db = db();
+        
+        // التحقق من وجود الجدول
+        $tableExists = false;
+        try {
+            $db->queryOne("SELECT 1 FROM sessions LIMIT 1");
+            $tableExists = true;
+        } catch (Exception $e) {
+            // الجدول غير موجود
+        }
+        
+        if (!$tableExists) {
+            // إنشاء جدول sessions
+            $db->execute("
+                CREATE TABLE IF NOT EXISTS `sessions` (
+                    `id` INT(11) UNSIGNED NOT NULL AUTO_INCREMENT,
+                    `user_id` INT(11) UNSIGNED NOT NULL,
+                    `session_id` VARCHAR(128) NOT NULL,
+                    `ip_address` VARCHAR(45) DEFAULT NULL,
+                    `user_agent` VARCHAR(255) DEFAULT NULL,
+                    `expires_at` DATETIME NOT NULL,
+                    `last_activity` DATETIME NOT NULL,
+                    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (`id`),
+                    UNIQUE KEY `session_id` (`session_id`),
+                    KEY `user_id` (`user_id`),
+                    KEY `expires_at` (`expires_at`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ");
+        }
+        
+        return true;
+    } catch (Exception $e) {
+        error_log("ensureSessionsTable error: " . $e->getMessage());
+        return false;
+    }
 }
 
 /**
- * تنظيف الجلسات المنتهية
+ * تنظيف الجلسات المنتهية من قاعدة البيانات
  */
 function cleanupExpiredSessions($days = 30) {
-    // PHP يدير الجلسات تلقائياً - لا حاجة لتنظيف يدوي
-    return [
-        'success' => true,
-        'deleted' => 0,
-        'message' => 'الجلسات تُدار تلقائياً من PHP'
-    ];
+    try {
+        $db = db();
+        
+        // التحقق من وجود جدول sessions
+        if (!ensureSessionsTable()) {
+            return [
+                'success' => false,
+                'deleted' => 0,
+                'message' => 'فشل التحقق من جدول sessions'
+            ];
+        }
+        
+        // حذف الجلسات المنتهية
+        $deleted = $db->execute(
+            "DELETE FROM sessions WHERE expires_at < NOW() OR last_activity < DATE_SUB(NOW(), INTERVAL ? DAY)",
+            [$days]
+        );
+        
+        $deletedCount = $deleted['affected_rows'] ?? 0;
+        
+        return [
+            'success' => true,
+            'deleted' => $deletedCount,
+            'message' => "تم حذف {$deletedCount} جلسة منتهية"
+        ];
+    } catch (Exception $e) {
+        error_log("cleanupExpiredSessions error: " . $e->getMessage());
+        return [
+            'success' => false,
+            'deleted' => 0,
+            'message' => 'حدث خطأ أثناء تنظيف الجلسات: ' . $e->getMessage()
+        ];
+    }
 }
 
 /**
@@ -741,6 +804,42 @@ function login($username, $password, $rememberMe = true) {
         $_SESSION['username'] = $user['username'];
         $_SESSION['role'] = $user['role'];
         $_SESSION['login_time'] = time();
+        
+        // === حفظ الجلسة في قاعدة البيانات ===
+        try {
+            $db = db();
+            $sessionId = session_id();
+            
+            if (!empty($sessionId) && !empty($user['id'])) {
+                // التحقق من وجود جدول sessions وإنشاؤه إذا لزم الأمر
+                if (ensureSessionsTable()) {
+                    $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7); // 7 أيام افتراضياً
+                    $expiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
+                    $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+                    $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
+                    
+                    // حذف الجلسات القديمة للمستخدم (اختياري - للسماح بجلسة واحدة فقط)
+                    // يمكنك تعطيل هذا السطر إذا كنت تريد السماح بجلسات متعددة
+                    // $db->execute("DELETE FROM sessions WHERE user_id = ?", [$user['id']]);
+                    
+                    // حفظ الجلسة في قاعدة البيانات
+                    $db->execute(
+                        "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
+                         VALUES (?, ?, ?, ?, ?, NOW())
+                         ON DUPLICATE KEY UPDATE 
+                            last_activity = NOW(), 
+                            expires_at = ?,
+                            ip_address = ?,
+                            user_agent = ?",
+                        [$user['id'], $sessionId, $ipAddress, $userAgent, $expiresAt, $expiresAt, $ipAddress, $userAgent]
+                    );
+                }
+            }
+        } catch (Throwable $e) {
+            // لا نوقف العملية إذا فشل حفظ الجلسة في قاعدة البيانات
+            // الجلسة PHP ستعمل بشكل طبيعي
+            error_log("Failed to save session to database: " . $e->getMessage());
+        }
         
         // إذا كان rememberMe مفعّل، نمدد مدة الجلسة
         // ملاحظة: لا يمكن تغيير session settings بعد بدء الجلسة
