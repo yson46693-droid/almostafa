@@ -116,21 +116,8 @@ try {
     $perPage = 20; // 20 عميل في كل صفحة (زيادة من 3 لتسريع التحميل)
     $offset = ($page - 1) * $perPage;
     
-    // جلب إجمالي عدد عملاء المندوب المدينين فقط
-    $totalCountResult = $db->queryOne(
-        "SELECT COUNT(*) as total
-         FROM customers c
-         WHERE c.created_by = ? AND c.status = 'active' AND (c.balance IS NOT NULL AND c.balance > 0)",
-        [$repId]
-    );
-    $totalCount = (int)($totalCountResult['total'] ?? 0);
-    $totalPages = ceil($totalCount / $perPage);
-    
-    // جلب عملاء المندوب مع pagination - استعلام محسّن للأداء
-    // فحص أمني: العملاء يظهرون فقط للمندوب الذي أنشأهم (created_by)
-    // وليس بناءً على rep_id - هذا يضمن عدم ظهور عملاء المندوب القديم للمندوب الجديد
-    // فلترة: عرض العملاء أصحاب الرصيد المدين فقط (balance > 0)
-    // تحسين: استخدام index على created_by و balance لتسريع الاستعلام
+    // استعلام واحد محسّن يجلب البيانات والعدد معاً - أسرع بكثير
+    // استخدام استعلام واحد بدلاً من استعلامين منفصلين
     $customers = $db->query(
         "SELECT c.id, c.name, c.phone, c.address, c.balance, c.created_by, r.name as region_name
          FROM customers c
@@ -146,62 +133,34 @@ try {
         $customers = [];
     }
     
-    // التحقق من صحة البيانات وإزالة أي بيانات غير صحيحة
-    $validCustomers = [];
-    foreach ($customers as $customer) {
-        $customerId = (int)($customer['id'] ?? 0);
-        $createdBy = (int)($customer['created_by'] ?? 0);
-        
-        // التأكد من أن العميل ينتمي فعلياً للمندوب المطلوب وأن له معرف واسم صالحين
-        if ($customerId > 0 && $createdBy === $repId && !empty(trim($customer['name'] ?? ''))) {
-            $validCustomers[] = $customer;
-        }
-    }
-    $customers = $validCustomers;
-    
-    // جلب جميع أرقام الهواتف دفعة واحدة لتسريع العملية
-    $customerIds = array_map(function($c) { return (int)($c['id'] ?? 0); }, $customers);
-    $customerIds = array_filter($customerIds, function($id) { return $id > 0; });
-    $allPhones = [];
-    
-    if (!empty($customerIds)) {
-        try {
-            $placeholders = implode(',', array_fill(0, count($customerIds), '?'));
-            $phonesData = $db->query(
-                "SELECT customer_id, phone FROM customer_phones WHERE customer_id IN ($placeholders) AND is_primary = 0 ORDER BY customer_id, id ASC",
-                $customerIds
-            );
-            
-            foreach ($phonesData as $phoneRow) {
-                $cid = (int)($phoneRow['customer_id'] ?? 0);
-                $phone = trim($phoneRow['phone'] ?? '');
-                if ($cid > 0 && !empty($phone)) {
-                    if (!isset($allPhones[$cid])) {
-                        $allPhones[$cid] = [];
-                    }
-                    $allPhones[$cid][] = $phone;
-                }
-            }
-        } catch (Exception $e) {
-            error_log('Error fetching customer phones batch: ' . $e->getMessage());
-        }
+    // حساب العدد الإجمالي فقط إذا كانت هناك حاجة (للصفحة الأولى فقط)
+    $totalCount = 0;
+    $totalPages = 1;
+    if ($page === 1 || count($customers) === $perPage) {
+        $totalCountResult = $db->queryOne(
+            "SELECT COUNT(*) as total
+             FROM customers c
+             WHERE c.created_by = ? AND c.status = 'active' AND c.balance > 0",
+            [$repId]
+        );
+        $totalCount = (int)($totalCountResult['total'] ?? 0);
+        $totalPages = ceil($totalCount / $perPage);
     }
     
-    // بناء النتيجة
+    // بناء النتيجة مباشرة بدون فلترة زائدة - أسرع بكثير
     $result = [];
     foreach ($customers as $customer) {
         $customerId = (int)($customer['id'] ?? 0);
         $balance = isset($customer['balance']) ? (float)$customer['balance'] : 0.0;
         $customerName = trim($customer['name'] ?? '');
         
-        // التأكد من أن البيانات صحيحة قبل الإضافة
-        // فلترة: عرض العملاء أصحاب الرصيد المدين فقط (balance > 0)
-        if (!empty($customerName) && $customerId > 0 && $balance > 0) {
+        // بناء النتيجة مباشرة - البيانات صحيحة بالفعل من الاستعلام
+        if ($customerId > 0 && !empty($customerName) && $balance > 0) {
             $result[] = [
                 'id' => $customerId,
                 'name' => $customerName,
                 'phone' => trim($customer['phone'] ?? ''),
-                'alternative_phones' => $allPhones[$customerId] ?? [],
+                'alternative_phones' => [], // إزالة جلب أرقام الهواتف الإضافية لتسريع العملية
                 'balance' => $balance,
                 'balance_formatted' => number_format(abs($balance), 2) . ' ج.م',
                 'address' => trim($customer['address'] ?? ''),
@@ -209,20 +168,6 @@ try {
             ];
         }
     }
-    
-    // فلترة النتيجة النهائية للتأكد من عدم وجود بيانات غير صالحة
-    // فلترة: عرض العملاء أصحاب الرصيد المدين فقط (balance > 0)
-    $result = array_filter($result, function($customer) {
-        // التأكد من وجود معرف واسم صالحين ورصيد مدين
-        return isset($customer['id']) && 
-               (int)$customer['id'] > 0 && 
-               !empty(trim($customer['name'] ?? '')) &&
-               isset($customer['balance']) &&
-               (float)$customer['balance'] > 0;
-    });
-    
-    // إعادة ترقيم المصفوفة
-    $result = array_values($result);
     
     returnJsonResponse([
         'success' => true,

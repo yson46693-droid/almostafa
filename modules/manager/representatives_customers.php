@@ -4083,17 +4083,26 @@ try {
     display: none;
 }
 
-/* إزالة animations على الهواتف */
+/* إزالة animations على الهواتف - إغلاق فوري */
 @media (max-width: 768px) {
     #customerExportModal.modal.fade .modal-dialog,
-    #customerExportModal.modal.show .modal-dialog {
+    #customerExportModal.modal.show .modal-dialog,
+    #customerExportModal.modal.showing .modal-dialog {
         transition: none !important;
-        transform: translate3d(0, 0, 0) !important;
+        transform: none !important;
+        opacity: 1 !important;
     }
     
     #customerExportModal.modal:not(.show) .modal-dialog {
         transition: none !important;
-        transform: translate3d(0, 0, 0) !important;
+        transform: none !important;
+        opacity: 0 !important;
+    }
+    
+    /* إزالة backdrop transition تماماً */
+    #customerExportModal + .modal-backdrop,
+    .modal-backdrop {
+        transition: none !important;
     }
 }
 
@@ -4237,30 +4246,50 @@ window.CUSTOMER_EXPORT_CONFIG = {
 <script src="<?php echo ASSETS_URL; ?>js/customer_export.js?v=<?php echo time(); ?>"></script>
 
 <script>
-// معالج Modal تصدير العملاء
+// معالج Modal تصدير العملاء - إغلاق فوري
 document.addEventListener('DOMContentLoaded', function() {
     const customerExportModal = document.getElementById('customerExportModal');
     if (customerExportModal) {
-        // إزالة backdrop فوراً عند بدء الإغلاق
-        customerExportModal.addEventListener('hide.bs.modal', function() {
+        // إزالة backdrop فوراً عند بدء الإغلاق - بدون أي delays
+        customerExportModal.addEventListener('hide.bs.modal', function(e) {
+            // إزالة backdrop فوراً بدون انتظار
             const backdrops = document.querySelectorAll('.modal-backdrop');
             backdrops.forEach(backdrop => {
                 backdrop.style.transition = 'none';
                 backdrop.style.opacity = '0';
+                backdrop.style.display = 'none';
                 backdrop.remove();
             });
+            
+            // تنظيف body classes فوراً
             document.body.classList.remove('modal-open');
             document.body.style.overflow = '';
             document.body.style.paddingRight = '';
+            document.body.style.position = '';
+            
+            // إزالة أي styles متبقية
+            if (document.body.hasAttribute('style') && !document.body.getAttribute('style')) {
+                document.body.removeAttribute('style');
+            }
         });
         
         customerExportModal.addEventListener('hidden.bs.modal', function() {
             // تنظيف backdrop المتبقي (احتياطي)
             const backdrops = document.querySelectorAll('.modal-backdrop');
-            backdrops.forEach(backdrop => backdrop.remove());
+            backdrops.forEach(backdrop => {
+                backdrop.remove();
+            });
+            
+            // تنظيف body classes
             document.body.classList.remove('modal-open');
             document.body.style.overflow = '';
             document.body.style.paddingRight = '';
+            document.body.style.position = '';
+            
+            // إزالة أي styles متبقية
+            if (document.body.hasAttribute('style') && !document.body.getAttribute('style')) {
+                document.body.removeAttribute('style');
+            }
         });
     }
 });

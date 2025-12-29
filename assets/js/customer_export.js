@@ -171,47 +171,35 @@
             }
         });
         
-        // ربط حدث اختيار المندوب مع debouncing محسّن
+        // ربط حدث اختيار المندوب بدون debounce - فوري على الهواتف
         const repSelect = document.getElementById('exportRepSelect');
-        let repSelectTimeout = null;
         if (repSelect && repSelect.tagName === 'SELECT') {
             repSelect.addEventListener('change', function() {
-                // إلغاء timeout السابق
-                if (repSelectTimeout) {
-                    clearTimeout(repSelectTimeout);
-                }
-                
-                // تعطيل الـ select أثناء التحميل
                 const selectEl = this;
-                const originalValue = selectEl.value;
-                selectEl.disabled = true;
+                const repId = parseInt(selectEl.value, 10);
                 
-                // إظهار loading فوراً
-                const selectRepMessage = document.getElementById('selectRepMessage');
-                const customersSection = document.getElementById('customersSection');
-                if (selectRepMessage) {
-                    selectRepMessage.style.display = 'block';
-                    selectRepMessage.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>جاري تحميل عملاء المندوب...';
-                }
-                if (customersSection) {
-                    customersSection.style.display = 'none';
-                }
-                
-                // debounce الطلب - تقليل الوقت على الهواتف
-                const isMobile = window.innerWidth <= 768;
-                const debounceTime = isMobile ? 50 : 100;
-                
-                repSelectTimeout = setTimeout(() => {
-                    const repId = parseInt(selectEl.value, 10);
-                    if (repId > 0 && repId === parseInt(originalValue, 10)) {
-                        loadCustomersByRep(repId).finally(() => {
-                            selectEl.disabled = false;
-                        });
-                    } else {
-                        showSelectRepMessage();
-                        selectEl.disabled = false;
+                if (repId > 0) {
+                    // تعطيل الـ select أثناء التحميل
+                    selectEl.disabled = true;
+                    
+                    // إظهار loading فوراً
+                    const selectRepMessage = document.getElementById('selectRepMessage');
+                    const customersSection = document.getElementById('customersSection');
+                    if (selectRepMessage) {
+                        selectRepMessage.style.display = 'block';
+                        selectRepMessage.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>جاري تحميل عملاء المندوب...';
                     }
-                }, debounceTime);
+                    if (customersSection) {
+                        customersSection.style.display = 'none';
+                    }
+                    
+                    // تحميل فوري بدون debounce
+                    loadCustomersByRep(repId).finally(() => {
+                        selectEl.disabled = false;
+                    });
+                } else {
+                    showSelectRepMessage();
+                }
             });
         }
         
@@ -505,22 +493,24 @@
         try {
             const apiUrl = `${getApiPath('get_rep_customers_for_export.php')}?rep_id=${repId}&page=${page}&_t=${Date.now()}`;
             
-            // استخدام AbortController مع timeout أطول قليلاً
+            // استخدام AbortController مع timeout أقصر
             const timeoutId = setTimeout(() => {
                 if (currentLoadAbortController) {
                     currentLoadAbortController.abort();
                 }
-            }, 30000); // 30 ثانية timeout
+            }, 15000); // 15 ثانية timeout (تقليل من 30)
             
             const response = await fetch(apiUrl, {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
                     'X-Requested-With': 'XMLHttpRequest',
-                    'Cache-Control': 'no-cache'
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache'
                 },
                 signal: currentLoadAbortController.signal,
-                cache: 'no-store'
+                cache: 'no-store',
+                credentials: 'same-origin'
             });
             
             clearTimeout(timeoutId);
@@ -560,22 +550,16 @@
                 return;
             }
             
-            // فلترة إضافية للتأكد من صحة البيانات
-            const validCustomers = customers.filter(function(customer) {
-                return customer && 
-                       typeof customer === 'object' && 
-                       customer.id && 
-                       parseInt(customer.id, 10) > 0 &&
-                       customer.name && 
-                       typeof customer.name === 'string' && 
-                       customer.name.trim() !== '';
-            });
+            // استخدام البيانات مباشرة بدون فلترة إضافية - API يضمن صحة البيانات
+            const validCustomers = customers;
             
             // قياس الوقت المستغرق
             const loadTime = performance.now() - startTime;
-            console.log('Customers loaded in', loadTime.toFixed(2), 'ms');
+            if (loadTime > 1000) {
+                console.warn('Slow load time:', loadTime.toFixed(2), 'ms');
+            }
             
-            // عرض قائمة العملاء مع pagination مباشرة
+            // عرض قائمة العملاء مع pagination مباشرة - بدون setTimeout
             displayCustomersList(validCustomers, {
                 hasPagination: true,
                 currentPage: repCustomersPage,
@@ -618,23 +602,10 @@
             return;
         }
         
-        // فلترة العملاء للتأكد من صحة البيانات
-        const validCustomers = [];
-        if (customers && Array.isArray(customers)) {
-            customers.forEach(function(customer) {
-                if (customer && 
-                    typeof customer === 'object' && 
-                    customer.id && 
-                    parseInt(customer.id, 10) > 0 &&
-                    customer.name && 
-                    typeof customer.name === 'string' && 
-                    customer.name.trim() !== '') {
-                    validCustomers.push(customer);
-                }
-            });
-        }
+        // استخدام البيانات مباشرة بدون فلترة - API يضمن صحة البيانات
+        const validCustomers = Array.isArray(customers) ? customers : [];
         
-        // إذا لم يكن هناك عملاء صالحين
+        // إذا لم يكن هناك عملاء
         if (validCustomers.length === 0 && (!paginationOptions || paginationOptions.currentPage === 1)) {
             // إخفاء قسم العملاء
             if (customersSection) {
@@ -762,20 +733,12 @@
             html += '</nav>';
         }
         
-        // تحديث HTML مباشرة
+        // تحديث HTML مباشرة - بدون force reflow لتسريع العرض
         customersList.innerHTML = html;
         
-        // Force reflow لضمان العرض على الهواتف
-        const hasContent = customersList.querySelector('table');
-        if (hasContent) {
-            // Force reflow
-            customersList.offsetHeight;
-            
-            // التأكد من إظهار القسم
-            if (customersSection) {
-                customersSection.style.display = 'block';
-                customersSection.offsetHeight; // Force reflow
-            }
+        // إظهار القسم مباشرة
+        if (customersSection && validCustomers.length > 0) {
+            customersSection.style.display = 'block';
         }
         
         // ربط أحداث pagination
