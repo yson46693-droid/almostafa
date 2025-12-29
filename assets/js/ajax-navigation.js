@@ -76,10 +76,34 @@
 
     /**
      * إظهار Loading Indicator
+     * @param {HTMLElement} targetElement - العنصر المستهدف لوضع المؤشر فوقه (اختياري)
      */
-    function showLoading() {
+    function showLoading(targetElement = null) {
         if (!CONFIG.showLoading) return;
         const indicator = createLoadingIndicator();
+        
+        if (targetElement) {
+            // الحصول على موقع العنصر
+            const rect = targetElement.getBoundingClientRect();
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+            
+            // تحديد موقع المؤشر فوق العنصر
+            indicator.style.position = 'absolute';
+            indicator.style.top = (rect.top + scrollTop) + 'px';
+            indicator.style.left = (rect.left + scrollLeft) + 'px';
+            indicator.style.width = rect.width + 'px';
+            indicator.style.height = rect.height + 'px';
+            indicator.style.margin = '0';
+        } else {
+            // الوضع الافتراضي: ملء الشاشة بالكامل
+            indicator.style.position = 'fixed';
+            indicator.style.top = '0';
+            indicator.style.left = '0';
+            indicator.style.width = '100%';
+            indicator.style.height = '100%';
+        }
+        
         indicator.style.display = 'flex';
     }
 

@@ -925,13 +925,13 @@ if (isset($_GET['id'])) {
 </div>
 
 <!-- البحث والفلترة -->
-<div class="card shadow-sm mb-4">
-    <div class="card-body">
-        <form method="GET" class="row g-3">
+<div class="card shadow-sm mb-4" id="filters-card">
+    <div class="card-body" style="padding: 0.75rem;">
+        <form method="GET" class="row g-2">
             <input type="hidden" name="page" value="company_payment_schedules">
-            <div class="col-md-3">
-                <label class="form-label">العميل</label>
-                <select class="form-select" name="customer_id">
+            <div class="col-6 col-md-3">
+                <label class="form-label small">العميل</label>
+                <select class="form-select form-select-sm" name="customer_id">
                     <option value="">جميع العملاء</option>
                     <?php foreach ($customers as $customer): ?>
                         <option value="<?php echo $customer['id']; ?>" 
@@ -941,37 +941,37 @@ if (isset($_GET['id'])) {
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-md-2">
-                <label class="form-label">الحالة</label>
-                <select class="form-select" name="status">
+            <div class="col-6 col-md-2">
+                <label class="form-label small">الحالة</label>
+                <select class="form-select form-select-sm" name="status">
                     <option value="">جميع الحالات</option>
                     <option value="pending" <?php echo ($filters['status'] ?? '') === 'pending' ? 'selected' : ''; ?>>معلق</option>
                     <option value="paid" <?php echo ($filters['status'] ?? '') === 'paid' ? 'selected' : ''; ?>>مدفوع</option>
                     <option value="overdue" <?php echo ($filters['status'] ?? '') === 'overdue' ? 'selected' : ''; ?>>متأخر</option>
                 </select>
             </div>
-            <div class="col-md-2">
-                <label class="form-label">من تاريخ</label>
-                <input type="date" class="form-control" name="due_date_from" 
+            <div class="col-6 col-md-2">
+                <label class="form-label small">من تاريخ</label>
+                <input type="date" class="form-control form-control-sm" name="due_date_from" 
                        value="<?php echo htmlspecialchars($filters['due_date_from'] ?? ''); ?>">
             </div>
-            <div class="col-md-2">
-                <label class="form-label">إلى تاريخ</label>
-                <input type="date" class="form-control" name="due_date_to" 
+            <div class="col-6 col-md-2">
+                <label class="form-label small">إلى تاريخ</label>
+                <input type="date" class="form-control form-control-sm" name="due_date_to" 
                        value="<?php echo htmlspecialchars($filters['due_date_to'] ?? ''); ?>">
             </div>
-            <div class="col-md-2">
-                <div class="form-check mt-4">
+            <div class="col-6 col-md-2">
+                <div class="form-check" style="margin-top: 1.75rem;">
                     <input class="form-check-input" type="checkbox" name="overdue_only" id="overdueOnly" 
                            <?php echo ($filters['overdue_only'] ?? false) ? 'checked' : ''; ?>>
-                    <label class="form-check-label" for="overdueOnly">
+                    <label class="form-check-label small" for="overdueOnly">
                         المتأخرة فقط
                     </label>
                 </div>
             </div>
-            <div class="col-md-1">
-                <label class="form-label">&nbsp;</label>
-                <button type="submit" class="btn btn-primary w-100">
+            <div class="col-6 col-md-1">
+                <label class="form-label small d-block">&nbsp;</label>
+                <button type="submit" class="btn btn-primary btn-sm w-100">
                     <i class="bi bi-search"></i>
                 </button>
             </div>
@@ -1123,17 +1123,17 @@ if (isset($_GET['id'])) {
 $showAddForm = isset($_GET['action']) && $_GET['action'] === 'show_add_form';
 if ($showAddForm): 
 ?>
-<div class="card shadow-sm mb-4">
-    <div class="card-header bg-primary text-white">
-        <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>إضافة موعد تحصيل</h5>
+<div class="card shadow-sm mb-4" id="add-schedule-card">
+    <div class="card-header bg-primary text-white py-2">
+        <h6 class="mb-0"><i class="bi bi-plus-circle me-2"></i>إضافة موعد تحصيل</h6>
     </div>
-    <div class="card-body">
+    <div class="card-body" style="padding: 0.75rem;">
         <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
             <input type="hidden" name="action" value="create_schedule">
             <?php if ($hasDebtorCustomers): ?>
-            <div class="mb-3">
-                <label class="form-label">العميل <span class="text-danger">*</span></label>
-                <select class="form-select" name="customer_id" required>
+            <div class="mb-2">
+                <label class="form-label small">العميل <span class="text-danger">*</span></label>
+                <select class="form-select form-select-sm" name="customer_id" required>
                     <option value="">اختر العميل</option>
                     <?php foreach ($debtorCustomers as $customer): ?>
                         <option value="<?php echo (int) $customer['id']; ?>">
@@ -1141,38 +1141,38 @@ if ($showAddForm):
                         </option>
                     <?php endforeach; ?>
                 </select>
-                <small class="text-muted">يتم عرض العملاء المحليين المدينين فقط.</small>
+                <small class="text-muted d-block mt-1" style="font-size: 0.7rem;">يتم عرض العملاء المحليين المدينين فقط.</small>
             </div>
-            <div class="mb-3">
-                <label class="form-label">مبلغ التحصيل <span class="text-danger">*</span></label>
-                <input type="number" name="amount" class="form-control" step="0.01" min="0.01" required>
+            <div class="mb-2">
+                <label class="form-label small">مبلغ التحصيل <span class="text-danger">*</span></label>
+                <input type="number" name="amount" class="form-control form-control-sm" step="0.01" min="0.01" required>
             </div>
-            <div class="mb-3">
-                <label class="form-label">موعد التحصيل <span class="text-danger">*</span></label>
-                <input type="date" name="due_date" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
+            <div class="mb-2">
+                <label class="form-label small">موعد التحصيل <span class="text-danger">*</span></label>
+                <input type="date" name="due_date" class="form-control form-control-sm" value="<?php echo date('Y-m-d'); ?>" required>
             </div>
-            <div class="mb-3">
-                <label class="form-label">عدد الأيام قبل الموعد للتذكير</label>
-                <input type="number" name="days_before_due" class="form-control" value="3" min="1" max="30" step="1">
-                <small class="text-muted">سيتم إرسال التذكير قبل موعد الاستحقاق بهذا العدد من الأيام (اختياري - الافتراضي: 3 أيام)</small>
+            <div class="mb-2">
+                <label class="form-label small">عدد الأيام قبل الموعد للتذكير</label>
+                <input type="number" name="days_before_due" class="form-control form-control-sm" value="3" min="1" max="30" step="1">
+                <small class="text-muted d-block mt-1" style="font-size: 0.7rem;">سيتم إرسال التذكير قبل موعد الاستحقاق بهذا العدد من الأيام (اختياري - الافتراضي: 3 أيام)</small>
             </div>
-            <div class="d-flex gap-2">
-                <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-check-circle me-2"></i>حفظ
+            <div class="d-flex gap-2 mt-3">
+                <button type="submit" class="btn btn-primary btn-sm">
+                    <i class="bi bi-check-circle me-1"></i>حفظ
                 </button>
-                <a href="?page=company_payment_schedules" class="btn btn-secondary">
-                    <i class="bi bi-x-circle me-2"></i>إلغاء
+                <a href="?page=company_payment_schedules" class="btn btn-secondary btn-sm">
+                    <i class="bi bi-x-circle me-1"></i>إلغاء
                 </a>
             </div>
             <?php else: ?>
-            <div class="alert alert-warning mb-0">
+            <div class="alert alert-warning mb-0 py-2" style="font-size: 0.85rem;">
                 <i class="bi bi-exclamation-triangle-fill me-2"></i>
                 لا يوجد عملاء محليون مدينون (رصيد مدين أكبر من صفر) لإضافة موعد تحصيل. 
-                <br><small class="text-muted">تأكد من وجود عملاء محليين نشطين برصيد مدين (balance > 0).</small>
+                <br><small class="text-muted" style="font-size: 0.7rem;">تأكد من وجود عملاء محليين نشطين برصيد مدين (balance > 0).</small>
             </div>
-            <div class="mt-3">
-                <a href="?page=company_payment_schedules" class="btn btn-secondary">
-                    <i class="bi bi-arrow-left me-2"></i>رجوع
+            <div class="mt-2">
+                <a href="?page=company_payment_schedules" class="btn btn-secondary btn-sm">
+                    <i class="bi bi-arrow-left me-1"></i>رجوع
                 </a>
             </div>
             <?php endif; ?>
@@ -1608,5 +1608,68 @@ document.addEventListener('DOMContentLoaded', function() {
 <script>
 // ===== كود مبسط لأقصى درجة - بدون أي تعارضات =====
 // الاعتماد الكامل على Bootstrap - لا event listeners إضافية
+
+// إضافة معالج لتحديد موقع مؤشر التحميل فوق الكارد عند الضغط على الزر
+document.addEventListener('DOMContentLoaded', function() {
+    // معالج لجميع الأزرار داخل الكاردات
+    const cards = document.querySelectorAll('#filters-card, #add-schedule-card');
+    
+    cards.forEach(function(card) {
+        if (!card) return;
+        
+        const forms = card.querySelectorAll('form');
+        forms.forEach(function(form) {
+            form.addEventListener('submit', function(e) {
+                // البحث عن مؤشر التحميل
+                let loadingIndicator = document.getElementById('ajax-loading-indicator');
+                
+                if (loadingIndicator && card) {
+                    // الحصول على موقع الكارد
+                    const rect = card.getBoundingClientRect();
+                    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                    const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+                    
+                    // تحديد موقع المؤشر فوق الكارد
+                    loadingIndicator.style.position = 'absolute';
+                    loadingIndicator.style.top = (rect.top + scrollTop) + 'px';
+                    loadingIndicator.style.left = (rect.left + scrollLeft) + 'px';
+                    loadingIndicator.style.width = rect.width + 'px';
+                    loadingIndicator.style.height = rect.height + 'px';
+                    loadingIndicator.style.margin = '0';
+                    loadingIndicator.style.display = 'flex';
+                    loadingIndicator.style.zIndex = '10000';
+                }
+            });
+        });
+    });
+    
+    // معالج للأزرار داخل الكاردات (مثل أزرار البحث)
+    const buttons = document.querySelectorAll('#filters-card button[type="submit"], #add-schedule-card button[type="submit"]');
+    buttons.forEach(function(button) {
+        button.addEventListener('click', function(e) {
+            const card = this.closest('.card');
+            if (card) {
+                let loadingIndicator = document.getElementById('ajax-loading-indicator');
+                
+                if (loadingIndicator) {
+                    // الحصول على موقع الكارد
+                    const rect = card.getBoundingClientRect();
+                    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                    const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+                    
+                    // تحديد موقع المؤشر فوق الكارد
+                    loadingIndicator.style.position = 'absolute';
+                    loadingIndicator.style.top = (rect.top + scrollTop) + 'px';
+                    loadingIndicator.style.left = (rect.left + scrollLeft) + 'px';
+                    loadingIndicator.style.width = rect.width + 'px';
+                    loadingIndicator.style.height = rect.height + 'px';
+                    loadingIndicator.style.margin = '0';
+                    loadingIndicator.style.display = 'flex';
+                    loadingIndicator.style.zIndex = '10000';
+                }
+            }
+        });
+    });
+});
 </script>
 
