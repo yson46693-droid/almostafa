@@ -16,8 +16,11 @@ require_once __DIR__ . '/db.php';
  */
 function initializeDatabase() {
     try {
+        // معالجة كلمة المرور: إذا كانت فارغة، استخدم null
+        $dbPassword = (defined('DB_PASS') && DB_PASS !== '') ? DB_PASS : null;
+        
         // الاتصال بقاعدة البيانات بدون تحديد قاعدة معينة أولاً
-        $connection = new mysqli(DB_HOST, DB_USER, DB_PASS, '', DB_PORT);
+        $connection = new mysqli(DB_HOST, DB_USER, $dbPassword, '', DB_PORT);
         
         if ($connection->connect_error) {
             throw new Exception("Connection failed: " . $connection->connect_error);
@@ -67,7 +70,10 @@ function initializeDatabase() {
  */
 function checkDatabaseExists() {
     try {
-        $connection = new mysqli(DB_HOST, DB_USER, DB_PASS, '', DB_PORT);
+        // معالجة كلمة المرور: إذا كانت فارغة، استخدم null
+        $dbPassword = (defined('DB_PASS') && DB_PASS !== '') ? DB_PASS : null;
+        
+        $connection = new mysqli(DB_HOST, DB_USER, $dbPassword, '', DB_PORT);
         
         if ($connection->connect_error) {
             return false;
@@ -89,8 +95,11 @@ function checkDatabaseExists() {
  */
 function checkTablesExist() {
     try {
+        // معالجة كلمة المرور: إذا كانت فارغة، استخدم null
+        $dbPassword = (defined('DB_PASS') && DB_PASS !== '') ? DB_PASS : null;
+        
         // محاولة الاتصال بقاعدة البيانات
-        $connection = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
+        $connection = new mysqli(DB_HOST, DB_USER, $dbPassword, DB_NAME, DB_PORT);
         
         if ($connection->connect_error) {
             return false;
@@ -130,7 +139,10 @@ function checkTablesExist() {
  */
 function checkInitialData() {
     try {
-        $connection = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
+        // معالجة كلمة المرور: إذا كانت فارغة، استخدم null
+        $dbPassword = (defined('DB_PASS') && DB_PASS !== '') ? DB_PASS : null;
+        
+        $connection = new mysqli(DB_HOST, DB_USER, $dbPassword, DB_NAME, DB_PORT);
         
         if ($connection->connect_error) {
             return false;
@@ -168,8 +180,11 @@ function importPackagingData() {
             return ['success' => false, 'message' => 'خطأ في قراءة ملف JSON'];
         }
         
+        // معالجة كلمة المرور: إذا كانت فارغة، استخدم null
+        $dbPassword = (defined('DB_PASS') && DB_PASS !== '') ? DB_PASS : null;
+        
         // استخدام اتصال مباشر بدلاً من db() لأنها قد لا تكون متاحة بعد
-        $connection = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
+        $connection = new mysqli(DB_HOST, DB_USER, $dbPassword, DB_NAME, DB_PORT);
         
         if ($connection->connect_error) {
             return ['success' => false, 'message' => 'خطأ في الاتصال بقاعدة البيانات: ' . $connection->connect_error];

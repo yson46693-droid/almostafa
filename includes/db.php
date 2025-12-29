@@ -36,12 +36,15 @@ class Database {
             // استخدام mysqli_report لتقليل الأخطاء أثناء الاتصال
             mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
             
+            // معالجة كلمة المرور: إذا كانت فارغة، استخدم null
+            $dbPassword = (defined('DB_PASS') && DB_PASS !== '') ? DB_PASS : null;
+            
             try {
-                $this->connection = @new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
+                $this->connection = @new mysqli(DB_HOST, DB_USER, $dbPassword, DB_NAME, DB_PORT);
             } catch (mysqli_sql_exception $e) {
                 // إذا فشل الاتصال، حاول بدون قاعدة البيانات أولاً للتحقق من الاتصال
                 try {
-                    $testConnection = @new mysqli(DB_HOST, DB_USER, DB_PASS, null, DB_PORT);
+                    $testConnection = @new mysqli(DB_HOST, DB_USER, $dbPassword, null, DB_PORT);
                     if ($testConnection->connect_error) {
                         throw new Exception("Cannot connect to MySQL server: " . $testConnection->connect_error);
                     }

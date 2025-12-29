@@ -31,7 +31,10 @@ function batchCreationGetPdo()
         );
 
         try {
-            $pdo = new PDO($dsn, DB_USER, DB_PASS, [
+            // معالجة كلمة المرور: إذا كانت فارغة، استخدم null
+            $dbPassword = (defined('DB_PASS') && DB_PASS !== '') ? DB_PASS : null;
+            
+            $pdo = new PDO($dsn, DB_USER, $dbPassword, [
                 PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                 PDO::ATTR_EMULATE_PREPARES   => false,

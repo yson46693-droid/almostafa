@@ -418,7 +418,7 @@ function updateNotificationList(notifications) {
         const safeMessage = sanitizeText(notification.message || '');
         const markReadButton = unread ? `
                         <button type="button" class="btn btn-sm btn-outline-secondary notification-mark-read" data-id="${notificationId}" title="تمت الرؤية" data-bs-auto-close="false">
-                            <i class="bi bi-check2 me-1"></i><span class="d-inline d-md-inline">تم الرؤية</span>
+                            <i class="bi bi-check2 me-1"></i><span class="notification-btn-text">تم الرؤية</span>
                         </button>` : `
                         <span class="badge bg-light text-muted border">تمت الرؤية</span>`;
         
@@ -434,7 +434,7 @@ function updateNotificationList(notifications) {
                     <div class="notification-actions">
                         ${markReadButton}
                         <button type="button" class="btn btn-sm btn-outline-danger notification-delete" data-id="${notificationId}" title="حذف الإشعار" data-bs-auto-close="false">
-                            <i class="bi bi-trash me-1"></i><span class="d-inline d-md-inline">حذف</span>
+                            <i class="bi bi-trash me-1"></i><span class="notification-btn-text">حذف</span>
                         </button>
                     </div>
                 </div>

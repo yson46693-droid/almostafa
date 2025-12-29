@@ -535,6 +535,8 @@
     white-space: normal !important;
     overflow: visible !important;
     position: relative !important;
+    max-width: none !important;
+    width: 100% !important;
 }
 
 /* على الموبايل: تحسين dropdown-item-text */
@@ -543,6 +545,14 @@
         padding: 0.5rem !important;
         overflow: visible !important;
         max-width: 100% !important;
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+    
+    /* إزالة أي قيود على العرض */
+    .notifications-dropdown .dropdown-item-text * {
+        max-width: none !important;
+        overflow: visible !important;
     }
 }
 
@@ -613,6 +623,8 @@
         gap: 0.5rem !important;
         margin-inline-start: 0 !important;
         width: 100% !important;
+        min-width: 100% !important;
+        max-width: 100% !important;
         justify-content: flex-end !important;
         flex-wrap: nowrap !important;
         visibility: visible !important;
@@ -624,6 +636,7 @@
         flex-shrink: 0 !important;
         order: 10 !important;
         pointer-events: auto !important;
+        box-sizing: border-box !important;
     }
     
     .notification-item .notification-actions .btn,
@@ -632,6 +645,7 @@
         font-size: 0.75rem !important;
         min-width: 70px !important;
         max-width: none !important;
+        width: auto !important;
         flex: 0 0 auto !important;
         visibility: visible !important;
         opacity: 1 !important;
@@ -648,13 +662,18 @@
         -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1) !important;
         cursor: pointer !important;
         user-select: none !important;
+        box-sizing: border-box !important;
+        margin: 0 !important;
     }
     
     .notification-item .notification-actions .btn span,
-    .notification-item .notification-actions button span {
+    .notification-item .notification-actions button span,
+    .notification-item .notification-actions .btn .notification-btn-text,
+    .notification-item .notification-actions button .notification-btn-text {
         display: inline !important;
         visibility: visible !important;
         opacity: 1 !important;
+        position: relative !important;
     }
     
     .notification-item .notification-actions .btn i,
@@ -672,6 +691,11 @@
             gap: 0.5rem !important;
             flex-wrap: nowrap !important;
             width: 100% !important;
+            min-width: 100% !important;
+            max-width: 100% !important;
+            display: flex !important;
+            visibility: visible !important;
+            opacity: 1 !important;
         }
         
         .notification-item .notification-actions .btn,
@@ -681,17 +705,28 @@
             font-size: 0.7rem !important;
             flex: 0 0 auto !important;
             max-width: calc(50% - 0.25rem) !important;
+            display: inline-flex !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            width: auto !important;
         }
         
         .notification-item .notification-actions .btn span,
-        .notification-item .notification-actions button span {
+        .notification-item .notification-actions button span,
+        .notification-item .notification-actions .btn .notification-btn-text,
+        .notification-item .notification-actions button .notification-btn-text {
             display: inline !important;
+            visibility: visible !important;
+            opacity: 1 !important;
         }
         
         .notification-item .notification-actions .btn i,
         .notification-item .notification-actions button i {
             margin-inline-end: 0.2rem;
             font-size: 0.8rem !important;
+            display: inline-block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
         }
     }
 }
@@ -772,14 +807,93 @@
     display: inline-flex !important;
     visibility: visible !important;
     opacity: 1 !important;
+    position: relative !important;
+    z-index: 10 !important;
 }
 
 /* ضمان ظهور النصوص داخل الأزرار */
 .notification-item .notification-actions .btn span,
-.notification-item .notification-actions button span {
+.notification-item .notification-actions button span,
+.notification-item .notification-actions .btn .notification-btn-text,
+.notification-item .notification-actions button .notification-btn-text {
     display: inline !important;
     visibility: visible !important;
     opacity: 1 !important;
+    position: relative !important;
+    white-space: nowrap !important;
+}
+
+/* ضمان ظهور النصوص على الموبايل */
+@media (max-width: 768px) {
+    .notification-item .notification-actions .btn .notification-btn-text,
+    .notification-item .notification-actions button .notification-btn-text {
+        display: inline !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+}
+
+/* إزالة أي overflow hidden قد يخفي الأزرار */
+.notifications-dropdown,
+.notifications-dropdown *,
+.notification-item,
+.notification-item *,
+.notification-item .d-flex,
+.notification-item .d-flex * {
+    overflow-x: visible !important;
+}
+
+/* على الموبايل: إزالة أي قيود على العرض */
+@media (max-width: 768px) {
+    .notifications-dropdown,
+    .notifications-dropdown * {
+        overflow-x: visible !important;
+        max-width: none !important;
+    }
+    
+    .notification-item,
+    .notification-item * {
+        overflow-x: visible !important;
+        max-width: none !important;
+    }
+    
+    .notification-item .d-flex {
+        overflow-x: visible !important;
+        max-width: none !important;
+    }
+    
+    .notification-item .notification-actions {
+        overflow-x: visible !important;
+        max-width: none !important;
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+    
+    /* قاعدة نهائية لضمان ظهور الأزرار */
+    .notification-item .notification-actions .btn,
+    .notification-item .notification-actions button,
+    .notification-item .notification-actions .notification-mark-read,
+    .notification-item .notification-actions .notification-delete {
+        display: inline-flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        position: relative !important;
+        z-index: 1000 !important;
+        pointer-events: auto !important;
+        width: auto !important;
+        min-width: 70px !important;
+        max-width: none !important;
+        overflow: visible !important;
+    }
+    
+    /* ضمان ظهور النصوص والأيقونات */
+    .notification-item .notification-actions .btn *,
+    .notification-item .notification-actions button * {
+        display: inline !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
 }
 
 /* إصلاح خاص للـ dropdown على الموبايل */
@@ -807,6 +921,10 @@
         visibility: visible !important;
         opacity: 1 !important;
         pointer-events: auto !important;
+        width: 100% !important;
+        min-width: 100% !important;
+        max-width: 100% !important;
+        overflow: visible !important;
     }
     
     .notifications-dropdown .notification-actions .btn,
@@ -815,11 +933,64 @@
         visibility: visible !important;
         opacity: 1 !important;
         pointer-events: auto !important;
+        width: auto !important;
+        min-width: 70px !important;
+        max-width: none !important;
+        flex: 0 0 auto !important;
+        overflow: visible !important;
+    }
+    
+    /* إزالة أي قيود على عرض notification-item */
+    .notifications-dropdown .notification-item {
+        width: 100% !important;
+        min-width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        overflow: visible !important;
+    }
+    
+    .notifications-dropdown .notification-item .d-flex {
+        width: 100% !important;
+        min-width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        overflow: visible !important;
     }
 }
 
 .notification-item:last-child {
     border-bottom: none;
+}
+
+/* قاعدة نهائية قوية لضمان ظهور الأزرار على جميع الأجهزة */
+.notification-item .notification-actions,
+.notification-item .notification-actions *,
+.notification-item .notification-actions .btn,
+.notification-item .notification-actions button {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+@media (max-width: 768px) {
+    /* قاعدة نهائية قوية للموبايل */
+    .notifications-dropdown .notification-item .notification-actions,
+    .notifications-dropdown .notification-item .notification-actions *,
+    .notifications-dropdown .notification-item .notification-actions .btn,
+    .notifications-dropdown .notification-item .notification-actions button {
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+        position: relative !important;
+        z-index: 1000 !important;
+    }
+    
+    .notifications-dropdown .notification-item .notification-actions {
+        flex-direction: row !important;
+        width: 100% !important;
+        min-width: 100% !important;
+    }
 }
 
 .notification-item:hover {
