@@ -1433,197 +1433,26 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <style>
-/* ===== تنسيقات النماذج الأخرى ===== */
-/* قائمة النماذج: editScheduleModal, reminderModal */
+/* ===== CSS مبسط جداً للمودالات - بدون أي تعارضات ===== */
+/* فقط القواعد الأساسية الضرورية - Bootstrap يتعامل مع الباقي */
 
-@media (min-width: 769px) {
-    #editScheduleModal .modal-dialog.modal-dialog-centered,
-    #reminderModal .modal-dialog.modal-dialog-centered {
-        margin: 0.5rem auto;
-        display: flex;
-        flex-direction: column;
-        max-height: calc(100vh - 1rem);
-    }
-
-    #editScheduleModal .modal-content,
-    #reminderModal .modal-content {
-        display: flex !important;
-        flex-direction: column !important;
-        height: auto !important;
-        max-height: 100% !important;
-        overflow: hidden !important;
-    }
-
-    /* إصلاح المساحة البيضاء - منع modal-body من التمدد */
-    #editScheduleModal .modal-body,
-    #reminderModal .modal-body {
-        flex: 0 1 auto !important;
-        flex-grow: 0 !important;
-        flex-shrink: 1 !important;
-        flex-basis: auto !important;
-        min-height: 0 !important;
-        height: auto !important;
-        max-height: none !important;
-        overflow-y: auto !important;
-        overflow-x: hidden !important;
-        padding-bottom: 1rem !important;
-        margin-bottom: 0 !important;
-    }
-}
-
-/* قواعد عامة للـ header والـ footer */
-#editScheduleModal .modal-header,
-#reminderModal .modal-header {
-    flex-shrink: 0 !important;
-    flex-grow: 0 !important;
-}
-
-#editScheduleModal .modal-footer,
-#reminderModal .modal-footer {
-    flex-shrink: 0 !important;
-    flex-grow: 0 !important;
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
-    border-top: 1px solid #dee2e6 !important;
-}
-
-/* padding للـ header والـ footer على الشاشات الكبيرة فقط */
-@media (min-width: 769px) {
-    #editScheduleModal .modal-footer,
-    #reminderModal .modal-footer {
-        padding-top: 1rem !important;
-        padding-bottom: 1rem !important;
-    }
-}
-
-/* إزالة أي pseudo-elements قد تسبب مساحة فارغة */
-#editScheduleModal .modal-content::after,
-#editScheduleModal .modal-content::before,
-#reminderModal .modal-content::after,
-#reminderModal .modal-content::before {
-    display: none !important;
-    content: none !important;
-}
-
-/* إصلاح خاص لـ modal-dialog-scrollable (للشاشات الكبيرة فقط) */
-@media (min-width: 769px) {
-    #editScheduleModal .modal-dialog.modal-dialog-scrollable .modal-content,
-    #reminderModal .modal-dialog.modal-dialog-scrollable .modal-content {
-        max-height: 100% !important;
-        overflow: hidden !important;
-    }
-
-    #editScheduleModal .modal-dialog.modal-dialog-scrollable .modal-body,
-    #reminderModal .modal-dialog.modal-dialog-scrollable .modal-body {
-        flex: 0 1 auto !important;
-        overflow-y: auto !important;
-        max-height: calc(100vh - 250px) !important;
-    }
-}
-
-/* تنسيقات للشاشات الصغيرة */
-@media (max-width: 768px) {
-    #editScheduleModal .modal-dialog,
-    #reminderModal .modal-dialog {
-        margin: 0.5rem !important;
-        max-width: calc(100% - 1rem) !important;
-        max-height: calc(100vh - 1rem) !important;
-        height: auto !important;
-    }
-    
-    #editScheduleModal .modal-content,
-    #reminderModal .modal-content {
-        max-height: calc(100vh - 1rem) !important;
-        height: auto !important;
-    }
-    
-    #editScheduleModal .modal-body,
-    #reminderModal .modal-body {
-        flex: 0 1 auto !important;
-        flex-grow: 0 !important;
-        padding-bottom: 1rem !important;
-        max-height: none !important;
-        height: auto !important;
-        overflow-y: visible !important;
-    }
-    
-    #editScheduleModal .modal-footer,
-    #reminderModal .modal-footer {
-        flex-shrink: 0 !important;
-        flex-grow: 0 !important;
-        margin-top: 0 !important;
-        padding-top: 1rem !important;
-        padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
-    }
-    
-    #editScheduleModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body,
-    #reminderModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body {
-        overflow-y: visible !important;
-        max-height: none !important;
-    }
-}
-
-/* ===== CSS مبسط للمودالات - بدون تعارضات ===== */
-/* منع scroll في body عند فتح النموذج */
+/* منع scroll في body عند فتح النموذج - بدون position: fixed */
 body.modal-open {
-    overflow: hidden !important;
-    position: fixed !important;
-    width: 100% !important;
+    overflow: hidden;
 }
 
 /* Backdrop بسيط */
 .modal-backdrop {
-    z-index: 1040 !important;
-    background-color: #000 !important;
-    opacity: 0.5 !important;
+    z-index: 1040;
+    background-color: #000;
+    opacity: 0.5;
 }
 
-/* منع التفاعل مع المحتوى خلف النموذج - بدون touch-action: none */
-body.modal-open > *:not(.modal):not(.modal-backdrop) {
-    pointer-events: none !important;
-}
-
-/* السماح بالتفاعل داخل النموذج - بدون touch-action معقد */
-#editScheduleModal.modal.show,
-#reminderModal.modal.show {
-    pointer-events: auto !important;
-}
-
-#editScheduleModal .modal-dialog,
-#reminderModal .modal-dialog {
-    pointer-events: auto !important;
-}
-
-#editScheduleModal .modal-content,
-#reminderModal .modal-content {
-    pointer-events: auto !important;
-}
-
-/* السماح بالتمرير داخل modal-body */
-#editScheduleModal .modal-body,
-#reminderModal .modal-body {
-    -webkit-overflow-scrolling: touch !important;
-    pointer-events: auto !important;
-}
-
-/* تنسيقات الموبايل - مبسطة بدون تعارضات */
+/* تنسيقات الموبايل - مبسطة جداً */
 @media (max-width: 768px) {
+    /* فقط منع scroll - بدون position: fixed أو pointer-events */
     body.modal-open {
-        overflow: hidden !important;
-        position: fixed !important;
-        width: 100% !important;
-    }
-    
-    body.modal-open > *:not(.modal):not(.modal-backdrop) {
-        pointer-events: none !important;
-    }
-    
-    /* السماح بالتمرير والتفاعل الطبيعي داخل النموذج */
-    #editScheduleModal .modal-body,
-    #reminderModal .modal-body {
-        -webkit-overflow-scrolling: touch !important;
-        overflow-y: auto !important;
-        max-height: calc(100vh - 180px) !important;
+        overflow: hidden;
     }
     
     /* تحسين التفاعل مع الحقول والأزرار */
@@ -1635,30 +1464,27 @@ body.modal-open > *:not(.modal):not(.modal-backdrop) {
     #reminderModal select,
     #reminderModal textarea,
     #reminderModal button {
-        -webkit-tap-highlight-color: rgba(0, 123, 255, 0.2) !important;
+        -webkit-tap-highlight-color: rgba(0, 123, 255, 0.2);
     }
 }
 </style>
 
 <script>
-// ===== كود مبسط للمودالات - بدون تعارضات =====
+// ===== كود مبسط جداً للمودالات - بدون أي تعارضات =====
 document.addEventListener('DOMContentLoaded', function() {
-    // Bootstrap يتعامل مع المودالات تلقائياً - لا حاجة لكود إضافي معقد
-    // فقط تنظيف بسيط عند إغلاق المودالات
-    const modals = ['editScheduleModal', 'reminderModal'];
-    
-    modals.forEach(function(modalId) {
-        const modal = document.getElementById(modalId);
-        if (!modal) return;
-        
-        // تنظيف النموذج عند إغلاق المودال فقط
-        modal.addEventListener('hidden.bs.modal', function() {
-            const form = modal.querySelector('form');
+    // Bootstrap يتعامل مع المودالات تلقائياً - لا حاجة لكود إضافي
+    // فقط تنظيف بسيط عند إغلاق editScheduleModal
+    const editScheduleModal = document.getElementById('editScheduleModal');
+    if (editScheduleModal) {
+        editScheduleModal.addEventListener('hidden.bs.modal', function() {
+            const form = editScheduleModal.querySelector('form');
             if (form) {
                 form.reset();
             }
         });
-    });
+    }
+    
+    // reminderModal له كود خاص به في مكان آخر - لا نضيف شيء هنا
 });
 </script>
 
