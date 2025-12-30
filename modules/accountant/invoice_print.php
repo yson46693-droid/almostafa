@@ -724,10 +724,12 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
 
 .items-table table {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
     border-radius: 18px;
     overflow: hidden;
     border: 1px solid rgba(15, 76, 129, 0.12);
+    table-layout: fixed;
 }
 
 .items-table thead {
@@ -740,11 +742,17 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
     color: #0f4c81;
     text-align: right;
     border-bottom: 1px solid rgba(15, 76, 129, 0.12);
+    border-left: 1px solid rgba(15, 76, 129, 0.08);
     font-weight: 600;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: normal;
+    box-sizing: border-box;
 }
 
 .items-table th:first-child {
     text-align: right;
+    border-left: none;
 }
 
 .items-table td {
@@ -752,8 +760,17 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
     font-size: 14px;
     color: #1f2937;
     border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+    border-left: 1px solid rgba(148, 163, 184, 0.15);
     text-align: right;
     vertical-align: middle;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: normal;
+    box-sizing: border-box;
+}
+
+.items-table td:first-child {
+    border-left: none;
 }
 
 .items-table tbody tr:last-child td {
@@ -1061,17 +1078,37 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
         min-width: 600px !important;
         font-size: 12px !important;
         width: 100% !important;
-        table-layout: auto !important;
+        table-layout: fixed !important;
+        border-collapse: separate !important;
+        border-spacing: 0 !important;
     }
 
     .items-table th {
         padding: 10px 8px !important;
         font-size: 11px !important;
+        border-left: 1px solid rgba(15, 76, 129, 0.08) !important;
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
+        white-space: normal !important;
+        box-sizing: border-box !important;
+    }
+
+    .items-table th:first-child {
+        border-left: none !important;
     }
 
     .items-table td {
         padding: 12px 8px !important;
         font-size: 12px !important;
+        border-left: 1px solid rgba(148, 163, 184, 0.15) !important;
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
+        white-space: normal !important;
+        box-sizing: border-box !important;
+    }
+
+    .items-table td:first-child {
+        border-left: none !important;
     }
 
     .items-table .product-name {

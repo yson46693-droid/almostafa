@@ -3270,7 +3270,230 @@ $hasShippingCompanies = !empty($shippingCompanies);
     </div>
 </div>
 
+<!-- Card للموبايل - إضافة شركة شحن -->
+<div class="card shadow-sm mb-4 d-md-none" id="addShippingCompanyCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-truck me-2"></i>إضافة شركة شحن</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="action" value="add_shipping_company">
+            <div class="mb-3">
+                <label class="form-label">اسم الشركة <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" name="company_name" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الشخص المسؤول</label>
+                <input type="text" class="form-control" name="contact_person" placeholder="اسم الشخص المسؤول (اختياري)">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">رقم الهاتف</label>
+                <input type="text" class="form-control" name="phone" placeholder="مثال: 01000000000">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">البريد الإلكتروني</label>
+                <input type="email" class="form-control" name="email" placeholder="example@domain.com">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">العنوان</label>
+                <textarea class="form-control" name="address" rows="2" placeholder="عنوان شركة الشحن (اختياري)"></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">ملاحظات</label>
+                <textarea class="form-control" name="company_notes" rows="2" placeholder="أي معلومات إضافية (اختياري)"></textarea>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save me-1"></i>حفظ
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeAddShippingCompanyCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card للموبايل - إضافة عميل -->
+<div class="card shadow-sm mb-4 d-md-none" id="addLocalCustomerCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-person-plus me-2"></i>إضافة عميل جديد</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="addLocalCustomerCardForm">
+            <input type="hidden" name="action" value="add_local_customer">
+            <div class="mb-3">
+                <label class="form-label">اسم العميل <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" name="customer_name" id="newCustomerCardName" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">رقم الهاتف</label>
+                <input type="text" class="form-control" name="customer_phone" id="newCustomerCardPhone" placeholder="مثال: 01000000000">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">العنوان</label>
+                <textarea class="form-control" name="customer_address" id="newCustomerCardAddress" rows="2" placeholder="عنوان العميل (اختياري)"></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الرصيد الابتدائي</label>
+                <input type="number" class="form-control" name="customer_balance" id="newCustomerCardBalance" value="0" step="0.01" min="0">
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save me-1"></i>حفظ
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeAddLocalCustomerCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
+// ===== دوال أساسية =====
+
+function isMobile() {
+    return window.innerWidth <= 768;
+}
+
+function scrollToElement(element) {
+    if (!element) return;
+    
+    setTimeout(function() {
+        const rect = element.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const elementTop = rect.top + scrollTop;
+        const offset = 80;
+        
+        requestAnimationFrame(function() {
+            window.scrollTo({
+                top: Math.max(0, elementTop - offset),
+                behavior: 'smooth'
+            });
+        });
+    }, 200);
+}
+
+function closeAllForms() {
+    const cards = ['addShippingCompanyCard', 'addLocalCustomerCard'];
+    cards.forEach(function(cardId) {
+        const card = document.getElementById(cardId);
+        if (card && card.style.display !== 'none') {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    });
+    
+    const modals = ['addShippingCompanyModal', 'addLocalCustomerModal', 'deliveryModal'];
+    modals.forEach(function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            if (modalInstance) modalInstance.hide();
+        }
+    });
+}
+
+// ===== دوال فتح النماذج =====
+
+function showAddShippingCompanyModal() {
+    closeAllForms();
+    
+    if (isMobile()) {
+        const card = document.getElementById('addShippingCompanyCard');
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        const modal = document.getElementById('addShippingCompanyModal');
+        if (modal) {
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+function showAddLocalCustomerModal() {
+    closeAllForms();
+    
+    if (isMobile()) {
+        const card = document.getElementById('addLocalCustomerCard');
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        const modal = document.getElementById('addLocalCustomerModal');
+        if (modal) {
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+function showDeliveryModal(button) {
+    if (!button) return;
+    
+    closeAllForms();
+    
+    // هذا المودال معقد، لذا سنستخدم Modal على جميع الأجهزة
+    const modal = document.getElementById('deliveryModal');
+    if (modal) {
+        // نسخ البيانات من data attributes
+        const orderId = button.getAttribute('data-order-id');
+        const orderNumber = button.getAttribute('data-order-number');
+        const customerId = button.getAttribute('data-customer-id');
+        const customerName = button.getAttribute('data-customer-name');
+        const customerBalance = button.getAttribute('data-customer-balance');
+        const totalAmount = button.getAttribute('data-total-amount');
+        const shippingCompanyName = button.getAttribute('data-shipping-company-name');
+        const companyBalance = button.getAttribute('data-company-balance');
+        
+        // تعيين القيم في Modal (إذا كانت العناصر موجودة)
+        const orderIdInput = document.getElementById('modal_order_id');
+        const orderNumberEl = document.getElementById('modal_order_number');
+        const shippingCompanyEl = document.getElementById('modal_shipping_company');
+        const companyBalanceEl = document.getElementById('modal_company_balance');
+        const customerNameEl = document.getElementById('modal_customer_name');
+        const customerBalanceEl = document.getElementById('modal_customer_balance');
+        const totalAmountEl = document.getElementById('modal_total_amount');
+        
+        if (orderIdInput) orderIdInput.value = orderId || '';
+        if (orderNumberEl) orderNumberEl.textContent = orderNumber || '';
+        if (shippingCompanyEl) shippingCompanyEl.textContent = shippingCompanyName || '';
+        if (companyBalanceEl) companyBalanceEl.textContent = (parseFloat(companyBalance) || 0).toFixed(2) + ' ج.م';
+        if (customerNameEl) customerNameEl.textContent = customerName || '';
+        if (customerBalanceEl) customerBalanceEl.textContent = (parseFloat(customerBalance) || 0).toFixed(2) + ' ج.م';
+        if (totalAmountEl) totalAmountEl.textContent = (parseFloat(totalAmount) || 0).toFixed(2) + ' ج.م';
+        
+        const modalInstance = new bootstrap.Modal(modal);
+        modalInstance.show();
+    }
+}
+
+// ===== دوال إغلاق Cards =====
+
+function closeAddShippingCompanyCard() {
+    const card = document.getElementById('addShippingCompanyCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closeAddLocalCustomerCard() {
+    const card = document.getElementById('addLocalCustomerCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
 (function() {
     const products = <?php echo json_encode(array_map(function ($product) {
         return [

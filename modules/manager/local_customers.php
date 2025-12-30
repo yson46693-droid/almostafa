@@ -2312,31 +2312,36 @@ function scrollToElement(element) {
 // دالة لإغلاق جميع النماذج المفتوحة
 function closeAllForms() {
     // إغلاق جميع Cards على الموبايل
-    const collectCard = document.getElementById('collectPaymentCard');
-    const addCard = document.getElementById('addLocalCustomerCard');
-    const editCard = document.getElementById('editLocalCustomerCard');
+    const cards = [
+        'collectPaymentCard', 
+        'addLocalCustomerCard', 
+        'editLocalCustomerCard',
+        'addRegionFromLocalCustomerCard', 
+        'importLocalCustomersCard', 
+        'deleteLocalCustomerCard'
+    ];
     
-    if (collectCard && collectCard.style.display !== 'none') {
-        collectCard.style.display = 'none';
-        const form = collectCard.querySelector('form');
-        if (form) form.reset();
-    }
-    
-    if (addCard && addCard.style.display !== 'none') {
-        addCard.style.display = 'none';
-        const form = addCard.querySelector('form');
-        if (form) form.reset();
-    }
-    
-    if (editCard && editCard.style.display !== 'none') {
-        editCard.style.display = 'none';
-        const form = editCard.querySelector('form');
-        if (form) form.reset();
-    }
+    cards.forEach(function(cardId) {
+        const card = document.getElementById(cardId);
+        if (card && card.style.display !== 'none') {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    });
     
     // إغلاق جميع Modals على الكمبيوتر
-    const modals = ['collectPaymentModal', 'addLocalCustomerModal', 'editLocalCustomerModal', 
-                    'localCustomerPurchaseHistoryModal', 'localCustomerReturnModal', 'viewLocationModal'];
+    const modals = [
+        'collectPaymentModal', 
+        'addLocalCustomerModal', 
+        'editLocalCustomerModal', 
+        'localCustomerPurchaseHistoryModal', 
+        'localCustomerReturnModal', 
+        'viewLocationModal',
+        'addRegionFromLocalCustomerModal', 
+        'importLocalCustomersModal', 
+        'deleteLocalCustomerModal'
+    ];
     
     modals.forEach(function(modalId) {
         const modal = document.getElementById(modalId);
@@ -5467,52 +5472,8 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
 </div>
 
 <script>
-// ===== دوال أساسية =====
-
-function isMobile() {
-    return window.innerWidth <= 768;
-}
-
-function scrollToElement(element) {
-    if (!element) return;
-    
-    setTimeout(function() {
-        const rect = element.getBoundingClientRect();
-        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-        const elementTop = rect.top + scrollTop;
-        const offset = 80;
-        
-        requestAnimationFrame(function() {
-            window.scrollTo({
-                top: Math.max(0, elementTop - offset),
-                behavior: 'smooth'
-            });
-        });
-    }, 200);
-}
-
-function closeAllForms() {
-    const cards = ['addRegionFromLocalCustomerCard', 'importLocalCustomersCard', 'deleteLocalCustomerCard'];
-    cards.forEach(function(cardId) {
-        const card = document.getElementById(cardId);
-        if (card && card.style.display !== 'none') {
-            card.style.display = 'none';
-            const form = card.querySelector('form');
-            if (form) form.reset();
-        }
-    });
-    
-    const modals = ['addRegionFromLocalCustomerModal', 'importLocalCustomersModal', 'deleteLocalCustomerModal'];
-    modals.forEach(function(modalId) {
-        const modal = document.getElementById(modalId);
-        if (modal) {
-            const modalInstance = bootstrap.Modal.getInstance(modal);
-            if (modalInstance) modalInstance.hide();
-        }
-    });
-}
-
 // ===== دوال فتح النماذج =====
+// ملاحظة: الدوال الأساسية (isMobile, scrollToElement, closeAllForms) موجودة في الأعلى في السطر 2288
 
 function showAddRegionFromLocalCustomerModal() {
     closeAllForms();
