@@ -219,15 +219,24 @@
         isLoading = true;
         showLoading();
 
+        let timeoutId = null;
         try {
+            // إضافة timeout فعلي باستخدام AbortController
+            const controller = new AbortController();
+            timeoutId = setTimeout(() => controller.abort(), CONFIG.requestTimeout);
+
             const response = await fetch(url, {
                 method: 'GET',
                 headers: {
                     'X-Requested-With': 'XMLHttpRequest',
                     'Accept': 'text/html'
                 },
-                cache: 'default'
+                cache: 'default',
+                signal: controller.signal
             });
+
+            clearTimeout(timeoutId);
+            timeoutId = null;
 
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -257,9 +266,35 @@
 
             return true;
         } catch (error) {
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
             console.error('AJAX navigation error:', error);
-            // Fallback: إعادة تحميل كامل
-            window.location.href = url;
+            
+            // إخفاء loading قبل fallback
+            hideLoading();
+            
+            // إذا كان timeout، أظهر رسالة خطأ قبل fallback
+            if (error.name === 'AbortError' || error.message.includes('timeout')) {
+                // إظهار رسالة خطأ مؤقتة
+                const mainElement = document.querySelector(CONFIG.contentSelector);
+                if (mainElement) {
+                    mainElement.innerHTML = `
+                        <div class="alert alert-warning">
+                            <h5>انتهت مهلة الاتصال</h5>
+                            <p>جاري إعادة تحميل الصفحة...</p>
+                        </div>
+                    `;
+                }
+                
+                // إعادة تحميل بعد تأخير بسيط
+                setTimeout(() => {
+                    window.location.href = url;
+                }, 1000);
+            } else {
+                // Fallback فوري للأخطاء الأخرى
+                window.location.href = url;
+            }
             return false;
         } finally {
             isLoading = false;

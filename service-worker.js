@@ -430,6 +430,16 @@ self.addEventListener('fetch', (event) => {
   // Handle PHP Pages - Network Only (No Caching)
   // ============================================
   if (url.pathname.endsWith('.php')) {
+    // استثناء AJAX navigation requests - دع المتصفح يتعامل معها مباشرة
+    // هذا يحل مشكلة الشاشة البيضاء عند التنقل بين الصفحات في PWA
+    const isAjaxRequest = request.headers.get('X-Requested-With') === 'XMLHttpRequest';
+    const acceptsHtml = request.headers.get('Accept')?.includes('text/html');
+    
+    // إذا كان AJAX request للتنقل (XMLHttpRequest + text/html)، اتركه للمتصفح
+    if (isAjaxRequest && acceptsHtml) {
+      return; // لا تعترض الطلب - دع المتصفح يتعامل معه مباشرة
+    }
+    
     const isNavigation = request.mode === 'navigate';
     event.respondWith(networkOnly(request, isNavigation));
     return;

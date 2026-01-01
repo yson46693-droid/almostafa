@@ -1080,19 +1080,40 @@ $allCustomersSql = "SELECT c.*,
         LEFT JOIN users rep1 ON c.rep_id = rep1.id AND rep1.role = 'sales'
         LEFT JOIN users rep2 ON c.created_by = rep2.id AND rep2.role = 'sales'
         LEFT JOIN regions r ON c.region_id = r.id
-        WHERE (c.rep_id IS NOT NULL AND c.rep_id IN (SELECT id FROM users WHERE role = 'sales'))
-           OR (c.created_by IS NOT NULL AND c.created_by IN (SELECT id FROM users WHERE role = 'sales'))";
+        WHERE ";
 
+// بناء استعلام COUNT - نحتاج JOINs فقط إذا كان هناك بحث
 $allCustomersCountSql = "SELECT COUNT(*) as total 
-        FROM customers c
-        LEFT JOIN users rep1 ON c.rep_id = rep1.id AND rep1.role = 'sales'
-        LEFT JOIN users rep2 ON c.created_by = rep2.id AND rep2.role = 'sales'
-        LEFT JOIN regions r ON c.region_id = r.id
-        WHERE (c.rep_id IS NOT NULL AND c.rep_id IN (SELECT id FROM users WHERE role = 'sales'))
-           OR (c.created_by IS NOT NULL AND c.created_by IN (SELECT id FROM users WHERE role = 'sales'))";
+        FROM customers c";
 
 $allCustomersParams = [];
 $allCustomersCountParams = [];
+
+// إضافة JOINs لاستعلام COUNT إذا كان هناك بحث
+if ($allCustomersSearch) {
+    $allCustomersCountSql .= " LEFT JOIN users rep1 ON c.rep_id = rep1.id AND rep1.role = 'sales'
+        LEFT JOIN users rep2 ON c.created_by = rep2.id AND rep2.role = 'sales'
+        LEFT JOIN regions r ON c.region_id = r.id";
+}
+
+$allCustomersCountSql .= " WHERE ";
+
+// بناء شرط WHERE حسب الفلتر
+if ($allCustomersRepFilter > 0) {
+    // إذا تم اختيار مندوب محدد، فلتر حسب هذا المندوب فقط
+    $allCustomersSql .= "(c.rep_id = ? OR c.created_by = ?)";
+    $allCustomersCountSql .= "(c.rep_id = ? OR c.created_by = ?)";
+    $allCustomersParams[] = $allCustomersRepFilter;
+    $allCustomersParams[] = $allCustomersRepFilter;
+    $allCustomersCountParams[] = $allCustomersRepFilter;
+    $allCustomersCountParams[] = $allCustomersRepFilter;
+} else {
+    // إذا لم يتم اختيار مندوب محدد، عرض جميع عملاء المندوبين
+    $allCustomersSql .= "((c.rep_id IS NOT NULL AND c.rep_id IN (SELECT id FROM users WHERE role = 'sales'))
+           OR (c.created_by IS NOT NULL AND c.created_by IN (SELECT id FROM users WHERE role = 'sales')))";
+    $allCustomersCountSql .= "((c.rep_id IS NOT NULL AND c.rep_id IN (SELECT id FROM users WHERE role = 'sales'))
+           OR (c.created_by IS NOT NULL AND c.created_by IN (SELECT id FROM users WHERE role = 'sales')))";
+}
 
 if ($allCustomersDebtStatus === 'debtor') {
     $allCustomersSql .= " AND (c.balance IS NOT NULL AND c.balance > 0)";
@@ -1100,15 +1121,6 @@ if ($allCustomersDebtStatus === 'debtor') {
 } elseif ($allCustomersDebtStatus === 'clear') {
     $allCustomersSql .= " AND (c.balance IS NULL OR c.balance <= 0)";
     $allCustomersCountSql .= " AND (c.balance IS NULL OR c.balance <= 0)";
-}
-
-if ($allCustomersRepFilter > 0) {
-    $allCustomersSql .= " AND (c.rep_id = ? OR c.created_by = ?)";
-    $allCustomersCountSql .= " AND (c.rep_id = ? OR c.created_by = ?)";
-    $allCustomersParams[] = $allCustomersRepFilter;
-    $allCustomersParams[] = $allCustomersRepFilter;
-    $allCustomersCountParams[] = $allCustomersRepFilter;
-    $allCustomersCountParams[] = $allCustomersRepFilter;
 }
 
 if ($allCustomersSearch) {

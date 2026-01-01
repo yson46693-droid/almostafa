@@ -424,16 +424,8 @@ $pageTitle = isset($lang['menu_financial']) ? $lang['menu_financial'] : 'خزن�
 <link rel="stylesheet" href="<?php echo getRelativeUrl('assets/css/responsive-modals.css'); ?>">
 
 <!-- صفحة الخزنة -->
-<div class="page-header mb-4 d-flex justify-content-between align-items-center flex-wrap gap-2">
+<div class="page-header mb-4">
     <h2><i class="bi bi-safe me-2"></i><?php echo isset($lang['menu_financial']) ? $lang['menu_financial'] : 'خزنة الشركة'; ?></h2>
-    <div class="d-flex gap-2">
-        <button type="button" class="btn btn-success" onclick="showGenerateReportModal()">
-            <i class="bi bi-file-earmark-text me-1"></i>تقرير تفصيلي
-        </button>
-        <button type="button" class="btn btn-primary" onclick="showCollectFromRepModal()">
-            <i class="bi bi-cash-coin me-1"></i>تحصيل من مندوب
-        </button>
-    </div>
 </div>
 
 <?php if ($financialError): ?>
@@ -463,124 +455,6 @@ $pageTitle = isset($lang['menu_financial']) ? $lang['menu_financial'] : 'خزن�
 <?php endif; ?>
 
 <!-- Cards للموبايل - يجب أن تكون في بداية الصفحة بعد الرسائل -->
-<!-- Card تحصيل من مندوب - للموبايل فقط -->
-<div class="card shadow-sm mb-4 d-md-none" id="collectFromRepCard" style="display: none;">
-    <div class="card-header bg-primary text-white">
-        <h5 class="mb-0">
-            <i class="bi bi-cash-coin me-2"></i>تحصيل من مندوب
-        </h5>
-    </div>
-    <div class="card-body">
-        <form method="POST" id="collectFromRepCardForm">
-            <input type="hidden" name="action" value="collect_from_sales_rep">
-            <div class="mb-3">
-                <label for="collectFromRepCardSalesRepSelect" class="form-label">اختر المندوب <span class="text-danger">*</span></label>
-                <select class="form-select" id="collectFromRepCardSalesRepSelect" name="sales_rep_id" required>
-                    <option value="">-- اختر المندوب --</option>
-                    <?php
-                    $salesReps = $db->query("
-                        SELECT id, username, full_name 
-                        FROM users 
-                        WHERE role = 'sales' AND status = 'active'
-                        ORDER BY full_name ASC, username ASC
-                    ") ?: [];
-                    foreach ($salesReps as $rep):
-                    ?>
-                        <option value="<?php echo $rep['id']; ?>">
-                            <?php echo htmlspecialchars($rep['full_name'] ?? $rep['username'], ENT_QUOTES, 'UTF-8'); ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            
-            <div class="mb-3">
-                <label for="collectFromRepCardRepBalanceAmount" class="form-label">رصيد المندوب</label>
-                <div class="input-group">
-                    <span class="input-group-text"><i class="bi bi-wallet2 me-1"></i>رصيد المندوب</span>
-                    <input type="text" class="form-control" id="collectFromRepCardRepBalanceAmount" readonly value="-- اختر مندوب أولاً --" style="background-color: #f8f9fa; font-weight: bold;">
-                    <span class="input-group-text">ج.م</span>
-                </div>
-            </div>
-            
-            <div class="mb-3">
-                <label for="collectFromRepCardAmount" class="form-label">مبلغ التحصيل <span class="text-danger">*</span></label>
-                <div class="input-group">
-                    <span class="input-group-text">ج.م</span>
-                    <input type="number" step="0.01" min="0.01" class="form-control" id="collectFromRepCardAmount" name="amount" required placeholder="أدخل المبلغ">
-                </div>
-                <small class="text-muted">يجب أن يكون المبلغ أقل من أو يساوي رصيد المندوب</small>
-            </div>
-            
-            <div class="d-flex gap-2">
-                <button type="submit" class="btn btn-primary" id="collectFromRepCardSubmitBtn">
-                    <i class="bi bi-check-circle me-1"></i>تحصيل
-                </button>
-                <button type="button" class="btn btn-secondary" onclick="closeCollectFromRepCard()">إلغاء</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<!-- Card إنشاء تقرير تفصيلي - للموبايل فقط -->
-<div class="card shadow-sm mb-4 d-md-none" id="generateReportCard" style="display: none;">
-    <div class="card-header bg-success text-white">
-        <h5 class="mb-0">
-            <i class="bi bi-file-earmark-text me-2"></i>إنشاء تقرير تفصيلي
-        </h5>
-    </div>
-    <div class="card-body">
-        <div class="alert alert-info">
-            <i class="bi bi-info-circle me-2"></i>
-            <strong>ملاحظة:</strong> سيتم إنشاء تقرير تفصيلي لجميع حركات خزنة الشركة في الفترة المحددة.
-        </div>
-        <form method="GET" id="generateReportCardForm" onsubmit="return handleReportCardSubmit(event)">
-            <div class="mb-3">
-                <label for="generateReportCardDateFrom" class="form-label">
-                    <i class="bi bi-calendar-event me-1"></i>من تاريخ <span class="text-danger">*</span>
-                </label>
-                <input type="date" 
-                       class="form-control" 
-                       id="generateReportCardDateFrom" 
-                       name="date_from" 
-                       required
-                       value="<?php echo date('Y-m-01'); ?>">
-            </div>
-            <div class="mb-3">
-                <label for="generateReportCardDateTo" class="form-label">
-                    <i class="bi bi-calendar-event me-1"></i>إلى تاريخ <span class="text-danger">*</span>
-                </label>
-                <input type="date" 
-                       class="form-control" 
-                       id="generateReportCardDateTo" 
-                       name="date_to" 
-                       required
-                       value="<?php echo date('Y-m-d'); ?>">
-            </div>
-            <div class="mb-3">
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" id="generateReportCardIncludePending" name="include_pending" value="1">
-                    <label class="form-check-label" for="generateReportCardIncludePending">
-                        تضمين المعاملات المعلقة
-                    </label>
-                </div>
-            </div>
-            <div class="mb-3">
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" id="generateReportCardGroupByType" name="group_by_type" value="1" checked>
-                    <label class="form-check-label" for="generateReportCardGroupByType">
-                        تجميع الحركات حسب النوع
-                    </label>
-                </div>
-            </div>
-            <div class="d-flex gap-2">
-                <button type="submit" class="btn btn-success">
-                    <i class="bi bi-file-earmark-pdf me-1"></i>إنشاء التقرير
-                </button>
-                <button type="button" class="btn btn-secondary" onclick="closeGenerateReportCard()">إلغاء</button>
-            </div>
-        </form>
-    </div>
-</div>
 
 
 <?php
@@ -792,54 +666,175 @@ $typeColorMap = [
         </div>
     </div>
     <div class="col-12 col-xxl-5">
-        <div class="card shadow-sm h-100">
-            <div class="card-header bg-light fw-bold">
-                <i class="bi bi-pencil-square me-2 text-success"></i>تسجيل مصروف سريع
+        <div class="row g-3">
+            <div class="col-12">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-light fw-bold">
+                        <i class="bi bi-pencil-square me-2 text-success"></i>تسجيل مصروف سريع
+                    </div>
+                    <div class="card-body">
+                        <form method="POST" class="row g-3">
+                            <input type="hidden" name="action" value="add_quick_expense">
+                            <div class="col-12 col-sm-6">
+                                <label for="quickExpenseAmount" class="form-label">قيمة المصروف <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <span class="input-group-text">ج.م</span>
+                                    <input type="number" step="0.01" min="0.01" class="form-control" id="quickExpenseAmount" name="amount" required value="<?php echo htmlspecialchars($financialFormData['amount'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                                </div>
+                            </div>
+                            <div class="col-12 col-sm-6">
+                                <label for="quickExpenseReference" class="form-label">رقم مرجعي</label>
+                                <?php
+                                $generatedRef = 'REF-' . mt_rand(100000, 999999);?>
+                                <input type="text" class="form-control" id="quickExpenseReference" name="reference_number" value="<?php echo $generatedRef; ?>" readonly style="background:#f5f5f5; cursor:not-allowed;">
+                            </div>
+                            <div class="col-12">
+                                <label for="quickExpenseDescription" class="form-label">وصف المصروف <span class="text-danger">*</span></label>
+                                <textarea class="form-control" id="quickExpenseDescription" name="description" rows="3" required placeholder="أدخل تفاصيل المصروف..."><?php echo htmlspecialchars($financialFormData['description'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea>
+                            </div>
+                            <?php
+                            // إخفاء خيار الاعتماد للمدير (المدير يعتمد تلقائياً)
+                            $userRole = strtolower($currentUser['role'] ?? '');
+                            $isManager = ($userRole === 'manager');
+                            
+                            if (!$isManager): // عرض الخيار فقط للمحاسب
+                            ?>
+                            <div class="col-12">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="quickExpenseApproved" name="mark_as_approved" value="1" <?php echo isset($financialFormData['mark_as_approved']) && $financialFormData['mark_as_approved'] === '1' ? 'checked' : ''; ?>>
+                                    <label class="form-check-label" for="quickExpenseApproved">
+                                        اعتماد المعاملة فوراً (يُستخدم عند تسجيل مصروف مؤكد)
+                                    </label>
+                                </div>
+                                <small class="text-muted d-block mt-1">إذا تُرك غير محدد فسيتم إرسال المصروف للموافقة لاحقاً.</small>
+                            </div>
+                            <?php endif; ?>
+                            <div class="col-12 d-flex justify-content-end gap-2">
+                                <button type="reset" class="btn btn-outline-secondary">تفريغ الحقول</button>
+                                <button type="submit" class="btn btn-success">
+                                    <i class="bi bi-send me-1"></i>حفظ المصروف
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
             </div>
-            <div class="card-body">
-                <form method="POST" class="row g-3">
-                    <input type="hidden" name="action" value="add_quick_expense">
-                    <div class="col-12 col-sm-6">
-                        <label for="quickExpenseAmount" class="form-label">قيمة المصروف <span class="text-danger">*</span></label>
-                        <div class="input-group">
-                            <span class="input-group-text">ج.م</span>
-                            <input type="number" step="0.01" min="0.01" class="form-control" id="quickExpenseAmount" name="amount" required value="<?php echo htmlspecialchars($financialFormData['amount'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+            
+            <!-- Card تحصيل من مندوب - ثابتة دائماً -->
+            <div class="col-12">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-light fw-bold">
+                        <i class="bi bi-cash-coin me-2 text-primary"></i>تحصيل من مندوب
+                    </div>
+                    <div class="card-body">
+                        <form method="POST" id="collectFromRepCardForm">
+                            <input type="hidden" name="action" value="collect_from_sales_rep">
+                            <div class="mb-3">
+                                <label for="collectFromRepCardSalesRepSelect" class="form-label">اختر المندوب <span class="text-danger">*</span></label>
+                                <select class="form-select" id="collectFromRepCardSalesRepSelect" name="sales_rep_id" required>
+                                    <option value="">-- اختر المندوب --</option>
+                                    <?php
+                                    $salesReps = $db->query("
+                                        SELECT id, username, full_name 
+                                        FROM users 
+                                        WHERE role = 'sales' AND status = 'active'
+                                        ORDER BY full_name ASC, username ASC
+                                    ") ?: [];
+                                    foreach ($salesReps as $rep):
+                                    ?>
+                                        <option value="<?php echo $rep['id']; ?>">
+                                            <?php echo htmlspecialchars($rep['full_name'] ?? $rep['username'], ENT_QUOTES, 'UTF-8'); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="collectFromRepCardRepBalanceAmount" class="form-label">رصيد المندوب</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="bi bi-wallet2 me-1"></i>رصيد المندوب</span>
+                                    <input type="text" class="form-control" id="collectFromRepCardRepBalanceAmount" readonly value="-- اختر مندوب أولاً --" style="background-color: #f8f9fa; font-weight: bold;">
+                                    <span class="input-group-text">ج.م</span>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="collectFromRepCardAmount" class="form-label">مبلغ التحصيل <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <span class="input-group-text">ج.م</span>
+                                    <input type="number" step="0.01" min="0.01" class="form-control" id="collectFromRepCardAmount" name="amount" required placeholder="أدخل المبلغ">
+                                </div>
+                                <small class="text-muted">يجب أن يكون المبلغ أقل من أو يساوي رصيد المندوب</small>
+                            </div>
+                            
+                            <div class="d-flex justify-content-end gap-2">
+                                <button type="submit" class="btn btn-primary" id="collectFromRepCardSubmitBtn">
+                                    <i class="bi bi-check-circle me-1"></i>تحصيل
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Card إنشاء تقرير تفصيلي - ثابتة دائماً -->
+            <div class="col-12">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-light fw-bold">
+                        <i class="bi bi-file-earmark-text me-2 text-success"></i>إنشاء تقرير تفصيلي
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>ملاحظة:</strong> سيتم إنشاء تقرير تفصيلي لجميع حركات خزنة الشركة في الفترة المحددة.
                         </div>
+                        <form method="GET" id="generateReportCardForm" onsubmit="return handleReportCardSubmit(event)">
+                            <div class="mb-3">
+                                <label for="generateReportCardDateFrom" class="form-label">
+                                    <i class="bi bi-calendar-event me-1"></i>من تاريخ <span class="text-danger">*</span>
+                                </label>
+                                <input type="date" 
+                                       class="form-control" 
+                                       id="generateReportCardDateFrom" 
+                                       name="date_from" 
+                                       required
+                                       value="<?php echo date('Y-m-01'); ?>">
+                            </div>
+                            <div class="mb-3">
+                                <label for="generateReportCardDateTo" class="form-label">
+                                    <i class="bi bi-calendar-event me-1"></i>إلى تاريخ <span class="text-danger">*</span>
+                                </label>
+                                <input type="date" 
+                                       class="form-control" 
+                                       id="generateReportCardDateTo" 
+                                       name="date_to" 
+                                       required
+                                       value="<?php echo date('Y-m-d'); ?>">
+                            </div>
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="generateReportCardIncludePending" name="include_pending" value="1">
+                                    <label class="form-check-label" for="generateReportCardIncludePending">
+                                        تضمين المعاملات المعلقة
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="generateReportCardGroupByType" name="group_by_type" value="1" checked>
+                                    <label class="form-check-label" for="generateReportCardGroupByType">
+                                        تجميع الحركات حسب النوع
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-end gap-2">
+                                <button type="submit" class="btn btn-success">
+                                    <i class="bi bi-file-earmark-pdf me-1"></i>إنشاء التقرير
+                                </button>
+                            </div>
+                        </form>
                     </div>
-                    <div class="col-12 col-sm-6">
-                        <label for="quickExpenseReference" class="form-label">رقم مرجعي</label>
-                        <?php
-                        $generatedRef = 'REF-' . mt_rand(100000, 999999);?>
-                        <input type="text" class="form-control" id="quickExpenseReference" name="reference_number" value="<?php echo $generatedRef; ?>" readonly style="background:#f5f5f5; cursor:not-allowed;">
-                    </div>
-                    <div class="col-12">
-                        <label for="quickExpenseDescription" class="form-label">وصف المصروف <span class="text-danger">*</span></label>
-                        <textarea class="form-control" id="quickExpenseDescription" name="description" rows="3" required placeholder="أدخل تفاصيل المصروف..."><?php echo htmlspecialchars($financialFormData['description'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea>
-                    </div>
-                    <?php
-                    // إخفاء خيار الاعتماد للمدير (المدير يعتمد تلقائياً)
-                    $userRole = strtolower($currentUser['role'] ?? '');
-                    $isManager = ($userRole === 'manager');
-                    
-                    if (!$isManager): // عرض الخيار فقط للمحاسب
-                    ?>
-                    <div class="col-12">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="quickExpenseApproved" name="mark_as_approved" value="1" <?php echo isset($financialFormData['mark_as_approved']) && $financialFormData['mark_as_approved'] === '1' ? 'checked' : ''; ?>>
-                            <label class="form-check-label" for="quickExpenseApproved">
-                                اعتماد المعاملة فوراً (يُستخدم عند تسجيل مصروف مؤكد)
-                            </label>
-                        </div>
-                        <small class="text-muted d-block mt-1">إذا تُرك غير محدد فسيتم إرسال المصروف للموافقة لاحقاً.</small>
-                    </div>
-                    <?php endif; ?>
-                    <div class="col-12 d-flex justify-content-end gap-2">
-                        <button type="reset" class="btn btn-outline-secondary">تفريغ الحقول</button>
-                        <button type="submit" class="btn btn-success">
-                            <i class="bi bi-send me-1"></i>حفظ المصروف
-                        </button>
-                    </div>
-                </form>
+                </div>
             </div>
         </div>
     </div>
@@ -1509,22 +1504,6 @@ function scrollToElement(element) {
 
 // دالة لإغلاق جميع النماذج المفتوحة
 function closeAllForms() {
-    // إغلاق جميع Cards على الموبايل
-    const collectCard = document.getElementById('collectFromRepCard');
-    const reportCard = document.getElementById('generateReportCard');
-    
-    if (collectCard && collectCard.style.display !== 'none') {
-        collectCard.style.display = 'none';
-        const form = collectCard.querySelector('form');
-        if (form) form.reset();
-    }
-    
-    if (reportCard && reportCard.style.display !== 'none') {
-        reportCard.style.display = 'none';
-        const form = reportCard.querySelector('form');
-        if (form) form.reset();
-    }
-    
     // إغلاق جميع Modals على الكمبيوتر
     const modals = ['collectFromRepModal', 'generateReportModal'];
     
@@ -1535,161 +1514,19 @@ function closeAllForms() {
             if (modalInstance) modalInstance.hide();
         }
     });
-}
-
-// دالة فتح نموذج تحصيل من مندوب
-function showCollectFromRepModal() {
-    closeAllForms();
     
-    if (isMobile()) {
-        // على الموبايل: استخدام Card فقط - منع Modal تماماً
-        const modal = document.getElementById('collectFromRepModal');
-        if (modal) {
-            // إغلاق Modal فوراً إذا كان مفتوحاً
-            modal.classList.remove('show', 'showing', 'modal-open');
-            modal.style.display = 'none';
-            modal.style.visibility = 'hidden';
-            modal.style.position = 'fixed';
-            modal.style.left = '-9999px';
-            modal.style.zIndex = '-1';
-            // إزالة class "modal" لمنع Bootstrap من التعرف عليه
-            modal.classList.remove('modal', 'fade');
-            
-            if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-                const modalInstance = bootstrap.Modal.getInstance(modal);
-                if (modalInstance) {
-                    modalInstance.hide();
-                }
-            }
-        }
-        
-        // إزالة backdrop فوراً
-        const backdrops = document.querySelectorAll('.modal-backdrop');
-        backdrops.forEach(function(backdrop) {
-            backdrop.remove();
-        });
-        document.body.classList.remove('modal-open');
-        document.body.style.overflow = '';
-        document.body.style.paddingRight = '';
-        
-        // فتح Card
-        const card = document.getElementById('collectFromRepCard');
-        if (card) {
-            card.style.display = 'block';
-            card.style.visibility = 'visible';
-            setTimeout(function() {
-                scrollToElement(card);
-            }, 50);
-        }
-    } else {
-        // على الكمبيوتر: استخدام Modal فقط
-        const modal = document.getElementById('collectFromRepModal');
-        if (modal && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-            // إعادة class "modal" على الكمبيوتر
-            if (!modal.classList.contains('modal')) {
-                modal.classList.add('modal', 'fade');
-            }
-            const modalInstance = new bootstrap.Modal(modal);
-            modalInstance.show();
-        }
-    }
+    // إزالة backdrop
+    const backdrops = document.querySelectorAll('.modal-backdrop');
+    backdrops.forEach(function(backdrop) {
+        backdrop.remove();
+    });
+    document.body.classList.remove('modal-open');
+    document.body.style.overflow = '';
+    document.body.style.paddingRight = '';
 }
 
-// دالة فتح نموذج إنشاء تقرير
-function showGenerateReportModal() {
-    closeAllForms();
-    
-    if (isMobile()) {
-        // على الموبايل: استخدام Card فقط - منع Modal تماماً
-        const modal = document.getElementById('generateReportModal');
-        if (modal) {
-            // إغلاق Modal فوراً إذا كان مفتوحاً
-            modal.classList.remove('show', 'showing', 'modal-open');
-            modal.style.display = 'none';
-            modal.style.visibility = 'hidden';
-            modal.style.position = 'fixed';
-            modal.style.left = '-9999px';
-            modal.style.zIndex = '-1';
-            // إزالة class "modal" لمنع Bootstrap من التعرف عليه
-            modal.classList.remove('modal', 'fade');
-            
-            if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-                const modalInstance = bootstrap.Modal.getInstance(modal);
-                if (modalInstance) {
-                    modalInstance.hide();
-                }
-            }
-        }
-        
-        // إزالة backdrop فوراً
-        const backdrops = document.querySelectorAll('.modal-backdrop');
-        backdrops.forEach(function(backdrop) {
-            backdrop.remove();
-        });
-        document.body.classList.remove('modal-open');
-        document.body.style.overflow = '';
-        document.body.style.paddingRight = '';
-        
-        // فتح Card
-        const card = document.getElementById('generateReportCard');
-        if (card) {
-            card.style.display = 'block';
-            card.style.visibility = 'visible';
-            setTimeout(function() {
-                scrollToElement(card);
-            }, 50);
-        }
-    } else {
-        // على الكمبيوتر: استخدام Modal فقط
-        const modal = document.getElementById('generateReportModal');
-        if (modal && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-            // إعادة class "modal" على الكمبيوتر
-            if (!modal.classList.contains('modal')) {
-                modal.classList.add('modal', 'fade');
-            }
-            const modalInstance = new bootstrap.Modal(modal);
-            modalInstance.show();
-        }
-    }
-}
-
-// دوال إغلاق Cards
-function closeCollectFromRepCard() {
-    const card = document.getElementById('collectFromRepCard');
-    if (card) {
-        card.style.display = 'none';
-        const form = card.querySelector('form');
-        if (form) form.reset();
-        
-        // إعادة تعيين حقول الرصيد
-        const repBalanceAmount = document.getElementById('collectFromRepCardRepBalanceAmount');
-        if (repBalanceAmount) {
-            repBalanceAmount.value = '-- اختر مندوب أولاً --';
-            repBalanceAmount.style.color = '#6c757d';
-        }
-        
-        const collectAmount = document.getElementById('collectFromRepCardAmount');
-        if (collectAmount) {
-            collectAmount.max = '';
-            collectAmount.removeAttribute('data-max-balance');
-        }
-        
-        const submitBtn = document.getElementById('collectFromRepCardSubmitBtn');
-        if (submitBtn) {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i>تحصيل';
-        }
-    }
-}
-
-function closeGenerateReportCard() {
-    const card = document.getElementById('generateReportCard');
-    if (card) {
-        card.style.display = 'none';
-        const form = card.querySelector('form');
-        if (form) form.reset();
-    }
-}
+// ملاحظة: تم إزالة دوال showCollectFromRepModal و showGenerateReportModal
+// لأن Cards أصبحت ثابتة دائماً ظاهرة ولا تحتاج إلى أزرار
 
 // معالجة إرسال نموذج التقرير من Card
 function handleReportCardSubmit(event) {
@@ -1748,8 +1585,18 @@ function handleReportCardSubmit(event) {
     const fullUrl = reportUrl + '?' + params.toString();
     window.open(fullUrl, '_blank');
     
-    // إغلاق Card
-    closeGenerateReportCard();
+    // إعادة تعيين النموذج بعد فتح التقرير
+    const form = document.getElementById('generateReportCardForm');
+    if (form) {
+        form.reset();
+        // إعادة تعيين القيم الافتراضية
+        const dateFrom = document.getElementById('generateReportCardDateFrom');
+        const dateTo = document.getElementById('generateReportCardDateTo');
+        const groupByType = document.getElementById('generateReportCardGroupByType');
+        if (dateFrom) dateFrom.value = '<?php echo date('Y-m-01'); ?>';
+        if (dateTo) dateTo.value = '<?php echo date('Y-m-d'); ?>';
+        if (groupByType) groupByType.checked = true;
+    }
     
     return false;
 }
