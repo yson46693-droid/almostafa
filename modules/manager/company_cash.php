@@ -1421,7 +1421,7 @@ function showCollectFromRepModal() {
     closeAllForms();
     
     if (isMobile()) {
-        // على الموبايل: استخدام Card فقط - منع فتح Modal تماماً
+        // على الموبايل: استخدام Card فقط
         const card = document.getElementById('collectFromRepCard');
         if (card) {
             card.style.display = 'block';
@@ -1429,26 +1429,6 @@ function showCollectFromRepModal() {
                 scrollToElement(card);
             }, 50);
         }
-        
-        // منع فتح Modal على الموبايل - إغلاق أي Modal مفتوح وإزالة backdrop
-        const modal = document.getElementById('collectFromRepModal');
-        if (modal) {
-            modal.classList.remove('show');
-            modal.style.display = 'none';
-            const modalInstance = bootstrap.Modal.getInstance(modal);
-            if (modalInstance) {
-                modalInstance.hide();
-            }
-        }
-        
-        // إزالة backdrop فوراً
-        const backdrops = document.querySelectorAll('.modal-backdrop');
-        backdrops.forEach(function(backdrop) {
-            backdrop.remove();
-        });
-        document.body.classList.remove('modal-open');
-        document.body.style.overflow = '';
-        document.body.style.paddingRight = '';
     } else {
         // على الكمبيوتر: استخدام Modal فقط
         const modal = document.getElementById('collectFromRepModal');
@@ -1464,7 +1444,7 @@ function showGenerateReportModal() {
     closeAllForms();
     
     if (isMobile()) {
-        // على الموبايل: استخدام Card فقط - منع فتح Modal تماماً
+        // على الموبايل: استخدام Card فقط
         const card = document.getElementById('generateReportCard');
         if (card) {
             card.style.display = 'block';
@@ -1472,26 +1452,6 @@ function showGenerateReportModal() {
                 scrollToElement(card);
             }, 50);
         }
-        
-        // منع فتح Modal على الموبايل - إغلاق أي Modal مفتوح وإزالة backdrop
-        const modal = document.getElementById('generateReportModal');
-        if (modal) {
-            modal.classList.remove('show');
-            modal.style.display = 'none';
-            const modalInstance = bootstrap.Modal.getInstance(modal);
-            if (modalInstance) {
-                modalInstance.hide();
-            }
-        }
-        
-        // إزالة backdrop فوراً
-        const backdrops = document.querySelectorAll('.modal-backdrop');
-        backdrops.forEach(function(backdrop) {
-            backdrop.remove();
-        });
-        document.body.classList.remove('modal-open');
-        document.body.style.overflow = '';
-        document.body.style.paddingRight = '';
     } else {
         // على الكمبيوتر: استخدام Modal فقط
         const modal = document.getElementById('generateReportModal');
@@ -1782,133 +1742,72 @@ function loadSalesRepBalance(salesRepId, repBalanceElement, collectAmountElement
 
 // معالجة تحصيل من مندوب
 document.addEventListener('DOMContentLoaded', function() {
-    // منع فتح Modal على الموبايل - حماية إضافية
-    const collectFromRepModal = document.getElementById('collectFromRepModal');
-    const generateReportModal = document.getElementById('generateReportModal');
-    
-    // دالة لإزالة backdrop وإغلاق Modal على الموبايل
-    function preventModalOnMobile() {
-        if (isMobile()) {
-            // إزالة جميع backdrops
-            const backdrops = document.querySelectorAll('.modal-backdrop');
-            backdrops.forEach(function(backdrop) {
-                backdrop.remove();
+    // منع Bootstrap من تهيئة Modal على الموبايل تماماً
+    if (isMobile()) {
+        const collectFromRepModal = document.getElementById('collectFromRepModal');
+        const generateReportModal = document.getElementById('generateReportModal');
+        
+        // منع Bootstrap من إنشاء Modal instance على الموبايل
+        if (collectFromRepModal) {
+            // إزالة جميع event listeners من Modal
+            const newModal = collectFromRepModal.cloneNode(true);
+            collectFromRepModal.parentNode.replaceChild(newModal, collectFromRepModal);
+            
+            // إزالة backdrop فوراً إذا تم إنشاؤه
+            const removeBackdrop = function() {
+                const backdrops = document.querySelectorAll('.modal-backdrop');
+                backdrops.forEach(function(backdrop) {
+                    backdrop.remove();
+                });
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+                document.body.style.paddingRight = '';
+            };
+            
+            // مراقبة مستمرة لإزالة backdrop
+            setInterval(removeBackdrop, 50);
+            
+            // منع فتح Modal تماماً
+            newModal.addEventListener('show.bs.modal', function(e) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                removeBackdrop();
+                return false;
             });
+        }
+        
+        if (generateReportModal) {
+            // إزالة جميع event listeners من Modal
+            const newModal = generateReportModal.cloneNode(true);
+            generateReportModal.parentNode.replaceChild(newModal, generateReportModal);
             
-            // إزالة class modal-open من body
-            document.body.classList.remove('modal-open');
-            document.body.style.overflow = '';
-            document.body.style.paddingRight = '';
+            // إزالة backdrop فوراً إذا تم إنشاؤه
+            const removeBackdrop = function() {
+                const backdrops = document.querySelectorAll('.modal-backdrop');
+                backdrops.forEach(function(backdrop) {
+                    backdrop.remove();
+                });
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+                document.body.style.paddingRight = '';
+            };
             
-            // إغلاق جميع Modals
-            if (collectFromRepModal) {
-                collectFromRepModal.classList.remove('show');
-                collectFromRepModal.style.display = 'none';
-                const modalInstance = bootstrap.Modal.getInstance(collectFromRepModal);
-                if (modalInstance) {
-                    modalInstance.hide();
-                }
-            }
+            // مراقبة مستمرة لإزالة backdrop
+            setInterval(removeBackdrop, 50);
             
-            if (generateReportModal) {
-                generateReportModal.classList.remove('show');
-                generateReportModal.style.display = 'none';
-                const modalInstance = bootstrap.Modal.getInstance(generateReportModal);
-                if (modalInstance) {
-                    modalInstance.hide();
-                }
-            }
+            // منع فتح Modal تماماً
+            newModal.addEventListener('show.bs.modal', function(e) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                removeBackdrop();
+                return false;
+            });
         }
     }
     
-    // مراقبة مستمرة لإزالة backdrop على الموبايل
-    if (isMobile()) {
-        setInterval(preventModalOnMobile, 100);
-        
-        // مراقبة DOM للتغييرات (لإزالة backdrop فوراً عند إضافته)
-        const observer = new MutationObserver(function(mutations) {
-            mutations.forEach(function(mutation) {
-                mutation.addedNodes.forEach(function(node) {
-                    if (node.nodeType === 1) { // Element node
-                        if (node.classList && node.classList.contains('modal-backdrop')) {
-                            node.remove();
-                            document.body.classList.remove('modal-open');
-                            document.body.style.overflow = '';
-                            document.body.style.paddingRight = '';
-                        }
-                        // التحقق من العناصر المضافة داخل الصفحة
-                        const backdrops = node.querySelectorAll ? node.querySelectorAll('.modal-backdrop') : [];
-                        backdrops.forEach(function(backdrop) {
-                            backdrop.remove();
-                            document.body.classList.remove('modal-open');
-                            document.body.style.overflow = '';
-                            document.body.style.paddingRight = '';
-                        });
-                    }
-                });
-            });
-        });
-        
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
-    }
-    
-    // منع فتح Modal على الموبايل حتى لو تم استدعاؤه مباشرة
-    if (collectFromRepModal) {
-        collectFromRepModal.addEventListener('show.bs.modal', function(event) {
-            if (isMobile()) {
-                event.preventDefault();
-                event.stopPropagation();
-                event.stopImmediatePropagation();
-                // فتح Card بدلاً من Modal
-                const card = document.getElementById('collectFromRepCard');
-                if (card) {
-                    card.style.display = 'block';
-                    setTimeout(function() {
-                        scrollToElement(card);
-                    }, 50);
-                }
-                preventModalOnMobile();
-                return false;
-            }
-        });
-        
-        // منع إضافة class show على الموبايل
-        collectFromRepModal.addEventListener('shown.bs.modal', function(event) {
-            if (isMobile()) {
-                preventModalOnMobile();
-            }
-        });
-    }
-    
-    if (generateReportModal) {
-        generateReportModal.addEventListener('show.bs.modal', function(event) {
-            if (isMobile()) {
-                event.preventDefault();
-                event.stopPropagation();
-                event.stopImmediatePropagation();
-                // فتح Card بدلاً من Modal
-                const card = document.getElementById('generateReportCard');
-                if (card) {
-                    card.style.display = 'block';
-                    setTimeout(function() {
-                        scrollToElement(card);
-                    }, 50);
-                }
-                preventModalOnMobile();
-                return false;
-            }
-        });
-        
-        // منع إضافة class show على الموبايل
-        generateReportModal.addEventListener('shown.bs.modal', function(event) {
-            if (isMobile()) {
-                preventModalOnMobile();
-            }
-        });
-    }
+    // Modal elements
+    const collectFromRepModal = document.getElementById('collectFromRepModal');
+    const generateReportModal = document.getElementById('generateReportModal');
     
     // Modal elements
     const salesRepSelect = document.getElementById('salesRepSelect');
@@ -1983,31 +1882,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // إعادة تعيين النموذج عند إغلاق Modal
-    const collectModal = document.getElementById('collectFromRepModal');
-    if (collectModal) {
-        // إزالة backdrop فوراً عند بدء الإغلاق - بدون أي تأخير
-        collectModal.addEventListener('hide.bs.modal', function() {
-            const backdrops = document.querySelectorAll('.modal-backdrop');
-            backdrops.forEach(backdrop => {
-                backdrop.style.transition = 'none'; /* إزالة transition تماماً */
-                backdrop.style.opacity = '0';
-                backdrop.remove(); /* إزالة فوراً بدون setTimeout */
-            });
-            // تنظيف body classes فوراً
-            document.body.classList.remove('modal-open');
-            document.body.style.overflow = '';
-            document.body.style.paddingRight = '';
-        });
-        
-        collectModal.addEventListener('hidden.bs.modal', function() {
-            // تنظيف backdrop المتبقي (احتياطي)
-            const backdrops = document.querySelectorAll('.modal-backdrop');
-            backdrops.forEach(backdrop => backdrop.remove());
-            document.body.classList.remove('modal-open');
-            document.body.style.overflow = '';
-            document.body.style.paddingRight = '';
-            
+    // إعادة تعيين النموذج عند إغلاق Modal (فقط على الكمبيوتر)
+    if (!isMobile() && collectFromRepModal) {
+        collectFromRepModal.addEventListener('hidden.bs.modal', function() {
             if (collectForm) {
                 collectForm.reset();
             }
@@ -2019,33 +1896,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i>تحصيل';
             }
-        });
-    }
-    
-    // معالجة Modal تقرير تفصيلي
-    const generateReportModal = document.getElementById('generateReportModal');
-    if (generateReportModal) {
-        // إزالة backdrop فوراً عند بدء الإغلاق - بدون أي تأخير
-        generateReportModal.addEventListener('hide.bs.modal', function() {
-            const backdrops = document.querySelectorAll('.modal-backdrop');
-            backdrops.forEach(backdrop => {
-                backdrop.style.transition = 'none'; /* إزالة transition تماماً */
-                backdrop.style.opacity = '0';
-                backdrop.remove(); /* إزالة فوراً بدون setTimeout */
-            });
-            // تنظيف body classes فوراً
-            document.body.classList.remove('modal-open');
-            document.body.style.overflow = '';
-            document.body.style.paddingRight = '';
-        });
-        
-        generateReportModal.addEventListener('hidden.bs.modal', function() {
-            // تنظيف backdrop المتبقي (احتياطي)
-            const backdrops = document.querySelectorAll('.modal-backdrop');
-            backdrops.forEach(backdrop => backdrop.remove());
-            document.body.classList.remove('modal-open');
-            document.body.style.overflow = '';
-            document.body.style.paddingRight = '';
         });
     }
 });

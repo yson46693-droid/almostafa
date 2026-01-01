@@ -3747,6 +3747,7 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
         const card = document.getElementById('transferExternalProductCard');
         if (card) {
             card.style.display = 'none';
+            card.classList.remove('show-card');
             const form = card.querySelector('form');
             if (form) form.reset();
         }
@@ -5172,6 +5173,7 @@ if (!window.transferFormInitialized) {
             const card = document.getElementById(cardId);
             if (card && card.style.display !== 'none') {
                 card.style.display = 'none';
+                card.classList.remove('show-card');
                 const form = card.querySelector('form');
                 if (form) form.reset();
             }
@@ -5806,6 +5808,7 @@ if (!window.transferFormInitialized) {
         const card = document.getElementById('batchDetailsCard');
         if (card) {
             card.style.display = 'none';
+            card.classList.remove('show-card');
         }
     }
     
@@ -5877,6 +5880,7 @@ if (!window.transferFormInitialized) {
         const card = document.getElementById('addExternalProductCard');
         if (card) {
             card.style.display = 'none';
+            card.classList.remove('show-card');
             const form = card.querySelector('form');
             if (form) form.reset();
         }
@@ -6170,6 +6174,7 @@ function showBarcodePrintModal(batchNumber, productName, defaultQuantity) {
         }
         
         card.style.display = 'block';
+        card.classList.add('show-card');
         if (typeof window.scrollToElement === 'function') {
             setTimeout(function() {
                 window.scrollToElement(card);
@@ -6265,6 +6270,7 @@ function closePrintBarcodesCard() {
     const card = document.getElementById('printBarcodesCard');
     if (card) {
         card.style.display = 'none';
+        card.classList.remove('show-card');
     }
 }
 
