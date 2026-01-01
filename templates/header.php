@@ -389,8 +389,8 @@ if (ob_get_level() > 0) {
     <link href="<?php echo $assetsUrl; ?>css/modal-iframe.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet" media="print" onload="this.media='all'">
     <noscript><link href="<?php echo $assetsUrl; ?>css/modal-iframe.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet"></noscript>
     
-    <link href="<?php echo $assetsUrl; ?>css/dark-mode.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet" media="print" onload="this.media='all'">
-    <noscript><link href="<?php echo $assetsUrl; ?>css/dark-mode.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet"></noscript>
+    <!-- Dark Mode CSS - تحميل مباشر لضمان التطبيق الفوري -->
+    <link href="<?php echo $assetsUrl; ?>css/dark-mode.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet">
     
     <!-- Accessibility Improvements - تحميل غير متزامن -->
     <link href="<?php echo $assetsUrl; ?>css/accessibility-improvements.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet" media="print" onload="this.media='all'">
@@ -682,6 +682,17 @@ if (ob_get_level() > 0) {
             min-height: 1px;
         }
     </style>
+    <script>
+        // Dark Mode - تطبيق فوري قبل تحميل الصفحة (منع FOUC)
+        (function() {
+            try {
+                const currentTheme = localStorage.getItem('theme') || 'light';
+                document.documentElement.setAttribute('data-theme', currentTheme);
+            } catch (e) {
+                // تجاهل الأخطاء في حالة عدم توفر localStorage
+            }
+        })();
+    </script>
     <script>
         // CSS Async Loader - تحميل CSS بشكل غير متزامن
         (function() {

@@ -37,17 +37,74 @@
     --border-color: #4b5563;
 }
 
+/* ===== Base Elements ===== */
+[data-theme="dark"] html {
+    background-color: var(--bg-primary);
+}
+
 [data-theme="dark"] body {
-    background-color: var(--bg-secondary);
-    color: var(--gray-700);
+    background-color: var(--bg-secondary) !important;
+    color: var(--gray-700) !important;
+}
+
+[data-theme="dark"] body.dashboard-body {
+    background-color: var(--bg-secondary) !important;
+    color: var(--gray-700) !important;
+}
+
+[data-theme="dark"] body.login-page {
+    background: var(--bg-primary) !important;
+    background-image: none !important;
+}
+
+[data-theme="dark"] .dashboard-wrapper {
+    background-color: var(--bg-secondary) !important;
+}
+
+[data-theme="dark"] .dashboard-main {
+    background-color: var(--bg-secondary) !important;
+    color: var(--gray-700) !important;
 }
 
 [data-theme="dark"] .dashboard-card,
 [data-theme="dark"] .stat-card,
 [data-theme="dark"] .analytics-card,
 [data-theme="dark"] .table-card {
-    background: var(--bg-card);
-    border-color: var(--border-color);
+    background: var(--bg-card) !important;
+    border-color: var(--border-color) !important;
+    color: var(--gray-700) !important;
+}
+
+/* ===== General Container Elements ===== */
+[data-theme="dark"] .container,
+[data-theme="dark"] .container-fluid,
+[data-theme="dark"] .row,
+[data-theme="dark"] .col,
+[data-theme="dark"] [class*="col-"] {
+    color: var(--gray-700);
+}
+
+/* ===== Login Page Specific ===== */
+[data-theme="dark"] .login-page .card {
+    background: var(--bg-card) !important;
+    border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .login-page .card-body {
+    background: var(--bg-card) !important;
+    color: var(--gray-700) !important;
+}
+
+[data-theme="dark"] .login-page .form-control {
+    background: var(--bg-card) !important;
+    border-color: var(--border-color) !important;
+    color: var(--gray-700) !important;
+}
+
+[data-theme="dark"] .login-page .form-control:focus {
+    background: var(--bg-card) !important;
+    border-color: var(--accent-blue) !important;
+    color: var(--gray-700) !important;
 }
 
 [data-theme="dark"] .homeline-sidebar {
@@ -598,6 +655,80 @@
 
 [data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
     background: var(--gray-400);
+}
+
+/* ===== Additional Elements ===== */
+[data-theme="dark"] h1,
+[data-theme="dark"] h2,
+[data-theme="dark"] h3,
+[data-theme="dark"] h4,
+[data-theme="dark"] h5,
+[data-theme="dark"] h6 {
+    color: var(--gray-700) !important;
+}
+
+[data-theme="dark"] p {
+    color: var(--gray-600);
+}
+
+[data-theme="dark"] .text-dark {
+    color: var(--gray-700) !important;
+}
+
+[data-theme="dark"] .text-light {
+    color: var(--gray-300) !important;
+}
+
+/* ===== Override White Backgrounds ===== */
+[data-theme="dark"] [style*="background-color: #ffffff"],
+[data-theme="dark"] [style*="background-color:#ffffff"],
+[data-theme="dark"] [style*="background: #ffffff"],
+[data-theme="dark"] [style*="background:#ffffff"],
+[data-theme="dark"] [style*="background-color: white"],
+[data-theme="dark"] [style*="background-color:white"],
+[data-theme="dark"] [style*="background: white"],
+[data-theme="dark"] [style*="background:white"] {
+    background-color: var(--bg-card) !important;
+    background: var(--bg-card) !important;
+}
+
+/* ===== Override Light Backgrounds ===== */
+[data-theme="dark"] [style*="background-color: #f8f9fa"],
+[data-theme="dark"] [style*="background-color:#f8f9fa"],
+[data-theme="dark"] [style*="background: #f8f9fa"],
+[data-theme="dark"] [style*="background:#f8f9fa"],
+[data-theme="dark"] [style*="background-color: #f5f9fc"],
+[data-theme="dark"] [style*="background-color:#f5f9fc"],
+[data-theme="dark"] [style*="background: #f5f9fc"],
+[data-theme="dark"] [style*="background:#f5f9fc"] {
+    background-color: var(--bg-secondary) !important;
+    background: var(--bg-secondary) !important;
+}
+
+/* ===== Additional Page Elements ===== */
+[data-theme="dark"] .page-content,
+[data-theme="dark"] .content-wrapper,
+[data-theme="dark"] .main-content {
+    background-color: var(--bg-secondary) !important;
+    color: var(--gray-700) !important;
+}
+
+[data-theme="dark"] .wrapper,
+[data-theme="dark"] .main-wrapper {
+    background-color: var(--bg-secondary) !important;
+}
+
+/* ===== Override Specific Background Classes ===== */
+[data-theme="dark"] .bg-white,
+[data-theme="dark"] .white-bg,
+[data-theme="dark"] .bg-light,
+[data-theme="dark"] .light-bg {
+    background-color: var(--bg-card) !important;
+}
+
+[data-theme="dark"] .bg-gray,
+[data-theme="dark"] .gray-bg {
+    background-color: var(--bg-secondary) !important;
 }
 
 /* ===== Print Styles ===== */
