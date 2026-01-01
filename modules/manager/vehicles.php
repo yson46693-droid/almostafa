@@ -930,38 +930,6 @@ function confirmDelete(vehicleId, vehicleNumber) {
         modal.show();
     }
 }
-    document.getElementById('editVehicleId').value = vehicleData.id;
-    document.getElementById('editVehicleNumber').value = vehicleData.vehicle_number || '';
-    document.getElementById('editVehicleType').value = vehicleData.vehicle_type || '';
-    document.getElementById('editVehicleModel').value = vehicleData.model || '';
-    
-    // معالجة السنة
-    if (vehicleData.year) {
-        const yearValue = typeof vehicleData.year === 'string' ? 
-            new Date(vehicleData.year + '-01-01').getFullYear() : 
-            vehicleData.year;
-        document.getElementById('editVehicleYear').value = yearValue;
-    } else {
-        document.getElementById('editVehicleYear').value = '';
-    }
-    
-    document.getElementById('editVehicleDriver').value = vehicleData.driver_id || '';
-    document.getElementById('editVehicleStatus').value = vehicleData.status || 'active';
-    document.getElementById('editVehicleNotes').value = vehicleData.notes || '';
-    
-    // فتح الـ modal
-    const modal = new bootstrap.Modal(document.getElementById('editVehicleModal'));
-    modal.show();
-}
-
-function confirmDelete(vehicleId, vehicleNumber) {
-    document.getElementById('deleteVehicleId').value = vehicleId;
-    document.getElementById('deleteVehicleNumber').textContent = vehicleNumber;
-    
-    // فتح الـ modal
-    const modal = new bootstrap.Modal(document.getElementById('deleteVehicleModal'));
-    modal.show();
-}
 </script>
 
 
