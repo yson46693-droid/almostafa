@@ -35,32 +35,51 @@
     background-color: #f5f7fa;
 }
 
-#pwa-modal button[data-modal-close] {
+#pwa-modal button[data-modal-close],
+#pwa-modal .pwa-modal-close {
     position: absolute;
-    top: 0.75rem;
-    right: 0.75rem;
+    top: 1rem;
+    right: 1rem;
     border: 0;
-    border-radius: 999px;
-    padding: 0.45rem 0.9rem;
-    font-size: 0.95rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    color: #111;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    color: #333;
     background-color: #ffffff;
     cursor: pointer;
-    transition: transform 0.2s ease, background-color 0.2s ease;
-    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.25);
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 10;
 }
 
 #pwa-modal button[data-modal-close]:hover,
-#pwa-modal button[data-modal-close]:focus-visible {
-    transform: scale(1.05);
+#pwa-modal .pwa-modal-close:hover,
+#pwa-modal button[data-modal-close]:focus-visible,
+#pwa-modal .pwa-modal-close:focus-visible {
+    transform: scale(1.1);
     background-color: #f1f1f1;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
     outline: none;
 }
 
-#pwa-modal button[data-modal-close]:focus-visible {
-    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.35);
+#pwa-modal button[data-modal-close]:active,
+#pwa-modal .pwa-modal-close:active {
+    transform: scale(0.95);
+}
+
+#pwa-modal button[data-modal-close]:focus-visible,
+#pwa-modal .pwa-modal-close:focus-visible {
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.25), 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+#pwa-modal .pwa-modal-close i {
+    font-size: 1.1rem;
+    color: #333;
 }
 
 @media (max-width: 768px) {
@@ -69,9 +88,16 @@
         height: 85vh;
     }
 
-    #pwa-modal button[data-modal-close] {
-        font-size: 0.85rem;
-        padding: 0.4rem 0.8rem;
+    #pwa-modal button[data-modal-close],
+    #pwa-modal .pwa-modal-close {
+        width: 36px;
+        height: 36px;
+        top: 0.75rem;
+        right: 0.75rem;
+    }
+    
+    #pwa-modal .pwa-modal-close i {
+        font-size: 1rem;
     }
 }
 

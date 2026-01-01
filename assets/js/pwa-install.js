@@ -288,33 +288,28 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.log('Banner element found, showing install banner on Android');
                     
                     // تحديث نص البانر بناءً على نوع المتصفح والإصدار
-                    const bannerContent = banner.querySelector('div > div.flex-grow-1');
-                    if (bannerContent && !deferredPrompt) {
-                        let instructions = '';
+                    const bannerTitle = banner.querySelector('.install-banner-title');
+                    const bannerDescription = banner.querySelector('.install-banner-description');
+                    if ((bannerTitle || bannerDescription) && !deferredPrompt) {
+                        let title = 'تثبيت التطبيق';
+                        let description = '';
                         
                         if (isSamsung) {
-                            instructions = `
-                                <strong><i class="bi bi-download me-2"></i>تثبيت التطبيق</strong>
-                                <p class="mb-0 small">اضغط على زر القائمة (⋮) ثم اختر "إضافة إلى الشاشة الرئيسية"</p>
-                            `;
+                            description = 'اضغط على زر القائمة (⋮) ثم اختر "إضافة إلى الشاشة الرئيسية"';
                         } else if (isFirefox) {
-                            instructions = `
-                                <strong><i class="bi bi-download me-2"></i>تثبيت التطبيق</strong>
-                                <p class="mb-0 small">اضغط على زر القائمة (⋮) ثم اختر "تثبيت" أو "Install"</p>
-                            `;
+                            description = 'اضغط على زر القائمة (⋮) ثم اختر "تثبيت" أو "Install"';
                         } else if (isOldAndroid || !isChrome) {
-                            instructions = `
-                                <strong><i class="bi bi-download me-2"></i>تثبيت التطبيق</strong>
-                                <p class="mb-0 small">اضغط على زر القائمة (⋮) ثم اختر "إضافة إلى الشاشة الرئيسية" أو "Add to Home Screen"</p>
-                            `;
+                            description = 'اضغط على زر القائمة (⋮) ثم اختر "إضافة إلى الشاشة الرئيسية" أو "Add to Home Screen"';
                         } else {
-                            instructions = `
-                                <strong><i class="bi bi-download me-2"></i>تثبيت التطبيق</strong>
-                                <p class="mb-0 small">اضغط على زر التثبيت أدناه أو من قائمة المتصفح</p>
-                            `;
+                            description = 'اضغط على زر التثبيت أدناه أو من قائمة المتصفح';
                         }
                         
-                        bannerContent.innerHTML = instructions;
+                        if (bannerTitle) {
+                            bannerTitle.textContent = title;
+                        }
+                        if (bannerDescription) {
+                            bannerDescription.textContent = description;
+                        }
                     }
                     
                     // التحقق من أن beforeinstallprompt لم يحدث بعد
@@ -358,12 +353,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 // تحديث نص البانر لـ iOS
                 const banner = document.getElementById('installBanner');
                 if (banner) {
-                    const bannerContent = banner.querySelector('div > div.flex-grow-1');
-                    if (bannerContent) {
-                        bannerContent.innerHTML = `
-                            <strong><i class="bi bi-download me-2"></i>تثبيت التطبيق</strong>
-                            <p class="mb-0 small">اضغط على زر المشاركة <i class="bi bi-share"></i> ثم اختر "إضافة إلى الشاشة الرئيسية"</p>
-                        `;
+                    const bannerTitle = banner.querySelector('.install-banner-title');
+                    const bannerDescription = banner.querySelector('.install-banner-description');
+                    if (bannerTitle) {
+                        bannerTitle.textContent = 'تثبيت التطبيق';
+                    }
+                    if (bannerDescription) {
+                        bannerDescription.innerHTML = 'اضغط على زر المشاركة <i class="bi bi-share"></i> ثم اختر "إضافة إلى الشاشة الرئيسية"';
                     }
                     const installBtn = document.getElementById('installButton');
                     if (installBtn) {
@@ -646,12 +642,13 @@ if (isAndroid() && !supportsBeforeInstallPrompt() && !isInstalled()) {
                 // تحديث النص للأجهزة القديمة
                 const banner = document.getElementById('installBanner');
                 if (banner) {
-                    const bannerContent = banner.querySelector('div > div.flex-grow-1');
-                    if (bannerContent) {
-                        bannerContent.innerHTML = `
-                            <strong><i class="bi bi-download me-2"></i>تثبيت التطبيق</strong>
-                            <p class="mb-0 small">اضغط على زر القائمة (⋮) ثم اختر "إضافة إلى الشاشة الرئيسية"</p>
-                        `;
+                    const bannerTitle = banner.querySelector('.install-banner-title');
+                    const bannerDescription = banner.querySelector('.install-banner-description');
+                    if (bannerTitle) {
+                        bannerTitle.textContent = 'تثبيت التطبيق';
+                    }
+                    if (bannerDescription) {
+                        bannerDescription.textContent = 'اضغط على زر القائمة (⋮) ثم اختر "إضافة إلى الشاشة الرئيسية"';
                     }
                 }
             }, delay);

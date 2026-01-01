@@ -8,13 +8,8 @@ if (!defined('ACCESS_ALLOWED')) {
     die('Direct access not allowed');
 }
 
-// إضافة Permissions-Policy header للسماح بالوصول إلى Geolocation, Camera, Microphone
-// ملاحظة: notifications تم إزالته من Feature-Policy لأنه غير مدعوم
-if (!headers_sent()) {
-    header("Permissions-Policy: geolocation=(self), camera=(self), microphone=(self)");
-    // Feature-Policy كبديل للمتصفحات القديمة (بدون notifications)
-    header("Feature-Policy: geolocation 'self'; camera 'self'; microphone 'self'");
-}
+// ملاحظة: Headers يتم إرسالها من dashboard/accountant.php أو dashboard/manager.php
+// لا حاجة لإرسالها هنا لتجنب مشاكل headers already sent
 
 if (!defined('LOCAL_CUSTOMERS_MODULE_BOOTSTRAPPED')) {
     define('LOCAL_CUSTOMERS_MODULE_BOOTSTRAPPED', true);

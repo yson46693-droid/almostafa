@@ -15,16 +15,6 @@ if (!defined('ACCESS_ALLOWED')) {
                         &copy; <?php echo date('Y'); ?> <?php echo COMPANY_NAME; ?>. <?php echo $lang['all_rights_reserved'] ?? 'جميع الحقوق محفوظة'; ?>
                     </small>
                 </div>
-                <div class="col-md-6 text-center text-md-end">
-                    <small class="text-muted">
-                        <?php
-                        $appInfo = APP_NAME === COMPANY_NAME
-                            ? 'v' . APP_VERSION
-                            : APP_NAME . ' v' . APP_VERSION;
-                        echo $appInfo;
-                        ?>
-                    </small>
-                </div>
             </div>
         </div>
     </footer>
@@ -552,21 +542,28 @@ if (!defined('ACCESS_ALLOWED')) {
     
     <!-- Install Banner -->
     <div class="install-banner" id="installBanner">
-        <div class="d-flex align-items-center justify-content-between">
-            <div class="flex-grow-1">
-                <strong><i class="bi bi-download me-2"></i>تثبيت التطبيق</strong>
-                <p class="mb-0 small">ثبت التطبيق للوصول السريع والاستخدام بدون إنترنت</p>
+        <div class="install-banner-content">
+            <div class="install-banner-icon">
+                <i class="bi bi-download"></i>
             </div>
-            <button class="btn btn-light btn-sm" id="installButton">
+            <div class="install-banner-text">
+                <h6 class="install-banner-title">تثبيت التطبيق</h6>
+                <p class="install-banner-description">ثبت التطبيق للوصول السريع والاستخدام بدون إنترنت</p>
+            </div>
+            <button class="install-banner-button" id="installButton">
                 <i class="bi bi-plus-circle me-1"></i>تثبيت
             </button>
         </div>
-        <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-2" id="dismissInstallBanner" aria-label="إغلاق"></button>
+        <button type="button" class="install-banner-close" id="dismissInstallBanner" aria-label="إغلاق">
+            <i class="bi bi-x-lg"></i>
+        </button>
     </div>
 
     <div id="pwa-modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
         <div id="pwa-modal">
-            <button type="button" data-modal-close>إغلاق</button>
+            <button type="button" class="pwa-modal-close" data-modal-close>
+                <i class="bi bi-x-lg"></i>
+            </button>
             <iframe src="about:blank" title="Embedded content"></iframe>
         </div>
     </div>
