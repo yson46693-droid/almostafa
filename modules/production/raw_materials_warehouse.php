@@ -4959,7 +4959,7 @@ if ($section === 'honey') {
     </div>
     
     <!-- Modal إضافة عسل -->
-    <div class="modal fade" id="addHoneyModal" tabindex="-1">
+    <div class="modal fade d-none d-md-block" id="addHoneyModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
@@ -5056,7 +5056,7 @@ if ($section === 'honey') {
     </div>
     
     <!-- Modal تصفية عسل -->
-    <div class="modal fade" id="filterHoneyModal" tabindex="-1">
+    <div class="modal fade d-none d-md-block" id="filterHoneyModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
@@ -5106,7 +5106,7 @@ if ($section === 'honey') {
     </div>
     
 <!-- Modal إضافة باقي التصفية -->
-<div class="modal fade" id="addRemainingFilteredModal" tabindex="-1">
+<div class="modal fade d-none d-md-block" id="addRemainingFilteredModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
@@ -5152,7 +5152,7 @@ if ($section === 'honey') {
 </div>
 
 <!-- Modal تسجيل تالف للعسل -->
-<div class="modal fade" id="damageHoneyModal" tabindex="-1">
+<div class="modal fade d-none d-md-block" id="damageHoneyModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-danger text-white">
@@ -5203,7 +5203,274 @@ if ($section === 'honey') {
     </div>
 </div>
 
+<!-- Cards للموبايل - مودالات العسل -->
+<!-- Card إضافة عسل - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="addHoneyCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">إضافة عسل</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="addHoneyFormCard">
+            <input type="hidden" name="action" value="add_honey">
+            <input type="hidden" name="submit_token" value="">
+            <div class="mb-3">
+                <label class="form-label">المورد <span class="text-danger">*</span></label>
+                <select class="form-select" name="supplier_id" required>
+                    <option value="">اختر المورد</option>
+                    <?php foreach ($honeySuppliers as $s): ?>
+                        <option value="<?php echo $s['id']; ?>"><?php echo htmlspecialchars($s['name']); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">نوع العسل</label>
+                <select class="form-select honey-variety-select-card" name="honey_variety" id="honey_variety_select_card">
+                    <?php 
+                    $staticCatalog = getHoneyVarietiesCatalog();
+                    foreach ($staticCatalog as $honeyVariety => $meta): 
+                        if ($honeyVariety === 'أخرى') continue;
+                    ?>
+                        <option value="<?php echo htmlspecialchars($honeyVariety); ?>" data-code="<?php echo htmlspecialchars($meta['code']); ?>" <?php echo $honeyVariety === $defaultHoneyVariety ? 'selected' : ''; ?>>
+                            <?php echo htmlspecialchars(sprintf('%s - %s', $meta['label'], $meta['code'])); ?>
+                        </option>
+                    <?php endforeach; ?>
+                    <?php 
+                    try {
+                        $customTypes = $db->query("SELECT honey_type_id, name FROM honey_types WHERE is_custom = 1 ORDER BY name ASC");
+                        if (!empty($customTypes)) {
+                            foreach ($customTypes as $customType) {
+                                $customName = trim($customType['name']);
+                                $customId = trim($customType['honey_type_id']);
+                                if (!empty($customName) && !empty($customId) && !isset($staticCatalog[$customName])) {
+                                ?>
+                                    <option value="<?php echo htmlspecialchars($customName); ?>" data-code="<?php echo htmlspecialchars($customId); ?>">
+                                        <?php echo htmlspecialchars(sprintf('%s - %s', $customName, $customId)); ?>
+                                    </option>
+                                <?php
+                                }
+                            }
+                        }
+                    } catch (Exception $e) {
+                        error_log("Error loading custom honey types: " . $e->getMessage());
+                    }
+                    ?>
+                    <option value="__add_custom__" data-code="">إضافة نوع مخصص</option>
+                </select>
+            </div>
+            <div class="mb-3" id="custom_honey_variety_container_card" style="display: none;">
+                <label class="form-label">اسم نوع العسل المخصص <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" name="custom_honey_variety" id="custom_honey_variety_card" placeholder="مثال: عسل الكينا" maxlength="100">
+                <small class="text-muted">سيتم إنشاء ID تلقائياً وحفظ نوع العسل الجديد في النظام</small>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الحالة</label>
+                <select class="form-select" name="honey_type">
+                    <option value="raw">عسل خام</option>
+                    <option value="filtered">عسل مصفى</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الكمية (كجم)</label>
+                <input type="number" class="form-control" name="quantity" step="0.01" min="0.01" required>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">إضافة</button>
+                <button type="button" class="btn btn-secondary" onclick="closeAddHoneyCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card تصفية عسل - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="filterHoneyCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">تصفية العسل</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="filterHoneyFormCard">
+            <input type="hidden" name="action" value="filter_honey">
+            <input type="hidden" name="stock_id" id="filter_stock_id_card">
+            <input type="hidden" name="submit_token" value="">
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>سيتم خصم 0.5% كخسارة في التصفية
+            </div>
+            <div class="mb-3">
+                <label class="form-label">المورد</label>
+                <input type="text" class="form-control" id="filter_supplier_card" readonly>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">النوع</label>
+                <input type="text" class="form-control" id="filter_variety_card" readonly>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الكمية المتاحة</label>
+                <input type="text" class="form-control" id="filter_available_card" readonly>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الكمية المراد تصفيتها (كجم)</label>
+                <input type="number" class="form-control" name="raw_quantity" step="0.01" min="0.01" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">تاريخ التصفية</label>
+                <input type="date" class="form-control" name="filtration_date" value="<?php echo date('Y-m-d'); ?>" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">ملاحظات</label>
+                <textarea class="form-control" name="notes" rows="2"></textarea>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-warning">تصفية</button>
+                <button type="button" class="btn btn-secondary" onclick="closeFilterHoneyCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card إضافة باقي التصفية - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="addRemainingFilteredCard" style="display: none;">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>إضافة باقي التصفية</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="addRemainingFilteredFormCard">
+            <input type="hidden" name="action" value="add_remaining_filtered_honey">
+            <input type="hidden" name="submit_token" value="<?php echo uniqid('tok_', true); ?>">
+            <input type="hidden" name="stock_id" id="add_remaining_stock_id_card">
+            <div class="mb-3">
+                <label class="form-label">المورد</label>
+                <input type="text" class="form-control" id="add_remaining_supplier_name_card" readonly>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">نوع العسل</label>
+                <input type="text" class="form-control" id="add_remaining_variety_card" readonly>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الكمية الحالية من العسل المصفى</label>
+                <div class="form-control bg-light">
+                    <span id="add_remaining_current_filtered_card">0.00</span> كجم
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الكمية المضافة (كجم) <span class="text-danger">*</span></label>
+                <input type="number" class="form-control" name="additional_filtered_quantity" id="add_remaining_quantity_card" step="0.01" min="0.01" required>
+                <small class="text-muted d-block mt-1">سيتم إضافة هذه الكمية إلى العسل المصفى للمورد المحدد فقط.</small>
+            </div>
+            <div class="alert alert-info mb-0">
+                <i class="bi bi-info-circle me-2"></i>
+                لا يتم تسجيل هذه العملية ضمن سجل التوريدات.
+            </div>
+            <div class="d-flex gap-2 mt-3">
+                <button type="submit" class="btn btn-success">إضافة الكمية</button>
+                <button type="button" class="btn btn-secondary" onclick="closeAddRemainingFilteredCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card تسجيل تالف للعسل - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="damageHoneyCard" style="display: none;">
+    <div class="card-header bg-danger text-white">
+        <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>تسجيل تالف للعسل</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="damageHoneyFormCard">
+            <input type="hidden" name="action" value="record_damage">
+            <input type="hidden" name="material_category" value="honey">
+            <input type="hidden" name="redirect_section" value="honey">
+            <input type="hidden" name="stock_id" id="damage_honey_stock_id_card">
+            <input type="hidden" name="damage_unit" value="كجم">
+            <input type="hidden" name="submit_token" value="<?php echo uniqid('tok_', true); ?>">
+            <div class="mb-3">
+                <label class="form-label">المورد</label>
+                <input type="text" class="form-control" id="damage_honey_supplier_card" readonly>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">نوع العسل</label>
+                <input type="text" class="form-control" id="damage_honey_variety_card" readonly>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">حالة العسل</label>
+                <select class="form-select" name="honey_type" id="damage_honey_type_card">
+                    <option value="raw">عسل خام</option>
+                    <option value="filtered">عسل مصفى</option>
+                </select>
+                <small class="text-muted d-block mt-1">الكمية المتاحة: <span id="damage_honey_available_card">0.000 كجم</span></small>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الكمية التالفة (كجم)</label>
+                <input type="number" class="form-control" name="damage_quantity" id="damage_honey_quantity_card" step="0.001" min="0.001" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">سبب التلف <span class="text-danger">*</span></label>
+                <textarea class="form-control" name="damage_reason" id="damage_honey_reason_card" rows="3" placeholder="اكتب سبب التلف بالتفصيل" required></textarea>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-danger" id="damage_honey_submit_card">
+                    <i class="bi bi-check-circle me-1"></i>تسجيل
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeDamageHoneyCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
     <script>
+    // ===== دوال أساسية للموبايل =====
+    function isMobile() {
+        return window.innerWidth <= 768;
+    }
+
+    function scrollToElement(element) {
+        if (!element) return;
+        
+        setTimeout(function() {
+            const rect = element.getBoundingClientRect();
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            const elementTop = rect.top + scrollTop;
+            const offset = 80;
+            
+            requestAnimationFrame(function() {
+                window.scrollTo({
+                    top: Math.max(0, elementTop - offset),
+                    behavior: 'smooth'
+                });
+            });
+        }, 200);
+    }
+
+    function closeAllForms() {
+        const cards = [
+            'addHoneyCard', 'filterHoneyCard', 'addRemainingFilteredCard', 'damageHoneyCard',
+            'addOliveOilCard', 'damageOliveOilCard', 'addBeeswaxCard', 'damageBeeswaxCard',
+            'addDerivativeCard', 'addDerivativeQuantityCard', 'damageDerivativeCard',
+            'addSingleNutsCard', 'damageNutsCard', 'createMixedNutsCard', 'damageMixedNutsCard',
+            'addSesameCard', 'addTahiniRemainderCard', 'damageSesameTahiniCard', 'convertToTahiniCard'
+        ];
+        cards.forEach(function(cardId) {
+            const card = document.getElementById(cardId);
+            if (card && card.style.display !== 'none') {
+                card.style.display = 'none';
+                const form = card.querySelector('form');
+                if (form) form.reset();
+            }
+        });
+        
+        const modals = [
+            'addHoneyModal', 'filterHoneyModal', 'addRemainingFilteredModal', 'damageHoneyModal',
+            'addOliveOilModal', 'damageOliveOilModal', 'addBeeswaxModal', 'damageBeeswaxModal',
+            'addDerivativeModal', 'addDerivativeQuantityModal', 'damageDerivativeModal',
+            'addSingleNutsModal', 'damageNutsModal', 'createMixedNutsModal', 'damageMixedNutsModal',
+            'addSesameModal', 'addTahiniRemainderModal', 'damageSesameTahiniModal', 'convertToTahiniModal'
+        ];
+        modals.forEach(function(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                const modalInstance = bootstrap.Modal.getInstance(modal);
+                if (modalInstance) modalInstance.hide();
+            }
+        });
+    }
+
     let honeyDamageMax = { raw: 0, filtered: 0 };
 
     // إظهار/إخفاء حقل نوع العسل المخصص عند اختيار "أخرى"
@@ -5244,80 +5511,306 @@ if ($section === 'honey') {
             // التحقق الأولي
             toggleCustomHoneyField();
         }
+        
+        // نفس الشيء للـ Card
+        const honeyVarietySelectCard = document.getElementById('honey_variety_select_card');
+        const customHoneyVarietyContainerCard = document.getElementById('custom_honey_variety_container_card');
+        const customHoneyVarietyInputCard = document.getElementById('custom_honey_variety_card');
+        
+        if (honeyVarietySelectCard && customHoneyVarietyContainerCard && customHoneyVarietyInputCard) {
+            function toggleCustomHoneyFieldCard() {
+                const selectedValue = honeyVarietySelectCard.value;
+                if (selectedValue === '__add_custom__') {
+                    customHoneyVarietyContainerCard.style.display = 'block';
+                    customHoneyVarietyInputCard.required = true;
+                    customHoneyVarietyInputCard.focus();
+                } else {
+                    customHoneyVarietyContainerCard.style.display = 'none';
+                    customHoneyVarietyInputCard.required = false;
+                    customHoneyVarietyInputCard.value = '';
+                }
+            }
+            
+            honeyVarietySelectCard.addEventListener('change', toggleCustomHoneyFieldCard);
+            toggleCustomHoneyFieldCard();
+        }
     });
 
     function filterHoney(id, supplier, variety, available) {
-        document.getElementById('filter_stock_id').value = id;
-        document.getElementById('filter_supplier').value = supplier;
-        document.getElementById('filter_variety').value = variety;
-        document.getElementById('filter_available').value = parseFloat(available).toFixed(2) + ' كجم';
-        new bootstrap.Modal(document.getElementById('filterHoneyModal')).show();
+        if (typeof closeAllForms === 'function') {
+            closeAllForms();
+        }
+        
+        const isMobileDevice = isMobile();
+        
+        if (isMobileDevice) {
+            // على الموبايل: استخدام Card
+            const card = document.getElementById('filterHoneyCard');
+            if (!card) return;
+            
+            const stockIdInput = document.getElementById('filter_stock_id_card');
+            const supplierInput = document.getElementById('filter_supplier_card');
+            const varietyInput = document.getElementById('filter_variety_card');
+            const availableInput = document.getElementById('filter_available_card');
+            
+            if (stockIdInput) stockIdInput.value = id;
+            if (supplierInput) supplierInput.value = supplier;
+            if (varietyInput) varietyInput.value = variety;
+            if (availableInput) availableInput.value = parseFloat(available).toFixed(2) + ' كجم';
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        } else {
+            // على الكمبيوتر: استخدام Modal
+            const stockIdInput = document.getElementById('filter_stock_id');
+            const supplierInput = document.getElementById('filter_supplier');
+            const varietyInput = document.getElementById('filter_variety');
+            const availableInput = document.getElementById('filter_available');
+            
+            if (stockIdInput) stockIdInput.value = id;
+            if (supplierInput) supplierInput.value = supplier;
+            if (varietyInput) varietyInput.value = variety;
+            if (availableInput) availableInput.value = parseFloat(available).toFixed(2) + ' كجم';
+            
+            new bootstrap.Modal(document.getElementById('filterHoneyModal')).show();
+        }
     }
 
     function openAddRemainingFilteredModal(id, supplier, variety, filteredQty) {
-        document.getElementById('add_remaining_stock_id').value = id;
-        document.getElementById('add_remaining_supplier_name').value = supplier;
-        document.getElementById('add_remaining_variety').value = variety;
-        document.getElementById('add_remaining_current_filtered').textContent = (parseFloat(filteredQty) || 0).toFixed(2);
-        document.getElementById('add_remaining_quantity').value = '';
-        new bootstrap.Modal(document.getElementById('addRemainingFilteredModal')).show();
+        if (typeof closeAllForms === 'function') {
+            closeAllForms();
+        }
+        
+        const isMobileDevice = isMobile();
+        
+        if (isMobileDevice) {
+            // على الموبايل: استخدام Card
+            const card = document.getElementById('addRemainingFilteredCard');
+            if (!card) return;
+            
+            const stockIdInput = document.getElementById('add_remaining_stock_id_card');
+            const supplierInput = document.getElementById('add_remaining_supplier_name_card');
+            const varietyInput = document.getElementById('add_remaining_variety_card');
+            const currentFilteredEl = document.getElementById('add_remaining_current_filtered_card');
+            const quantityInput = document.getElementById('add_remaining_quantity_card');
+            
+            if (stockIdInput) stockIdInput.value = id;
+            if (supplierInput) supplierInput.value = supplier;
+            if (varietyInput) varietyInput.value = variety;
+            if (currentFilteredEl) currentFilteredEl.textContent = (parseFloat(filteredQty) || 0).toFixed(2);
+            if (quantityInput) quantityInput.value = '';
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        } else {
+            // على الكمبيوتر: استخدام Modal
+            const stockIdInput = document.getElementById('add_remaining_stock_id');
+            const supplierInput = document.getElementById('add_remaining_supplier_name');
+            const varietyInput = document.getElementById('add_remaining_variety');
+            const currentFilteredEl = document.getElementById('add_remaining_current_filtered');
+            const quantityInput = document.getElementById('add_remaining_quantity');
+            
+            if (stockIdInput) stockIdInput.value = id;
+            if (supplierInput) supplierInput.value = supplier;
+            if (varietyInput) varietyInput.value = variety;
+            if (currentFilteredEl) currentFilteredEl.textContent = (parseFloat(filteredQty) || 0).toFixed(2);
+            if (quantityInput) quantityInput.value = '';
+            
+            new bootstrap.Modal(document.getElementById('addRemainingFilteredModal')).show();
+        }
     }
 
     function openHoneyDamageModal(id, supplier, variety, rawQty, filteredQty) {
+        if (typeof closeAllForms === 'function') {
+            closeAllForms();
+        }
+        
         honeyDamageMax.raw = parseFloat(rawQty) || 0;
         honeyDamageMax.filtered = parseFloat(filteredQty) || 0;
-
-        document.getElementById('damage_honey_stock_id').value = id;
-        document.getElementById('damage_honey_supplier').value = supplier;
-        document.getElementById('damage_honey_variety').value = variety;
-        document.getElementById('damage_honey_reason').value = '';
-        document.getElementById('damage_honey_quantity').value = '';
-
-        const typeSelect = document.getElementById('damage_honey_type');
-        const rawOption = typeSelect.querySelector('option[value="raw"]');
-        const filteredOption = typeSelect.querySelector('option[value="filtered"]');
-
-        rawOption.disabled = honeyDamageMax.raw <= 0;
-        filteredOption.disabled = honeyDamageMax.filtered <= 0;
-
-        if (!rawOption.disabled) {
-            typeSelect.value = 'raw';
-        } else if (!filteredOption.disabled) {
-            typeSelect.value = 'filtered';
+        
+        const isMobileDevice = isMobile();
+        
+        if (isMobileDevice) {
+            // على الموبايل: استخدام Card
+            const card = document.getElementById('damageHoneyCard');
+            if (!card) return;
+            
+            const stockIdInput = document.getElementById('damage_honey_stock_id_card');
+            const supplierInput = document.getElementById('damage_honey_supplier_card');
+            const varietyInput = document.getElementById('damage_honey_variety_card');
+            const reasonInput = document.getElementById('damage_honey_reason_card');
+            const quantityInput = document.getElementById('damage_honey_quantity_card');
+            const typeSelect = document.getElementById('damage_honey_type_card');
+            const availableEl = document.getElementById('damage_honey_available_card');
+            
+            if (stockIdInput) stockIdInput.value = id;
+            if (supplierInput) supplierInput.value = supplier;
+            if (varietyInput) varietyInput.value = variety;
+            if (reasonInput) reasonInput.value = '';
+            if (quantityInput) quantityInput.value = '';
+            
+            if (typeSelect) {
+                const rawOption = typeSelect.querySelector('option[value="raw"]');
+                const filteredOption = typeSelect.querySelector('option[value="filtered"]');
+                
+                if (rawOption) rawOption.disabled = honeyDamageMax.raw <= 0;
+                if (filteredOption) filteredOption.disabled = honeyDamageMax.filtered <= 0;
+                
+                // تحديث الكمية المتاحة عند تغيير النوع
+                const updateAvailable = function() {
+                    const selectedType = typeSelect.value;
+                    const available = selectedType === 'raw' ? honeyDamageMax.raw : honeyDamageMax.filtered;
+                    if (availableEl) {
+                        availableEl.textContent = available.toFixed(3) + ' كجم';
+                    }
+                    if (quantityInput) {
+                        quantityInput.setAttribute('max', available);
+                    }
+                };
+                
+                typeSelect.addEventListener('change', updateAvailable);
+                updateAvailable();
+            }
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
         } else {
-            typeSelect.value = '';
+            // على الكمبيوتر: استخدام Modal
+            const stockIdInput = document.getElementById('damage_honey_stock_id');
+            const supplierInput = document.getElementById('damage_honey_supplier');
+            const varietyInput = document.getElementById('damage_honey_variety');
+            const reasonInput = document.getElementById('damage_honey_reason');
+            const quantityInput = document.getElementById('damage_honey_quantity');
+            const typeSelect = document.getElementById('damage_honey_type');
+            const availableEl = document.getElementById('damage_honey_available');
+
+            if (stockIdInput) stockIdInput.value = id;
+            if (supplierInput) supplierInput.value = supplier;
+            if (varietyInput) varietyInput.value = variety;
+            if (reasonInput) reasonInput.value = '';
+            if (quantityInput) quantityInput.value = '';
+
+            if (typeSelect) {
+                const rawOption = typeSelect.querySelector('option[value="raw"]');
+                const filteredOption = typeSelect.querySelector('option[value="filtered"]');
+
+                if (rawOption) rawOption.disabled = honeyDamageMax.raw <= 0;
+                if (filteredOption) filteredOption.disabled = honeyDamageMax.filtered <= 0;
+
+                if (rawOption && !rawOption.disabled) {
+                    typeSelect.value = 'raw';
+                } else if (filteredOption && !filteredOption.disabled) {
+                    typeSelect.value = 'filtered';
+                } else {
+                    typeSelect.value = '';
         }
 
-        updateHoneyDamageAvailable();
-        new bootstrap.Modal(document.getElementById('damageHoneyModal')).show();
+                updateHoneyDamageAvailable();
+            }
+            
+            new bootstrap.Modal(document.getElementById('damageHoneyModal')).show();
+        }
+    }
+
+    // ===== دوال إغلاق Cards - مودالات العسل =====
+    function closeAddHoneyCard() {
+        const card = document.getElementById('addHoneyCard');
+        if (card) {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    }
+
+    function closeFilterHoneyCard() {
+        const card = document.getElementById('filterHoneyCard');
+        if (card) {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    }
+
+    function closeAddRemainingFilteredCard() {
+        const card = document.getElementById('addRemainingFilteredCard');
+        if (card) {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    }
+
+    function closeDamageHoneyCard() {
+        const card = document.getElementById('damageHoneyCard');
+        if (card) {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
     }
 
     function updateHoneyDamageAvailable() {
+        // للـ Modal
         const typeSelect = document.getElementById('damage_honey_type');
         const quantityInput = document.getElementById('damage_honey_quantity');
         const availableLabel = document.getElementById('damage_honey_available');
         const submitButton = document.getElementById('damage_honey_submit');
 
-        let max = 0;
-        if (typeSelect.value === 'raw') {
-            max = honeyDamageMax.raw;
-        } else if (typeSelect.value === 'filtered') {
-            max = honeyDamageMax.filtered;
-        }
+        if (typeSelect && quantityInput && availableLabel && submitButton) {
+            let max = 0;
+            if (typeSelect.value === 'raw') {
+                max = honeyDamageMax.raw;
+            } else if (typeSelect.value === 'filtered') {
+                max = honeyDamageMax.filtered;
+            }
 
-        availableLabel.textContent = max.toFixed(3) + ' كجم';
-        if (max > 0) {
-            quantityInput.max = max.toFixed(3);
-            quantityInput.disabled = false;
-            submitButton.disabled = false;
-        } else {
-            quantityInput.value = '';
-            quantityInput.disabled = true;
-            submitButton.disabled = true;
+            availableLabel.textContent = max.toFixed(3) + ' كجم';
+            if (max > 0) {
+                quantityInput.max = max.toFixed(3);
+                quantityInput.disabled = false;
+                submitButton.disabled = false;
+            } else {
+                quantityInput.value = '';
+                quantityInput.disabled = true;
+                submitButton.disabled = true;
+            }
+        }
+        
+        // للـ Card
+        const typeSelectCard = document.getElementById('damage_honey_type_card');
+        const quantityInputCard = document.getElementById('damage_honey_quantity_card');
+        const availableLabelCard = document.getElementById('damage_honey_available_card');
+        const submitButtonCard = document.getElementById('damage_honey_submit_card');
+
+        if (typeSelectCard && quantityInputCard && availableLabelCard && submitButtonCard) {
+            let max = 0;
+            if (typeSelectCard.value === 'raw') {
+                max = honeyDamageMax.raw;
+            } else if (typeSelectCard.value === 'filtered') {
+                max = honeyDamageMax.filtered;
+            }
+
+            availableLabelCard.textContent = max.toFixed(3) + ' كجم';
+            if (max > 0) {
+                quantityInputCard.max = max.toFixed(3);
+                quantityInputCard.disabled = false;
+                submitButtonCard.disabled = false;
+            } else {
+                quantityInputCard.value = '';
+                quantityInputCard.disabled = true;
+                submitButtonCard.disabled = true;
+            }
         }
     }
 
     document.getElementById('damage_honey_type')?.addEventListener('change', updateHoneyDamageAvailable);
+    document.getElementById('damage_honey_type_card')?.addEventListener('change', updateHoneyDamageAvailable);
     </script>
     
     <?php
@@ -5424,7 +5917,7 @@ if ($section === 'honey') {
     </div>
     
     <!-- Modal إضافة زيت زيتون -->
-    <div class="modal fade" id="addOliveOilModal" tabindex="-1">
+    <div class="modal fade d-none d-md-block" id="addOliveOilModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
@@ -5459,7 +5952,7 @@ if ($section === 'honey') {
     </div>
     
 <!-- Modal تسجيل تالف زيت الزيتون -->
-<div class="modal fade" id="damageOliveOilModal" tabindex="-1">
+<div class="modal fade d-none d-md-block" id="damageOliveOilModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-danger text-white">
@@ -5502,19 +5995,203 @@ if ($section === 'honey') {
     </div>
 </div>
 
+<!-- Cards للموبايل - مودالات زيت الزيتون والشمع -->
+<!-- Card إضافة زيت زيتون - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="addOliveOilCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">إضافة زيت زيتون</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="addOliveOilFormCard">
+            <input type="hidden" name="action" value="add_olive_oil">
+            <input type="hidden" name="submit_token" value="">
+            <div class="mb-3">
+                <label class="form-label">المورد <span class="text-danger">*</span></label>
+                <select class="form-select" name="supplier_id" required>
+                    <option value="">اختر المورد</option>
+                    <?php foreach ($oilSuppliers as $s): ?>
+                        <option value="<?php echo $s['id']; ?>"><?php echo htmlspecialchars($s['name']); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الكمية (كجم)</label>
+                <input type="number" class="form-control" name="quantity" step="0.01" min="0.01" required>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-success">إضافة</button>
+                <button type="button" class="btn btn-secondary" onclick="closeAddOliveOilCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card تسجيل تالف زيت الزيتون - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="damageOliveOilCard" style="display: none;">
+    <div class="card-header bg-danger text-white">
+        <h5 class="mb-0"><i class="bi bi-exclamation-octagon me-2"></i>تسجيل تالف زيت الزيتون</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="damageOliveOilFormCard">
+            <input type="hidden" name="action" value="record_damage">
+            <input type="hidden" name="material_category" value="olive_oil">
+            <input type="hidden" name="redirect_section" value="olive_oil">
+            <input type="hidden" name="stock_id" id="damage_oil_stock_id_card">
+            <input type="hidden" name="damage_unit" value="كجم">
+            <input type="hidden" name="submit_token" value="<?php echo uniqid('tok_', true); ?>">
+            <div class="mb-3">
+                <label class="form-label">المورد</label>
+                <input type="text" class="form-control" id="damage_oil_supplier_card" readonly>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الكمية المتاحة</label>
+                <input type="text" class="form-control" id="damage_oil_available_card" readonly>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الكمية التالفة (كجم)</label>
+                <input type="number" class="form-control" name="damage_quantity" id="damage_oil_quantity_card" step="0.01" min="0.01" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">سبب التلف <span class="text-danger">*</span></label>
+                <textarea class="form-control" name="damage_reason" id="damage_oil_reason_card" rows="3" required></textarea>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-danger" id="damage_oil_submit_card">
+                    <i class="bi bi-check-circle me-1"></i>تسجيل
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeDamageOliveOilCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card إضافة شمع عسل - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="addBeeswaxCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">إضافة شمع عسل</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="addBeeswaxFormCard">
+            <input type="hidden" name="action" value="add_beeswax">
+            <input type="hidden" name="submit_token" value="">
+            <div class="mb-3">
+                <label class="form-label">المورد <span class="text-danger">*</span></label>
+                <select class="form-select" name="supplier_id" required>
+                    <option value="">اختر المورد</option>
+                    <?php foreach ($waxSuppliers as $s): ?>
+                        <option value="<?php echo $s['id']; ?>"><?php echo htmlspecialchars($s['name']); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الوزن (كجم)</label>
+                <input type="number" class="form-control" name="weight" step="0.01" min="0.01" required>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-warning">إضافة</button>
+                <button type="button" class="btn btn-secondary" onclick="closeAddBeeswaxCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card تسجيل تالف شمع العسل - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="damageBeeswaxCard" style="display: none;">
+    <div class="card-header bg-danger text-white">
+        <h5 class="mb-0"><i class="bi bi-exclamation-square me-2"></i>تسجيل تالف شمع العسل</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="damageBeeswaxFormCard">
+            <input type="hidden" name="action" value="record_damage">
+            <input type="hidden" name="material_category" value="beeswax">
+            <input type="hidden" name="redirect_section" value="beeswax">
+            <input type="hidden" name="stock_id" id="damage_wax_stock_id_card">
+            <input type="hidden" name="damage_unit" value="كجم">
+            <input type="hidden" name="submit_token" value="<?php echo uniqid('tok_', true); ?>">
+            <div class="mb-3">
+                <label class="form-label">المورد</label>
+                <input type="text" class="form-control" id="damage_wax_supplier_card" readonly>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الكمية المتاحة</label>
+                <input type="text" class="form-control" id="damage_wax_available_card" readonly>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الكمية التالفة (كجم)</label>
+                <input type="number" class="form-control" name="damage_quantity" id="damage_wax_quantity_card" step="0.01" min="0.01" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">سبب التلف <span class="text-danger">*</span></label>
+                <textarea class="form-control" name="damage_reason" id="damage_wax_reason_card" rows="3" required></textarea>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-danger" id="damage_wax_submit_card">
+                    <i class="bi bi-check-circle me-1"></i>تسجيل
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeDamageBeeswaxCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
     function openOliveOilDamageModal(id, supplier, quantity) {
+        if (typeof closeAllForms === 'function') {
+            closeAllForms();
+        }
+        
         const qty = parseFloat(quantity) || 0;
-        document.getElementById('damage_oil_stock_id').value = id;
-        document.getElementById('damage_oil_supplier').value = supplier;
-        document.getElementById('damage_oil_available').value = qty.toFixed(2) + ' كجم';
-        const qtyInput = document.getElementById('damage_oil_quantity');
-        qtyInput.value = '';
-        qtyInput.max = qty > 0 ? qty.toFixed(2) : null;
-        qtyInput.disabled = qty <= 0;
-        document.getElementById('damage_oil_reason').value = '';
-        document.getElementById('damage_oil_submit').disabled = qty <= 0;
-        new bootstrap.Modal(document.getElementById('damageOliveOilModal')).show();
+        const isMobileDevice = isMobile();
+        
+        if (isMobileDevice) {
+            // على الموبايل: استخدام Card
+            const card = document.getElementById('damageOliveOilCard');
+            if (!card) return;
+            
+            const stockIdInput = document.getElementById('damage_oil_stock_id_card');
+            const supplierInput = document.getElementById('damage_oil_supplier_card');
+            const availableInput = document.getElementById('damage_oil_available_card');
+            const qtyInput = document.getElementById('damage_oil_quantity_card');
+            const reasonInput = document.getElementById('damage_oil_reason_card');
+            const submitBtn = document.getElementById('damage_oil_submit_card');
+            
+            if (stockIdInput) stockIdInput.value = id;
+            if (supplierInput) supplierInput.value = supplier;
+            if (availableInput) availableInput.value = qty.toFixed(2) + ' كجم';
+            if (qtyInput) {
+                qtyInput.value = '';
+                qtyInput.max = qty > 0 ? qty.toFixed(2) : null;
+                qtyInput.disabled = qty <= 0;
+            }
+            if (reasonInput) reasonInput.value = '';
+            if (submitBtn) submitBtn.disabled = qty <= 0;
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        } else {
+            // على الكمبيوتر: استخدام Modal
+            const stockIdInput = document.getElementById('damage_oil_stock_id');
+            const supplierInput = document.getElementById('damage_oil_supplier');
+            const availableInput = document.getElementById('damage_oil_available');
+            const qtyInput = document.getElementById('damage_oil_quantity');
+            const reasonInput = document.getElementById('damage_oil_reason');
+            const submitBtn = document.getElementById('damage_oil_submit');
+            
+            if (stockIdInput) stockIdInput.value = id;
+            if (supplierInput) supplierInput.value = supplier;
+            if (availableInput) availableInput.value = qty.toFixed(2) + ' كجم';
+            if (qtyInput) {
+                qtyInput.value = '';
+                qtyInput.max = qty > 0 ? qty.toFixed(2) : null;
+                qtyInput.disabled = qty <= 0;
+            }
+            if (reasonInput) reasonInput.value = '';
+            if (submitBtn) submitBtn.disabled = qty <= 0;
+            
+            new bootstrap.Modal(document.getElementById('damageOliveOilModal')).show();
+        }
     }
 </script>
 
@@ -5622,7 +6299,7 @@ if ($section === 'honey') {
     </div>
     
     <!-- Modal إضافة شمع عسل -->
-    <div class="modal fade" id="addBeeswaxModal" tabindex="-1">
+    <div class="modal fade d-none d-md-block" id="addBeeswaxModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
@@ -5657,7 +6334,7 @@ if ($section === 'honey') {
     </div>
     
 <!-- Modal تسجيل تالف شمع العسل -->
-<div class="modal fade" id="damageBeeswaxModal" tabindex="-1">
+<div class="modal fade d-none d-md-block" id="damageBeeswaxModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-danger text-white">
@@ -5702,17 +6379,99 @@ if ($section === 'honey') {
 
 <script>
     function openBeeswaxDamageModal(id, supplier, quantity) {
+        if (typeof closeAllForms === 'function') {
+            closeAllForms();
+        }
+        
         const qty = parseFloat(quantity) || 0;
-        document.getElementById('damage_wax_stock_id').value = id;
-        document.getElementById('damage_wax_supplier').value = supplier;
-        document.getElementById('damage_wax_available').value = qty.toFixed(2) + ' كجم';
-        const qtyInput = document.getElementById('damage_wax_quantity');
-        qtyInput.value = '';
-        qtyInput.max = qty > 0 ? qty.toFixed(2) : null;
-        qtyInput.disabled = qty <= 0;
-        document.getElementById('damage_wax_reason').value = '';
-        document.getElementById('damage_wax_submit').disabled = qty <= 0;
-        new bootstrap.Modal(document.getElementById('damageBeeswaxModal')).show();
+        const isMobileDevice = isMobile();
+        
+        if (isMobileDevice) {
+            // على الموبايل: استخدام Card
+            const card = document.getElementById('damageBeeswaxCard');
+            if (!card) return;
+            
+            const stockIdInput = document.getElementById('damage_wax_stock_id_card');
+            const supplierInput = document.getElementById('damage_wax_supplier_card');
+            const availableInput = document.getElementById('damage_wax_available_card');
+            const qtyInput = document.getElementById('damage_wax_quantity_card');
+            const reasonInput = document.getElementById('damage_wax_reason_card');
+            const submitBtn = document.getElementById('damage_wax_submit_card');
+            
+            if (stockIdInput) stockIdInput.value = id;
+            if (supplierInput) supplierInput.value = supplier;
+            if (availableInput) availableInput.value = qty.toFixed(2) + ' كجم';
+            if (qtyInput) {
+                qtyInput.value = '';
+                qtyInput.max = qty > 0 ? qty.toFixed(2) : null;
+                qtyInput.disabled = qty <= 0;
+            }
+            if (reasonInput) reasonInput.value = '';
+            if (submitBtn) submitBtn.disabled = qty <= 0;
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        } else {
+            // على الكمبيوتر: استخدام Modal
+            const stockIdInput = document.getElementById('damage_wax_stock_id');
+            const supplierInput = document.getElementById('damage_wax_supplier');
+            const availableInput = document.getElementById('damage_wax_available');
+            const qtyInput = document.getElementById('damage_wax_quantity');
+            const reasonInput = document.getElementById('damage_wax_reason');
+            const submitBtn = document.getElementById('damage_wax_submit');
+            
+            if (stockIdInput) stockIdInput.value = id;
+            if (supplierInput) supplierInput.value = supplier;
+            if (availableInput) availableInput.value = qty.toFixed(2) + ' كجم';
+            if (qtyInput) {
+                qtyInput.value = '';
+                qtyInput.max = qty > 0 ? qty.toFixed(2) : null;
+                qtyInput.disabled = qty <= 0;
+            }
+            if (reasonInput) reasonInput.value = '';
+            if (submitBtn) submitBtn.disabled = qty <= 0;
+            
+            new bootstrap.Modal(document.getElementById('damageBeeswaxModal')).show();
+        }
+    }
+
+    // ===== دوال إغلاق Cards - زيت الزيتون والشمع =====
+    function closeAddOliveOilCard() {
+        const card = document.getElementById('addOliveOilCard');
+        if (card) {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    }
+
+    function closeDamageOliveOilCard() {
+        const card = document.getElementById('damageOliveOilCard');
+        if (card) {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    }
+
+    function closeAddBeeswaxCard() {
+        const card = document.getElementById('addBeeswaxCard');
+        if (card) {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    }
+
+    function closeDamageBeeswaxCard() {
+        const card = document.getElementById('damageBeeswaxCard');
+        if (card) {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
     }
 </script>
 
@@ -5787,7 +6546,7 @@ if ($section === 'honey') {
             <div class="card shadow-sm">
                 <div class="card-header text-white d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);">
                     <h5 class="mb-0"><i class="bi bi-box2-fill me-2"></i>مخزون المشتقات</h5>
-                    <button class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#addDerivativeModal">
+                    <button class="btn btn-light btn-sm" onclick="showAddDerivativeModal()">
                         <i class="bi bi-plus-circle me-1"></i>إضافة
                     </button>
                 </div>
@@ -5846,7 +6605,7 @@ if ($section === 'honey') {
     </div>
     
     <!-- Modal إضافة مشتق -->
-    <div class="modal fade" id="addDerivativeModal" tabindex="-1">
+    <div class="modal fade d-none d-md-block" id="addDerivativeModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
@@ -5901,7 +6660,7 @@ if ($section === 'honey') {
     </div>
     
 <!-- Modal إضافة كمية إلى مشتق موجود -->
-<div class="modal fade" id="addDerivativeQuantityModal" tabindex="-1">
+<div class="modal fade d-none d-md-block" id="addDerivativeQuantityModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
@@ -5946,7 +6705,7 @@ if ($section === 'honey') {
 </div>
 
 <!-- Modal تسجيل تالف للمشتقات -->
-<div class="modal fade" id="damageDerivativeModal" tabindex="-1">
+<div class="modal fade d-none d-md-block" id="damageDerivativeModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-danger text-white">
@@ -5993,33 +6752,312 @@ if ($section === 'honey') {
     </div>
 </div>
 
+<!-- Cards للموبايل - مودالات المشتقات -->
+<!-- Card إضافة مشتق - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="addDerivativeCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">إضافة مشتق</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="addDerivativeFormCard">
+            <input type="hidden" name="action" value="add_derivative">
+            <input type="hidden" name="submit_token" value="">
+            <div class="mb-3">
+                <label class="form-label">المورد <span class="text-danger">*</span></label>
+                <select class="form-select" name="supplier_id" required>
+                    <option value="">اختر المورد</option>
+                    <?php foreach ($derivSuppliers as $s): ?>
+                        <option value="<?php echo $s['id']; ?>"><?php echo htmlspecialchars($s['name']); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">نوع المشتق <span class="text-danger">*</span></label>
+                <select class="form-select" name="derivative_type" id="derivative_type_select_card" required>
+                    <option value="">اختر نوع المشتق</option>
+                    <?php if (!empty($derivTypes)): ?>
+                        <?php foreach ($derivTypes as $type): ?>
+                            <?php $typeName = trim($type['derivative_type'] ?? ''); ?>
+                            <?php if ($typeName !== ''): ?>
+                                <option value="<?php echo htmlspecialchars($typeName, ENT_QUOTES, 'UTF-8'); ?>">
+                                    <?php echo htmlspecialchars($typeName); ?>
+                                </option>
+                            <?php endif; ?>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                    <option value="__new__" style="font-style: italic; color: #6c757d;">+ إضافة نوع جديد</option>
+                </select>
+                <input type="text" class="form-control mt-2" name="derivative_type_new" id="derivative_type_new_card" 
+                       placeholder="أدخل نوع المشتق الجديد..." style="display: none;">
+                <small class="text-muted">اختر من القائمة أو أضف نوعاً جديداً</small>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الوزن (كجم)</label>
+                <input type="number" class="form-control" name="weight" step="0.01" min="0.01" required>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-info">إضافة</button>
+                <button type="button" class="btn btn-secondary" onclick="closeAddDerivativeCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card إضافة كمية إلى مشتق - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="addDerivativeQuantityCard" style="display: none;">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>إضافة كمية إلى المشتق</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="addDerivativeQuantityFormCard">
+            <input type="hidden" name="action" value="add_derivative_quantity">
+            <input type="hidden" name="stock_id" id="add_derivative_stock_id_card">
+            <input type="hidden" name="submit_token" value="<?php echo uniqid('tok_', true); ?>">
+            <div class="mb-3">
+                <label class="form-label">المورد</label>
+                <input type="text" class="form-control" id="add_derivative_supplier_card" readonly>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">نوع المشتق</label>
+                <input type="text" class="form-control" id="add_derivative_type_card" readonly>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الكمية الحالية</label>
+                <input type="text" class="form-control" id="add_derivative_current_card" readonly>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الكمية المضافة (كجم) <span class="text-danger">*</span></label>
+                <input type="number" class="form-control" name="weight" id="add_derivative_weight_card" step="0.01" min="0.01" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">ملاحظات</label>
+                <textarea class="form-control" name="notes" rows="3" placeholder="ملاحظات إضافية (اختياري)"></textarea>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-success">
+                    <i class="bi bi-check-circle me-1"></i>إضافة
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeAddDerivativeQuantityCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card تسجيل تالف للمشتقات - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="damageDerivativeCard" style="display: none;">
+    <div class="card-header bg-danger text-white">
+        <h5 class="mb-0"><i class="bi bi-exclamation-diamond me-2"></i>تسجيل تالف للمشتقات</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="damageDerivativeFormCard">
+            <input type="hidden" name="action" value="record_damage">
+            <input type="hidden" name="material_category" value="derivatives">
+            <input type="hidden" name="redirect_section" value="derivatives">
+            <input type="hidden" name="stock_id" id="damage_derivative_stock_id_card">
+            <input type="hidden" name="damage_unit" value="كجم">
+            <input type="hidden" name="submit_token" value="<?php echo uniqid('tok_', true); ?>">
+            <div class="mb-3">
+                <label class="form-label">المورد</label>
+                <input type="text" class="form-control" id="damage_derivative_supplier_card" readonly>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">نوع المشتق</label>
+                <input type="text" class="form-control" id="damage_derivative_type_card" readonly>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الكمية المتاحة</label>
+                <input type="text" class="form-control" id="damage_derivative_available_card" readonly>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الكمية التالفة (كجم)</label>
+                <input type="number" class="form-control" name="damage_quantity" id="damage_derivative_quantity_card" step="0.01" min="0.01" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">سبب التلف <span class="text-danger">*</span></label>
+                <textarea class="form-control" name="damage_reason" id="damage_derivative_reason_card" rows="3" required></textarea>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-danger" id="damage_derivative_submit_card">
+                    <i class="bi bi-check-circle me-1"></i>تسجيل
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeDamageDerivativeCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
     function openAddDerivativeQuantityModal(id, supplier, derivativeType, currentWeight) {
+        if (typeof closeAllForms === 'function') {
+            closeAllForms();
+        }
+        
         const weight = parseFloat(currentWeight) || 0;
-        document.getElementById('add_derivative_stock_id').value = id;
-        document.getElementById('add_derivative_supplier').value = supplier;
-        document.getElementById('add_derivative_type').value = derivativeType;
-        document.getElementById('add_derivative_current').value = weight.toFixed(2) + ' كجم';
-        document.getElementById('add_derivative_weight').value = '';
-        document.getElementById('add_derivative_weight').focus();
-        new bootstrap.Modal(document.getElementById('addDerivativeQuantityModal')).show();
+        const isMobileDevice = isMobile();
+        
+        if (isMobileDevice) {
+            // على الموبايل: استخدام Card
+            const card = document.getElementById('addDerivativeQuantityCard');
+            if (!card) return;
+            
+            const stockIdInput = document.getElementById('add_derivative_stock_id_card');
+            const supplierInput = document.getElementById('add_derivative_supplier_card');
+            const typeInput = document.getElementById('add_derivative_type_card');
+            const currentInput = document.getElementById('add_derivative_current_card');
+            const weightInput = document.getElementById('add_derivative_weight_card');
+            
+            if (stockIdInput) stockIdInput.value = id;
+            if (supplierInput) supplierInput.value = supplier;
+            if (typeInput) typeInput.value = derivativeType;
+            if (currentInput) currentInput.value = weight.toFixed(2) + ' كجم';
+            if (weightInput) {
+                weightInput.value = '';
+                weightInput.focus();
+            }
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        } else {
+            // على الكمبيوتر: استخدام Modal
+            const stockIdInput = document.getElementById('add_derivative_stock_id');
+            const supplierInput = document.getElementById('add_derivative_supplier');
+            const typeInput = document.getElementById('add_derivative_type');
+            const currentInput = document.getElementById('add_derivative_current');
+            const weightInput = document.getElementById('add_derivative_weight');
+            
+            if (stockIdInput) stockIdInput.value = id;
+            if (supplierInput) supplierInput.value = supplier;
+            if (typeInput) typeInput.value = derivativeType;
+            if (currentInput) currentInput.value = weight.toFixed(2) + ' كجم';
+            if (weightInput) {
+                weightInput.value = '';
+                weightInput.focus();
+            }
+            
+            new bootstrap.Modal(document.getElementById('addDerivativeQuantityModal')).show();
+        }
     }
     
     function openDerivativeDamageModal(id, supplier, derivativeType, quantity) {
+        if (typeof closeAllForms === 'function') {
+            closeAllForms();
+        }
+        
         const qty = parseFloat(quantity) || 0;
-        document.getElementById('damage_derivative_stock_id').value = id;
-        document.getElementById('damage_derivative_supplier').value = supplier;
-        document.getElementById('damage_derivative_type').value = derivativeType;
-        document.getElementById('damage_derivative_available').value = qty.toFixed(2) + ' كجم';
-        const qtyInput = document.getElementById('damage_derivative_quantity');
-        qtyInput.value = '';
-        qtyInput.max = qty > 0 ? qty.toFixed(2) : null;
-        qtyInput.disabled = qty <= 0;
-        document.getElementById('damage_derivative_reason').value = '';
-        document.getElementById('damage_derivative_submit').disabled = qty <= 0;
-        new bootstrap.Modal(document.getElementById('damageDerivativeModal')).show();
+        const isMobileDevice = isMobile();
+        
+        if (isMobileDevice) {
+            // على الموبايل: استخدام Card
+            const card = document.getElementById('damageDerivativeCard');
+            if (!card) return;
+            
+            const stockIdInput = document.getElementById('damage_derivative_stock_id_card');
+            const supplierInput = document.getElementById('damage_derivative_supplier_card');
+            const typeInput = document.getElementById('damage_derivative_type_card');
+            const availableInput = document.getElementById('damage_derivative_available_card');
+            const qtyInput = document.getElementById('damage_derivative_quantity_card');
+            const reasonInput = document.getElementById('damage_derivative_reason_card');
+            const submitBtn = document.getElementById('damage_derivative_submit_card');
+            
+            if (stockIdInput) stockIdInput.value = id;
+            if (supplierInput) supplierInput.value = supplier;
+            if (typeInput) typeInput.value = derivativeType;
+            if (availableInput) availableInput.value = qty.toFixed(2) + ' كجم';
+            if (qtyInput) {
+                qtyInput.value = '';
+                qtyInput.max = qty > 0 ? qty.toFixed(2) : null;
+                qtyInput.disabled = qty <= 0;
+            }
+            if (reasonInput) reasonInput.value = '';
+            if (submitBtn) submitBtn.disabled = qty <= 0;
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        } else {
+            // على الكمبيوتر: استخدام Modal
+            const stockIdInput = document.getElementById('damage_derivative_stock_id');
+            const supplierInput = document.getElementById('damage_derivative_supplier');
+            const typeInput = document.getElementById('damage_derivative_type');
+            const availableInput = document.getElementById('damage_derivative_available');
+            const qtyInput = document.getElementById('damage_derivative_quantity');
+            const reasonInput = document.getElementById('damage_derivative_reason');
+            const submitBtn = document.getElementById('damage_derivative_submit');
+            
+            if (stockIdInput) stockIdInput.value = id;
+            if (supplierInput) supplierInput.value = supplier;
+            if (typeInput) typeInput.value = derivativeType;
+            if (availableInput) availableInput.value = qty.toFixed(2) + ' كجم';
+            if (qtyInput) {
+                qtyInput.value = '';
+                qtyInput.max = qty > 0 ? qty.toFixed(2) : null;
+                qtyInput.disabled = qty <= 0;
+            }
+            if (reasonInput) reasonInput.value = '';
+            if (submitBtn) submitBtn.disabled = qty <= 0;
+            
+            new bootstrap.Modal(document.getElementById('damageDerivativeModal')).show();
+        }
     }
     
+    // دالة فتح نموذج إضافة مشتق
+    function showAddDerivativeModal() {
+        if (typeof closeAllForms === 'function') {
+            closeAllForms();
+        }
+        
+        const isMobileDevice = isMobile();
+        
+        if (isMobileDevice) {
+            // على الموبايل: استخدام Card
+            const card = document.getElementById('addDerivativeCard');
+            if (card) {
+                card.style.display = 'block';
+                setTimeout(function() {
+                    scrollToElement(card);
+                }, 50);
+            }
+        } else {
+            // على الكمبيوتر: استخدام Modal
+            const modal = document.getElementById('addDerivativeModal');
+            if (modal) {
+                const modalInstance = new bootstrap.Modal(modal);
+                modalInstance.show();
+            }
+        }
+    }
+
+    // ===== دوال إغلاق Cards - المشتقات =====
+    function closeAddDerivativeCard() {
+        const card = document.getElementById('addDerivativeCard');
+        if (card) {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    }
+
+    function closeAddDerivativeQuantityCard() {
+        const card = document.getElementById('addDerivativeQuantityCard');
+        if (card) {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    }
+
+    function closeDamageDerivativeCard() {
+        const card = document.getElementById('damageDerivativeCard');
+        if (card) {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    }
+
     // إدارة حقل إضافة نوع مشتق جديد
     document.addEventListener('DOMContentLoaded', function() {
         const derivativeTypeSelect = document.getElementById('derivative_type_select');
@@ -6044,6 +7082,52 @@ if ($section === 'honey') {
             addDerivativeModal.addEventListener('show.bs.modal', function() {
                 resetDerivativeForm();
             });
+        }
+        
+        // نفس الشيء للـ Card
+        const derivativeTypeSelectCard = document.getElementById('derivative_type_select_card');
+        const derivativeTypeNewCard = document.getElementById('derivative_type_new_card');
+        const addDerivativeCard = document.getElementById('addDerivativeCard');
+        
+        function resetDerivativeFormCard() {
+            if (derivativeTypeSelectCard) {
+                derivativeTypeSelectCard.value = '';
+                derivativeTypeSelectCard.setAttribute('required', 'required');
+            }
+            if (derivativeTypeNewCard) {
+                derivativeTypeNewCard.style.display = 'none';
+                derivativeTypeNewCard.value = '';
+                derivativeTypeNewCard.removeAttribute('required');
+            }
+        }
+        
+        if (derivativeTypeSelectCard && derivativeTypeNewCard) {
+            derivativeTypeSelectCard.addEventListener('change', function() {
+                if (this.value === '__new__') {
+                    derivativeTypeNewCard.style.display = 'block';
+                    derivativeTypeNewCard.setAttribute('required', 'required');
+                    derivativeTypeNewCard.focus();
+                } else {
+                    derivativeTypeNewCard.style.display = 'none';
+                    derivativeTypeNewCard.removeAttribute('required');
+                    derivativeTypeNewCard.value = '';
+                }
+            });
+        }
+        
+        // إعادة تعيين عند فتح Card
+        if (addDerivativeCard) {
+            const originalDisplay = addDerivativeCard.style.display;
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+                        if (addDerivativeCard.style.display === 'block' && originalDisplay === 'none') {
+                            resetDerivativeFormCard();
+                        }
+                    }
+                });
+            });
+            observer.observe(addDerivativeCard, { attributes: true });
         }
         
         if (derivativeTypeSelect && derivativeTypeNew) {
@@ -6162,7 +7246,7 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
             <div class="card shadow-sm">
                 <div class="card-header text-white d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #d4a574 0%, #8b6f47 100%);">
                     <h5 class="mb-0"><i class="bi bi-nut me-2"></i>المكسرات المنفردة</h5>
-                    <button class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#addSingleNutsModal">
+                    <button class="btn btn-light btn-sm" onclick="showAddSingleNutsModal()">
                         <i class="bi bi-plus-circle me-1"></i>إضافة
                     </button>
                 </div>
@@ -6212,7 +7296,7 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
         </div>
         
 <!-- Modal تسجيل تالف للمكسرات المنفردة -->
-<div class="modal fade" id="damageNutsModal" tabindex="-1">
+<div class="modal fade d-none d-md-block" id="damageNutsModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-danger text-white">
@@ -6260,7 +7344,7 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
 </div>
 
 <!-- Modal تسجيل تالف للمكسرات المشكلة -->
-<div class="modal fade" id="damageMixedNutsModal" tabindex="-1">
+<div class="modal fade d-none d-md-block" id="damageMixedNutsModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-danger text-white">
@@ -6310,33 +7394,283 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
 
 <script>
     function openNutsDamageModal(id, supplier, nutType, quantity) {
+        if (typeof closeAllForms === 'function') {
+            closeAllForms();
+        }
+        
         const qty = parseFloat(quantity) || 0;
-        document.getElementById('damage_nuts_stock_id').value = id;
-        document.getElementById('damage_nuts_supplier').value = supplier;
-        document.getElementById('damage_nuts_type').value = nutType;
-        document.getElementById('damage_nuts_available').value = qty.toFixed(3) + ' كجم';
-        const qtyInput = document.getElementById('damage_nuts_quantity');
-        qtyInput.value = '';
-        qtyInput.max = qty > 0 ? qty.toFixed(3) : null;
-        qtyInput.disabled = qty <= 0;
-        document.getElementById('damage_nuts_reason').value = '';
-        document.getElementById('damage_nuts_submit').disabled = qty <= 0;
-        new bootstrap.Modal(document.getElementById('damageNutsModal')).show();
+        const isMobileDevice = isMobile();
+        
+        if (isMobileDevice) {
+            // على الموبايل: استخدام Card
+            const card = document.getElementById('damageNutsCard');
+            if (!card) return;
+            
+            const stockIdInput = document.getElementById('damage_nuts_stock_id_card');
+            const supplierInput = document.getElementById('damage_nuts_supplier_card');
+            const typeInput = document.getElementById('damage_nuts_type_card');
+            const availableInput = document.getElementById('damage_nuts_available_card');
+            const qtyInput = document.getElementById('damage_nuts_quantity_card');
+            const reasonInput = document.getElementById('damage_nuts_reason_card');
+            const submitBtn = document.getElementById('damage_nuts_submit_card');
+            
+            if (stockIdInput) stockIdInput.value = id;
+            if (supplierInput) supplierInput.value = supplier;
+            if (typeInput) typeInput.value = nutType;
+            if (availableInput) availableInput.value = qty.toFixed(3) + ' كجم';
+            if (qtyInput) {
+                qtyInput.value = '';
+                qtyInput.max = qty > 0 ? qty.toFixed(3) : null;
+                qtyInput.disabled = qty <= 0;
+            }
+            if (reasonInput) reasonInput.value = '';
+            if (submitBtn) submitBtn.disabled = qty <= 0;
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        } else {
+            // على الكمبيوتر: استخدام Modal
+            const stockIdInput = document.getElementById('damage_nuts_stock_id');
+            const supplierInput = document.getElementById('damage_nuts_supplier');
+            const typeInput = document.getElementById('damage_nuts_type');
+            const availableInput = document.getElementById('damage_nuts_available');
+            const qtyInput = document.getElementById('damage_nuts_quantity');
+            const reasonInput = document.getElementById('damage_nuts_reason');
+            const submitBtn = document.getElementById('damage_nuts_submit');
+            
+            if (stockIdInput) stockIdInput.value = id;
+            if (supplierInput) supplierInput.value = supplier;
+            if (typeInput) typeInput.value = nutType;
+            if (availableInput) availableInput.value = qty.toFixed(3) + ' كجم';
+            if (qtyInput) {
+                qtyInput.value = '';
+                qtyInput.max = qty > 0 ? qty.toFixed(3) : null;
+                qtyInput.disabled = qty <= 0;
+            }
+            if (reasonInput) reasonInput.value = '';
+            if (submitBtn) submitBtn.disabled = qty <= 0;
+            
+            new bootstrap.Modal(document.getElementById('damageNutsModal')).show();
+        }
     }
 
     function openMixedNutsDamageModal(id, supplier, batchName, quantity) {
+        if (typeof closeAllForms === 'function') {
+            closeAllForms();
+        }
+        
         const qty = parseFloat(quantity) || 0;
-        document.getElementById('damage_mixed_stock_id').value = id;
-        document.getElementById('damage_mixed_supplier').value = supplier;
-        document.getElementById('damage_mixed_batch').value = batchName;
-        document.getElementById('damage_mixed_available').value = qty.toFixed(3) + ' كجم';
-        const qtyInput = document.getElementById('damage_mixed_quantity');
-        qtyInput.value = '';
-        qtyInput.max = qty > 0 ? qty.toFixed(3) : null;
-        qtyInput.disabled = qty <= 0;
-        document.getElementById('damage_mixed_reason').value = '';
-        document.getElementById('damage_mixed_submit').disabled = qty <= 0;
-        new bootstrap.Modal(document.getElementById('damageMixedNutsModal')).show();
+        const isMobileDevice = isMobile();
+        
+        if (isMobileDevice) {
+            // على الموبايل: استخدام Card
+            const card = document.getElementById('damageMixedNutsCard');
+            if (!card) return;
+            
+            const stockIdInput = document.getElementById('damage_mixed_stock_id_card');
+            const supplierInput = document.getElementById('damage_mixed_supplier_card');
+            const batchInput = document.getElementById('damage_mixed_batch_card');
+            const availableInput = document.getElementById('damage_mixed_available_card');
+            const qtyInput = document.getElementById('damage_mixed_quantity_card');
+            const reasonInput = document.getElementById('damage_mixed_reason_card');
+            const submitBtn = document.getElementById('damage_mixed_submit_card');
+            
+            if (stockIdInput) stockIdInput.value = id;
+            if (supplierInput) supplierInput.value = supplier;
+            if (batchInput) batchInput.value = batchName;
+            if (availableInput) availableInput.value = qty.toFixed(3) + ' كجم';
+            if (qtyInput) {
+                qtyInput.value = '';
+                qtyInput.max = qty > 0 ? qty.toFixed(3) : null;
+                qtyInput.disabled = qty <= 0;
+            }
+            if (reasonInput) reasonInput.value = '';
+            if (submitBtn) submitBtn.disabled = qty <= 0;
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        } else {
+            // على الكمبيوتر: استخدام Modal
+            const stockIdInput = document.getElementById('damage_mixed_stock_id');
+            const supplierInput = document.getElementById('damage_mixed_supplier');
+            const batchInput = document.getElementById('damage_mixed_batch');
+            const availableInput = document.getElementById('damage_mixed_available');
+            const qtyInput = document.getElementById('damage_mixed_quantity');
+            const reasonInput = document.getElementById('damage_mixed_reason');
+            const submitBtn = document.getElementById('damage_mixed_submit');
+            
+            if (stockIdInput) stockIdInput.value = id;
+            if (supplierInput) supplierInput.value = supplier;
+            if (batchInput) batchInput.value = batchName;
+            if (availableInput) availableInput.value = qty.toFixed(3) + ' كجم';
+            if (qtyInput) {
+                qtyInput.value = '';
+                qtyInput.max = qty > 0 ? qty.toFixed(3) : null;
+                qtyInput.disabled = qty <= 0;
+            }
+            if (reasonInput) reasonInput.value = '';
+            if (submitBtn) submitBtn.disabled = qty <= 0;
+            
+            new bootstrap.Modal(document.getElementById('damageMixedNutsModal')).show();
+        }
+    }
+
+    // ===== دوال Cards للمكسرات =====
+    function addIngredientCard() {
+        const container = document.getElementById('ingredientsContainerCard');
+        const nutsStock = <?php echo json_encode($nutsStock); ?>;
+        
+        const ingredientHtml = `
+            <div class="ingredient-row" id="ingredient-card-${ingredientIndexCard}">
+                <div class="row g-2 align-items-end">
+                    <div class="col-12 col-lg-6">
+                        <label class="form-label">نوع المكسرات</label>
+                        <select name="ingredients[${ingredientIndexCard}][nuts_stock_id]" class="form-select" required onchange="updateAvailableCard(this, ${ingredientIndexCard})">
+                            <option value="">اختر النوع</option>
+                            ${nutsStock.map(stock => `
+                                <option value="${stock.id}" data-quantity="${stock.quantity}" data-type="${stock.nut_type}">
+                                    ${stock.nut_type} (${stock.supplier_name}) - متاح: ${parseFloat(stock.quantity).toFixed(3)} كجم
+                                </option>
+                            `).join('')}
+                        </select>
+                    </div>
+                    <div class="col-6 col-lg-4">
+                        <label class="form-label">الكمية (كجم)</label>
+                        <input type="number" name="ingredients[${ingredientIndexCard}][quantity]" 
+                               class="form-control" step="0.001" min="0.001" required 
+                               id="quantity-card-${ingredientIndexCard}">
+                        <div class="form-text text-muted" id="available-card-${ingredientIndexCard}"></div>
+                    </div>
+                    <div class="col-6 col-lg-2">
+                        <button type="button" class="btn btn-outline-danger remove-ingredient-btn w-100" onclick="removeIngredientCard(${ingredientIndexCard})">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        container.insertAdjacentHTML('beforeend', ingredientHtml);
+        container.scrollTop = container.scrollHeight;
+        ingredientIndexCard++;
+    }
+    
+    function removeIngredientCard(index) {
+        document.getElementById('ingredient-card-' + index).remove();
+    }
+    
+    function updateAvailableCard(select, index) {
+        const selectedOption = select.options[select.selectedIndex];
+        const availableQty = selectedOption.getAttribute('data-quantity');
+        const availableSpan = document.getElementById('available-card-' + index);
+        const quantityInput = document.getElementById('quantity-card-' + index);
+        const availableValue = parseFloat(availableQty);
+
+        if (!Number.isNaN(availableValue)) {
+            availableSpan.textContent = `متاح: ${availableValue.toFixed(3)} كجم`;
+            quantityInput.max = availableValue.toFixed(3);
+        } else {
+            availableSpan.textContent = '';
+            quantityInput.removeAttribute('max');
+        }
+    }
+
+    // ===== دوال إغلاق Cards - المكسرات =====
+    function closeAddSingleNutsCard() {
+        const card = document.getElementById('addSingleNutsCard');
+        if (card) {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    }
+
+    function closeDamageNutsCard() {
+        const card = document.getElementById('damageNutsCard');
+        if (card) {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    }
+
+    function closeDamageMixedNutsCard() {
+        const card = document.getElementById('damageMixedNutsCard');
+        if (card) {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    }
+
+    function closeCreateMixedNutsCard() {
+        const card = document.getElementById('createMixedNutsCard');
+        if (card) {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+            const container = document.getElementById('ingredientsContainerCard');
+            if (container) container.innerHTML = '';
+            ingredientIndexCard = 0;
+        }
+    }
+
+    // دالة فتح نموذج إضافة مكسرات منفردة
+    function showAddSingleNutsModal() {
+        if (typeof closeAllForms === 'function') {
+            closeAllForms();
+        }
+        
+        const isMobileDevice = isMobile();
+        
+        if (isMobileDevice) {
+            const card = document.getElementById('addSingleNutsCard');
+            if (card) {
+                card.style.display = 'block';
+                setTimeout(function() {
+                    scrollToElement(card);
+                }, 50);
+            }
+        } else {
+            const modal = document.getElementById('addSingleNutsModal');
+            if (modal) {
+                const modalInstance = new bootstrap.Modal(modal);
+                modalInstance.show();
+            }
+        }
+    }
+
+    // دالة فتح نموذج إنشاء مكسرات مشكلة
+    function showCreateMixedNutsModal() {
+        if (typeof closeAllForms === 'function') {
+            closeAllForms();
+        }
+        
+        const isMobileDevice = isMobile();
+        
+        if (isMobileDevice) {
+            const card = document.getElementById('createMixedNutsCard');
+            if (card) {
+                card.style.display = 'block';
+                const container = document.getElementById('ingredientsContainerCard');
+                if (container && container.children.length === 0) {
+                    addIngredientCard();
+                }
+                setTimeout(function() {
+                    scrollToElement(card);
+                }, 50);
+            }
+        } else {
+            const modal = document.getElementById('createMixedNutsModal');
+            if (modal) {
+                const modalInstance = new bootstrap.Modal(modal);
+                modalInstance.show();
+            }
+        }
     }
 </script>
 
@@ -6345,7 +7679,7 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
             <div class="card shadow-sm">
                 <div class="card-header text-white d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #d4a574 0%, #8b6f47 100%);">
                     <h5 class="mb-0"><i class="bi bi-layers-fill me-2"></i>المكسرات المشكلة</h5>
-                    <button class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#createMixedNutsModal">
+                    <button class="btn btn-light btn-sm" onclick="showCreateMixedNutsModal()">
                         <i class="bi bi-plus-circle me-1"></i>إنشاء خلطة
                     </button>
                 </div>
@@ -6410,7 +7744,7 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
     </div>
     
     <!-- Modal إضافة مكسرات منفردة -->
-    <div class="modal fade" id="addSingleNutsModal" tabindex="-1">
+    <div class="modal fade d-none d-md-block" id="addSingleNutsModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header text-white" style="background: linear-gradient(135deg, #d4a574 0%, #8b6f47 100%);">
@@ -6468,7 +7802,7 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
     </div>
     
     <!-- Modal إنشاء مكسرات مشكلة -->
-    <div class="modal fade" id="createMixedNutsModal" tabindex="-1">
+    <div class="modal fade d-none d-md-block" id="createMixedNutsModal" tabindex="-1">
         <div class="modal-dialog modal-lg modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header text-white" style="background: linear-gradient(135deg, #d4a574 0%, #8b6f47 100%);">
@@ -6528,8 +7862,203 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
         </div>
     </div>
     
+    <!-- Cards للموبايل - مودالات المكسرات -->
+    <!-- Card إضافة مكسرات منفردة - للموبايل فقط -->
+    <div class="card shadow-sm mb-4 d-md-none" id="addSingleNutsCard" style="display: none;">
+        <div class="card-header text-white" style="background: linear-gradient(135deg, #d4a574 0%, #8b6f47 100%);">
+            <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>إضافة مكسرات منفردة</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" id="addSingleNutsFormCard">
+                <input type="hidden" name="action" value="add_single_nuts">
+                <input type="hidden" name="submit_token" value="">
+                <div class="mb-3">
+                    <label class="form-label">المورد <span class="text-danger">*</span></label>
+                    <select name="supplier_id" class="form-select" required>
+                        <option value="">اختر المورد</option>
+                        <?php foreach ($nutsSuppliers as $supplier): ?>
+                            <option value="<?php echo $supplier['id']; ?>"><?php echo htmlspecialchars($supplier['name']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">نوع المكسرات <span class="text-danger">*</span></label>
+                    <select name="nut_type" class="form-select" id="nut_type_card" required>
+                        <option value="">اختر نوع المكسرات</option>
+                        <option value="عين جمل">عين جمل</option>
+                        <option value="بندق">بندق</option>
+                        <option value="لوز">لوز</option>
+                        <option value="فستق">فستق</option>
+                        <option value="كاجو">كاجو</option>
+                        <option value="أخرى">أخرى (يدوياً)</option>
+                    </select>
+                </div>
+                <div class="mb-3" id="otherNutTypeDivCard" style="display: none;">
+                    <label class="form-label">اكتب نوع المكسرات <span class="text-danger">*</span></label>
+                    <input type="text" id="otherNutTypeCard" name="other_nut_type" class="form-control" 
+                           placeholder="مثال: بيكان، مكاديميا...">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">الكمية (كجم) <span class="text-danger">*</span></label>
+                    <input type="number" name="quantity" class="form-control" step="0.001" min="0.001" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">ملاحظات</label>
+                    <textarea name="notes" class="form-control" rows="2"></textarea>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn text-white" style="background: linear-gradient(135deg, #d4a574 0%, #8b6f47 100%);">
+                        <i class="bi bi-check-circle me-1"></i>إضافة
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="closeAddSingleNutsCard()">إلغاء</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Card تسجيل تالف للمكسرات - للموبايل فقط -->
+    <div class="card shadow-sm mb-4 d-md-none" id="damageNutsCard" style="display: none;">
+        <div class="card-header bg-danger text-white">
+            <h5 class="mb-0"><i class="bi bi-exclamation-diamond me-2"></i>تسجيل تالف للمكسرات</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" id="damageNutsFormCard">
+                <input type="hidden" name="action" value="record_damage">
+                <input type="hidden" name="material_category" value="nuts">
+                <input type="hidden" name="redirect_section" value="nuts">
+                <input type="hidden" name="stock_id" id="damage_nuts_stock_id_card">
+                <input type="hidden" name="damage_unit" value="كجم">
+                <input type="hidden" name="submit_token" value="<?php echo uniqid('tok_', true); ?>">
+                <div class="mb-3">
+                    <label class="form-label">المورد</label>
+                    <input type="text" class="form-control" id="damage_nuts_supplier_card" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">نوع المكسرات</label>
+                    <input type="text" class="form-control" id="damage_nuts_type_card" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">الكمية المتاحة</label>
+                    <input type="text" class="form-control" id="damage_nuts_available_card" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">الكمية التالفة (كجم)</label>
+                    <input type="number" class="form-control" name="damage_quantity" id="damage_nuts_quantity_card" step="0.001" min="0.001" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">سبب التلف <span class="text-danger">*</span></label>
+                    <textarea class="form-control" name="damage_reason" id="damage_nuts_reason_card" rows="3" required></textarea>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-danger" id="damage_nuts_submit_card">
+                        <i class="bi bi-check-circle me-1"></i>تسجيل
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="closeDamageNutsCard()">إلغاء</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Card تسجيل تالف للمكسرات المشكلة - للموبايل فقط -->
+    <div class="card shadow-sm mb-4 d-md-none" id="damageMixedNutsCard" style="display: none;">
+        <div class="card-header bg-danger text-white">
+            <h5 class="mb-0"><i class="bi bi-exclamation-diamond me-2"></i>تسجيل تالف للمكسرات المشكلة</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" id="damageMixedNutsFormCard">
+                <input type="hidden" name="action" value="record_damage">
+                <input type="hidden" name="material_category" value="nuts">
+                <input type="hidden" name="redirect_section" value="nuts">
+                <input type="hidden" name="stock_id" id="damage_mixed_stock_id_card">
+                <input type="hidden" name="stock_source" value="mixed">
+                <input type="hidden" name="damage_unit" value="كجم">
+                <input type="hidden" name="submit_token" value="<?php echo uniqid('tok_', true); ?>">
+                <div class="mb-3">
+                    <label class="form-label">المورد</label>
+                    <input type="text" class="form-control" id="damage_mixed_supplier_card" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">اسم الخلطة</label>
+                    <input type="text" class="form-control" id="damage_mixed_batch_card" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">الكمية المتاحة</label>
+                    <input type="text" class="form-control" id="damage_mixed_available_card" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">الكمية التالفة (كجم)</label>
+                    <input type="number" class="form-control" name="damage_quantity" id="damage_mixed_quantity_card" step="0.001" min="0.001" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">سبب التلف <span class="text-danger">*</span></label>
+                    <textarea class="form-control" name="damage_reason" id="damage_mixed_reason_card" rows="3" required></textarea>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-danger" id="damage_mixed_submit_card">
+                        <i class="bi bi-check-circle me-1"></i>تسجيل
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="closeDamageMixedNutsCard()">إلغاء</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Card إنشاء مكسرات مشكلة - للموبايل فقط -->
+    <div class="card shadow-sm mb-4 d-md-none" id="createMixedNutsCard" style="display: none;">
+        <div class="card-header text-white" style="background: linear-gradient(135deg, #d4a574 0%, #8b6f47 100%);">
+            <h5 class="mb-0"><i class="bi bi-layers-fill me-2"></i>إنشاء مكسرات مشكلة</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" id="mixedNutsFormCard">
+                <input type="hidden" name="action" value="create_mixed_nuts">
+                <input type="hidden" name="submit_token" value="">
+                <div class="mb-3">
+                    <label class="form-label">اسم الخلطة <span class="text-danger">*</span></label>
+                    <input type="text" name="batch_name" class="form-control" required 
+                           placeholder="مثال: مكسرات مشكلة ممتازة">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">المورد <span class="text-danger">*</span></label>
+                    <select name="supplier_id" class="form-select" required>
+                        <option value="">اختر المورد</option>
+                        <?php foreach ($nutsSuppliers as $supplier): ?>
+                            <option value="<?php echo $supplier['id']; ?>"><?php echo htmlspecialchars($supplier['name']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <small class="text-muted">المورد المسؤول عن هذه الخلطة</small>
+                </div>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <label class="form-label mb-0">المكونات <span class="text-danger">*</span></label>
+                        <button type="button" class="btn btn-sm text-white" style="background: linear-gradient(135deg, #d4a574 0%, #8b6f47 100%);" onclick="addIngredientCard()">
+                            <i class="bi bi-plus-circle me-1"></i>إضافة مكون
+                        </button>
+                    </div>
+                    <div id="ingredientsContainerCard">
+                        <!-- سيتم إضافة المكونات هنا -->
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">ملاحظات</label>
+                    <textarea name="notes" class="form-control" rows="2"></textarea>
+                </div>
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>ملاحظة:</strong> سيتم خصم الكميات المحددة تلقائياً من مخزون كل نوع من المكسرات المنفردة.
+                </div>
+                <div class="d-flex gap-2 mt-3">
+                    <button type="submit" class="btn text-white" style="background: linear-gradient(135deg, #d4a574 0%, #8b6f47 100%);">
+                        <i class="bi bi-check-circle me-1"></i>إنشاء الخلطة
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="closeCreateMixedNutsCard()">إلغاء</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
     <script>
     let ingredientIndex = 0;
+    let ingredientIndexCard = 0;
     
     function addIngredient() {
         const container = document.getElementById('ingredientsContainer');
@@ -6591,15 +8120,18 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
     }
     
     // إضافة صف واحد عند فتح النافذة
-    document.getElementById('createMixedNutsModal').addEventListener('shown.bs.modal', function () {
-        if (document.getElementById('ingredientsContainer').children.length === 0) {
-            addIngredient();
-        }
-    });
+    const createMixedNutsModal = document.getElementById('createMixedNutsModal');
+    if (createMixedNutsModal) {
+        createMixedNutsModal.addEventListener('shown.bs.modal', function () {
+            if (document.getElementById('ingredientsContainer').children.length === 0) {
+                addIngredient();
+            }
+        });
+    }
     
     // التحكم في إظهار حقل "أخرى" لنوع المكسرات
     document.addEventListener('DOMContentLoaded', function() {
-        const nutTypeSelect = document.querySelector('select[name="nut_type"]');
+        const nutTypeSelect = document.querySelector('#addSingleNutsModal select[name="nut_type"]');
         const otherNutTypeDiv = document.getElementById('otherNutTypeDiv');
         const otherNutTypeInput = document.getElementById('otherNutType');
         
@@ -6612,6 +8144,24 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
                     otherNutTypeDiv.style.display = 'none';
                     otherNutTypeInput.required = false;
                     otherNutTypeInput.value = '';
+                }
+            });
+        }
+        
+        // نفس الشيء للـ Card
+        const nutTypeSelectCard = document.getElementById('nut_type_card');
+        const otherNutTypeDivCard = document.getElementById('otherNutTypeDivCard');
+        const otherNutTypeInputCard = document.getElementById('otherNutTypeCard');
+        
+        if (nutTypeSelectCard) {
+            nutTypeSelectCard.addEventListener('change', function() {
+                if (this.value === 'أخرى') {
+                    otherNutTypeDivCard.style.display = 'block';
+                    otherNutTypeInputCard.required = true;
+                } else {
+                    otherNutTypeDivCard.style.display = 'none';
+                    otherNutTypeInputCard.required = false;
+                    otherNutTypeInputCard.value = '';
                 }
             });
         }
@@ -6770,7 +8320,7 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
             <div class="card shadow-sm">
                 <div class="card-header text-white d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #f4d03f 0%, #f39c12 100%);">
                     <h5 class="mb-0"><i class="bi bi-circle-fill me-2"></i>مخزون السمسم</h5>
-                    <button class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#addSesameModal" <?php echo $sesameActionsDisabledAttr; ?>>
+                    <button class="btn btn-light btn-sm" onclick="showAddSesameModal()" <?php echo $sesameActionsDisabledAttr; ?>>
                         <i class="bi bi-plus-circle me-1"></i>إضافة
                     </button>
                 </div>
@@ -6832,7 +8382,7 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
     </div>
     
     <!-- Modal إضافة سمسم -->
-    <div class="modal fade" id="addSesameModal" tabindex="-1">
+    <div class="modal fade d-none d-md-block" id="addSesameModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header text-white" style="background: linear-gradient(135deg, #f4d03f 0%, #f39c12 100%);">
@@ -6878,7 +8428,7 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
     </div>
     
     <!-- Modal تسجيل تالف (سمسم أو طحينة) -->
-    <div class="modal fade" id="damageSesameTahiniModal" tabindex="-1">
+    <div class="modal fade d-none d-md-block" id="damageSesameTahiniModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header bg-danger text-white">
@@ -6926,7 +8476,7 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
     </div>
     
     <!-- Modal إضافة باقي عملية التحويل -->
-    <div class="modal fade" id="addTahiniRemainderModal" tabindex="-1">
+    <div class="modal fade d-none d-md-block" id="addTahiniRemainderModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header bg-info text-white">
@@ -6971,7 +8521,7 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
     </div>
     
     <!-- Modal تحويل السمسم إلى طحينة -->
-    <div class="modal fade" id="convertToTahiniModal" tabindex="-1">
+    <div class="modal fade d-none d-md-block" id="convertToTahiniModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header bg-success text-white">
@@ -7026,13 +8576,189 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
         </div>
     </div>
     
+    <!-- Cards للموبايل - مودالات السمسم والطحينة -->
+    <!-- Card إضافة سمسم - للموبايل فقط -->
+    <div class="card shadow-sm mb-4 d-md-none" id="addSesameCard" style="display: none;">
+        <div class="card-header text-white" style="background: linear-gradient(135deg, #f4d03f 0%, #f39c12 100%);">
+            <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>إضافة سمسم</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" id="addSesameFormCard">
+                <input type="hidden" name="action" value="add_single_sesame">
+                <input type="hidden" name="submit_token" value="">
+                <?php if ($sesameSectionTableError): ?>
+                    <div class="alert alert-warning">
+                        لا يمكن إضافة سمسم جديد قبل إنشاء جدول المخزون في قاعدة البيانات.
+                    </div>
+                <?php endif; ?>
+                <div class="mb-3">
+                    <label class="form-label">المورد <span class="text-danger">*</span></label>
+                    <select name="supplier_id" class="form-select" required>
+                        <option value="">اختر المورد</option>
+                        <?php foreach ($sesameSuppliers as $supplier): ?>
+                            <option value="<?php echo $supplier['id']; ?>"><?php echo htmlspecialchars($supplier['name']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">الكمية (كجم) <span class="text-danger">*</span></label>
+                    <input type="number" step="0.001" min="0.001" name="quantity" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">ملاحظات</label>
+                    <textarea name="notes" class="form-control" rows="3"></textarea>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn text-white" style="background: linear-gradient(135deg, #f4d03f 0%, #f39c12 100%);" <?php echo $sesameActionsDisabledAttr; ?>>
+                        <i class="bi bi-check-circle me-1"></i>إضافة
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="closeAddSesameCard()">إلغاء</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Card تسجيل تالف (سمسم أو طحينة) - للموبايل فقط -->
+    <div class="card shadow-sm mb-4 d-md-none" id="damageSesameTahiniCard" style="display: none;">
+        <div class="card-header bg-danger text-white">
+            <h5 class="mb-0"><i class="bi bi-exclamation-diamond me-2"></i>تسجيل تالف</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" id="damageSesameTahiniFormCard">
+                <input type="hidden" name="action" value="record_damage">
+                <input type="hidden" name="material_category" id="damage_material_category_card">
+                <input type="hidden" name="redirect_section" value="sesame">
+                <input type="hidden" name="stock_id" id="damage_stock_id_card">
+                <input type="hidden" name="damage_unit" value="كجم">
+                <input type="hidden" name="submit_token" value="<?php echo uniqid('tok_', true); ?>">
+                <div class="mb-3">
+                    <label class="form-label">نوع المادة</label>
+                    <input type="text" class="form-control" id="damage_material_type_card" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">المورد</label>
+                    <input type="text" class="form-control" id="damage_supplier_card" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">الكمية المتاحة</label>
+                    <input type="text" class="form-control" id="damage_available_card" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">الكمية التالفة (كجم)</label>
+                    <input type="number" class="form-control" name="damage_quantity" id="damage_quantity_card" step="0.001" min="0.001" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">سبب التلف <span class="text-danger">*</span></label>
+                    <textarea class="form-control" name="damage_reason" id="damage_reason_card" rows="3" required></textarea>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-danger" id="damage_submit_card">
+                        <i class="bi bi-check-circle me-1"></i>تسجيل
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="closeDamageSesameTahiniCard()">إلغاء</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Card إضافة باقي عملية التحويل - للموبايل فقط -->
+    <div class="card shadow-sm mb-4 d-md-none" id="addTahiniRemainderCard" style="display: none;">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>إضافة باقي عملية التحويل</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" id="addTahiniRemainderFormCard">
+                <input type="hidden" name="action" value="add_tahini_remainder">
+                <input type="hidden" name="submit_token" value="<?php echo uniqid('tok_', true); ?>">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    استخدم هذا النموذج لإضافة كمية طحينة إضافية من عملية تحويل سابقة.
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">المورد <span class="text-danger">*</span></label>
+                    <select name="supplier_id" class="form-select" required id="remainder_supplier_id_card">
+                        <option value="">اختر المورد</option>
+                        <?php foreach ($sesameSuppliers as $supplier): ?>
+                            <option value="<?php echo $supplier['id']; ?>"><?php echo htmlspecialchars($supplier['name']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">الكمية (كجم) <span class="text-danger">*</span></label>
+                    <input type="number" step="0.001" min="0.001" name="quantity" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">ملاحظات</label>
+                    <textarea name="notes" class="form-control" rows="3" placeholder="ملاحظات إضافية (اختياري)"></textarea>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-info text-white">
+                        <i class="bi bi-check-circle me-1"></i>إضافة
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="closeAddTahiniRemainderCard()">إلغاء</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Card تحويل السمسم إلى طحينة - للموبايل فقط -->
+    <div class="card shadow-sm mb-4 d-md-none" id="convertToTahiniCard" style="display: none;">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0"><i class="bi bi-arrow-repeat me-2"></i>تحويل السمسم إلى طحينة</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" id="convertToTahiniFormCard">
+                <input type="hidden" name="action" value="convert_sesame_to_tahini">
+                <input type="hidden" name="sesame_stock_id" id="convert_sesame_stock_id_card">
+                <input type="hidden" name="submit_token" value="<?php echo uniqid('tok_', true); ?>">
+                <?php if ($sesameSectionTableError): ?>
+                    <div class="alert alert-warning">
+                        لا يمكن تحويل السمسم حالياً لعدم توفر جدول السمسم.
+                    </div>
+                <?php endif; ?>
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    سيتم خصم نسبة إهلاك 0.2% من الكمية المدخلة عند التحويل إلى طحينة.
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">المورد</label>
+                    <input type="text" class="form-control" id="convert_sesame_supplier_card" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">الكمية المتاحة</label>
+                    <input type="text" class="form-control" id="convert_sesame_available_card" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">الكمية المراد تحويلها (كجم) <span class="text-danger">*</span></label>
+                    <input type="number" class="form-control" name="quantity" id="convert_sesame_quantity_card" step="0.001" min="0.001" required>
+                    <small class="text-muted">الكمية المتاحة: <span id="convert_sesame_max_qty_card">0</span> كجم</small>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">الكمية المتوقعة من الطحينة (كجم)</label>
+                    <input type="text" class="form-control" id="convert_tahini_expected_card" readonly style="background-color: #e9ecef;">
+                    <small class="text-muted">بعد خصم نسبة الإهلاك 0.2%</small>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">ملاحظات</label>
+                    <textarea class="form-control" name="notes" rows="3" placeholder="ملاحظات إضافية (اختياري)"></textarea>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-success" id="convert_tahini_submit_card" <?php echo $sesameActionsDisabledAttr; ?>>
+                        <i class="bi bi-check-circle me-1"></i>تحويل
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="closeConvertToTahiniCard()">إلغاء</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
     <!-- قسم مخزون الطحينة -->
     <div class="row mt-4">
         <div class="col-12">
             <div class="card shadow-sm">
                 <div class="card-header text-white d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
                     <h5 class="mb-0"><i class="bi bi-droplet me-2"></i>مخزون الطحينة</h5>
-                    <button class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#addTahiniRemainderModal">
+                    <button class="btn btn-light btn-sm" onclick="showAddTahiniRemainderModal()">
                         <i class="bi bi-plus-circle me-1"></i>إضافة باقي عملية التحويل
                     </button>
                 </div>
@@ -7084,51 +8810,243 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
     const sesameActionsDisabled = <?php echo $sesameSectionTableError ? 'true' : 'false'; ?>;
 
     function openConvertToTahiniModal(id, supplier, quantity) {
+        if (typeof closeAllForms === 'function') {
+            closeAllForms();
+        }
+        
         if (sesameActionsDisabled) {
             alert('لا يمكن تحويل السمسم حالياً لعدم توفر جدول السمسم.');
             return;
         }
+        
         const qty = parseFloat(quantity) || 0;
-        document.getElementById('convert_sesame_stock_id').value = id;
-        document.getElementById('convert_sesame_supplier').value = supplier;
-        document.getElementById('convert_sesame_available').value = qty.toFixed(3) + ' كجم';
-        document.getElementById('convert_sesame_max_qty').textContent = qty.toFixed(3);
-        const qtyInput = document.getElementById('convert_sesame_quantity');
-        qtyInput.value = '';
-        qtyInput.max = qty > 0 ? qty.toFixed(3) : null;
-        qtyInput.disabled = qty <= 0;
-        document.getElementById('convert_tahini_expected').value = '0.000';
+        const isMobileDevice = isMobile();
         
-        // حساب الكمية المتوقعة عند تغيير الكمية
-        qtyInput.addEventListener('input', function() {
-            const inputQty = parseFloat(this.value) || 0;
-            if (inputQty > 0 && inputQty <= qty) {
-                const wastageRate = 0.002; // 0.2%
-                const tahiniQty = inputQty * (1 - wastageRate);
-                document.getElementById('convert_tahini_expected').value = tahiniQty.toFixed(3);
-            } else {
-                document.getElementById('convert_tahini_expected').value = '0.000';
+        if (isMobileDevice) {
+            // على الموبايل: استخدام Card
+            const card = document.getElementById('convertToTahiniCard');
+            if (!card) return;
+            
+            const stockIdInput = document.getElementById('convert_sesame_stock_id_card');
+            const supplierInput = document.getElementById('convert_sesame_supplier_card');
+            const availableInput = document.getElementById('convert_sesame_available_card');
+            const maxQtyEl = document.getElementById('convert_sesame_max_qty_card');
+            const qtyInput = document.getElementById('convert_sesame_quantity_card');
+            const expectedEl = document.getElementById('convert_tahini_expected_card');
+            
+            if (stockIdInput) stockIdInput.value = id;
+            if (supplierInput) supplierInput.value = supplier;
+            if (availableInput) availableInput.value = qty.toFixed(3) + ' كجم';
+            if (maxQtyEl) maxQtyEl.textContent = qty.toFixed(3);
+            if (qtyInput) {
+                qtyInput.value = '';
+                qtyInput.max = qty > 0 ? qty.toFixed(3) : null;
+                qtyInput.disabled = qty <= 0;
+                
+                // حساب الكمية المتوقعة عند تغيير الكمية
+                qtyInput.addEventListener('input', function() {
+                    const inputQty = parseFloat(this.value) || 0;
+                    if (inputQty > 0 && inputQty <= qty) {
+                        const wastageRate = 0.002; // 0.2%
+                        const tahiniQty = inputQty * (1 - wastageRate);
+                        if (expectedEl) expectedEl.value = tahiniQty.toFixed(3);
+                    } else {
+                        if (expectedEl) expectedEl.value = '0.000';
+                    }
+                });
             }
-        });
-        
-        const modal = new bootstrap.Modal(document.getElementById('convertToTahiniModal'));
-        modal.show();
+            if (expectedEl) expectedEl.value = '0.000';
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        } else {
+            // على الكمبيوتر: استخدام Modal
+            const stockIdInput = document.getElementById('convert_sesame_stock_id');
+            const supplierInput = document.getElementById('convert_sesame_supplier');
+            const availableInput = document.getElementById('convert_sesame_available');
+            const maxQtyEl = document.getElementById('convert_sesame_max_qty');
+            const qtyInput = document.getElementById('convert_sesame_quantity');
+            const expectedEl = document.getElementById('convert_tahini_expected');
+            
+            if (stockIdInput) stockIdInput.value = id;
+            if (supplierInput) supplierInput.value = supplier;
+            if (availableInput) availableInput.value = qty.toFixed(3) + ' كجم';
+            if (maxQtyEl) maxQtyEl.textContent = qty.toFixed(3);
+            if (qtyInput) {
+                qtyInput.value = '';
+                qtyInput.max = qty > 0 ? qty.toFixed(3) : null;
+                qtyInput.disabled = qty <= 0;
+                
+                // حساب الكمية المتوقعة عند تغيير الكمية
+                qtyInput.addEventListener('input', function() {
+                    const inputQty = parseFloat(this.value) || 0;
+                    if (inputQty > 0 && inputQty <= qty) {
+                        const wastageRate = 0.002; // 0.2%
+                        const tahiniQty = inputQty * (1 - wastageRate);
+                        if (expectedEl) expectedEl.value = tahiniQty.toFixed(3);
+                    } else {
+                        if (expectedEl) expectedEl.value = '0.000';
+                    }
+                });
+            }
+            if (expectedEl) expectedEl.value = '0.000';
+            
+            const modal = new bootstrap.Modal(document.getElementById('convertToTahiniModal'));
+            modal.show();
+        }
     }
 
     function openDamageModal(category, id, materialType, supplier, quantity) {
+        if (typeof closeAllForms === 'function') {
+            closeAllForms();
+        }
+        
         const qty = parseFloat(quantity) || 0;
-        document.getElementById('damage_material_category').value = category;
-        document.getElementById('damage_stock_id').value = id;
-        document.getElementById('damage_material_type').value = materialType;
-        document.getElementById('damage_supplier').value = supplier;
-        document.getElementById('damage_available').value = qty.toFixed(3) + ' كجم';
-        const qtyInput = document.getElementById('damage_quantity');
-        qtyInput.value = '';
-        qtyInput.max = qty > 0 ? qty.toFixed(3) : null;
-        qtyInput.disabled = qty <= 0;
-        document.getElementById('damage_reason').value = '';
-        document.getElementById('damage_submit').disabled = qty <= 0;
-        new bootstrap.Modal(document.getElementById('damageSesameTahiniModal')).show();
+        const isMobileDevice = isMobile();
+        
+        if (isMobileDevice) {
+            // على الموبايل: استخدام Card
+            const card = document.getElementById('damageSesameTahiniCard');
+            if (!card) return;
+            
+            const categoryInput = document.getElementById('damage_material_category_card');
+            const stockIdInput = document.getElementById('damage_stock_id_card');
+            const typeInput = document.getElementById('damage_material_type_card');
+            const supplierInput = document.getElementById('damage_supplier_card');
+            const availableInput = document.getElementById('damage_available_card');
+            const qtyInput = document.getElementById('damage_quantity_card');
+            const reasonInput = document.getElementById('damage_reason_card');
+            const submitBtn = document.getElementById('damage_submit_card');
+            
+            if (categoryInput) categoryInput.value = category;
+            if (stockIdInput) stockIdInput.value = id;
+            if (typeInput) typeInput.value = materialType;
+            if (supplierInput) supplierInput.value = supplier;
+            if (availableInput) availableInput.value = qty.toFixed(3) + ' كجم';
+            if (qtyInput) {
+                qtyInput.value = '';
+                qtyInput.max = qty > 0 ? qty.toFixed(3) : null;
+                qtyInput.disabled = qty <= 0;
+            }
+            if (reasonInput) reasonInput.value = '';
+            if (submitBtn) submitBtn.disabled = qty <= 0;
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        } else {
+            // على الكمبيوتر: استخدام Modal
+            if (categoryInput) categoryInput.value = category;
+            if (stockIdInput) stockIdInput.value = id;
+            if (typeInput) typeInput.value = materialType;
+            if (supplierInput) supplierInput.value = supplier;
+            
+            const availableInput = document.getElementById('damage_available');
+            const qtyInput = document.getElementById('damage_quantity');
+            const reasonInput = document.getElementById('damage_reason');
+            const submitBtn = document.getElementById('damage_submit');
+            
+            if (availableInput) availableInput.value = qty.toFixed(3) + ' كجم';
+            if (qtyInput) {
+                qtyInput.value = '';
+                qtyInput.max = qty > 0 ? qty.toFixed(3) : null;
+                qtyInput.disabled = qty <= 0;
+            }
+            if (reasonInput) reasonInput.value = '';
+            if (submitBtn) submitBtn.disabled = qty <= 0;
+            
+            new bootstrap.Modal(document.getElementById('damageSesameTahiniModal')).show();
+        }
+    }
+
+    // ===== دوال إغلاق Cards - السمسم والطحينة =====
+    function closeAddSesameCard() {
+        const card = document.getElementById('addSesameCard');
+        if (card) {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    }
+
+    function closeDamageSesameTahiniCard() {
+        const card = document.getElementById('damageSesameTahiniCard');
+        if (card) {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    }
+
+    function closeAddTahiniRemainderCard() {
+        const card = document.getElementById('addTahiniRemainderCard');
+        if (card) {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    }
+
+    function closeConvertToTahiniCard() {
+        const card = document.getElementById('convertToTahiniCard');
+        if (card) {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    }
+
+    // دالة فتح نموذج إضافة سمسم
+    function showAddSesameModal() {
+        if (typeof closeAllForms === 'function') {
+            closeAllForms();
+        }
+        
+        const isMobileDevice = isMobile();
+        
+        if (isMobileDevice) {
+            const card = document.getElementById('addSesameCard');
+            if (card) {
+                card.style.display = 'block';
+                setTimeout(function() {
+                    scrollToElement(card);
+                }, 50);
+            }
+        } else {
+            const modal = document.getElementById('addSesameModal');
+            if (modal) {
+                const modalInstance = new bootstrap.Modal(modal);
+                modalInstance.show();
+            }
+        }
+    }
+
+    // دالة فتح نموذج إضافة باقي عملية التحويل
+    function showAddTahiniRemainderModal() {
+        if (typeof closeAllForms === 'function') {
+            closeAllForms();
+        }
+        
+        const isMobileDevice = isMobile();
+        
+        if (isMobileDevice) {
+            const card = document.getElementById('addTahiniRemainderCard');
+            if (card) {
+                card.style.display = 'block';
+                setTimeout(function() {
+                    scrollToElement(card);
+                }, 50);
+            }
+        } else {
+            const modal = document.getElementById('addTahiniRemainderModal');
+            if (modal) {
+                const modalInstance = new bootstrap.Modal(modal);
+                modalInstance.show();
+            }
+        }
     }
     </script>
     

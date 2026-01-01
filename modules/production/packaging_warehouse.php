@@ -2872,7 +2872,7 @@ $packagingReportGeneratedAt = $packagingReport['generated_at'] ?? date('Y-m-d H:
 </div>
 <?php endif; ?>
 
-<div class="modal fade" id="packagingReportModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade d-none d-md-block" id="packagingReportModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-md">
         <div class="modal-content">
             <div class="modal-header bg-dark text-white">
@@ -2914,7 +2914,7 @@ $packagingReportGeneratedAt = $packagingReport['generated_at'] ?? date('Y-m-d H:
     </div>
 </div>
 
-<div class="modal fade" id="addQuantityModal" tabindex="-1">
+<div class="modal fade d-none d-md-block" id="addQuantityModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <form method="POST" id="addQuantityForm">
@@ -2992,7 +2992,7 @@ $packagingReportGeneratedAt = $packagingReport['generated_at'] ?? date('Y-m-d H:
 </div>
 
 <!-- Modal تسجيل تالف -->
-<div class="modal fade" id="recordDamageModal" tabindex="-1">
+<div class="modal fade d-none d-md-block" id="recordDamageModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <form method="POST" id="recordDamageForm">
@@ -3044,6 +3044,170 @@ $packagingReportGeneratedAt = $packagingReport['generated_at'] ?? date('Y-m-d H:
                 </div>
             </form>
         </div>
+    </div>
+</div>
+
+<!-- Card تقرير مخزن أدوات التعبئة - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="packagingReportCard" style="display: none;">
+    <div class="card-header bg-dark text-white">
+        <h5 class="mb-0"><i class="bi bi-clipboard-data me-2"></i>خيارات تقرير مخزن أدوات التعبئة</h5>
+    </div>
+    <div class="card-body">
+        <?php if ($packagingReportViewUrl): ?>
+            <p class="mb-3 text-muted">
+                تم حفظ نسخة من التقرير في مساحة التخزين الآمنة بتاريخ
+                <span class="fw-semibold"><?php echo htmlspecialchars($packagingReportGeneratedAt, ENT_QUOTES, 'UTF-8'); ?></span>.
+                اختر الإجراء المطلوب أدناه.
+            </p>
+            <div class="d-grid gap-2">
+                <button type="button" class="btn btn-primary" id="packagingReportViewBtnCard">
+                    <i class="bi bi-display me-2"></i>
+                    عرض التقرير داخل المتصفح
+                </button>
+                <button type="button" class="btn btn-outline-primary" id="packagingReportPrintBtnCard">
+                    <i class="bi bi-printer me-2"></i>
+                    طباعة / حفظ التقرير كـ PDF
+                </button>
+            </div>
+            <div class="alert alert-light border mt-3 mb-0 small text-muted">
+                <i class="bi bi-shield-lock me-1"></i>
+                يتم فتح التقرير عبر `view.php` لضمان الحماية ومنع خطأ Forbidden.
+            </div>
+        <?php else: ?>
+            <div class="alert alert-warning mb-0">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                تعذّر حفظ التقرير تلقائياً. يرجى التأكد من صلاحيات الكتابة على مجلد التخزين ثم تحديث الصفحة.
+            </div>
+        <?php endif; ?>
+        <div class="d-flex gap-2 mt-3">
+            <button type="button" class="btn btn-secondary" onclick="closePackagingReportCard()">إغلاق</button>
+        </div>
+    </div>
+</div>
+
+<!-- Card إضافة كمية - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="addQuantityCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>إضافة كمية لأداة التعبئة</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="addQuantityFormCard">
+            <input type="hidden" name="action" value="add_packaging_quantity">
+            <input type="hidden" name="material_id" id="add_quantity_material_id_card">
+
+            <div class="mb-3">
+                <label class="form-label fw-bold">أداة التعبئة</label>
+                <div class="form-control-plaintext" id="add_quantity_material_name_card">-</div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-bold">الكمية الحالية</label>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-secondary" id="add_quantity_existing_card">0</span>
+                    <span id="add_quantity_unit_card" class="text-muted small"></span>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-bold">الكمية المضافة <span class="text-danger">*</span></label>
+                <div class="input-group">
+                    <input type="number"
+                           step="0.01"
+                           min="0.01"
+                           class="form-control"
+                           name="additional_quantity"
+                           id="add_quantity_input_card"
+                           required
+                           placeholder="0.00">
+                    <span class="input-group-text" id="add_quantity_unit_suffix_card"></span>
+                </div>
+                <small class="text-muted">سيتم جمع الكمية المدخلة مع الموجود حالياً في المخزون.</small>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-bold">المورد <span class="text-danger">*</span></label>
+                <select class="form-select" name="supplier_id" id="add_quantity_supplier_id_card" required>
+                    <option value="">اختر المورد</option>
+                    <?php foreach ($packagingSuppliers as $supplier): ?>
+                        <option value="<?php echo $supplier['id']; ?>" <?php echo ($defaultSupplierId === $supplier['id']) ? 'selected' : ''; ?>>
+                            <?php echo htmlspecialchars($supplier['name']); ?>
+                            <?php if (!empty($supplier['supplier_code'])): ?>
+                                (<?php echo htmlspecialchars($supplier['supplier_code']); ?>)
+                            <?php endif; ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <small class="text-muted">سيتم تسجيل هذه الإضافة في سجل توريدات المورد خلال الشهر الحالي.</small>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-bold">ملاحظات (اختياري)</label>
+                <textarea class="form-control"
+                          name="notes"
+                          rows="3"
+                          maxlength="500"
+                          placeholder="مثال: إضافة من شحنة جديدة أو تصحيح جرد."></textarea>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle me-2"></i>حفظ الكمية
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeAddQuantityCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card تسجيل تالف - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="recordDamageCard" style="display: none;">
+    <div class="card-header bg-danger text-white">
+        <h5 class="mb-0"><i class="bi bi-exclamation-octagon me-2"></i>تسجيل تالف لأداة التعبئة</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="recordDamageFormCard">
+            <input type="hidden" name="action" value="record_packaging_damage">
+            <input type="hidden" name="material_id" id="damage_material_id_card">
+
+            <div class="mb-3">
+                <label class="form-label fw-bold">أداة التعبئة</label>
+                <div class="form-control-plaintext" id="damage_material_name_card">-</div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-bold">الكمية الحالية</label>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-secondary" id="damage_existing_card">0</span>
+                    <span id="damage_unit_card" class="text-muted small"></span>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-bold">الكمية التالفة <span class="text-danger">*</span></label>
+                <div class="input-group">
+                    <input type="number"
+                           step="0.01"
+                           min="0.01"
+                           class="form-control"
+                           name="damaged_quantity"
+                           id="damage_quantity_input_card"
+                           required
+                           placeholder="0.00">
+                    <span class="input-group-text" id="damage_unit_suffix_card"></span>
+                </div>
+                <small class="text-muted">سيتم خصم الكمية التالفة من المخزون الحالي.</small>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-bold">سبب التلف <span class="text-danger">*</span></label>
+                <textarea class="form-control" name="reason" id="damage_reason_input_card" rows="3" required placeholder="اذكر سبب التلف"></textarea>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-danger">تسجيل التالف</button>
+                <button type="button" class="btn btn-secondary" onclick="closeRecordDamageCard()">إلغاء</button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -3267,12 +3431,50 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         } else {
             reportButton.addEventListener('click', () => {
-                if (!reportModalElement || typeof bootstrap === 'undefined') {
-                    openInNewTab(viewUrl);
-                    return;
+                if (typeof closeAllForms === 'function') {
+                    closeAllForms();
                 }
-                const instance = bootstrap.Modal.getOrCreateInstance(reportModalElement);
-                instance.show();
+                
+                const isMobileDevice = isMobile();
+                
+                if (isMobileDevice) {
+                    // على الموبايل: استخدام Card
+                    const card = document.getElementById('packagingReportCard');
+                    if (card) {
+                        card.style.display = 'block';
+                        setTimeout(function() {
+                            scrollToElement(card);
+                        }, 50);
+                        
+                        // ربط الأزرار في Card
+                        const viewBtnCard = document.getElementById('packagingReportViewBtnCard');
+                        const printBtnCard = document.getElementById('packagingReportPrintBtnCard');
+                        
+                        if (viewBtnCard) {
+                            viewBtnCard.onclick = () => {
+                                openInNewTab(viewUrl);
+                                closePackagingReportCard();
+                            };
+                        }
+                        
+                        if (printBtnCard) {
+                            printBtnCard.onclick = () => {
+                                openInNewTab(resolvedPrintUrl);
+                                closePackagingReportCard();
+                            };
+                        }
+                    } else {
+                        openInNewTab(viewUrl);
+                    }
+                } else {
+                    // على الكمبيوتر: استخدام Modal
+                    if (!reportModalElement || typeof bootstrap === 'undefined') {
+                        openInNewTab(viewUrl);
+                        return;
+                    }
+                    const instance = bootstrap.Modal.getOrCreateInstance(reportModalElement);
+                    instance.show();
+                }
             });
 
             if (viewButton) {
@@ -3415,24 +3617,63 @@ async function usePackagingMaterial(trigger) {
     }
 }
 
+// ===== دوال أساسية للموبايل =====
+function isMobile() {
+    return window.innerWidth <= 768;
+}
+
+function scrollToElement(element) {
+    if (!element) return;
+    
+    setTimeout(function() {
+        const rect = element.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const elementTop = rect.top + scrollTop;
+        const offset = 80;
+        
+        requestAnimationFrame(function() {
+            window.scrollTo({
+                top: Math.max(0, elementTop - offset),
+                behavior: 'smooth'
+            });
+        });
+    }, 200);
+}
+
+function closeAllForms() {
+    const cards = [
+        'packagingReportCard',
+        'addQuantityCard',
+        'recordDamageCard'
+    ];
+    cards.forEach(function(cardId) {
+        const card = document.getElementById(cardId);
+        if (card && card.style.display !== 'none') {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    });
+    
+    const modals = [
+        'packagingReportModal',
+        'addQuantityModal',
+        'recordDamageModal'
+    ];
+    modals.forEach(function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            if (modalInstance) modalInstance.hide();
+        }
+    });
+}
+
 function openAddQuantityModal(trigger) {
-    const modalElement = document.getElementById('addQuantityModal');
-    const form = document.getElementById('addQuantityForm');
-    if (!modalElement || !form) {
-        return;
+    if (typeof closeAllForms === 'function') {
+        closeAllForms();
     }
-
-    const materialIdInput = document.getElementById('add_quantity_material_id');
-    const nameElement = document.getElementById('add_quantity_material_name');
-    const existingElement = document.getElementById('add_quantity_existing');
-    const unitElement = document.getElementById('add_quantity_unit');
-    const unitSuffix = document.getElementById('add_quantity_unit_suffix');
-    const quantityInput = document.getElementById('add_quantity_input');
-
-    if (form) {
-        form.reset();
-    }
-
+    
     const dataset = trigger?.dataset || {};
     const materialId = dataset.id || '';
     const materialName = dataset.name || '-';
@@ -3443,35 +3684,94 @@ function openAddQuantityModal(trigger) {
         console.warn('Material id is missing for add quantity modal trigger.');
         return;
     }
+    
+    const isMobileDevice = isMobile();
+    
+    if (isMobileDevice) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('addQuantityCard');
+        const form = document.getElementById('addQuantityFormCard');
+        if (!card || !form) {
+            return;
+        }
+        
+        form.reset();
+        
+        const materialIdInput = document.getElementById('add_quantity_material_id_card');
+        const nameElement = document.getElementById('add_quantity_material_name_card');
+        const existingElement = document.getElementById('add_quantity_existing_card');
+        const unitElement = document.getElementById('add_quantity_unit_card');
+        const unitSuffix = document.getElementById('add_quantity_unit_suffix_card');
+        const quantityInput = document.getElementById('add_quantity_input_card');
+        
+        if (materialIdInput) materialIdInput.value = materialId;
+        if (nameElement) nameElement.textContent = materialName;
+        if (existingElement) {
+            existingElement.textContent = existingQuantity.toLocaleString('ar-EG', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
+        if (unitElement) unitElement.textContent = unit;
+        if (unitSuffix) unitSuffix.textContent = unit;
+        if (quantityInput) quantityInput.value = '';
+        
+        card.style.display = 'block';
+        setTimeout(function() {
+            scrollToElement(card);
+            if (quantityInput) {
+                quantityInput.focus();
+                quantityInput.select();
+            }
+        }, 50);
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        const modalElement = document.getElementById('addQuantityModal');
+        const form = document.getElementById('addQuantityForm');
+        if (!modalElement || !form) {
+            return;
+        }
 
-    materialIdInput.value = materialId;
-    nameElement.textContent = materialName;
-    existingElement.textContent = existingQuantity.toLocaleString('ar-EG', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    });
-    unitElement.textContent = unit;
-    unitSuffix.textContent = unit;
-    quantityInput.value = '';
+        const materialIdInput = document.getElementById('add_quantity_material_id');
+        const nameElement = document.getElementById('add_quantity_material_name');
+        const existingElement = document.getElementById('add_quantity_existing');
+        const unitElement = document.getElementById('add_quantity_unit');
+        const unitSuffix = document.getElementById('add_quantity_unit_suffix');
+        const quantityInput = document.getElementById('add_quantity_input');
 
-    const modal = new bootstrap.Modal(modalElement);
-    modal.show();
+        if (form) {
+            form.reset();
+        }
 
-    setTimeout(() => {
-        quantityInput.focus();
-        quantityInput.select();
-    }, 250);
+        if (materialIdInput) materialIdInput.value = materialId;
+        if (nameElement) nameElement.textContent = materialName;
+        if (existingElement) {
+            existingElement.textContent = existingQuantity.toLocaleString('ar-EG', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
+        if (unitElement) unitElement.textContent = unit;
+        if (unitSuffix) unitSuffix.textContent = unit;
+        if (quantityInput) quantityInput.value = '';
+
+        const modal = new bootstrap.Modal(modalElement);
+        modal.show();
+
+        setTimeout(() => {
+            if (quantityInput) {
+                quantityInput.focus();
+                quantityInput.select();
+            }
+        }, 250);
+    }
 }
 
 function openRecordDamageModal(trigger) {
-    const modalElement = document.getElementById('recordDamageModal');
-    const form = document.getElementById('recordDamageForm');
-    if (!modalElement || !form) {
-        return;
+    if (typeof closeAllForms === 'function') {
+        closeAllForms();
     }
-
-    form.reset();
-
+    
     const dataset = trigger?.dataset || {};
     const materialId = dataset.id || '';
     const materialName = dataset.name || '-';
@@ -3482,25 +3782,115 @@ function openRecordDamageModal(trigger) {
         console.warn('Material id is missing for damage modal trigger.');
         return;
     }
+    
+    const isMobileDevice = isMobile();
+    
+    if (isMobileDevice) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('recordDamageCard');
+        const form = document.getElementById('recordDamageFormCard');
+        if (!card || !form) {
+            return;
+        }
+        
+        form.reset();
+        
+        const materialIdInput = document.getElementById('damage_material_id_card');
+        const nameElement = document.getElementById('damage_material_name_card');
+        const existingElement = document.getElementById('damage_existing_card');
+        const unitElement = document.getElementById('damage_unit_card');
+        const unitSuffix = document.getElementById('damage_unit_suffix_card');
+        const quantityInput = document.getElementById('damage_quantity_input_card');
+        const reasonInput = document.getElementById('damage_reason_input_card');
+        
+        if (materialIdInput) materialIdInput.value = materialId;
+        if (nameElement) nameElement.textContent = materialName;
+        if (existingElement) {
+            existingElement.textContent = existingQuantity.toLocaleString('ar-EG', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
+        if (unitElement) unitElement.textContent = unit;
+        if (unitSuffix) unitSuffix.textContent = unit;
+        if (quantityInput) quantityInput.value = '';
+        if (reasonInput) reasonInput.value = '';
+        
+        card.style.display = 'block';
+        setTimeout(function() {
+            scrollToElement(card);
+            if (quantityInput) {
+                quantityInput.focus();
+                quantityInput.select();
+            }
+        }, 50);
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        const modalElement = document.getElementById('recordDamageModal');
+        const form = document.getElementById('recordDamageForm');
+        if (!modalElement || !form) {
+            return;
+        }
 
-    document.getElementById('damage_material_id').value = materialId;
-    document.getElementById('damage_material_name').textContent = materialName;
-    document.getElementById('damage_existing').textContent = existingQuantity.toLocaleString('ar-EG', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    });
-    document.getElementById('damage_unit').textContent = unit;
-    document.getElementById('damage_unit_suffix').textContent = unit;
-    document.getElementById('damage_quantity_input').value = '';
-    document.getElementById('damage_reason_input').value = '';
+        form.reset();
 
-    const modal = new bootstrap.Modal(modalElement);
-    modal.show();
+        const materialIdInput = document.getElementById('damage_material_id');
+        const nameElement = document.getElementById('damage_material_name');
+        const existingElement = document.getElementById('damage_existing');
+        const unitElement = document.getElementById('damage_unit');
+        const unitSuffix = document.getElementById('damage_unit_suffix');
+        const quantityInput = document.getElementById('damage_quantity_input');
+        const reasonInput = document.getElementById('damage_reason_input');
 
-    setTimeout(() => {
-        document.getElementById('damage_quantity_input').focus();
-        document.getElementById('damage_quantity_input').select();
-    }, 250);
+        if (materialIdInput) materialIdInput.value = materialId;
+        if (nameElement) nameElement.textContent = materialName;
+        if (existingElement) {
+            existingElement.textContent = existingQuantity.toLocaleString('ar-EG', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
+        if (unitElement) unitElement.textContent = unit;
+        if (unitSuffix) unitSuffix.textContent = unit;
+        if (quantityInput) quantityInput.value = '';
+        if (reasonInput) reasonInput.value = '';
+
+        const modal = new bootstrap.Modal(modalElement);
+        modal.show();
+
+        setTimeout(() => {
+            if (quantityInput) {
+                quantityInput.focus();
+                quantityInput.select();
+            }
+        }, 250);
+    }
+}
+
+// ===== دوال إغلاق Cards =====
+function closePackagingReportCard() {
+    const card = document.getElementById('packagingReportCard');
+    if (card) {
+        card.style.display = 'none';
+    }
+}
+
+function closeAddQuantityCard() {
+    const card = document.getElementById('addQuantityCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closeRecordDamageCard() {
+    const card = document.getElementById('recordDamageCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
 }
 
 function viewMaterialDetails(materialId) {

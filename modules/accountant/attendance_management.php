@@ -534,7 +534,7 @@ $backUrl = '?page=attendance_management&month=' . urlencode($selectedMonth);
 
 <?php if ($selectedUserId > 0 && in_array($currentUser['role'], ['manager', 'accountant'])): ?>
 <!-- Modal تعديل العدادات -->
-<div class="modal fade" id="editCountsModal" tabindex="-1" aria-labelledby="editCountsModalLabel" aria-hidden="true">
+<div class="modal fade d-none d-md-block" id="editCountsModal" tabindex="-1" aria-labelledby="editCountsModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -568,6 +568,40 @@ $backUrl = '?page=attendance_management&month=' . urlencode($selectedMonth);
                 </div>
             </form>
         </div>
+    </div>
+</div>
+
+<!-- Card تعديل العدادات - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="editCountsCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-pencil me-2"></i>تعديل العدادات
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="editCountsFormCard">
+            <input type="hidden" name="action" value="update_counts">
+            <input type="hidden" name="user_id" id="countsUserIdCard">
+            
+            <div class="mb-3">
+                <label for="delay_count_card" class="form-label">عداد تأخيرات الحضور الشهري</label>
+                <input type="number" class="form-control" id="delay_count_card" name="delay_count" min="0" required>
+                <small class="text-muted">عدد حالات التأخير في الحضور لهذا الشهر</small>
+            </div>
+            
+            <div class="mb-3">
+                <label for="warning_count_card" class="form-label">عداد إنذارات نسيان الانصراف</label>
+                <input type="number" class="form-control" id="warning_count_card" name="warning_count" min="0" required>
+                <small class="text-muted">عدد إنذارات نسيان تسجيل الانصراف لهذا الشهر</small>
+            </div>
+            
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-lg me-2"></i>حفظ التغييرات
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeEditCountsCard()">إلغاء</button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -623,32 +657,132 @@ $backUrl = '?page=attendance_management&month=' . urlencode($selectedMonth);
 </div>
 
 <script>
+// ===== دوال أساسية للموبايل =====
+function isMobile() {
+    return window.innerWidth <= 768;
+}
+
+function scrollToElement(element) {
+    if (!element) return;
+    
+    setTimeout(function() {
+        const rect = element.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const elementTop = rect.top + scrollTop;
+        const offset = 80;
+        
+        requestAnimationFrame(function() {
+            window.scrollTo({
+                top: Math.max(0, elementTop - offset),
+                behavior: 'smooth'
+            });
+        });
+    }, 200);
+}
+
+function closeAllForms() {
+    const cards = ['editCountsCard'];
+    cards.forEach(function(cardId) {
+        const card = document.getElementById(cardId);
+        if (card && card.style.display !== 'none') {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    });
+    
+    const modals = ['editCountsModal'];
+    modals.forEach(function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            if (modalInstance) modalInstance.hide();
+        }
+    });
+}
+
 function editCounts(userId, delayCount, warningCount) {
-    document.getElementById('countsUserId').value = userId;
-    document.getElementById('delay_count').value = delayCount;
-    document.getElementById('warning_count').value = warningCount;
-    
-    // إضافة معاملات GET للنموذج
-    const form = document.getElementById('editCountsForm');
-    const month = new URLSearchParams(window.location.search).get('month') || '<?php echo date('Y-m'); ?>';
-    const actionInput = form.querySelector('input[name="action"]');
-    const userIdInput = form.querySelector('input[name="user_id"]');
-    
-    // إضافة hidden inputs للاحتفاظ بالمعاملات عند الإرسال
-    let monthInput = form.querySelector('input[name="month"]');
-    if (!monthInput) {
-        monthInput = document.createElement('input');
-        monthInput.type = 'hidden';
-        monthInput.name = 'month';
-        form.appendChild(monthInput);
+    if (typeof closeAllForms === 'function') {
+        closeAllForms();
     }
-    monthInput.value = month;
     
-    // إضافة user_id للـ GET parameters عند الإعادة التوجيه
-    form.action = window.location.pathname + '?page=attendance_management&month=' + encodeURIComponent(month) + '&user_id=' + userId;
+    const month = new URLSearchParams(window.location.search).get('month') || '<?php echo date('Y-m'); ?>';
+    const isMobileDevice = isMobile();
     
-    const modal = new bootstrap.Modal(document.getElementById('editCountsModal'));
-    modal.show();
+    if (isMobileDevice) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('editCountsCard');
+        const form = document.getElementById('editCountsFormCard');
+        if (!card || !form) {
+            return;
+        }
+        
+        const userIdInput = document.getElementById('countsUserIdCard');
+        const delayCountInput = document.getElementById('delay_count_card');
+        const warningCountInput = document.getElementById('warning_count_card');
+        
+        if (userIdInput) userIdInput.value = userId;
+        if (delayCountInput) delayCountInput.value = delayCount;
+        if (warningCountInput) warningCountInput.value = warningCount;
+        
+        // إضافة hidden inputs للاحتفاظ بالمعاملات عند الإرسال
+        let monthInput = form.querySelector('input[name="month"]');
+        if (!monthInput) {
+            monthInput = document.createElement('input');
+            monthInput.type = 'hidden';
+            monthInput.name = 'month';
+            form.appendChild(monthInput);
+        }
+        monthInput.value = month;
+        
+        // إضافة user_id للـ GET parameters عند الإعادة التوجيه
+        form.action = window.location.pathname + '?page=attendance_management&month=' + encodeURIComponent(month) + '&user_id=' + userId;
+        
+        card.style.display = 'block';
+        setTimeout(function() {
+            scrollToElement(card);
+        }, 50);
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        const modalElement = document.getElementById('editCountsModal');
+        const form = document.getElementById('editCountsForm');
+        if (!modalElement || !form) {
+            return;
+        }
+        
+        const userIdInput = document.getElementById('countsUserId');
+        const delayCountInput = document.getElementById('delay_count');
+        const warningCountInput = document.getElementById('warning_count');
+        
+        if (userIdInput) userIdInput.value = userId;
+        if (delayCountInput) delayCountInput.value = delayCount;
+        if (warningCountInput) warningCountInput.value = warningCount;
+        
+        // إضافة hidden inputs للاحتفاظ بالمعاملات عند الإرسال
+        let monthInput = form.querySelector('input[name="month"]');
+        if (!monthInput) {
+            monthInput = document.createElement('input');
+            monthInput.type = 'hidden';
+            monthInput.name = 'month';
+            form.appendChild(monthInput);
+        }
+        monthInput.value = month;
+        
+        // إضافة user_id للـ GET parameters عند الإعادة التوجيه
+        form.action = window.location.pathname + '?page=attendance_management&month=' + encodeURIComponent(month) + '&user_id=' + userId;
+        
+        const modal = new bootstrap.Modal(modalElement);
+        modal.show();
+    }
+}
+
+function closeEditCountsCard() {
+    const card = document.getElementById('editCountsCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
 }
 
 function editPermissions(userId, canCheckIn, canCheckOut) {

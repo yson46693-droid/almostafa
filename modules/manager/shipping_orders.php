@@ -3383,6 +3383,14 @@ function closeAllForms() {
     });
     
     const modals = ['addShippingCompanyModal', 'addLocalCustomerModal', 'deliveryModal'];
+    
+    // إضافة deliveryCard
+    const deliveryCard = document.getElementById('deliveryCard');
+    if (deliveryCard && deliveryCard.style.display !== 'none') {
+        deliveryCard.style.display = 'none';
+        const form = deliveryCard.querySelector('form');
+        if (form) form.reset();
+    }
     modals.forEach(function(modalId) {
         const modal = document.getElementById(modalId);
         if (modal) {
@@ -3439,38 +3447,106 @@ function showDeliveryModal(button) {
     
     closeAllForms();
     
-    // هذا المودال معقد، لذا سنستخدم Modal على جميع الأجهزة
-    const modal = document.getElementById('deliveryModal');
-    if (modal) {
-        // نسخ البيانات من data attributes
-        const orderId = button.getAttribute('data-order-id');
-        const orderNumber = button.getAttribute('data-order-number');
-        const customerId = button.getAttribute('data-customer-id');
-        const customerName = button.getAttribute('data-customer-name');
-        const customerBalance = button.getAttribute('data-customer-balance');
-        const totalAmount = button.getAttribute('data-total-amount');
-        const shippingCompanyName = button.getAttribute('data-shipping-company-name');
-        const companyBalance = button.getAttribute('data-company-balance');
+    // نسخ البيانات من data attributes
+    const orderId = button.getAttribute('data-order-id');
+    const orderNumber = button.getAttribute('data-order-number');
+    const customerId = button.getAttribute('data-customer-id');
+    const customerName = button.getAttribute('data-customer-name');
+    const customerBalance = button.getAttribute('data-customer-balance');
+    const totalAmount = button.getAttribute('data-total-amount');
+    const shippingCompanyName = button.getAttribute('data-shipping-company-name');
+    const companyBalance = button.getAttribute('data-company-balance');
+    
+    const isMobileDevice = isMobile();
+    
+    if (isMobileDevice) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('deliveryCard');
+        const form = document.getElementById('deliveryFormCard');
+        if (!card || !form) {
+            return;
+        }
         
-        // تعيين القيم في Modal (إذا كانت العناصر موجودة)
-        const orderIdInput = document.getElementById('modal_order_id');
-        const orderNumberEl = document.getElementById('modal_order_number');
-        const shippingCompanyEl = document.getElementById('modal_shipping_company');
-        const companyBalanceEl = document.getElementById('modal_company_balance');
-        const customerNameEl = document.getElementById('modal_customer_name');
-        const customerBalanceEl = document.getElementById('modal_customer_balance');
-        const totalAmountEl = document.getElementById('modal_total_amount');
+        const orderIdInput = document.getElementById('card_order_id');
+        const orderNumberEl = document.getElementById('card_order_number');
+        const shippingCompanyEl = document.getElementById('card_shipping_company');
+        const companyBalanceEl = document.getElementById('card_company_balance');
+        const customerNameEl = document.getElementById('card_customer_name');
+        const customerBalanceEl = document.getElementById('card_customer_balance');
+        const totalAmountEl = document.getElementById('card_total_amount');
+        const collectedAmountInput = document.getElementById('collected_amount_card');
+        const balanceWarning = document.getElementById('balance_warning_card');
+        const balanceWarningText = document.getElementById('balance_warning_text_card');
         
         if (orderIdInput) orderIdInput.value = orderId || '';
-        if (orderNumberEl) orderNumberEl.textContent = orderNumber || '';
+        if (orderNumberEl) orderNumberEl.textContent = '#' + (orderNumber || '');
         if (shippingCompanyEl) shippingCompanyEl.textContent = shippingCompanyName || '';
-        if (companyBalanceEl) companyBalanceEl.textContent = (parseFloat(companyBalance) || 0).toFixed(2) + ' ج.م';
+        if (companyBalanceEl) companyBalanceEl.textContent = (parseFloat(companyBalance) || 0).toLocaleString('ar-EG', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ج.م';
         if (customerNameEl) customerNameEl.textContent = customerName || '';
-        if (customerBalanceEl) customerBalanceEl.textContent = (parseFloat(customerBalance) || 0).toFixed(2) + ' ج.م';
-        if (totalAmountEl) totalAmountEl.textContent = (parseFloat(totalAmount) || 0).toFixed(2) + ' ج.م';
+        if (customerBalanceEl) customerBalanceEl.textContent = (parseFloat(customerBalance) || 0).toLocaleString('ar-EG', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ج.م';
+        if (totalAmountEl) totalAmountEl.textContent = (parseFloat(totalAmount) || 0).toLocaleString('ar-EG', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ج.م';
+        if (collectedAmountInput) collectedAmountInput.value = '';
+        if (balanceWarning) balanceWarning.style.display = 'none';
         
-        const modalInstance = new bootstrap.Modal(modal);
-        modalInstance.show();
+        // إضافة event listener للتحقق من الرصيد
+        if (collectedAmountInput && balanceWarning && balanceWarningText) {
+            const updateBalanceWarning = function() {
+                const collected = parseFloat(collectedAmountInput.value) || 0;
+                const customerBal = parseFloat(customerBalance) || 0;
+                const total = parseFloat(totalAmount) || 0;
+                const newBalance = customerBal + total - collected;
+                
+                if (newBalance < 0) {
+                    balanceWarningText.textContent = 'تحذير: الرصيد الجديد للعميل سيكون سالباً (' + Math.abs(newBalance).toLocaleString('ar-EG', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ج.م)';
+                    balanceWarning.style.display = 'block';
+                } else {
+                    balanceWarning.style.display = 'none';
+                }
+            };
+            
+            // إزالة الـ listeners القديمة وإضافة جديدة
+            const newInput = collectedAmountInput.cloneNode(true);
+            collectedAmountInput.parentNode.replaceChild(newInput, collectedAmountInput);
+            newInput.addEventListener('input', updateBalanceWarning);
+        }
+        
+        card.style.display = 'block';
+        setTimeout(function() {
+            scrollToElement(card);
+        }, 50);
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        const modal = document.getElementById('deliveryModal');
+        if (modal) {
+            // تعيين القيم في Modal (إذا كانت العناصر موجودة)
+            const orderIdInput = document.getElementById('modal_order_id');
+            const orderNumberEl = document.getElementById('modal_order_number');
+            const shippingCompanyEl = document.getElementById('modal_shipping_company');
+            const companyBalanceEl = document.getElementById('modal_company_balance');
+            const customerNameEl = document.getElementById('modal_customer_name');
+            const customerBalanceEl = document.getElementById('modal_customer_balance');
+            const totalAmountEl = document.getElementById('modal_total_amount');
+            
+            if (orderIdInput) orderIdInput.value = orderId || '';
+            if (orderNumberEl) orderNumberEl.textContent = '#' + (orderNumber || '');
+            if (shippingCompanyEl) shippingCompanyEl.textContent = shippingCompanyName || '';
+            if (companyBalanceEl) companyBalanceEl.textContent = (parseFloat(companyBalance) || 0).toLocaleString('ar-EG', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ج.م';
+            if (customerNameEl) customerNameEl.textContent = customerName || '';
+            if (customerBalanceEl) customerBalanceEl.textContent = (parseFloat(customerBalance) || 0).toLocaleString('ar-EG', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ج.م';
+            if (totalAmountEl) totalAmountEl.textContent = (parseFloat(totalAmount) || 0).toLocaleString('ar-EG', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ج.م';
+            
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+function closeDeliveryCard() {
+    const card = document.getElementById('deliveryCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
     }
 }
 
@@ -3478,6 +3554,15 @@ function showDeliveryModal(button) {
 
 function closeAddShippingCompanyCard() {
     const card = document.getElementById('addShippingCompanyCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closeDeliveryCard() {
+    const card = document.getElementById('deliveryCard');
     if (card) {
         card.style.display = 'none';
         const form = card.querySelector('form');
