@@ -2961,6 +2961,14 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
         #receiveFromSalesRepModal {
             display: none !important;
         }
+        
+        /* السماح بإظهار Cards على الموبايل عند الحاجة */
+        #batchDetailsCard.show-card,
+        #printBarcodesCard.show-card,
+        #transferExternalProductCard.show-card,
+        #addExternalProductCard.show-card {
+            display: block !important;
+        }
     }
     
     /* إخفاء Card على الكمبيوتر */
@@ -5624,11 +5632,20 @@ if (!window.transferFormInitialized) {
         }
         
         // إغلاق جميع النماذج المفتوحة أولاً
-        closeAllForms();
+        if (typeof window.closeAllForms === 'function') {
+            window.closeAllForms();
+        } else if (typeof closeAllForms === 'function') {
+            closeAllForms();
+        }
         
-        if (isMobile()) {
+        const isMobileDevice = (typeof window.isMobile === 'function' ? window.isMobile() : (typeof isMobile === 'function' ? isMobile() : window.innerWidth <= 768));
+        
+        console.log('showBatchDetailsModal - isMobileDevice:', isMobileDevice, 'window.innerWidth:', window.innerWidth);
+        
+        if (isMobileDevice) {
             // على الموبايل: استخدام Card
             const card = document.getElementById('batchDetailsCard');
+            console.log('batchDetailsCard element:', card);
             if (!card) {
                 console.error('batchDetailsCard not found');
                 return;
@@ -5646,6 +5663,7 @@ if (!window.transferFormInitialized) {
                 renderBatchDetailsCard(cachedData);
                 if (contentWrapper) contentWrapper.classList.remove('d-none');
                 card.style.display = 'block';
+                card.classList.add('show-card');
                 if (typeof window.scrollToElement === 'function') {
                     setTimeout(function() {
                         window.scrollToElement(card);
@@ -5661,6 +5679,7 @@ if (!window.transferFormInitialized) {
             batchDetailsIsLoading = true;
             
             card.style.display = 'block';
+            card.classList.add('show-card');
             if (typeof window.scrollToElement === 'function') {
                 setTimeout(function() {
                     window.scrollToElement(card);
@@ -6116,9 +6135,12 @@ function showBarcodePrintModal(batchNumber, productName, defaultQuantity) {
     
     const isMobileDevice = typeof window.isMobile === 'function' ? window.isMobile() : window.innerWidth <= 768;
     
+    console.log('showBarcodePrintModal - isMobileDevice:', isMobileDevice, 'window.innerWidth:', window.innerWidth);
+    
     if (isMobileDevice) {
         // على الموبايل: استخدام Card
         const card = document.getElementById('printBarcodesCard');
+        console.log('printBarcodesCard element:', card);
         if (!card) {
             console.error('printBarcodesCard not found');
             const fallbackUrl = `${PRINT_BARCODE_URL}?batch=${encodeURIComponent(batchNumber)}&quantity=${quantity}&print=1`;
