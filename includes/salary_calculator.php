@@ -432,12 +432,9 @@ function calculateSalesCollections($userId, $month, $year) {
                  AND YEAR(c.date) = ?" . 
                  ($hasStatus ? " AND c.status IN ('pending','approved')" : "");
             
-            // إعداد المعاملات: userId, month, year, userId, month, year
-            // إذا كان hasOriginalSalesRepIdColumn موجوداً، نضيف userId مرة أخرى في البداية
-            $partialParams = [$userId, $month, $year, $userId, $month, $year];
-            if ($hasOriginalSalesRepIdColumn) {
-                $partialParams = [$userId, $userId, $month, $year, $userId, $month, $year];
-            }
+            // إعداد المعاملات: userId (للـ subquery), month, year (للـ main query)
+            // الاستعلام يحتاج فقط إلى 3 معاملات: userId في subquery، و month و year في main query
+            $partialParams = [$userId, $month, $year];
             $partialCollections = $db->queryOne($partialCollectionsSql, $partialParams);
             $partialAmount = floatval($partialCollections['total'] ?? 0);
             

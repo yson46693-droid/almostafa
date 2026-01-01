@@ -2439,11 +2439,7 @@ if ($isProductionRole) {
             type="button"
             class="btn btn-primary"
             style="background: #0c2c80; color: white; padding: 12px 24px; border-radius: 8px; border: none; font-weight: bold; display: inline-flex; align-items: center; gap: 8px; cursor: pointer;<?php echo $canCreateTransfers ? '' : ' opacity: 0.5; cursor: not-allowed;'; ?>"
-            data-bs-toggle="modal"
-            data-bs-target="#requestTransferModal"
-            <?php if (!$canCreateTransfers): ?>
-            onclick="event.preventDefault(); return false;"
-            <?php endif; ?>
+            onclick="<?php echo $canCreateTransfers ? 'showRequestTransferModal(this)' : 'event.preventDefault(); return false;'; ?>"
             title="<?php echo $canCreateTransfers ? '' : 'يرجى التأكد من وجود مخازن وجهة نشطة.'; ?>"
         >
             <i class="bi bi-arrow-left-right"></i>
@@ -2950,6 +2946,93 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
             padding: 0.5rem !important;
         }
     }
+    /* ===== CSS مبسط - Modal للكمبيوتر فقط، Card للموبايل ===== */
+    
+    /* إخفاء Modal على الموبايل */
+    @media (max-width: 768px) {
+        #batchDetailsModal,
+        #printBarcodesModal,
+        #transferExternalProductModal,
+        #addExternalProductModal,
+        #externalStockModal,
+        #editExternalProductModal,
+        #setManualPriceModal,
+        #requestTransferModal,
+        #receiveFromSalesRepModal {
+            display: none !important;
+        }
+    }
+    
+    /* إخفاء Card على الكمبيوتر */
+    @media (min-width: 769px) {
+        #batchDetailsCard,
+        #printBarcodesCard,
+        #transferExternalProductCard,
+        #addExternalProductCard,
+        #externalStockCard,
+        #editExternalProductCard,
+        #setManualPriceCard,
+        #requestTransferCard,
+        #receiveFromSalesRepCard {
+            display: none !important;
+        }
+    }
+    
+    /* منع الملفات العامة من التأثير على Modals */
+    #batchDetailsModal,
+    #printBarcodesModal,
+    #transferExternalProductModal,
+    #addExternalProductModal,
+    #externalStockModal,
+    #editExternalProductModal,
+    #setManualPriceModal,
+    #requestTransferModal,
+    #receiveFromSalesRepModal {
+        height: auto !important;
+        max-height: none !important;
+    }
+    
+    #batchDetailsModal .modal-dialog,
+    #printBarcodesModal .modal-dialog,
+    #transferExternalProductModal .modal-dialog,
+    #addExternalProductModal .modal-dialog,
+    #externalStockModal .modal-dialog,
+    #editExternalProductModal .modal-dialog,
+    #setManualPriceModal .modal-dialog,
+    #requestTransferModal .modal-dialog,
+    #receiveFromSalesRepModal .modal-dialog {
+        display: block !important;
+        height: auto !important;
+        max-height: none !important;
+        margin: 1.75rem auto !important;
+    }
+    
+    #batchDetailsModal .modal-content,
+    #printBarcodesModal .modal-content,
+    #transferExternalProductModal .modal-content,
+    #addExternalProductModal .modal-content,
+    #externalStockModal .modal-content,
+    #editExternalProductModal .modal-content,
+    #setManualPriceModal .modal-content,
+    #requestTransferModal .modal-content,
+    #receiveFromSalesRepModal .modal-content {
+        height: auto !important;
+        max-height: none !important;
+    }
+    
+    #batchDetailsModal .modal-body,
+    #printBarcodesModal .modal-body,
+    #transferExternalProductModal .modal-body,
+    #addExternalProductModal .modal-body,
+    #externalStockModal .modal-body,
+    #editExternalProductModal .modal-body,
+    #setManualPriceModal .modal-body,
+    #requestTransferModal .modal-body,
+    #receiveFromSalesRepModal .modal-body {
+        height: auto !important;
+        max-height: none !important;
+        overflow-y: visible !important;
+    }
 </style>
 
 <!-- تحميل مكتبة JsBarcode -->
@@ -3198,8 +3281,8 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
     </div>
 <?php endif; ?>
 
-<!-- Modal طباعة الباركود -->
-<div class="modal fade" id="printBarcodesModal" tabindex="-1">
+<!-- Modal طباعة الباركود - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="printBarcodesModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
@@ -3233,6 +3316,42 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
                     <i class="bi bi-printer me-2"></i>طباعة
                 </button>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Card طباعة الباركود - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="printBarcodesCard" style="display: none;">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-printer me-2"></i>طباعة الباركود
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-success">
+            <i class="bi bi-check-circle me-2"></i>
+            جاهز للطباعة
+        </div>
+        <div class="mb-3">
+            <label class="form-label">اسم المنتج</label>
+            <input type="text" class="form-control" id="barcodeCardProductName" readonly>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">عدد الباركودات المراد طباعتها</label>
+            <input type="number" class="form-control" id="barcodeCardPrintQuantity" min="1" value="1">
+            <small class="text-muted">سيتم طباعة نفس رقم التشغيلة بعدد المرات المحدد</small>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">أرقام التشغيلة</label>
+            <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;">
+                <div id="batchNumbersListCard"></div>
+            </div>
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-primary" onclick="printBarcodesFromCard()">
+                <i class="bi bi-printer me-2"></i>طباعة
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="closePrintBarcodesCard()">إغلاق</button>
         </div>
     </div>
 </div>
@@ -3903,7 +4022,8 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
 <?php endif; ?>
 
 <?php if ($primaryWarehouse): ?>
-<div class="modal fade" id="requestTransferModal" tabindex="-1" aria-labelledby="requestTransferModalLabel" aria-hidden="true">
+<!-- Modal طلب نقل منتجات - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="requestTransferModal" tabindex="-1" aria-labelledby="requestTransferModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -4588,7 +4708,8 @@ if (!window.transferFormInitialized) {
 }
 </script>
 
-<div class="modal fade" id="batchDetailsModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+<!-- Modal تفاصيل التشغيلة - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="batchDetailsModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
@@ -4612,6 +4733,32 @@ if (!window.transferFormInitialized) {
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Card تفاصيل التشغيلة - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="batchDetailsCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-info-circle me-2"></i>تفاصيل التشغيلة
+        </h5>
+    </div>
+    <div class="card-body">
+        <div id="batchDetailsCardLoading" class="d-flex justify-content-center py-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">جارٍ التحميل...</span>
+            </div>
+        </div>
+        <div id="batchDetailsCardError" class="alert alert-danger d-none" role="alert"></div>
+        <div id="batchDetailsCardContent" class="d-none">
+            <div id="batchDetailsCardSummarySection" class="mb-4"></div>
+            <div id="batchDetailsCardMaterialsSection" class="mb-4"></div>
+            <div id="batchDetailsCardRawMaterialsSection" class="mb-4"></div>
+            <div id="batchDetailsCardWorkersSection" class="mb-0"></div>
+        </div>
+        <div class="d-flex gap-2 mt-3">
+            <button type="button" class="btn btn-secondary" onclick="closeBatchDetailsCard()">إغلاق</button>
         </div>
     </div>
 </div>
@@ -4675,6 +4822,76 @@ if (!window.transferFormInitialized) {
     
     // جعل الدالة متاحة عالمياً
     window.showToast = showToast;
+    
+    // ========== دوال أساسية للمودالات على الموبايل ==========
+    
+    // دالة التحقق من الموبايل
+    function isMobile() {
+        return window.innerWidth <= 768;
+    }
+    
+    // دالة Scroll تلقائي
+    function scrollToElement(element) {
+        if (!element) return;
+        
+        setTimeout(function() {
+            const rect = element.getBoundingClientRect();
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            const elementTop = rect.top + scrollTop;
+            const offset = 80; // مساحة للـ header
+            
+            requestAnimationFrame(function() {
+                window.scrollTo({
+                    top: Math.max(0, elementTop - offset),
+                    behavior: 'smooth'
+                });
+            });
+        }, 200);
+    }
+    
+    // دالة إغلاق جميع النماذج
+    function closeAllForms() {
+        // إغلاق جميع Cards على الموبايل
+        const cards = [
+            'batchDetailsCard', 
+            'printBarcodesCard', 
+            'transferExternalProductCard',
+            'addExternalProductCard',
+            'externalStockCard',
+            'editExternalProductCard',
+            'setManualPriceCard',
+            'requestTransferCard',
+            'receiveFromSalesRepCard'
+        ];
+        cards.forEach(function(cardId) {
+            const card = document.getElementById(cardId);
+            if (card && card.style.display !== 'none') {
+                card.style.display = 'none';
+                const form = card.querySelector('form');
+                if (form) form.reset();
+            }
+        });
+        
+        // إغلاق جميع Modals على الكمبيوتر
+        const modals = [
+            'batchDetailsModal', 
+            'printBarcodesModal', 
+            'transferExternalProductModal',
+            'addExternalProductModal',
+            'externalStockModal',
+            'editExternalProductModal',
+            'setManualPriceModal',
+            'requestTransferModal',
+            'receiveFromSalesRepModal'
+        ];
+        modals.forEach(function(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                const modalInstance = bootstrap.Modal.getInstance(modal);
+                if (modalInstance) modalInstance.hide();
+            }
+        });
+    }
         
     // ========== إدارة نماذج تفاصيل التشغيلة ==========
     const batchDetailsEndpoint = <?php echo json_encode(getRelativeUrl('api/production/get_batch_details.php')); ?>;
@@ -4963,6 +5180,142 @@ if (!window.transferFormInitialized) {
         }
     }
 
+    // دالة renderBatchDetails للـ Card (نفس البيانات، عناصر مختلفة)
+    function renderBatchDetailsCard(data) {
+        const summarySection = document.getElementById('batchDetailsCardSummarySection');
+        const materialsSection = document.getElementById('batchDetailsCardMaterialsSection');
+        const rawMaterialsSection = document.getElementById('batchDetailsCardRawMaterialsSection');
+        const workersSection = document.getElementById('batchDetailsCardWorkersSection');
+        
+        if (!summarySection || !materialsSection || !rawMaterialsSection || !workersSection) {
+            console.error('Batch details card sections not found');
+            return;
+        }
+
+        const batchNumber = data.batch_number ?? '—';
+        const summaryRows = [
+            ['رقم التشغيلة', batchNumber],
+            ['المنتج', data.product_name ?? '—'],
+            ['تاريخ الإنتاج', formatDateValue(data.production_date)],
+            ['الكمية المنتجة', data.quantity_produced ?? data.quantity ?? '—']
+        ];
+
+        if (data.honey_supplier_name) {
+            summaryRows.push(['مورد العسل', data.honey_supplier_name]);
+        }
+        
+        let packagingSuppliersDisplay = '—';
+        if (data.packaging_suppliers_list && Array.isArray(data.packaging_suppliers_list) && data.packaging_suppliers_list.length > 0) {
+            packagingSuppliersDisplay = data.packaging_suppliers_list.join('، ');
+        } else if (data.packaging_supplier_name) {
+            packagingSuppliersDisplay = data.packaging_supplier_name;
+        }
+        
+        if (packagingSuppliersDisplay !== '—') {
+            summaryRows.push(['مورد أدوات التعبئة', packagingSuppliersDisplay]);
+        }
+        if (data.notes) {
+            summaryRows.push(['ملاحظات', data.notes]);
+        }
+
+        summarySection.innerHTML = `
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>ملخص التشغيلة</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive dashboard-table-wrapper">
+                        <table class="table dashboard-table dashboard-table--compact align-middle mb-0">
+                            <tbody>
+                                ${summaryRows.map(([label, value]) => `
+                                    <tr>
+                                        <th class="w-25">${label}</th>
+                                        <td>${value}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const packagingItems = Array.isArray(data.packaging_materials) ? data.packaging_materials : [];
+        if (packagingItems.length > 0) {
+            materialsSection.innerHTML = `
+                <div class="card shadow-sm">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0"><i class="bi bi-box-seam me-2"></i>مواد التعبئة المستخدمة</h6>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-unstyled mb-0">
+                            ${packagingItems.map(item => `
+                                <li class="mb-2">
+                                    <strong>${item.name ?? '—'}</strong>
+                                    <div class="text-muted small">
+                                        ${formatQuantity(item.quantity_used, item.unit ?? '')}
+                                        ${item.supplier_name ? ` • المورد: ${item.supplier_name}` : ''}
+                                    </div>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                </div>
+            `;
+        } else {
+            materialsSection.innerHTML = '';
+        }
+
+        const rawItems = Array.isArray(data.raw_materials) ? data.raw_materials : [];
+        if (rawItems.length > 0) {
+            rawMaterialsSection.innerHTML = `
+                <div class="card shadow-sm">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0"><i class="bi bi-droplet-half me-2"></i>المواد الخام المستخدمة</h6>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-unstyled mb-0">
+                            ${rawItems.map(item => `
+                                <li class="mb-2">
+                                    <strong>${item.name ?? '—'}</strong>
+                                    <div class="text-muted small">
+                                        ${formatQuantity(item.quantity_used, item.unit ?? '')}
+                                        ${item.supplier_name ? ` • المورد: ${item.supplier_name}` : ''}
+                                    </div>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                </div>
+            `;
+        } else {
+            rawMaterialsSection.innerHTML = '';
+        }
+
+        const workers = Array.isArray(data.workers) ? data.workers : [];
+        if (workers.length > 0) {
+            workersSection.innerHTML = `
+                <div class="card shadow-sm">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0"><i class="bi bi-people-fill me-2"></i>فريق الإنتاج</h6>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-unstyled mb-0">
+                            ${workers.map(worker => `
+                                <li class="mb-2">
+                                    <strong>${worker.full_name ?? worker.username ?? '—'}</strong>
+                                    <div class="text-muted small">${worker.role ?? 'عامل إنتاج'}</div>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                </div>
+            `;
+        } else {
+            workersSection.innerHTML = '';
+        }
+    }
+
     function showBatchDetailsModal(batchNumber, productName) {
         if (!batchNumber || typeof batchNumber !== 'string' || batchNumber.trim() === '') {
             console.error('Invalid batch number');
@@ -4973,94 +5326,198 @@ if (!window.transferFormInitialized) {
             return; // منع الطلبات المتعددة
         }
         
-        if (typeof bootstrap === 'undefined' || typeof bootstrap.Modal === 'undefined') {
-            alert('تعذر فتح تفاصيل التشغيلة. يرجى تحديث الصفحة.');
-            return;
-        }
+        // إغلاق جميع النماذج المفتوحة أولاً
+        closeAllForms();
         
-        createBatchDetailsModal();
-        
-        const modalElement = document.getElementById('batchDetailsModal');
-        if (!modalElement) {
-            console.error('Failed to create batch details modal');
-            return;
-        }
-        
-        const modalInstance = bootstrap.Modal.getOrCreateInstance(modalElement);
-        const loader = modalElement.querySelector('#batchDetailsLoading');
-        const errorAlert = modalElement.querySelector('#batchDetailsError');
-        const contentWrapper = modalElement.querySelector('#batchDetailsContent');
-        const modalTitle = modalElement.querySelector('.modal-title');
-        
-        // التحقق من وجود العناصر المطلوبة
-        if (!loader || !contentWrapper) {
-            console.error('Required modal elements not found', {
-                loader: !!loader,
-                errorAlert: !!errorAlert,
-                contentWrapper: !!contentWrapper
-            });
-            alert('تعذر فتح تفاصيل التشغيلة. يرجى تحديث الصفحة.');
-            return;
-        }
-        
-        if (modalTitle) {
-            modalTitle.textContent = productName ? `تفاصيل التشغيلة - ${productName}` : 'تفاصيل التشغيلة';
-        }
-        
-        // التحقق من وجود البيانات في cache
-        const cachedData = getBatchDetailsFromCache(batchNumber);
-        if (cachedData) {
-            // استخدام البيانات من cache مباشرة
-            if (loader) loader.classList.add('d-none');
-            if (errorAlert) errorAlert.classList.add('d-none');
-            renderBatchDetails(cachedData);
-            if (contentWrapper) contentWrapper.classList.remove('d-none');
-            modalInstance.show();
-            return;
-        }
-        
-        // إذا لم تكن البيانات موجودة في cache، جلبها من الخادم
-        if (loader) loader.classList.remove('d-none');
-        if (errorAlert) errorAlert.classList.add('d-none');
-        if (contentWrapper) contentWrapper.classList.add('d-none');
-        batchDetailsIsLoading = true;
-        
-        modalInstance.show();
-        
-        // تحميل البيانات
-        fetch(batchDetailsEndpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ batch_number: batchNumber })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (loader) loader.classList.add('d-none');
-            batchDetailsIsLoading = false;
+        if (isMobile()) {
+            // على الموبايل: استخدام Card
+            const card = document.getElementById('batchDetailsCard');
+            if (!card) {
+                console.error('batchDetailsCard not found');
+                return;
+            }
             
-            if (data.success && data.batch) {
-                // حفظ البيانات في cache
-                setBatchDetailsInCache(batchNumber, data.batch);
-                
-                renderBatchDetails(data.batch);
+            const loader = card.querySelector('#batchDetailsCardLoading');
+            const errorAlert = card.querySelector('#batchDetailsCardError');
+            const contentWrapper = card.querySelector('#batchDetailsCardContent');
+            
+            // التحقق من وجود البيانات في cache
+            const cachedData = getBatchDetailsFromCache(batchNumber);
+            if (cachedData) {
+                if (loader) loader.classList.add('d-none');
+                if (errorAlert) errorAlert.classList.add('d-none');
+                renderBatchDetailsCard(cachedData);
                 if (contentWrapper) contentWrapper.classList.remove('d-none');
-            } else {
+                card.style.display = 'block';
+                setTimeout(function() {
+                    scrollToElement(card);
+                }, 50);
+                return;
+            }
+            
+            // إذا لم تكن البيانات موجودة في cache، جلبها من الخادم
+            if (loader) loader.classList.remove('d-none');
+            if (errorAlert) errorAlert.classList.add('d-none');
+            if (contentWrapper) contentWrapper.classList.add('d-none');
+            batchDetailsIsLoading = true;
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+            
+            // تحميل البيانات
+            fetch(batchDetailsEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ batch_number: batchNumber })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (loader) loader.classList.add('d-none');
+                batchDetailsIsLoading = false;
+                
+                if (data.success && data.batch) {
+                    setBatchDetailsInCache(batchNumber, data.batch);
+                    renderBatchDetailsCard(data.batch);
+                    if (contentWrapper) contentWrapper.classList.remove('d-none');
+                } else {
+                    if (errorAlert) {
+                        errorAlert.textContent = data.message || 'تعذر تحميل تفاصيل التشغيلة';
+                        errorAlert.classList.remove('d-none');
+                    }
+                }
+            })
+            .catch(error => {
+                if (loader) loader.classList.add('d-none');
                 if (errorAlert) {
-                    errorAlert.textContent = data.message || 'تعذر تحميل تفاصيل التشغيلة';
+                    errorAlert.textContent = 'حدث خطأ أثناء تحميل التفاصيل';
                     errorAlert.classList.remove('d-none');
                 }
+                batchDetailsIsLoading = false;
+                console.error('Error loading batch details:', error);
+            });
+        } else {
+            // على الكمبيوتر: استخدام Modal
+            if (typeof bootstrap === 'undefined' || typeof bootstrap.Modal === 'undefined') {
+                alert('تعذر فتح تفاصيل التشغيلة. يرجى تحديث الصفحة.');
+                return;
             }
-        })
-        .catch(error => {
-            if (loader) loader.classList.add('d-none');
-            if (errorAlert) {
-                errorAlert.textContent = 'حدث خطأ أثناء تحميل التفاصيل';
-                errorAlert.classList.remove('d-none');
+            
+            createBatchDetailsModal();
+            
+            const modalElement = document.getElementById('batchDetailsModal');
+            if (!modalElement) {
+                console.error('Failed to create batch details modal');
+                return;
             }
-            batchDetailsIsLoading = false;
-            console.error('Error loading batch details:', error);
-        });
+            
+            const modalInstance = bootstrap.Modal.getOrCreateInstance(modalElement);
+            const loader = modalElement.querySelector('#batchDetailsLoading');
+            const errorAlert = modalElement.querySelector('#batchDetailsError');
+            const contentWrapper = modalElement.querySelector('#batchDetailsContent');
+            const modalTitle = modalElement.querySelector('.modal-title');
+            
+            if (!loader || !contentWrapper) {
+                console.error('Required modal elements not found');
+                alert('تعذر فتح تفاصيل التشغيلة. يرجى تحديث الصفحة.');
+                return;
+            }
+            
+            if (modalTitle) {
+                modalTitle.textContent = productName ? `تفاصيل التشغيلة - ${productName}` : 'تفاصيل التشغيلة';
+            }
+            
+            // التحقق من وجود البيانات في cache
+            const cachedData = getBatchDetailsFromCache(batchNumber);
+            if (cachedData) {
+                if (loader) loader.classList.add('d-none');
+                if (errorAlert) errorAlert.classList.add('d-none');
+                renderBatchDetails(cachedData);
+                if (contentWrapper) contentWrapper.classList.remove('d-none');
+                modalInstance.show();
+                return;
+            }
+            
+            // إذا لم تكن البيانات موجودة في cache، جلبها من الخادم
+            if (loader) loader.classList.remove('d-none');
+            if (errorAlert) errorAlert.classList.add('d-none');
+            if (contentWrapper) contentWrapper.classList.add('d-none');
+            batchDetailsIsLoading = true;
+            
+            modalInstance.show();
+            
+            // تحميل البيانات
+            fetch(batchDetailsEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ batch_number: batchNumber })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (loader) loader.classList.add('d-none');
+                batchDetailsIsLoading = false;
+                
+                if (data.success && data.batch) {
+                    setBatchDetailsInCache(batchNumber, data.batch);
+                    renderBatchDetails(data.batch);
+                    if (contentWrapper) contentWrapper.classList.remove('d-none');
+                } else {
+                    if (errorAlert) {
+                        errorAlert.textContent = data.message || 'تعذر تحميل تفاصيل التشغيلة';
+                        errorAlert.classList.remove('d-none');
+                    }
+                }
+            })
+            .catch(error => {
+                if (loader) loader.classList.add('d-none');
+                if (errorAlert) {
+                    errorAlert.textContent = 'حدث خطأ أثناء تحميل التفاصيل';
+                    errorAlert.classList.remove('d-none');
+                }
+                batchDetailsIsLoading = false;
+                console.error('Error loading batch details:', error);
+            });
+        }
     }
+    
+    // دالة إغلاق Card تفاصيل التشغيلة
+    function closeBatchDetailsCard() {
+        const card = document.getElementById('batchDetailsCard');
+        if (card) {
+            card.style.display = 'none';
+        }
+    }
+    
+    // دالة فتح Modal طلب نقل منتجات (على الكمبيوتر فقط)
+    function showRequestTransferModal(button) {
+        if (!button) return;
+        
+        // إغلاق جميع النماذج المفتوحة أولاً
+        closeAllForms();
+        
+        if (isMobile()) {
+            // على الموبايل: هذا المودال معقد جداً، نتركه كـ Modal فقط
+            // يمكن إضافة Card لاحقاً إذا لزم الأمر
+            alert('هذه الميزة متاحة على الكمبيوتر فقط. يرجى استخدام جهاز كمبيوتر.');
+            return;
+        }
+        
+        // على الكمبيوتر: استخدام Modal
+        const modalElement = document.getElementById('requestTransferModal');
+        if (!modalElement) {
+            console.error('requestTransferModal not found');
+            return;
+        }
+        
+        if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+            const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+            modal.show();
+        }
+    }
+    
+    // جعل الدالة متاحة عالمياً
+    window.showRequestTransferModal = showRequestTransferModal;
 
 
     // ========== ربط الأحداث للأزرار ==========
@@ -5307,52 +5764,89 @@ const PRINT_BARCODE_URL = <?php echo json_encode(getRelativeUrl('print_barcode.p
 window.PRINT_BARCODE_URL = PRINT_BARCODE_URL;
 
 function showBarcodePrintModal(batchNumber, productName, defaultQuantity) {
-    const modalElement = document.getElementById('printBarcodesModal');
-    if (!modalElement) {
-        console.error('Modal printBarcodesModal not found');
-        // Fallback: فتح صفحة الطباعة مباشرة
-        const quantity = defaultQuantity > 0 ? defaultQuantity : 1;
-        const fallbackUrl = `${PRINT_BARCODE_URL}?batch=${encodeURIComponent(batchNumber)}&quantity=${quantity}&print=1`;
-        window.open(fallbackUrl, '_blank');
-        return;
-    }
+    closeAllForms();
     
     const quantity = defaultQuantity > 0 ? defaultQuantity : 1;
-
     window.batchNumbersToPrint = [batchNumber];
-
-    const productNameInput = document.getElementById('barcode_product_name');
-    if (productNameInput) {
-        productNameInput.value = productName || '';
-    }
-
-    const quantityText = document.getElementById('barcode_quantity');
-    if (quantityText) {
-        quantityText.textContent = quantity;
-    }
-
-    const quantityInput = document.getElementById('barcode_print_quantity');
-    if (quantityInput) {
-        quantityInput.value = quantity;
-    }
-
-    const batchListContainer = document.getElementById('batch_numbers_list');
-    if (batchListContainer) {
-        batchListContainer.innerHTML = `
-            <div class="alert alert-info mb-0">
-                <i class="bi bi-info-circle me-2"></i>
-                <strong>رقم التشغيلة:</strong> ${batchNumber}<br>
-                <small>ستتم طباعة نفس رقم التشغيلة بعدد ${quantity} باركود</small>
-            </div>
-        `;
-    }
-
-    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-        const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
-        modal.show();
+    
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('printBarcodesCard');
+        if (!card) {
+            console.error('printBarcodesCard not found');
+            const fallbackUrl = `${PRINT_BARCODE_URL}?batch=${encodeURIComponent(batchNumber)}&quantity=${quantity}&print=1`;
+            window.open(fallbackUrl, '_blank');
+            return;
+        }
+        
+        const productNameInput = document.getElementById('barcodeCardProductName');
+        if (productNameInput) {
+            productNameInput.value = productName || '';
+        }
+        
+        const quantityInput = document.getElementById('barcodeCardPrintQuantity');
+        if (quantityInput) {
+            quantityInput.value = quantity;
+        }
+        
+        const batchListContainer = document.getElementById('batchNumbersListCard');
+        if (batchListContainer) {
+            batchListContainer.innerHTML = `
+                <div class="alert alert-info mb-0">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>رقم التشغيلة:</strong> ${batchNumber}<br>
+                    <small>ستتم طباعة نفس رقم التشغيلة بعدد ${quantity} باركود</small>
+                </div>
+            `;
+        }
+        
+        card.style.display = 'block';
+        setTimeout(function() {
+            scrollToElement(card);
+        }, 50);
     } else {
-        const fallbackUrl = `${PRINT_BARCODE_URL}?batch=${encodeURIComponent(batchNumber)}&quantity=${quantity}&print=1`;
-        window.open(fallbackUrl, '_blank');
+        // على الكمبيوتر: استخدام Modal
+        const modalElement = document.getElementById('printBarcodesModal');
+        if (!modalElement) {
+            console.error('Modal printBarcodesModal not found');
+            const fallbackUrl = `${PRINT_BARCODE_URL}?batch=${encodeURIComponent(batchNumber)}&quantity=${quantity}&print=1`;
+            window.open(fallbackUrl, '_blank');
+            return;
+        }
+        
+        const productNameInput = document.getElementById('barcode_product_name');
+        if (productNameInput) {
+            productNameInput.value = productName || '';
+        }
+        
+        const quantityText = document.getElementById('barcode_quantity');
+        if (quantityText) {
+            quantityText.textContent = quantity;
+        }
+        
+        const quantityInput = document.getElementById('barcode_print_quantity');
+        if (quantityInput) {
+            quantityInput.value = quantity;
+        }
+        
+        const batchListContainer = document.getElementById('batch_numbers_list');
+        if (batchListContainer) {
+            batchListContainer.innerHTML = `
+                <div class="alert alert-info mb-0">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>رقم التشغيلة:</strong> ${batchNumber}<br>
+                    <small>ستتم طباعة نفس رقم التشغيلة بعدد ${quantity} باركود</small>
+                </div>
+            `;
+        }
+        
+        if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+            const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+            modal.show();
+        } else {
+            const fallbackUrl = `${PRINT_BARCODE_URL}?batch=${encodeURIComponent(batchNumber)}&quantity=${quantity}&print=1`;
+            window.open(fallbackUrl, '_blank');
+        }
     }
 }
 
@@ -5374,6 +5868,33 @@ function printBarcodes() {
     const batchNumber = batchNumbers[0];
     const printUrl = `${PRINT_BARCODE_URL}?batch=${encodeURIComponent(batchNumber)}&quantity=${printQuantity}&print=1`;
     window.open(printUrl, '_blank');
+}
+
+function printBarcodesFromCard() {
+    const batchNumbers = window.batchNumbersToPrint || [];
+    if (batchNumbers.length === 0) {
+        alert('لا توجد أرقام تشغيلة للطباعة');
+        return;
+    }
+
+    const quantityInput = document.getElementById('barcodeCardPrintQuantity');
+    const printQuantity = quantityInput ? parseInt(quantityInput.value, 10) : 1;
+    
+    if (!printQuantity || printQuantity < 1) {
+        alert('يرجى إدخال عدد صحيح للطباعة');
+        return;
+    }
+
+    const batchNumber = batchNumbers[0];
+    const printUrl = `${PRINT_BARCODE_URL}?batch=${encodeURIComponent(batchNumber)}&quantity=${printQuantity}&print=1`;
+    window.open(printUrl, '_blank');
+}
+
+function closePrintBarcodesCard() {
+    const card = document.getElementById('printBarcodesCard');
+    if (card) {
+        card.style.display = 'none';
+    }
 }
 
 // جعل الدوال متاحة عالمياً
