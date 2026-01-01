@@ -1247,11 +1247,12 @@ if ($currentUser['role'] === 'sales') {
 
 // استخدام القيم من جدول salaries وإعادة حساب الراتب الإجمالي من المكونات لضمان الدقة
 if ($currentSalary && isset($currentSalary['base_amount'])) {
-    // حساب الراتب الأساسي دائماً من الساعات × سعر الساعة (حقل ثابت لا يتأثر بالتسويات)
-    // لا نستخدم base_amount المحفوظ في قاعدة البيانات لأنه قد يكون متأثراً بالتسويات
+    // حساب الراتب الأساسي دائماً من الساعات المعروضة في الجدول × سعر الساعة
+    // نستخدم عدد الساعات من $monthStats['total_hours'] لأن هذا هو ما يتم عرضه في الجدول
     require_once __DIR__ . '/../../includes/salary_calculator.php';
     $hourlyRate = cleanFinancialValue($currentSalary['hourly_rate'] ?? $currentUser['hourly_rate'] ?? 0);
-    $completedHours = calculateCompletedMonthlyHours($currentUser['id'], $selectedMonth, $selectedYear);
+    // استخدام عدد الساعات من $monthStats بدلاً من calculateCompletedMonthlyHours لضمان التطابق مع العرض
+    $completedHours = $monthStats['total_hours'] ?? 0;
     $baseAmount = round($completedHours * $hourlyRate, 2);
     
     // حساب نسبة التحصيلات: يجب أن تشمل:
