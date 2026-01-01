@@ -97,16 +97,6 @@
     
     /* إخفاء بعض الأيقونات على الشاشات الصغيرة جداً */
     @media (max-width: 480px) {
-        /* إخفاء جميع الأزرار الفردية على الشاشات الصغيرة */
-        .topbar-action-desktop {
-            display: none !important;
-        }
-        
-        /* إظهار القائمة المنسدلة على الشاشات الصغيرة */
-        .quick-actions-dropdown {
-            display: block !important;
-        }
-        
         .topbar-left {
             min-width: auto;
         }
@@ -143,17 +133,6 @@
 /* إخفاء desktop-logout-btn على الشاشات الصغيرة جداً (حيث يظهر mobile-logout-btn) */
 @media (max-width: 480px) {
     .desktop-logout-btn {
-        display: none !important;
-    }
-}
-
-/* إظهار الأزرار الفردية على الشاشات الكبيرة */
-@media (min-width: 481px) {
-    .topbar-action-desktop {
-        display: flex !important;
-    }
-    
-    .quick-actions-dropdown {
         display: none !important;
     }
 }
@@ -1177,13 +1156,7 @@
 
 /* ===== Quick Actions Dropdown ===== */
 .quick-actions-dropdown {
-    display: none; /* مخفي افتراضياً على الشاشات الكبيرة */
-}
-
-@media (max-width: 480px) {
-    .quick-actions-dropdown {
-        display: block !important;
-    }
+    display: block; /* مرئي دائماً على جميع الشاشات */
 }
 
 .quick-actions-toggle {

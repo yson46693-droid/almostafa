@@ -1402,12 +1402,47 @@ $typeColorMap = [
         }
     }
     
+    // إزالة backdrop فوراً
+    function removeAllBackdropsImmediate() {
+        const backdrops = document.querySelectorAll('.modal-backdrop');
+        backdrops.forEach(function(backdrop) {
+            backdrop.remove();
+        });
+        document.body.classList.remove('modal-open');
+        document.body.style.overflow = '';
+        document.body.style.paddingRight = '';
+    }
+    
     // تنفيذ فوراً
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', removeModalsFromDOM);
+        document.addEventListener('DOMContentLoaded', function() {
+            removeModalsFromDOM();
+            removeAllBackdropsImmediate();
+            // مراقبة مستمرة لإزالة backdrop
+            setInterval(removeAllBackdropsImmediate, 50);
+        });
     } else {
         removeModalsFromDOM();
+        removeAllBackdropsImmediate();
+        // مراقبة مستمرة لإزالة backdrop
+        setInterval(removeAllBackdropsImmediate, 50);
     }
+    
+    // مراقبة DOM لإزالة backdrop فور إضافته
+    const backdropObserver = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            mutation.addedNodes.forEach(function(node) {
+                if (node.nodeType === 1 && node.classList && node.classList.contains('modal-backdrop')) {
+                    node.remove();
+                    removeAllBackdropsImmediate();
+                }
+            });
+        });
+    });
+    backdropObserver.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
     
     // تنفيذ مرة أخرى بعد تحميل الصفحة
     window.addEventListener('load', removeModalsFromDOM);
@@ -2000,8 +2035,26 @@ document.addEventListener('DOMContentLoaded', function() {
             }, true);
         }
         
-        // مراقبة مستمرة لإزالة backdrop (كل 20ms - أسرع)
-        setInterval(forceCloseModals, 20);
+        // إزالة backdrop فوراً وبشكل مستمر
+        function removeAllBackdrops() {
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            backdrops.forEach(function(backdrop) {
+                backdrop.remove();
+            });
+            // إزالة class modal-open من body
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
+        }
+        
+        // مراقبة مستمرة لإزالة backdrop (كل 10ms - أسرع)
+        setInterval(function() {
+            removeAllBackdrops();
+            forceCloseModals();
+        }, 10);
+        
+        // إزالة backdrop فور تحميل الصفحة
+        removeAllBackdrops();
         
         // مراقبة DOM لإزالة backdrop فور إضافته
         const observer = new MutationObserver(function(mutations) {
@@ -2009,14 +2062,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 mutation.addedNodes.forEach(function(node) {
                     if (node.nodeType === 1 && node.classList && node.classList.contains('modal-backdrop')) {
                         node.remove();
+                        removeAllBackdrops();
                         forceCloseModals();
                     }
                     if (node.nodeType === 1 && node.querySelectorAll) {
                         const backdrops = node.querySelectorAll('.modal-backdrop');
                         backdrops.forEach(function(backdrop) {
                             backdrop.remove();
-                            forceCloseModals();
                         });
+                        removeAllBackdrops();
+                        forceCloseModals();
                     }
                 });
                 // إذا تم إضافة class "show" للمodal، نزيله
@@ -2025,6 +2080,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (target && target.id && (target.id === 'collectFromRepModal' || target.id === 'generateReportModal')) {
                         if (target.classList.contains('show') || target.classList.contains('showing')) {
                             target.classList.remove('show', 'showing');
+                            removeAllBackdrops();
                             forceCloseModals();
                         }
                     }
@@ -2288,19 +2344,22 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 }
 
-/* تسريع إغلاق النماذج - إزالة جميع الـ transitions */
+/* إزالة modal-backdrop تماماً - لا تظهر الطبقة الداكنة */
+.modal-backdrop,
+.modal-backdrop.fade,
+.modal-backdrop.show,
 #generateReportModal ~ .modal-backdrop,
-#collectFromRepModal ~ .modal-backdrop,
+#collectFromRepModal ~ .modal-backdrop {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    z-index: -1 !important;
+    pointer-events: none !important;
+}
+
+/* تسريع إغلاق النماذج - إزالة جميع الـ transitions */
 .modal-backdrop {
     transition: none !important;
-}
-
-.modal-backdrop.fade {
-    opacity: 0 !important;
-}
-
-.modal-backdrop.show {
-    opacity: 0.5 !important;
 }
 
 .modal.fade .modal-dialog {
@@ -2342,6 +2401,24 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     /* منع body من أن يصبح modal-open على الموبايل */
+    body.modal-open {
+        overflow: auto !important;
+        padding-right: 0 !important;
+    }
+}
+
+/* إزالة backdrop على جميع الأجهزة (الكمبيوتر والموبايل) */
+@media (min-width: 769px) {
+    .modal-backdrop,
+    .modal-backdrop.fade,
+    .modal-backdrop.show {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        z-index: -1 !important;
+        pointer-events: none !important;
+    }
+    
     body.modal-open {
         overflow: auto !important;
         padding-right: 0 !important;

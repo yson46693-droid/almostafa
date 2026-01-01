@@ -2997,66 +2997,7 @@ if (ob_get_level() > 0) {
     (function() {
         'use strict';
         
-        function initRefreshButton() {
-            const refreshBtn = document.getElementById('refreshPageBtn');
-            if (!refreshBtn) return;
-            
-            refreshBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                try {
-                    // إنشاء URL جديد مع إزالة معاملات cache القديمة
-                    const url = new URL(window.location.href);
-                    
-                    // إزالة معاملات cache القديمة
-                    url.searchParams.delete('_nocache');
-                    url.searchParams.delete('_refresh');
-                    url.searchParams.delete('_cache_bust');
-                    url.searchParams.delete('_t');
-                    url.searchParams.delete('_r');
-                    url.searchParams.delete('_auto_refresh');
-                    url.searchParams.delete('_retry');
-                    
-                    // إضافة timestamp جديد لفرض إعادة تحميل من السيرفر
-                    url.searchParams.set('_nocache', Date.now().toString());
-                    
-                    // بناء URL النهائي مع hash إن وجد
-                    const newUrl = url.pathname + url.search + (window.location.hash || '');
-                    
-                    // محاولة مسح cache إن أمكن
-                    if ('caches' in window) {
-                        caches.keys().then(function(names) {
-                            names.forEach(function(name) {
-                                caches.delete(name).catch(function(err) {
-                                    console.warn('Failed to delete cache:', name, err);
-                                });
-                            });
-                        }).catch(function(err) {
-                            console.warn('Error accessing caches:', err);
-                        });
-                    }
-                    
-                    // إعادة تحميل الصفحة
-                    window.location.replace(newUrl);
-                } catch (error) {
-                    console.error('Error refreshing page:', error);
-                    // في حالة الخطأ، استخدم طريقة بسيطة
-                    window.location.reload(true);
-                }
-                
-                return false;
-            });
-        }
-        
-        // تهيئة الزر عند تحميل الصفحة
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initRefreshButton);
-        } else {
-            initRefreshButton();
-        }
-        
-        // ربط زر التحديث في القائمة المنسدلة بنفس الوظيفة
+        // تهيئة زر التحديث في القائمة المنسدلة
         function initRefreshButtonDropdown() {
             const refreshBtnDropdown = document.getElementById('refreshPageBtnDropdown');
             if (!refreshBtnDropdown) return;
@@ -3492,7 +3433,7 @@ if (ob_get_level() > 0) {
                 </div>
                 <?php endif; ?>
                 
-                <!-- Quick Actions Dropdown Menu (Mobile) -->
+                <!-- Quick Actions Dropdown Menu -->
                 <div class="topbar-dropdown quick-actions-dropdown">
                     <a href="#" 
                        class="topbar-action quick-actions-toggle" 
@@ -3590,88 +3531,6 @@ if (ob_get_level() > 0) {
                         <?php endif; ?>
                     </ul>
                 </div>
-                
-                <!-- Version Badge - عداد يدوي من version.json (Desktop) -->
-                <div class="version-badge-container topbar-action-desktop">
-                    <span class="version-badge" title="إصدار النظام">
-                        <?php 
-                        // قراءة الإصدار مباشرة من version.json (عداد يدوي)
-                        $versionFile = __DIR__ . '/../version.json';
-                        $currentVersion = 'v1.0.0'; // افتراضي
-                        
-                        if (file_exists($versionFile)) {
-                            try {
-                                $versionData = json_decode(file_get_contents($versionFile), true);
-                                if (isset($versionData['version']) && !empty($versionData['version'])) {
-                                    $version = trim($versionData['version']);
-                                    // إضافة v في البداية إذا لم تكن موجودة
-                                    if (strpos($version, 'v') !== 0) {
-                                        $version = 'v' . $version;
-                                    }
-                                    $currentVersion = $version;
-                                }
-                            } catch (Exception $e) {
-                                // في حالة الخطأ، استخدام الإصدار الافتراضي
-                            }
-                        }
-                        
-                        echo htmlspecialchars($currentVersion);
-                        ?>
-                    </span>
-                </div>
-                
-                <!-- Fingerprint Registration Button (Desktop) -->
-                <?php if (isLoggedIn()): ?>
-                <a href="<?php echo getRelativeUrl('register_fingerprint.php'); ?>" 
-                   class="topbar-action topbar-action-desktop" 
-                   id="fingerprintRegisterBtn" 
-                   role="button" 
-                   data-bs-toggle="tooltip" 
-                   title="تسجيل البصمة والملف الشخصي" 
-                   aria-label="تسجيل البصمة والملف الشخصي">
-                    <i class="bi bi-fingerprint" aria-hidden="true"></i>
-                    <span class="visually-hidden">تسجيل البصمة والملف الشخصي</span>
-                </a>
-                <?php endif; ?>
-                
-                <!-- Refresh Page Button (Desktop) -->
-                <a href="#" 
-                   class="topbar-action topbar-action-desktop" 
-                   id="refreshPageBtn" 
-                   role="button" 
-                   data-bs-toggle="tooltip" 
-                   title="<?php echo isset($lang['refresh']) ? $lang['refresh'] : 'تحديث الصفحة'; ?>" 
-                   aria-label="<?php echo isset($lang['refresh']) ? $lang['refresh'] : 'تحديث الصفحة'; ?>">
-                    <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
-                    <span class="visually-hidden"><?php echo isset($lang['refresh']) ? $lang['refresh'] : 'تحديث الصفحة'; ?></span>
-                </a>
-                
-                <!-- Dark Mode Toggle (Desktop) -->
-                <div class="topbar-action topbar-action-desktop" data-bs-toggle="tooltip" title="<?php echo isset($lang['dark_mode']) ? $lang['dark_mode'] : 'الوضع الداكن'; ?>">
-                    <div class="form-check form-switch mb-0">
-                        <label for="darkModeToggle" class="visually-hidden">
-                            <?php echo isset($lang['dark_mode']) ? $lang['dark_mode'] : 'الوضع الداكن'; ?>
-                        </label>
-                        <input class="form-check-input" 
-                               type="checkbox" 
-                               id="darkModeToggle" 
-                               aria-label="<?php echo isset($lang['dark_mode']) ? $lang['dark_mode'] : 'الوضع الداكن'; ?>"
-                               aria-pressed="false"
-                               style="cursor: pointer;">
-                    </div>
-                </div>
-                
-                <!-- Mobile Logout Button (Desktop - hidden on mobile) -->
-                <?php if (isLoggedIn()): ?>
-                <a href="<?php echo getRelativeUrl('logout.php'); ?>" 
-                   class="topbar-action mobile-logout-btn topbar-action-desktop" 
-                   data-bs-toggle="tooltip" 
-                   title="<?php echo isset($lang['logout']) ? $lang['logout'] : 'تسجيل الخروج'; ?>"
-                   aria-label="<?php echo isset($lang['logout']) ? $lang['logout'] : 'تسجيل الخروج'; ?>">
-                    <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
-                    <span class="visually-hidden"><?php echo isset($lang['logout']) ? $lang['logout'] : 'تسجيل الخروج'; ?></span>
-                </a>
-                <?php endif; ?>
             </div>
         </div>
         
