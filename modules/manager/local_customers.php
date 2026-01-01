@@ -1383,7 +1383,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
             <i class="bi bi-file-earmark-spreadsheet me-2"></i>استيراد من CSV
         </button>
         <?php if (in_array($currentRole, ['manager', 'developer', 'accountant'], true)): ?>
-        <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#customerExportModal" data-section="local">
+        <button type="button" class="btn btn-info" onclick="showCustomerExportModal()" data-section="local">
             <i class="bi bi-download me-2"></i>تصدير عملاء محددين
         </button>
         <?php endif; ?>
@@ -2318,7 +2318,8 @@ function closeAllForms() {
         'editLocalCustomerCard',
         'addRegionFromLocalCustomerCard', 
         'importLocalCustomersCard', 
-        'deleteLocalCustomerCard'
+        'deleteLocalCustomerCard',
+        'customerExportCard'
     ];
     
     cards.forEach(function(cardId) {
@@ -2340,7 +2341,8 @@ function closeAllForms() {
         'viewLocationModal',
         'addRegionFromLocalCustomerModal', 
         'importLocalCustomersModal', 
-        'deleteLocalCustomerModal'
+        'deleteLocalCustomerModal',
+        'customerExportModal'
     ];
     
     modals.forEach(function(modalId) {
@@ -2458,6 +2460,49 @@ function closeEditLocalCustomerCard() {
         card.style.display = 'none';
         const form = card.querySelector('form');
         if (form) form.reset();
+    }
+}
+
+// دالة فتح نموذج تصدير العملاء
+function showCustomerExportModal(event) {
+    closeAllForms();
+    
+    // الحصول على section من الزر إذا كان موجوداً
+    const button = event ? (event.target.closest('button') || event.target) : null;
+    const section = button ? (button.getAttribute('data-section') || 'local') : 'local';
+    
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('customerExportCard');
+        if (card) {
+            // تعيين data-section للـ Card
+            card.setAttribute('data-section', section);
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+                // تشغيل loadCustomersList بعد فتح Card
+                // سيتم التعامل معه في customer_export.js عبر event delegation
+                if (typeof loadCustomersList === 'function') {
+                    loadCustomersList(section);
+                }
+            }, 50);
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        const modal = document.getElementById('customerExportModal');
+        if (modal) {
+            modal.setAttribute('data-section', section);
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+// دالة إغلاق Card تصدير العملاء
+function closeCustomerExportCard() {
+    const card = document.getElementById('customerExportCard');
+    if (card) {
+        card.style.display = 'none';
     }
 }
 
@@ -4356,9 +4401,9 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 <?php endif; ?>
 
-<!-- Modal تصدير العملاء المحددين -->
+<!-- Modal تصدير العملاء المحددين - للكمبيوتر فقط -->
 <?php if (in_array($currentRole, ['manager', 'developer', 'accountant'], true)): ?>
-<div class="modal fade" id="customerExportModal" tabindex="-1" aria-hidden="true" data-section="local">
+<div class="modal fade d-none d-md-block" id="customerExportModal" tabindex="-1" aria-hidden="true" data-section="local">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-info text-white">
@@ -4409,6 +4454,58 @@ document.addEventListener('DOMContentLoaded', function() {
                     <i class="bi bi-file-earmark-excel me-2"></i>توليد ملف Excel
                 </button>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Card تصدير العملاء المحددين - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="customerExportCard" style="display: none;">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-download me-2"></i>تصدير عملاء محددين إلى Excel
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="customer-export-alerts mb-3"></div>
+        
+        <!-- قائمة العملاء -->
+        <div class="mb-3" id="customersSection" style="display: none;">
+            <div class="d-flex flex-column justify-content-between align-items-center mb-2 gap-2">
+                <h6 class="mb-0 w-100">حدد العملاء المراد تصديرهم:</h6>
+                <div class="btn-group btn-group-sm w-100">
+                    <button type="button" class="btn btn-outline-primary" id="selectAllCustomers">
+                        <i class="bi bi-check-square me-1"></i>تحديد الكل
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" id="deselectAllCustomers">
+                        <i class="bi bi-square me-1"></i>إلغاء التحديد
+                    </button>
+                </div>
+            </div>
+            <div id="exportCustomersList" class="table-responsive">
+                <!-- سيتم ملؤه عبر JavaScript -->
+            </div>
+        </div>
+        
+        <!-- رسالة التحميل -->
+        <div id="selectRepMessage" class="text-center text-muted py-4">
+            <span class="spinner-border spinner-border-sm me-2"></span>جاري تحميل قائمة العملاء المحليين المدينين...
+        </div>
+        
+        <!-- أزرار الإجراءات بعد التوليد -->
+        <div id="exportActionButtons" style="display: none;" class="mt-3 p-3 bg-light rounded">
+            <h6 class="mb-3">تم توليد ملف Excel بنجاح</h6>
+            <div class="d-flex gap-2 flex-wrap">
+                <button type="button" class="btn btn-primary btn-sm" id="printExcelBtn">
+                    <i class="bi bi-printer me-2"></i>طباعة
+                </button>
+            </div>
+        </div>
+        
+        <div class="d-flex gap-2 mt-3">
+            <button type="button" class="btn btn-secondary flex-fill" onclick="closeCustomerExportCard()">إغلاق</button>
+            <button type="button" class="btn btn-primary flex-fill" id="generateExcelBtn" disabled>
+                <i class="bi bi-file-earmark-excel me-2"></i>توليد ملف Excel
+            </button>
         </div>
     </div>
 </div>
@@ -4737,7 +4834,8 @@ window.CUSTOMER_EXPORT_CONFIG = {
 @media (min-width: 769px) {
     #collectPaymentCard,
     #addLocalCustomerCard,
-    #editLocalCustomerCard {
+    #editLocalCustomerCard,
+    #customerExportCard {
         display: none !important;
     }
 }

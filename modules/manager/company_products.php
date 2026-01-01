@@ -1569,6 +1569,42 @@ foreach ($factoryProducts as $product) {
     </div>
 </div>
 
+<!-- Card طباعة الباركود - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="printBarcodesCard" style="display: none;">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-printer me-2"></i>طباعة الباركود
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-success">
+            <i class="bi bi-check-circle me-2"></i>
+            جاهز للطباعة
+        </div>
+        <div class="mb-3">
+            <label class="form-label">اسم المنتج</label>
+            <input type="text" class="form-control" id="barcodeCardProductName" readonly>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">عدد الباركودات المراد طباعتها</label>
+            <input type="number" class="form-control" id="barcodeCardPrintQuantity" min="1" value="1">
+            <small class="text-muted">سيتم طباعة نفس رقم التشغيلة بعدد المرات المحدد</small>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">أرقام التشغيلة</label>
+            <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;">
+                <div id="batchNumbersListCard"></div>
+            </div>
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-primary" onclick="printBarcodesFromCard()">
+                <i class="bi bi-printer me-2"></i>طباعة
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="closePrintBarcodesCard()">إغلاق</button>
+        </div>
+    </div>
+</div>
+
 <!-- Card للموبايل - إضافة منتج خارجي -->
 <div class="card shadow-sm mb-4 d-md-none" id="addExternalProductCard" style="display: none;">
     <div class="card-header bg-primary text-white">
@@ -1658,7 +1694,7 @@ foreach ($factoryProducts as $product) {
 </div>
 
 <!-- Modal تفاصيل التشغيلة -->
-<div class="modal fade" id="batchDetailsModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+<div class="modal fade d-none d-md-block" id="batchDetailsModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
@@ -1682,6 +1718,32 @@ foreach ($factoryProducts as $product) {
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Card تفاصيل التشغيلة - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="batchDetailsCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-info-circle me-2"></i>تفاصيل التشغيلة
+        </h5>
+    </div>
+    <div class="card-body">
+        <div id="batchDetailsCardLoading" class="d-flex justify-content-center py-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">جارٍ التحميل...</span>
+            </div>
+        </div>
+        <div id="batchDetailsCardError" class="alert alert-danger d-none" role="alert"></div>
+        <div id="batchDetailsCardContent" class="d-none">
+            <div id="batchDetailsCardSummarySection" class="mb-4"></div>
+            <div id="batchDetailsCardMaterialsSection" class="mb-4"></div>
+            <div id="batchDetailsCardRawMaterialsSection" class="mb-4"></div>
+            <div id="batchDetailsCardWorkersSection" class="mb-0"></div>
+        </div>
+        <div class="d-flex gap-2 mt-3">
+            <button type="button" class="btn btn-secondary" onclick="closeBatchDetailsCard()">إغلاق</button>
         </div>
     </div>
 </div>
@@ -1712,7 +1774,13 @@ function scrollToElement(element) {
 }
 
 function closeAllForms() {
-    const cards = ['addExternalProductCard', 'editExternalProductCard', 'deleteExternalProductCard'];
+    const cards = [
+        'addExternalProductCard', 
+        'editExternalProductCard', 
+        'deleteExternalProductCard',
+        'batchDetailsCard',
+        'printBarcodesCard'
+    ];
     cards.forEach(function(cardId) {
         const card = document.getElementById(cardId);
         if (card && card.style.display !== 'none') {
@@ -1722,7 +1790,13 @@ function closeAllForms() {
         }
     });
     
-    const modals = ['addExternalProductModal', 'editExternalProductModal', 'deleteExternalProductModal'];
+    const modals = [
+        'addExternalProductModal', 
+        'editExternalProductModal', 
+        'deleteExternalProductModal',
+        'batchDetailsModal',
+        'printBarcodesModal'
+    ];
     modals.forEach(function(modalId) {
         const modal = document.getElementById(modalId);
         if (modal) {
@@ -1932,6 +2006,85 @@ function showBatchDetailsModal(batchNumber, productName, retryCount = 0) {
         return;
     }
     
+    // إغلاق جميع النماذج المفتوحة أولاً
+    if (typeof closeAllForms === 'function') {
+        closeAllForms();
+    }
+    
+    const isMobileDevice = isMobile();
+    
+    if (isMobileDevice) {
+        // على الموبايل: استخدام Card فقط
+        const card = document.getElementById('batchDetailsCard');
+        if (!card) {
+            console.error('batchDetailsCard not found');
+            return;
+        }
+        
+        const loader = card.querySelector('#batchDetailsCardLoading');
+        const errorAlert = card.querySelector('#batchDetailsCardError');
+        const contentWrapper = card.querySelector('#batchDetailsCardContent');
+        
+        // التحقق من وجود البيانات في cache
+        const cachedData = getBatchDetailsFromCache(batchNumber);
+        if (cachedData) {
+            if (loader) loader.classList.add('d-none');
+            if (errorAlert) errorAlert.classList.add('d-none');
+            renderBatchDetailsCard(cachedData);
+            if (contentWrapper) contentWrapper.classList.remove('d-none');
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+            return;
+        }
+        
+        // إذا لم تكن البيانات موجودة في cache، جلبها من الخادم
+        if (loader) loader.classList.remove('d-none');
+        if (errorAlert) errorAlert.classList.add('d-none');
+        if (contentWrapper) contentWrapper.classList.add('d-none');
+        batchDetailsIsLoading = true;
+        
+        card.style.display = 'block';
+        setTimeout(function() {
+            scrollToElement(card);
+        }, 50);
+        
+        // تحميل البيانات
+        fetch(batchDetailsEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ batch_number: batchNumber })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (loader) loader.classList.add('d-none');
+            batchDetailsIsLoading = false;
+            
+            if (data.success && data.batch) {
+                setBatchDetailsInCache(batchNumber, data.batch);
+                renderBatchDetailsCard(data.batch);
+                if (contentWrapper) contentWrapper.classList.remove('d-none');
+            } else {
+                if (errorAlert) {
+                    errorAlert.textContent = data.message || 'تعذر تحميل تفاصيل التشغيلة';
+                    errorAlert.classList.remove('d-none');
+                }
+            }
+        })
+        .catch(error => {
+            if (loader) loader.classList.add('d-none');
+            if (errorAlert) {
+                errorAlert.textContent = 'حدث خطأ أثناء تحميل التفاصيل';
+                errorAlert.classList.remove('d-none');
+            }
+            batchDetailsIsLoading = false;
+            console.error('Error loading batch details:', error);
+        });
+        return;
+    }
+    
+    // على الكمبيوتر: استخدام Modal
     if (typeof bootstrap === 'undefined' || typeof bootstrap.Modal === 'undefined') {
         alert('تعذر فتح تفاصيل التشغيلة. يرجى تحديث الصفحة.');
         return;

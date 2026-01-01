@@ -1359,6 +1359,46 @@ $typeColorMap = [
 </div>
 
 <script>
+// ===== منع Bootstrap Modal على الموبايل - يجب تنفيذ هذا أولاً =====
+// هذا الكود يعمل فوراً قبل أي كود آخر
+(function() {
+    'use strict';
+    
+    function isMobileCheck() {
+        return window.innerWidth <= 768;
+    }
+    
+    // منع Bootstrap من تهيئة Modal على الموبايل
+    if (isMobileCheck()) {
+        // تعطيل show method لـ Bootstrap Modal
+        document.addEventListener('DOMContentLoaded', function() {
+            // إزالة Modal من DOM على الموبايل بعد تحميل الصفحة
+            setTimeout(function() {
+                const collectModal = document.getElementById('collectFromRepModal');
+                const reportModal = document.getElementById('generateReportModal');
+                
+                if (collectModal && isMobileCheck()) {
+                    collectModal.style.display = 'none';
+                    collectModal.style.visibility = 'hidden';
+                    collectModal.style.position = 'fixed';
+                    collectModal.style.left = '-9999px';
+                    collectModal.setAttribute('aria-hidden', 'true');
+                    collectModal.setAttribute('tabindex', '-1');
+                }
+                
+                if (reportModal && isMobileCheck()) {
+                    reportModal.style.display = 'none';
+                    reportModal.style.visibility = 'hidden';
+                    reportModal.style.position = 'fixed';
+                    reportModal.style.left = '-9999px';
+                    reportModal.setAttribute('aria-hidden', 'true');
+                    reportModal.setAttribute('tabindex', '-1');
+                }
+            }, 0);
+        }, { once: true });
+    }
+})();
+
 // ===== دوال أساسية للـ Modal/Card Dual System =====
 
 // دالة التحقق من الموبايل
@@ -1787,26 +1827,22 @@ function loadSalesRepBalance(salesRepId, repBalanceElement, collectAmountElement
 }
 
 // معالجة تحصيل من مندوب
-// يجب تنفيذ هذا الكود قبل تحميل Bootstrap
+// منع Bootstrap من تهيئة Modal على الموبايل - يجب تنفيذ هذا قبل Bootstrap
 (function() {
-    // منع Bootstrap من التعرف على Modal كـ modal element على الموبايل
     if (window.innerWidth <= 768) {
-        // هذا الكود يعمل فوراً قبل DOMContentLoaded
-        const originalCreateElement = document.createElement;
-        document.createElement = function(tagName) {
-            const element = originalCreateElement.call(document, tagName);
-            if (tagName.toLowerCase() === 'div' && element.classList) {
-                // عندما يتم إنشاء div للـ backdrop، نمنعه
-                const originalAppendChild = document.body.appendChild;
-                document.body.appendChild = function(child) {
-                    if (child.classList && child.classList.contains('modal-backdrop')) {
-                        return child; // لا نضيف backdrop
-                    }
-                    return originalAppendChild.call(document.body, child);
-                };
-            }
-            return element;
-        };
+        // تعطيل Bootstrap Modal على الموبايل تماماً
+        if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+            const originalModalShow = bootstrap.Modal.prototype.show;
+            bootstrap.Modal.prototype.show = function() {
+                // إذا كان Modal خاص بـ collectFromRepModal أو generateReportModal على الموبايل، لا نفتحه
+                const modalId = this._element ? this._element.id : '';
+                if (modalId === 'collectFromRepModal' || modalId === 'generateReportModal') {
+                    // منع فتح Modal
+                    return;
+                }
+                return originalModalShow.call(this);
+            };
+        }
     }
 })();
 
