@@ -4174,7 +4174,8 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
     </div>
 </div>
 
-<div class="modal fade" id="externalStockModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+<!-- Modal تحديث كمية المنتج الخارجي - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="externalStockModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog">
         <form class="modal-content" method="POST">
             <input type="hidden" name="action" value="adjust_external_stock">
@@ -4206,7 +4207,8 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
     </div>
 </div>
 
-<div class="modal fade" id="editExternalProductModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+<!-- Modal تعديل منتج خارجي - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="editExternalProductModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog">
         <form class="modal-content" method="POST">
             <input type="hidden" name="action" value="update_external_product">
@@ -4251,7 +4253,8 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
     </div>
 </div>
 
-<div class="modal fade" id="setManualPriceModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+<!-- Modal تحديد السعر اليدوي - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="setManualPriceModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog">
         <form class="modal-content" method="POST">
             <input type="hidden" name="action" value="update_manual_price">
@@ -6219,8 +6222,8 @@ window.showBarcodePrintModal = showBarcodePrintModal;
 window.printBarcodes = printBarcodes;
 </script>
 
-<!-- Modal طلب استلام منتجات من بضاعة المندوب -->
-<div class="modal fade" id="receiveFromSalesRepModal" tabindex="-1">
+<!-- Modal طلب استلام منتجات من بضاعة المندوب - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="receiveFromSalesRepModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
