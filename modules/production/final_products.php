@@ -2948,7 +2948,7 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
     }
     /* ===== CSS مبسط - Modal للكمبيوتر فقط، Card للموبايل ===== */
     
-    /* إخفاء Modal على الموبايل */
+    /* إخفاء Modal على الموبايل - منع فتحها تماماً */
     @media (max-width: 768px) {
         #batchDetailsModal,
         #printBarcodesModal,
@@ -2960,6 +2960,20 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
         #requestTransferModal,
         #receiveFromSalesRepModal {
             display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+        }
+        
+        /* منع backdrop من الظهور */
+        .modal-backdrop {
+            display: none !important;
+        }
+        
+        /* إزالة class modal-open من body */
+        body.modal-open {
+            overflow: auto !important;
+            padding-right: 0 !important;
         }
         
         /* السماح بإظهار Cards على الموبايل عند الحاجة */
@@ -2968,6 +2982,8 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
         #transferExternalProductCard.show-card,
         #addExternalProductCard.show-card {
             display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
         }
     }
     
@@ -5846,6 +5862,30 @@ if (!window.transferFormInitialized) {
         window.finalProductsClickEventsAttached = true;
         
         document.addEventListener('click', function(event) {
+            // منع فتح Modal على الموبايل - إغلاق أي Modal مفتوح أولاً
+            const isMobileDevice = typeof window.isMobile === 'function' ? window.isMobile() : window.innerWidth <= 768;
+            if (isMobileDevice) {
+                // إغلاق جميع Modals المفتوحة على الموبايل
+                document.querySelectorAll('.modal.show').forEach(function(modal) {
+                    try {
+                        const modalInstance = bootstrap.Modal.getInstance(modal);
+                        if (modalInstance) {
+                            modalInstance.hide();
+                        }
+                    } catch (e) {
+                        // تجاهل الأخطاء
+                    }
+                });
+                // إزالة backdrop
+                document.querySelectorAll('.modal-backdrop').forEach(function(backdrop) {
+                    backdrop.remove();
+                });
+                // إزالة class modal-open من body
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+                document.body.style.paddingRight = '';
+            }
+            
             // زر تفاصيل التشغيلة
             const detailsButton = event.target.closest('.js-batch-details');
             if (detailsButton) {
