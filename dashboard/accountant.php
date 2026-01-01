@@ -1155,16 +1155,8 @@ if ($isAjaxNavigation) {
 
             <?php elseif ($page === 'financial'): ?>
                 <!-- صفحة الخزنة -->
-                <div class="page-header mb-4 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="page-header mb-4">
                     <h2><i class="bi bi-safe me-2"></i><?php echo isset($lang['menu_financial']) ? $lang['menu_financial'] : 'الخزنة'; ?></h2>
-                    <div class="d-flex gap-2">
-                        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#generateReportModal">
-                            <i class="bi bi-file-earmark-text me-1"></i>تقرير تفصيلي
-                        </button>
-                        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#collectFromRepModal">
-                            <i class="bi bi-cash-coin me-1"></i>تحصيل من مندوب
-                        </button>
-                    </div>
                 </div>
 
                 <?php if ($financialError): ?>
@@ -2938,6 +2930,8 @@ function loadSalesRepBalance(salesRepId, repBalanceElement, collectAmountElement
 
 // معالجة تحصيل من مندوب
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOMContentLoaded - Setting up collect from rep forms');
+    
     // Modal elements
     const salesRepSelect = document.getElementById('salesRepSelect');
     const repBalanceAmount = document.getElementById('repBalanceAmount');
@@ -2952,6 +2946,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const collectCardForm = document.getElementById('collectFromRepCardForm');
     const collectCardSubmitBtn = document.getElementById('collectFromRepCardSubmitBtn');
     
+    console.log('Card elements found:', {
+        select: !!collectCardSalesRepSelect,
+        balance: !!collectCardRepBalanceAmount,
+        amount: !!collectCardAmount,
+        form: !!collectCardForm
+    });
+    
     // معالجة تغيير المندوب في Modal
     if (salesRepSelect) {
         salesRepSelect.addEventListener('change', function() {
@@ -2960,10 +2961,16 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // معالجة تغيير المندوب في Card
-    if (collectCardSalesRepSelect) {
+    if (collectCardSalesRepSelect && collectCardRepBalanceAmount && collectCardAmount) {
         collectCardSalesRepSelect.addEventListener('change', function() {
-            loadSalesRepBalance(this.value, collectCardRepBalanceAmount, collectCardAmount);
+            const salesRepId = this.value;
+            loadSalesRepBalance(salesRepId, collectCardRepBalanceAmount, collectCardAmount);
         });
+        
+        // تحميل الرصيد تلقائياً إذا كان هناك قيمة محفوظة
+        if (collectCardSalesRepSelect.value) {
+            loadSalesRepBalance(collectCardSalesRepSelect.value, collectCardRepBalanceAmount, collectCardAmount);
+        }
     }
     
     // دالة مشتركة للتحقق من المبلغ قبل الإرسال

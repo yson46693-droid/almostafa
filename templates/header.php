@@ -3583,8 +3583,7 @@ if (ob_get_level() > 0) {
                        aria-label="القائمة السريعة"
                        aria-expanded="false"
                        aria-haspopup="true"
-                       data-bs-toggle="dropdown" 
-                       title="القائمة السريعة">
+                       data-bs-toggle="dropdown">
                         <i class="bi bi-three-dots-vertical" aria-hidden="true"></i>
                         <span class="visually-hidden">القائمة السريعة</span>
                     </a>

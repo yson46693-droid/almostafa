@@ -114,13 +114,18 @@
         font-size: var(--font-size-sm);
     }
     
-    .mobile-menu-toggle,
-    .mobile-reload-btn {
+    .mobile-menu-toggle {
         width: 36px;
         height: 36px;
         font-size: var(--font-size-base);
         margin-right: 0;
         margin-left: 0;
+    }
+    
+    /* إخفاء الأزرار المكررة على الهواتف - تظهر فقط داخل القائمة السريعة */
+    .mobile-reload-btn,
+    .mobile-dark-toggle {
+        display: none !important;
     }
     
     /* إخفاء بعض الأيقونات على الشاشات الصغيرة جداً */
@@ -130,7 +135,9 @@
         #fingerprintRegisterBtn,
         #refreshPageBtn,
         #darkModeToggle,
-        .mobile-logout-btn {
+        .mobile-logout-btn,
+        .mobile-reload-btn,
+        .mobile-dark-toggle {
             display: none !important;
         }
         
@@ -226,9 +233,7 @@
 }
 
 /* ===== Mobile Menu Toggle ===== */
-.mobile-menu-toggle,
-.mobile-reload-btn,
-.mobile-dark-toggle {
+.mobile-menu-toggle {
     background: none;
     border: none;
     padding: var(--spacing-sm);
@@ -244,18 +249,26 @@
     transition: all var(--transition-base);
 }
 
-.mobile-menu-toggle:hover,
-.mobile-reload-btn:hover,
-.mobile-dark-toggle:hover {
+.mobile-menu-toggle:hover {
     background: var(--gray-100);
     color: var(--gray-900);
 }
 
+/* إخفاء الأزرار المكررة على جميع الشاشات - تظهر فقط داخل القائمة السريعة */
+.mobile-reload-btn,
+.mobile-dark-toggle {
+    display: none !important;
+}
+
 @media (max-width: 768px) {
-    .mobile-menu-toggle,
+    .mobile-menu-toggle {
+        display: flex;
+    }
+    
+    /* التأكد من إخفاء الأزرار المكررة على الهواتف */
     .mobile-reload-btn,
     .mobile-dark-toggle {
-        display: flex;
+        display: none !important;
     }
 }
 
@@ -1366,6 +1379,22 @@ a#quickActionsDropdown {
         padding: 0 !important;
     }
     
+    /* إخفاء tooltip على الهواتف */
+    .quick-actions-toggle[title],
+    #quickActionsDropdown[title],
+    a.quick-actions-toggle[title],
+    a#quickActionsDropdown[title] {
+        pointer-events: auto;
+    }
+    
+    /* منع ظهور tooltip على الهواتف */
+    .quick-actions-toggle[title]:hover::after,
+    #quickActionsDropdown[title]:hover::after,
+    a.quick-actions-toggle[title]:hover::after,
+    a#quickActionsDropdown[title]:hover::after {
+        display: none !important;
+    }
+    
     /* التأكد من أن الزر مرئي في topbar-right */
     .topbar-right .quick-actions-dropdown,
     .topbar-right .quick-actions-toggle,
@@ -1382,5 +1411,58 @@ a#quickActionsDropdown {
     #darkModeToggle,
     .mobile-logout-btn {
         display: none !important;
+    }
+}
+
+/* ===== قاعدة نهائية لضمان ظهور زر القائمة السريعة على جميع الأجهزة ===== */
+/* التأكد من أن زر القائمة السريعة مرئي دائماً على الهواتف */
+@media (max-width: 768px) {
+    /* قاعدة نهائية قوية - تضمن ظهور الزر */
+    .topbar-right .quick-actions-dropdown,
+    .homeline-topbar .quick-actions-dropdown {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        position: relative !important;
+        z-index: 1000 !important;
+    }
+    
+    .topbar-right .quick-actions-toggle,
+    .topbar-right #quickActionsDropdown,
+    .topbar-right a.quick-actions-toggle,
+    .topbar-right a#quickActionsDropdown,
+    .homeline-topbar .quick-actions-toggle,
+    .homeline-topbar #quickActionsDropdown,
+    .homeline-topbar a.quick-actions-toggle,
+    .homeline-topbar a#quickActionsDropdown {
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        position: relative !important;
+        z-index: 1001 !important;
+        pointer-events: auto !important;
+        cursor: pointer !important;
+        width: 36px !important;
+        height: 36px !important;
+        min-width: 36px !important;
+        min-height: 36px !important;
+        flex-shrink: 0 !important;
+    }
+    
+    /* التأكد من إخفاء الأزرار المكررة على الهواتف */
+    .topbar-left .mobile-reload-btn,
+    .topbar-left .mobile-dark-toggle,
+    .topbar-right .mobile-reload-btn,
+    .topbar-right .mobile-dark-toggle,
+    .homeline-topbar .mobile-reload-btn,
+    .homeline-topbar .mobile-dark-toggle {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        width: 0 !important;
+        height: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        overflow: hidden !important;
     }
 }

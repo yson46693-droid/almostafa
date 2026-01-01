@@ -4076,13 +4076,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 credentials: 'same-origin'
             })
             .then(response => {
-                // التحقق من حالة الاستجابة
-                if (!response.ok) {
-                    return response.text().then(text => {
-                        throw new Error('خطأ في الخادم: ' + response.status + ' ' + response.statusText + (text ? ' - ' + text.substring(0, 200) : ''));
-                    });
-                }
-                return response.json();
+                // قراءة النص أولاً للتحقق من نوع المحتوى
+                return response.text().then(text => {
+                    // محاولة parse JSON
+                    try {
+                        const data = JSON.parse(text);
+                        if (!response.ok) {
+                            throw new Error(data.message || 'خطأ في الخادم: ' + response.status);
+                        }
+                        return data;
+                    } catch (parseError) {
+                        // إذا لم يكن JSON، قد يكون HTML error page
+                        if (!response.ok) {
+                            throw new Error('خطأ في الخادم: ' + response.status + ' ' + response.statusText + (text ? ' - ' + text.substring(0, 200) : ''));
+                        }
+                        throw new Error('استجابة غير صحيحة من الخادم');
+                    }
+                });
             })
             .then(data => {
                 if (progressBar) progressBar.style.width = '100%';
@@ -4218,17 +4228,29 @@ document.addEventListener('DOMContentLoaded', function() {
                 credentials: 'same-origin'
             })
             .then(response => {
-                if (!response.ok) {
-                    return response.text().then(text => {
-                        throw new Error('خطأ في الخادم: ' + response.status + ' ' + response.statusText + (text ? ' - ' + text.substring(0, 200) : ''));
-                    });
-                }
-                return response.json();
+                // قراءة النص أولاً للتحقق من نوع المحتوى
+                return response.text().then(text => {
+                    // محاولة parse JSON
+                    try {
+                        const data = JSON.parse(text);
+                        if (!response.ok) {
+                            throw new Error(data.message || 'خطأ في الخادم: ' + response.status);
+                        }
+                        return data;
+                    } catch (parseError) {
+                        // إذا لم يكن JSON، قد يكون HTML error page
+                        if (!response.ok) {
+                            throw new Error('خطأ في الخادم: ' + response.status + ' ' + response.statusText + (text ? ' - ' + text.substring(0, 200) : ''));
+                        }
+                        throw new Error('استجابة غير صحيحة من الخادم');
+                    }
+                });
             })
             .then(data => {
+                console.log('Import Card response data:', data);
                 if (progressBar) progressBar.style.width = '100%';
                 
-                if (data.success) {
+                if (data && data.success) {
                     if (statusDiv) {
                         statusDiv.textContent = 'تم الاستيراد بنجاح!';
                         statusDiv.className = 'text-center text-success';
@@ -4273,7 +4295,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (submitBtn) submitBtn.disabled = false;
             })
             .catch(error => {
-                console.error('Import error:', error);
+                console.error('Import Card error:', error);
+                console.error('Error details:', {
+                    message: error.message,
+                    stack: error.stack,
+                    name: error.name
+                });
                 if (statusDiv) {
                     statusDiv.textContent = 'حدث خطأ في الاتصال بالخادم';
                     statusDiv.className = 'text-center text-danger';
@@ -4282,7 +4309,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 var errorMessage = error.message || 'حدث خطأ غير معروف';
                 var errorsContent = document.getElementById('localImportErrorsContentCard');
                 if (errorsContent) {
-                    errorsContent.innerHTML = '<p>' + errorMessage + '</p><p class="text-muted small mt-2">يرجى التحقق من ملف error_log في الخادم لمزيد من التفاصيل</p>';
+                    errorsContent.innerHTML = '<p><strong>خطأ:</strong> ' + errorMessage + '</p><p class="text-muted small mt-2">يرجى التحقق من ملف error_log في الخادم لمزيد من التفاصيل</p>';
                 } else {
                     console.error('localImportErrorsContentCard element not found');
                     alert('حدث خطأ: ' + errorMessage);

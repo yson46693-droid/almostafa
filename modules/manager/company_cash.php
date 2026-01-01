@@ -1711,10 +1711,16 @@ document.addEventListener('DOMContentLoaded', function() {
     const collectCardSubmitBtn = document.getElementById('collectFromRepCardSubmitBtn');
     
     // معالجة تغيير المندوب في Card
-    if (collectCardSalesRepSelect) {
+    if (collectCardSalesRepSelect && collectCardRepBalanceAmount && collectCardAmount) {
         collectCardSalesRepSelect.addEventListener('change', function() {
-            loadSalesRepBalance(this.value, collectCardRepBalanceAmount, collectCardAmount);
+            const salesRepId = this.value;
+            loadSalesRepBalance(salesRepId, collectCardRepBalanceAmount, collectCardAmount);
         });
+        
+        // تحميل الرصيد تلقائياً إذا كان هناك قيمة محفوظة
+        if (collectCardSalesRepSelect.value) {
+            loadSalesRepBalance(collectCardSalesRepSelect.value, collectCardRepBalanceAmount, collectCardAmount);
+        }
     }
     
     // دالة مشتركة للتحقق من المبلغ قبل الإرسال
