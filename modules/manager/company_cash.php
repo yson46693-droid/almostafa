@@ -462,6 +462,126 @@ $pageTitle = isset($lang['menu_financial']) ? $lang['menu_financial'] : 'خزن�
     </div>
 <?php endif; ?>
 
+<!-- Cards للموبايل - يجب أن تكون في بداية الصفحة بعد الرسائل -->
+<!-- Card تحصيل من مندوب - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="collectFromRepCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-cash-coin me-2"></i>تحصيل من مندوب
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="collectFromRepCardForm">
+            <input type="hidden" name="action" value="collect_from_sales_rep">
+            <div class="mb-3">
+                <label for="collectFromRepCardSalesRepSelect" class="form-label">اختر المندوب <span class="text-danger">*</span></label>
+                <select class="form-select" id="collectFromRepCardSalesRepSelect" name="sales_rep_id" required>
+                    <option value="">-- اختر المندوب --</option>
+                    <?php
+                    $salesReps = $db->query("
+                        SELECT id, username, full_name 
+                        FROM users 
+                        WHERE role = 'sales' AND status = 'active'
+                        ORDER BY full_name ASC, username ASC
+                    ") ?: [];
+                    foreach ($salesReps as $rep):
+                    ?>
+                        <option value="<?php echo $rep['id']; ?>">
+                            <?php echo htmlspecialchars($rep['full_name'] ?? $rep['username'], ENT_QUOTES, 'UTF-8'); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            
+            <div class="mb-3">
+                <label for="collectFromRepCardRepBalanceAmount" class="form-label">رصيد المندوب</label>
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-wallet2 me-1"></i>رصيد المندوب</span>
+                    <input type="text" class="form-control" id="collectFromRepCardRepBalanceAmount" readonly value="-- اختر مندوب أولاً --" style="background-color: #f8f9fa; font-weight: bold;">
+                    <span class="input-group-text">ج.م</span>
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="collectFromRepCardAmount" class="form-label">مبلغ التحصيل <span class="text-danger">*</span></label>
+                <div class="input-group">
+                    <span class="input-group-text">ج.م</span>
+                    <input type="number" step="0.01" min="0.01" class="form-control" id="collectFromRepCardAmount" name="amount" required placeholder="أدخل المبلغ">
+                </div>
+                <small class="text-muted">يجب أن يكون المبلغ أقل من أو يساوي رصيد المندوب</small>
+            </div>
+            
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary" id="collectFromRepCardSubmitBtn">
+                    <i class="bi bi-check-circle me-1"></i>تحصيل
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeCollectFromRepCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card إنشاء تقرير تفصيلي - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="generateReportCard" style="display: none;">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-file-earmark-text me-2"></i>إنشاء تقرير تفصيلي
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle me-2"></i>
+            <strong>ملاحظة:</strong> سيتم إنشاء تقرير تفصيلي لجميع حركات خزنة الشركة في الفترة المحددة.
+        </div>
+        <form method="GET" id="generateReportCardForm" onsubmit="return handleReportCardSubmit(event)">
+            <div class="mb-3">
+                <label for="generateReportCardDateFrom" class="form-label">
+                    <i class="bi bi-calendar-event me-1"></i>من تاريخ <span class="text-danger">*</span>
+                </label>
+                <input type="date" 
+                       class="form-control" 
+                       id="generateReportCardDateFrom" 
+                       name="date_from" 
+                       required
+                       value="<?php echo date('Y-m-01'); ?>">
+            </div>
+            <div class="mb-3">
+                <label for="generateReportCardDateTo" class="form-label">
+                    <i class="bi bi-calendar-event me-1"></i>إلى تاريخ <span class="text-danger">*</span>
+                </label>
+                <input type="date" 
+                       class="form-control" 
+                       id="generateReportCardDateTo" 
+                       name="date_to" 
+                       required
+                       value="<?php echo date('Y-m-d'); ?>">
+            </div>
+            <div class="mb-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="generateReportCardIncludePending" name="include_pending" value="1">
+                    <label class="form-check-label" for="generateReportCardIncludePending">
+                        تضمين المعاملات المعلقة
+                    </label>
+                </div>
+            </div>
+            <div class="mb-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="generateReportCardGroupByType" name="group_by_type" value="1" checked>
+                    <label class="form-check-label" for="generateReportCardGroupByType">
+                        تجميع الحركات حسب النوع
+                    </label>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-success">
+                    <i class="bi bi-file-earmark-pdf me-1"></i>إنشاء التقرير
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeGenerateReportCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 
 <?php
 // حساب ملخص الخزينة من financial_transactions و accountant_transactions
@@ -1238,64 +1358,6 @@ $typeColorMap = [
     </div>
 </div>
 
-<!-- Card تحصيل من مندوب - للموبايل فقط -->
-<div class="card shadow-sm mb-4 d-md-none" id="collectFromRepCard" style="display: none;">
-    <div class="card-header bg-primary text-white">
-        <h5 class="mb-0">
-            <i class="bi bi-cash-coin me-2"></i>تحصيل من مندوب
-        </h5>
-    </div>
-    <div class="card-body">
-        <form method="POST" id="collectFromRepCardForm">
-            <input type="hidden" name="action" value="collect_from_sales_rep">
-            <div class="mb-3">
-                <label for="collectFromRepCardSalesRepSelect" class="form-label">اختر المندوب <span class="text-danger">*</span></label>
-                <select class="form-select" id="collectFromRepCardSalesRepSelect" name="sales_rep_id" required>
-                    <option value="">-- اختر المندوب --</option>
-                    <?php
-                    $salesReps = $db->query("
-                        SELECT id, username, full_name 
-                        FROM users 
-                        WHERE role = 'sales' AND status = 'active'
-                        ORDER BY full_name ASC, username ASC
-                    ") ?: [];
-                    foreach ($salesReps as $rep):
-                    ?>
-                        <option value="<?php echo $rep['id']; ?>">
-                            <?php echo htmlspecialchars($rep['full_name'] ?? $rep['username'], ENT_QUOTES, 'UTF-8'); ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            
-            <div class="mb-3">
-                <label for="collectFromRepCardRepBalanceAmount" class="form-label">رصيد المندوب</label>
-                <div class="input-group">
-                    <span class="input-group-text"><i class="bi bi-wallet2 me-1"></i>رصيد المندوب</span>
-                    <input type="text" class="form-control" id="collectFromRepCardRepBalanceAmount" readonly value="-- اختر مندوب أولاً --" style="background-color: #f8f9fa; font-weight: bold;">
-                    <span class="input-group-text">ج.م</span>
-                </div>
-            </div>
-            
-            <div class="mb-3">
-                <label for="collectFromRepCardAmount" class="form-label">مبلغ التحصيل <span class="text-danger">*</span></label>
-                <div class="input-group">
-                    <span class="input-group-text">ج.م</span>
-                    <input type="number" step="0.01" min="0.01" class="form-control" id="collectFromRepCardAmount" name="amount" required placeholder="أدخل المبلغ">
-                </div>
-                <small class="text-muted">يجب أن يكون المبلغ أقل من أو يساوي رصيد المندوب</small>
-            </div>
-            
-            <div class="d-flex gap-2">
-                <button type="submit" class="btn btn-primary" id="collectFromRepCardSubmitBtn">
-                    <i class="bi bi-check-circle me-1"></i>تحصيل
-                </button>
-                <button type="button" class="btn btn-secondary" onclick="closeCollectFromRepCard()">إلغاء</button>
-            </div>
-        </form>
-    </div>
-</div>
-
 <script>
 // ===== دوال أساسية للـ Modal/Card Dual System =====
 
@@ -1363,6 +1425,7 @@ function showCollectFromRepModal() {
         const card = document.getElementById('collectFromRepCard');
         if (card) {
             card.style.display = 'block';
+            card.style.setProperty('display', 'block', 'important');
             setTimeout(function() {
                 scrollToElement(card);
             }, 50);
@@ -1386,6 +1449,7 @@ function showGenerateReportModal() {
         const card = document.getElementById('generateReportCard');
         if (card) {
             card.style.display = 'block';
+            card.style.setProperty('display', 'block', 'important');
             setTimeout(function() {
                 scrollToElement(card);
             }, 50);
@@ -1405,6 +1469,7 @@ function closeCollectFromRepCard() {
     const card = document.getElementById('collectFromRepCard');
     if (card) {
         card.style.display = 'none';
+        card.style.removeProperty('display');
         const form = card.querySelector('form');
         if (form) form.reset();
         
@@ -1433,6 +1498,7 @@ function closeGenerateReportCard() {
     const card = document.getElementById('generateReportCard');
     if (card) {
         card.style.display = 'none';
+        card.style.removeProperty('display');
         const form = card.querySelector('form');
         if (form) form.reset();
     }
@@ -1886,67 +1952,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             </form>
         </div>
-    </div>
-</div>
-
-<!-- Card إنشاء تقرير تفصيلي - للموبايل فقط -->
-<div class="card shadow-sm mb-4 d-md-none" id="generateReportCard" style="display: none;">
-    <div class="card-header bg-success text-white">
-        <h5 class="mb-0">
-            <i class="bi bi-file-earmark-text me-2"></i>إنشاء تقرير تفصيلي
-        </h5>
-    </div>
-    <div class="card-body">
-        <div class="alert alert-info">
-            <i class="bi bi-info-circle me-2"></i>
-            <strong>ملاحظة:</strong> سيتم إنشاء تقرير تفصيلي لجميع حركات خزنة الشركة في الفترة المحددة.
-        </div>
-        <form method="GET" id="generateReportCardForm" onsubmit="return handleReportCardSubmit(event)">
-            <div class="mb-3">
-                <label for="generateReportCardDateFrom" class="form-label">
-                    <i class="bi bi-calendar-event me-1"></i>من تاريخ <span class="text-danger">*</span>
-                </label>
-                <input type="date" 
-                       class="form-control" 
-                       id="generateReportCardDateFrom" 
-                       name="date_from" 
-                       required
-                       value="<?php echo date('Y-m-01'); ?>">
-            </div>
-            <div class="mb-3">
-                <label for="generateReportCardDateTo" class="form-label">
-                    <i class="bi bi-calendar-event me-1"></i>إلى تاريخ <span class="text-danger">*</span>
-                </label>
-                <input type="date" 
-                       class="form-control" 
-                       id="generateReportCardDateTo" 
-                       name="date_to" 
-                       required
-                       value="<?php echo date('Y-m-d'); ?>">
-            </div>
-            <div class="mb-3">
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" id="generateReportCardIncludePending" name="include_pending" value="1">
-                    <label class="form-check-label" for="generateReportCardIncludePending">
-                        تضمين المعاملات المعلقة
-                    </label>
-                </div>
-            </div>
-            <div class="mb-3">
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" id="generateReportCardGroupByType" name="group_by_type" value="1" checked>
-                    <label class="form-check-label" for="generateReportCardGroupByType">
-                        تجميع الحركات حسب النوع
-                    </label>
-                </div>
-            </div>
-            <div class="d-flex gap-2">
-                <button type="submit" class="btn btn-success">
-                    <i class="bi bi-file-earmark-pdf me-1"></i>إنشاء التقرير
-                </button>
-                <button type="button" class="btn btn-secondary" onclick="closeGenerateReportCard()">إلغاء</button>
-            </div>
-        </form>
     </div>
 </div>
 
