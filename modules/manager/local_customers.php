@@ -4173,6 +4173,124 @@ document.addEventListener('DOMContentLoaded', function() {
             if (errorsDiv) errorsDiv.classList.add('d-none');
         });
     }
+    
+    // معالج استيراد العملاء المحليين من CSV - للـ Card
+    var importLocalCustomersCardForm = document.getElementById('importLocalCustomersCardForm');
+    
+    if (importLocalCustomersCardForm) {
+        importLocalCustomersCardForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            var fileInput = document.getElementById('localExcelFileInputCard');
+            if (!fileInput || !fileInput.files || !fileInput.files.length) {
+                alert('يرجى اختيار ملف CSV أو Excel');
+                return;
+            }
+            
+            var file = fileInput.files[0];
+            if (file.size > 10 * 1024 * 1024) {
+                alert('حجم الملف يجب ألا يتجاوز 10 ميجابايت');
+                return;
+            }
+            
+            var formData = new FormData();
+            formData.append('excel_file', file);
+            formData.append('action', 'import_local_customers');
+            
+            // إظهار شريط التقدم
+            var progressDiv = document.getElementById('localImportProgressCard');
+            var progressBar = progressDiv ? progressDiv.querySelector('.progress-bar') : null;
+            var statusDiv = document.getElementById('localImportStatusCard');
+            var resultsDiv = document.getElementById('localImportResultsCard');
+            var errorsDiv = document.getElementById('localImportErrorsCard');
+            var submitBtn = document.getElementById('localImportSubmitBtnCard');
+            
+            if (progressDiv) progressDiv.classList.remove('d-none');
+            if (resultsDiv) resultsDiv.classList.add('d-none');
+            if (errorsDiv) errorsDiv.classList.add('d-none');
+            if (progressBar) progressBar.style.width = '0%';
+            if (statusDiv) statusDiv.textContent = 'جاري رفع الملف...';
+            if (submitBtn) submitBtn.disabled = true;
+            
+            fetch('<?php echo getRelativeUrl("api/import_local_customers.php"); ?>', {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error('خطأ في الخادم: ' + response.status + ' ' + response.statusText + (text ? ' - ' + text.substring(0, 200) : ''));
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (progressBar) progressBar.style.width = '100%';
+                
+                if (data.success) {
+                    if (statusDiv) {
+                        statusDiv.textContent = 'تم الاستيراد بنجاح!';
+                        statusDiv.className = 'text-center text-success';
+                    }
+                    
+                    var resultsContent = document.getElementById('localImportResultsContentCard');
+                    if (resultsContent) {
+                        var html = '<ul class="mb-0">';
+                        html += '<li>تم استيراد: <strong>' + (data.imported || 0) + '</strong> عميل محلي</li>';
+                        if (data.skipped && data.skipped > 0) {
+                            html += '<li>تم تخطي: <strong>' + data.skipped + '</strong> عميل (مكرر)</li>';
+                        }
+                        if (data.errors && data.errors.length > 0) {
+                            html += '<li>أخطاء: <strong>' + data.errors.length + '</strong> سطر</li>';
+                        }
+                        html += '</ul>';
+                        resultsContent.innerHTML = html;
+                    }
+                    if (resultsDiv) resultsDiv.classList.remove('d-none');
+                    
+                    // إعادة تحميل الصفحة بعد 2 ثانية
+                    setTimeout(function() {
+                        location.reload();
+                    }, 2000);
+                } else {
+                    if (statusDiv) {
+                        statusDiv.textContent = 'فشل الاستيراد';
+                        statusDiv.className = 'text-center text-danger';
+                    }
+                    
+                    var errorsContent = document.getElementById('localImportErrorsContentCard');
+                    if (errorsContent) {
+                        var html = '<p>' + (data.message || 'حدث خطأ أثناء الاستيراد') + '</p>';
+                        if (data.errors && data.errors.length > 0) {
+                            html += '<ul class="mb-0"><li>' + data.errors.join('</li><li>') + '</li></ul>';
+                        }
+                        errorsContent.innerHTML = html;
+                    }
+                    if (errorsDiv) errorsDiv.classList.remove('d-none');
+                }
+                
+                if (submitBtn) submitBtn.disabled = false;
+            })
+            .catch(error => {
+                console.error('Import error:', error);
+                if (statusDiv) {
+                    statusDiv.textContent = 'حدث خطأ في الاتصال بالخادم';
+                    statusDiv.className = 'text-center text-danger';
+                }
+                if (errorsDiv) errorsDiv.classList.remove('d-none');
+                var errorMessage = error.message || 'حدث خطأ غير معروف';
+                var errorsContent = document.getElementById('localImportErrorsContentCard');
+                if (errorsContent) {
+                    errorsContent.innerHTML = '<p>' + errorMessage + '</p><p class="text-muted small mt-2">يرجى التحقق من ملف error_log في الخادم لمزيد من التفاصيل</p>';
+                } else {
+                    console.error('localImportErrorsContentCard element not found');
+                    alert('حدث خطأ: ' + errorMessage);
+                }
+                if (submitBtn) submitBtn.disabled = false;
+            });
+        });
+    }
 });
 
 // إدارة أرقام الهواتف المتعددة
@@ -4905,6 +5023,48 @@ window.CUSTOMER_EXPORT_CONFIG = {
     </div>
 </div>
 
+<!-- Card استيراد العملاء المحليين من CSV - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="importLocalCustomersCard" style="display: none;">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-file-earmark-spreadsheet me-2"></i>استيراد العملاء المحليين من ملف CSV
+        </h5>
+    </div>
+    <div class="card-body">
+        <form id="importLocalCustomersCardForm" enctype="multipart/form-data">
+            <div class="mb-3">
+                <label class="form-label">اختر ملف CSV أو Excel <span class="text-danger">*</span></label>
+                <input type="file" class="form-control" name="excel_file" id="localExcelFileInputCard" accept=".csv,.xlsx,.xls" required>
+                <small class="text-muted">الحجم الأقصى: 10 ميجابايت | يُفضل استخدام ملف CSV</small>
+            </div>
+            <div id="localImportProgressCard" class="d-none">
+                <div class="progress mb-3">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                </div>
+                <div id="localImportStatusCard" class="text-center"></div>
+            </div>
+            <div id="localImportResultsCard" class="d-none">
+                <div class="alert alert-success">
+                    <h6><i class="bi bi-check-circle me-2"></i>تم الاستيراد بنجاح</h6>
+                    <div id="localImportResultsContentCard"></div>
+                </div>
+            </div>
+            <div id="localImportErrorsCard" class="d-none">
+                <div class="alert alert-danger">
+                    <h6><i class="bi bi-exclamation-triangle me-2"></i>أخطاء أثناء الاستيراد</h6>
+                    <div id="localImportErrorsContentCard"></div>
+                </div>
+            </div>
+            <div class="d-flex gap-2 mt-3">
+                <button type="button" class="btn btn-secondary flex-fill" onclick="closeImportLocalCustomersCard()">إلغاء</button>
+                <button type="submit" class="btn btn-success flex-fill" id="localImportSubmitBtnCard">
+                    <i class="bi bi-upload me-2"></i>استيراد
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <style>
 /* ===== CSS مبسط - Modal للكمبيوتر فقط، Card للموبايل ===== */
 
@@ -4926,7 +5086,8 @@ window.CUSTOMER_EXPORT_CONFIG = {
     #addLocalCustomerCard,
     #editLocalCustomerCard,
     #customerExportCard,
-    #viewLocationCard {
+    #viewLocationCard,
+    #importLocalCustomersCard {
         display: none !important;
     }
 }

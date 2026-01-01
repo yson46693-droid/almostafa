@@ -668,7 +668,7 @@ $typeColorMap = [
     <div class="col-12 col-xxl-5">
         <div class="row g-3">
             <!-- تسجيل مصروف سريع -->
-            <div class="col-12 col-md-6">
+            <div class="col-12 col-md-4">
                 <div class="card shadow-sm h-100">
                     <div class="card-header bg-light fw-bold">
                         <i class="bi bi-pencil-square me-2 text-success"></i>تسجيل مصروف سريع
@@ -722,7 +722,7 @@ $typeColorMap = [
             </div>
             
             <!-- تحصيل من مندوب -->
-            <div class="col-12 col-md-6">
+            <div class="col-12 col-md-4">
                 <div class="card shadow-sm h-100">
                     <div class="card-header bg-light fw-bold">
                         <i class="bi bi-cash-coin me-2 text-primary"></i>تحصيل من مندوب
@@ -774,23 +774,25 @@ $typeColorMap = [
                                 </button>
                             </div>
                         </form>
-                    </div>
-                </div>
-            </div>
+                                </div>
+                            </div>
+                        </div>
             
-            <!-- Card إنشاء تقرير تفصيلي - ثابتة دائماً -->
-            <div class="col-12">
+            <!-- إنشاء تقرير تفصيلي -->
+            <div class="col-12 col-md-4">
                 <div class="card shadow-sm h-100">
                     <div class="card-header bg-light fw-bold">
                         <i class="bi bi-file-earmark-text me-2 text-success"></i>إنشاء تقرير تفصيلي
                     </div>
                     <div class="card-body">
-                        <div class="alert alert-info">
-                            <i class="bi bi-info-circle me-2"></i>
-                            <strong>ملاحظة:</strong> سيتم إنشاء تقرير تفصيلي لجميع حركات خزنة الشركة في الفترة المحددة.
-                        </div>
-                        <form method="GET" id="generateReportCardForm" onsubmit="return handleReportCardSubmit(event)">
-                            <div class="mb-3">
+                        <form method="GET" id="generateReportCardForm" onsubmit="return handleReportCardSubmit(event)" class="row g-3">
+                            <div class="col-12">
+                                <div class="alert alert-info mb-0">
+                                    <i class="bi bi-info-circle me-2"></i>
+                                    <small><strong>ملاحظة:</strong> سيتم إنشاء تقرير تفصيلي لجميع حركات خزنة الشركة في الفترة المحددة.</small>
+                                </div>
+                            </div>
+                            <div class="col-12">
                                 <label for="generateReportCardDateFrom" class="form-label">
                                     <i class="bi bi-calendar-event me-1"></i>من تاريخ <span class="text-danger">*</span>
                                 </label>
@@ -801,7 +803,7 @@ $typeColorMap = [
                                        required
                                        value="<?php echo date('Y-m-01'); ?>">
                             </div>
-                            <div class="mb-3">
+                            <div class="col-12">
                                 <label for="generateReportCardDateTo" class="form-label">
                                     <i class="bi bi-calendar-event me-1"></i>إلى تاريخ <span class="text-danger">*</span>
                                 </label>
@@ -812,7 +814,7 @@ $typeColorMap = [
                                        required
                                        value="<?php echo date('Y-m-d'); ?>">
                             </div>
-                            <div class="mb-3">
+                            <div class="col-12">
                                 <div class="form-check">
                                     <input class="form-check-input" type="checkbox" id="generateReportCardIncludePending" name="include_pending" value="1">
                                     <label class="form-check-label" for="generateReportCardIncludePending">
@@ -820,7 +822,7 @@ $typeColorMap = [
                                     </label>
                                 </div>
                             </div>
-                            <div class="mb-3">
+                            <div class="col-12">
                                 <div class="form-check">
                                     <input class="form-check-input" type="checkbox" id="generateReportCardGroupByType" name="group_by_type" value="1" checked>
                                     <label class="form-check-label" for="generateReportCardGroupByType">
@@ -828,7 +830,7 @@ $typeColorMap = [
                                     </label>
                                 </div>
                             </div>
-                            <div class="d-flex justify-content-end gap-2">
+                            <div class="col-12 d-flex justify-content-end gap-2">
                                 <button type="submit" class="btn btn-success">
                                     <i class="bi bi-file-earmark-pdf me-1"></i>إنشاء التقرير
                                 </button>

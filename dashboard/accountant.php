@@ -1405,7 +1405,7 @@ if ($isAjaxNavigation) {
                 <div class="col-12 col-xxl-5">
                     <div class="row g-3">
                         <!-- تسجيل مصروف سريع -->
-                        <div class="col-12 col-md-6">
+                        <div class="col-12 col-md-4">
                             <div class="card shadow-sm h-100">
                                 <div class="card-header bg-light fw-bold">
                                     <i class="bi bi-pencil-square me-2 text-success"></i>تسجيل مصروف سريع
@@ -1451,7 +1451,7 @@ if ($isAjaxNavigation) {
                         </div>
                         
                         <!-- تحصيل من مندوب -->
-                        <div class="col-12 col-md-6">
+                        <div class="col-12 col-md-4">
                             <div class="card shadow-sm h-100">
                                 <div class="card-header bg-light fw-bold">
                                     <i class="bi bi-cash-coin me-2 text-primary"></i>تحصيل من مندوب
@@ -1500,6 +1500,68 @@ if ($isAjaxNavigation) {
                                             <button type="reset" class="btn btn-outline-secondary">تفريغ الحقول</button>
                                             <button type="submit" class="btn btn-primary" id="collectFromRepCardSubmitBtn">
                                                 <i class="bi bi-check-circle me-1"></i>تحصيل
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- إنشاء تقرير تفصيلي -->
+                        <div class="col-12 col-md-4">
+                            <div class="card shadow-sm h-100">
+                                <div class="card-header bg-light fw-bold">
+                                    <i class="bi bi-file-earmark-text me-2 text-success"></i>إنشاء تقرير تفصيلي
+                                </div>
+                                <div class="card-body">
+                                    <form method="GET" id="generateReportCardForm" onsubmit="return handleReportCardSubmit(event)" class="row g-3">
+                                        <div class="col-12">
+                                            <div class="alert alert-info mb-0">
+                                                <i class="bi bi-info-circle me-2"></i>
+                                                <small><strong>ملاحظة:</strong> سيتم إنشاء تقرير تفصيلي لجميع حركات خزنة الشركة في الفترة المحددة.</small>
+                                            </div>
+                                        </div>
+                                        <div class="col-12">
+                                            <label for="generateReportCardDateFrom" class="form-label">
+                                                <i class="bi bi-calendar-event me-1"></i>من تاريخ <span class="text-danger">*</span>
+                                            </label>
+                                            <input type="date" 
+                                                   class="form-control" 
+                                                   id="generateReportCardDateFrom" 
+                                                   name="date_from" 
+                                                   required
+                                                   value="<?php echo date('Y-m-01'); ?>">
+                                        </div>
+                                        <div class="col-12">
+                                            <label for="generateReportCardDateTo" class="form-label">
+                                                <i class="bi bi-calendar-event me-1"></i>إلى تاريخ <span class="text-danger">*</span>
+                                            </label>
+                                            <input type="date" 
+                                                   class="form-control" 
+                                                   id="generateReportCardDateTo" 
+                                                   name="date_to" 
+                                                   required
+                                                   value="<?php echo date('Y-m-d'); ?>">
+                                        </div>
+                                        <div class="col-12">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="generateReportCardIncludePending" name="include_pending" value="1">
+                                                <label class="form-check-label" for="generateReportCardIncludePending">
+                                                    تضمين المعاملات المعلقة
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-12">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="generateReportCardGroupByType" name="group_by_type" value="1" checked>
+                                                <label class="form-check-label" for="generateReportCardGroupByType">
+                                                    تجميع الحركات حسب النوع
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-12 d-flex justify-content-end gap-2">
+                                            <button type="submit" class="btn btn-success">
+                                                <i class="bi bi-file-earmark-pdf me-1"></i>إنشاء التقرير
                                             </button>
                                         </div>
                                     </form>
@@ -2701,6 +2763,75 @@ function handleReportSubmit(event) {
         if (modal) {
             modal.hide();
         }
+    }
+    
+    return false;
+}
+
+// معالجة إرسال نموذج التقرير من Card
+function handleReportCardSubmit(event) {
+    event.preventDefault();
+    
+    const form = document.getElementById('generateReportCardForm');
+    if (!form) return false;
+    
+    const dateFrom = document.getElementById('generateReportCardDateFrom');
+    const dateTo = document.getElementById('generateReportCardDateTo');
+    
+    if (!dateFrom || !dateTo) return false;
+    
+    const fromDate = new Date(dateFrom.value);
+    const toDate = new Date(dateTo.value);
+    
+    if (fromDate > toDate) {
+        alert('تاريخ البداية يجب أن يكون قبل تاريخ النهاية');
+        dateFrom.focus();
+        return false;
+    }
+    
+    // بناء URL للتقرير
+    const origin = window.location.origin;
+    const currentPath = window.location.pathname;
+    
+    let basePath = currentPath;
+    basePath = basePath.replace(/\/dashboard\/[^\/]+\.php.*$/, '');
+    basePath = basePath.replace(/\/modules\/[^\/]+\/[^\/]+\.php.*$/, '');
+    basePath = basePath.replace(/\/$/, '');
+    if (!basePath) {
+        basePath = '';
+    }
+    
+    const reportUrl = origin + basePath + '/print_company_cash_report.php';
+    
+    // جمع معاملات النموذج
+    const formData = new FormData(form);
+    const params = new URLSearchParams();
+    
+    for (const [key, value] of formData.entries()) {
+        params.append(key, value);
+    }
+    
+    const includePending = document.getElementById('generateReportCardIncludePending');
+    const groupByType = document.getElementById('generateReportCardGroupByType');
+    
+    if (!includePending.checked) {
+        params.delete('include_pending');
+    }
+    if (!groupByType.checked) {
+        params.delete('group_by_type');
+    }
+    
+    // فتح التقرير في تبويب جديد
+    const fullUrl = reportUrl + '?' + params.toString();
+    window.open(fullUrl, '_blank');
+    
+    // إعادة تعيين النموذج بعد فتح التقرير
+    if (form) {
+        form.reset();
+        // إعادة تعيين القيم الافتراضية
+        if (dateFrom) dateFrom.value = '<?php echo date('Y-m-01'); ?>';
+        if (dateTo) dateTo.value = '<?php echo date('Y-m-d'); ?>';
+        if (groupByType) groupByType.checked = true;
     }
     
     return false;

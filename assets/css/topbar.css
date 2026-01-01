@@ -72,12 +72,16 @@
         flex: 0 0 auto;
         order: 2; /* الأيقونات آخراً */
         justify-content: flex-end;
+        min-width: 0;
+        overflow: visible !important;
     }
     
     /* إظهار القائمة السريعة على الموبايل */
     .quick-actions-dropdown,
     .topbar-dropdown.quick-actions-dropdown {
         display: block !important;
+        position: relative !important;
+        z-index: 1000 !important;
     }
     
     .quick-actions-toggle,
@@ -89,6 +93,13 @@
         opacity: 1 !important;
         width: 36px !important;
         height: 36px !important;
+        position: relative !important;
+        z-index: 1001 !important;
+        pointer-events: auto !important;
+        cursor: pointer !important;
+        flex-shrink: 0 !important;
+        min-width: 36px !important;
+        min-height: 36px !important;
     }
     
     .topbar-action {
@@ -138,6 +149,13 @@
             opacity: 1 !important;
             width: 36px !important;
             height: 36px !important;
+            position: relative !important;
+            z-index: 1001 !important;
+            pointer-events: auto !important;
+            cursor: pointer !important;
+            flex-shrink: 0 !important;
+            min-width: 36px !important;
+            min-height: 36px !important;
         }
         
         .topbar-left {
@@ -1215,6 +1233,10 @@ a#quickActionsDropdown {
     opacity: 1 !important;
     width: 40px;
     height: 40px;
+    position: relative;
+    z-index: 1001;
+    pointer-events: auto !important;
+    cursor: pointer !important;
 }
 
 .quick-actions-menu {
@@ -1318,6 +1340,9 @@ a#quickActionsDropdown {
     /* إظهار القائمة المنسدلة على الهواتف */
     .quick-actions-dropdown {
         display: block !important;
+        position: relative !important;
+        z-index: 1000 !important;
+        flex-shrink: 0 !important;
     }
     
     /* إظهار زر القائمة السريعة على الهواتف */
@@ -1330,6 +1355,24 @@ a#quickActionsDropdown {
         opacity: 1 !important;
         width: 36px !important;
         height: 36px !important;
+        position: relative !important;
+        z-index: 1001 !important;
+        pointer-events: auto !important;
+        cursor: pointer !important;
+        flex-shrink: 0 !important;
+        min-width: 36px !important;
+        min-height: 36px !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    
+    /* التأكد من أن الزر مرئي في topbar-right */
+    .topbar-right .quick-actions-dropdown,
+    .topbar-right .quick-actions-toggle,
+    .topbar-right #quickActionsDropdown {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
     }
     
     /* إخفاء جميع الأزرار الفردية على الهواتف */
