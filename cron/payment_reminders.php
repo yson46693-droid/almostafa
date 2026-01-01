@@ -57,6 +57,11 @@ foreach ($salesReps as $rep) {
 $totalSent = $sentCountLocal + $sentCountSalesReps;
 error_log("{$logPrefix} Total reminders sent: {$totalSent} (Local: {$sentCountLocal}, Sales Reps: {$sentCountSalesReps})");
 
+// إرسال إشعارات للمواعيد المتأخرة للمحاسبين والمديرين (للعملاء المحليين)
+error_log("{$logPrefix} Sending overdue notifications for managers/accountants...");
+$overdueNotificationsSent = notifyOverduePaymentSchedulesForManagers();
+error_log("{$logPrefix} Sent {$overdueNotificationsSent} overdue notifications for managers/accountants");
+
 // إنشاء تذكيرات تلقائية للجداول القادمة (3 أيام قبل الاستحقاق)
 error_log("{$logPrefix} Creating auto reminders for upcoming schedules (3 days before due date)...");
 $pendingSchedules = $db->query(
@@ -77,7 +82,7 @@ error_log("{$logPrefix} Created {$createdCount} new auto reminders");
 $endTime = microtime(true);
 $executionTime = round($endTime - $startTime, 2);
 
-error_log("{$logPrefix} ====== END ====== Execution time: {$executionTime}s | Total sent: {$totalSent} | Created: {$createdCount}");
+error_log("{$logPrefix} ====== END ====== Execution time: {$executionTime}s | Total sent: {$totalSent} | Overdue notifications: {$overdueNotificationsSent} | Created: {$createdCount}");
 
-echo "تم إرسال {$totalSent} تذكير (محلي: {$sentCountLocal}, مندوبين: {$sentCountSalesReps}) وإنشاء {$createdCount} تذكير جديد\n";
+echo "تم إرسال {$totalSent} تذكير (محلي: {$sentCountLocal}, مندوبين: {$sentCountSalesReps}) و {$overdueNotificationsSent} إشعار متأخر وإنشاء {$createdCount} تذكير جديد\n";
 

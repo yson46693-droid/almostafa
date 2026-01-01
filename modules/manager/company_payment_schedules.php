@@ -557,10 +557,9 @@ updateOverdueSchedules();
 // ملاحظة: إرسال التذكيرات يتم عبر cron job فقط (cron/payment_reminders.php)
 // لا يتم إرسال التذكيرات عند الدخول للصفحة لتجنب الإشعارات المكررة
 
-// إرسال إشعارات للمواعيد المتأخرة للمحاسبين والمديرين (للعملاء المحليين)
-error_log('=== company_payment_schedules.php: Calling notifyOverduePaymentSchedulesForManagers ===');
-$overdueNotificationsSent = notifyOverduePaymentSchedulesForManagers();
-error_log('notifyOverduePaymentSchedulesForManagers returned: ' . $overdueNotificationsSent);
+// ملاحظة: إرسال إشعارات المواعيد المتأخرة يتم عبر cron job أيضاً
+// تم إزالة استدعاء notifyOverduePaymentSchedulesForManagers لتجنب الإشعارات المكررة
+// يمكن إضافة هذه الدالة إلى cron job إذا لزم الأمر
 
 // الحصول على البيانات - فقط جداول العملاء المحليين
 $saleNumberColumnCheck = $db->queryOne("SHOW COLUMNS FROM sales LIKE 'sale_number'");

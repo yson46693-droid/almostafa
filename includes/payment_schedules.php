@@ -950,6 +950,7 @@ function notifyOverduePaymentSchedulesForManagers() {
     $notifiedCount = 0;
     $notifiedSchedules = [];
     $todayDate = new DateTimeImmutable('today');
+    $todayString = $todayDate->format('Y-m-d');
 
     foreach ($schedules as $schedule) {
         $scheduleId = (int) ($schedule['id'] ?? 0);
@@ -960,6 +961,30 @@ function notifyOverduePaymentSchedulesForManagers() {
         // تجنب إرسال إشعارات مكررة لنفس الجدول في نفس اليوم
         if (isset($notifiedSchedules[$scheduleId])) {
             continue;
+        }
+
+        // التحقق من أن إشعار متأخر لم يُرسل لهذا الجدول في نفس اليوم
+        // نستخدم reminder_sent_at للتحقق من آخر مرة تم إرسال إشعار فيها
+        $scheduleCheck = $db->queryOne(
+            "SELECT reminder_sent_at FROM payment_schedules 
+             WHERE id = ? 
+             LIMIT 1",
+            [$scheduleId]
+        );
+        
+        // إذا تم إرسال إشعار في نفس اليوم، تخطي هذا الجدول
+        if ($scheduleCheck && !empty($scheduleCheck['reminder_sent_at'])) {
+            $reminderSentDate = date('Y-m-d', strtotime($scheduleCheck['reminder_sent_at']));
+            if ($reminderSentDate === $todayString) {
+                $logMessage = sprintf(
+                    "[PAYMENT_OVERDUE_NOTIFICATION_SKIPPED] Schedule ID: %d | Customer: %s | Reason: Overdue notification already sent today (reminder_sent_at: %s)",
+                    $scheduleId,
+                    $schedule['customer_name'] ?? 'N/A',
+                    $scheduleCheck['reminder_sent_at']
+                );
+                error_log($logMessage);
+                continue;
+            }
         }
 
         $link = getRelativeUrl('dashboard/accountant.php?page=company_payment_schedules&id=' . $scheduleId);
@@ -1003,8 +1028,9 @@ function notifyOverduePaymentSchedulesForManagers() {
             }
 
             try {
-                // التحقق من وجود إشعار من نفس النوع والرابط في نفس اليوم (مقروء أو غير مقروء)
+                // التحقق من وجود إشعار من نفس النوع والرابط في نفس اليوم (مقروء أو غير مقروء أو محذوف)
                 // لإرسال الإشعار مرة واحدة فقط في اليوم
+                // نتحقق من أي إشعار في نفس اليوم بنفس الرابط والنوع، بغض النظر عن حالة القراءة
                 $existing = $db->queryOne(
                     "SELECT id FROM notifications 
                      WHERE user_id = ? 
@@ -1016,6 +1042,13 @@ function notifyOverduePaymentSchedulesForManagers() {
                 );
 
                 if ($existing) {
+                    $logMessage = sprintf(
+                        "[PAYMENT_OVERDUE_NOTIFICATION_SKIPPED] User ID: %d | Schedule ID: %d | Customer: %s | Reason: Notification already exists for today",
+                        $userId,
+                        $scheduleId,
+                        $customerName
+                    );
+                    error_log($logMessage);
                     continue;
                 }
 
@@ -1027,6 +1060,29 @@ function notifyOverduePaymentSchedulesForManagers() {
                     $link,
                     true // إرسال Telegram
                 );
+                
+                // تحديث reminder_sent_at في payment_schedules لتتبع إرسال إشعار متأخر
+                // هذا يضمن عدم إرسال إشعار متأخر مرة أخرى في نفس اليوم حتى لو تم حذف الإشعار
+                try {
+                    $db->execute(
+                        "UPDATE payment_schedules 
+                         SET reminder_sent_at = NOW() 
+                         WHERE id = ?",
+                        [$scheduleId]
+                    );
+                } catch (Exception $updateError) {
+                    error_log('Error updating reminder_sent_at for schedule ' . $scheduleId . ': ' . $updateError->getMessage());
+                }
+                
+                $logMessage = sprintf(
+                    "[PAYMENT_OVERDUE_NOTIFICATION_SENT] User ID: %d | Schedule ID: %d | Customer: %s | Amount: %s | Days Overdue: %d",
+                    $userId,
+                    $scheduleId,
+                    $customerName,
+                    formatCurrency($amount),
+                    $daysOverdue
+                );
+                error_log($logMessage);
                 
                 $notifiedCount++;
             } catch (Exception $notifError) {
