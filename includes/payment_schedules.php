@@ -1112,3 +1112,137 @@ function updateOverdueSchedules() {
     return $updated['affected_rows'] ?? 0;
 }
 
+/**
+ * إرسال تقرير يومي واحد عبر Telegram عن جداول التحصيل للعملاء المحليين
+ * يتم إرسال الرسالة مرة واحدة فقط يومياً
+ */
+function sendDailyLocalPaymentSchedulesTelegramReport() {
+    require_once __DIR__ . '/simple_telegram.php';
+    
+    if (!isTelegramConfigured()) {
+        error_log('Daily Payment Schedules Report: Telegram not configured');
+        return false;
+    }
+    
+    $db = db();
+    $jobKey = 'daily_local_payment_schedules_report';
+    $today = date('Y-m-d');
+    
+    // التأكد من وجود جدول system_daily_jobs
+    try {
+        $db->execute("
+            CREATE TABLE IF NOT EXISTS `system_daily_jobs` (
+              `job_key` varchar(120) NOT NULL,
+              `last_sent_at` datetime DEFAULT NULL,
+              `last_file_path` varchar(512) DEFAULT NULL,
+              `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              PRIMARY KEY (`job_key`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+    } catch (Throwable $e) {
+        error_log('Daily Payment Schedules Report: Failed to create system_daily_jobs table - ' . $e->getMessage());
+    }
+    
+    // التحقق من إرسال الرسالة اليوم
+    $lastSent = $db->queryOne(
+        "SELECT last_sent_at FROM system_daily_jobs WHERE job_key = ?",
+        [$jobKey]
+    );
+    
+    if ($lastSent && !empty($lastSent['last_sent_at'])) {
+        $lastSentDate = date('Y-m-d', strtotime($lastSent['last_sent_at']));
+        if ($lastSentDate === $today) {
+            error_log('Daily Payment Schedules Report: Already sent today at ' . $lastSent['last_sent_at']);
+            return false;
+        }
+    }
+    
+    // جلب إحصائيات الجداول للعملاء المحليين
+    $stats = $db->queryOne("
+        SELECT 
+            COUNT(CASE WHEN ps.status = 'pending' THEN 1 END) as pending_count,
+            COUNT(CASE WHEN ps.status = 'overdue' THEN 1 END) as overdue_count,
+            COALESCE(SUM(CASE WHEN ps.status = 'pending' THEN ps.amount END), 0) as pending_amount,
+            COALESCE(SUM(CASE WHEN ps.status = 'overdue' THEN ps.amount END), 0) as overdue_amount,
+            COUNT(*) as total_count
+        FROM payment_schedules ps
+        INNER JOIN local_customers lc ON ps.customer_id = lc.id
+        WHERE lc.status = 'active' 
+          AND ps.sales_rep_id IS NULL
+          AND ps.status IN ('pending', 'overdue')
+    ");
+    
+    if (!$stats || ($stats['total_count'] ?? 0) == 0) {
+        error_log('Daily Payment Schedules Report: No pending or overdue schedules found');
+        // تحديث last_sent_at حتى لو لم يكن هناك جداول
+        $db->execute(
+            "INSERT INTO system_daily_jobs (job_key, last_sent_at) 
+             VALUES (?, NOW()) 
+             ON DUPLICATE KEY UPDATE last_sent_at = NOW()",
+            [$jobKey]
+        );
+        return false;
+    }
+    
+    $pendingCount = (int)($stats['pending_count'] ?? 0);
+    $overdueCount = (int)($stats['overdue_count'] ?? 0);
+    $pendingAmount = (float)($stats['pending_amount'] ?? 0);
+    $overdueAmount = (float)($stats['overdue_amount'] ?? 0);
+    $totalCount = (int)($stats['total_count'] ?? 0);
+    
+    // جلب أفضل 10 جداول متأخرة
+    $topOverdue = $db->query("
+        SELECT ps.id, ps.amount, ps.due_date, lc.name as customer_name,
+               DATEDIFF(CURDATE(), ps.due_date) as days_overdue
+        FROM payment_schedules ps
+        INNER JOIN local_customers lc ON ps.customer_id = lc.id
+        WHERE lc.status = 'active' 
+          AND ps.sales_rep_id IS NULL
+          AND ps.status = 'overdue'
+        ORDER BY ps.due_date ASC
+        LIMIT 10
+    ");
+    
+    // بناء الرسالة
+    $message = "📊 <b>تقرير يومي - جداول التحصيل (العملاء المحليين)</b>\n\n";
+    $message .= "📅 التاريخ: " . formatDate($today) . "\n\n";
+    
+    $message .= "📈 <b>الإحصائيات:</b>\n";
+    $message .= "• إجمالي الجداول المعلقة/المتأخرة: <b>" . number_format($totalCount) . "</b>\n";
+    $message .= "• معلقة: <b>" . number_format($pendingCount) . "</b> جدول (" . formatCurrency($pendingAmount) . ")\n";
+    $message .= "• متأخرة: <b>" . number_format($overdueCount) . "</b> جدول (" . formatCurrency($overdueAmount) . ")\n\n";
+    
+    if (!empty($topOverdue)) {
+        $message .= "⚠️ <b>أهم الجداول المتأخرة:</b>\n";
+        $counter = 1;
+        foreach ($topOverdue as $schedule) {
+            $daysOverdue = (int)($schedule['days_overdue'] ?? 0);
+            $message .= $counter . ". " . htmlspecialchars($schedule['customer_name']) . 
+                       " - " . formatCurrency($schedule['amount']) . 
+                       " (متأخر " . $daysOverdue . " يوم)\n";
+            $counter++;
+            if ($counter > 10) break;
+        }
+        $message .= "\n";
+    }
+    
+    $message .= "🔗 للتفاصيل: افتح صفحة جداول التحصيل - العملاء المحليين\n";
+    
+    // إرسال الرسالة
+    $result = sendTelegramMessage($message);
+    
+    if ($result) {
+        // تحديث last_sent_at
+        $db->execute(
+            "INSERT INTO system_daily_jobs (job_key, last_sent_at) 
+             VALUES (?, NOW()) 
+             ON DUPLICATE KEY UPDATE last_sent_at = NOW()",
+            [$jobKey]
+        );
+        error_log('Daily Payment Schedules Report: Telegram message sent successfully');
+        return true;
+    } else {
+        error_log('Daily Payment Schedules Report: Failed to send Telegram message');
+        return false;
+    }
+}

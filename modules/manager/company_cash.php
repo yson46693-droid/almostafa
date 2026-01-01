@@ -667,7 +667,8 @@ $typeColorMap = [
     </div>
     <div class="col-12 col-xxl-5">
         <div class="row g-3">
-            <div class="col-12">
+            <!-- تسجيل مصروف سريع -->
+            <div class="col-12 col-md-6">
                 <div class="card shadow-sm h-100">
                     <div class="card-header bg-light fw-bold">
                         <i class="bi bi-pencil-square me-2 text-success"></i>تسجيل مصروف سريع
@@ -675,14 +676,14 @@ $typeColorMap = [
                     <div class="card-body">
                         <form method="POST" class="row g-3">
                             <input type="hidden" name="action" value="add_quick_expense">
-                            <div class="col-12 col-sm-6">
+                            <div class="col-12">
                                 <label for="quickExpenseAmount" class="form-label">قيمة المصروف <span class="text-danger">*</span></label>
                                 <div class="input-group">
                                     <span class="input-group-text">ج.م</span>
                                     <input type="number" step="0.01" min="0.01" class="form-control" id="quickExpenseAmount" name="amount" required value="<?php echo htmlspecialchars($financialFormData['amount'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                                 </div>
                             </div>
-                            <div class="col-12 col-sm-6">
+                            <div class="col-12">
                                 <label for="quickExpenseReference" class="form-label">رقم مرجعي</label>
                                 <?php
                                 $generatedRef = 'REF-' . mt_rand(100000, 999999);?>
@@ -720,16 +721,16 @@ $typeColorMap = [
                 </div>
             </div>
             
-            <!-- Card تحصيل من مندوب - ثابتة دائماً -->
-            <div class="col-12">
+            <!-- تحصيل من مندوب -->
+            <div class="col-12 col-md-6">
                 <div class="card shadow-sm h-100">
                     <div class="card-header bg-light fw-bold">
                         <i class="bi bi-cash-coin me-2 text-primary"></i>تحصيل من مندوب
                     </div>
                     <div class="card-body">
-                        <form method="POST" id="collectFromRepCardForm">
+                        <form method="POST" id="collectFromRepCardForm" class="row g-3">
                             <input type="hidden" name="action" value="collect_from_sales_rep">
-                            <div class="mb-3">
+                            <div class="col-12">
                                 <label for="collectFromRepCardSalesRepSelect" class="form-label">اختر المندوب <span class="text-danger">*</span></label>
                                 <select class="form-select" id="collectFromRepCardSalesRepSelect" name="sales_rep_id" required>
                                     <option value="">-- اختر المندوب --</option>
@@ -749,25 +750,25 @@ $typeColorMap = [
                                 </select>
                             </div>
                             
-                            <div class="mb-3">
+                            <div class="col-12">
                                 <label for="collectFromRepCardRepBalanceAmount" class="form-label">رصيد المندوب</label>
                                 <div class="input-group">
-                                    <span class="input-group-text"><i class="bi bi-wallet2 me-1"></i>رصيد المندوب</span>
-                                    <input type="text" class="form-control" id="collectFromRepCardRepBalanceAmount" readonly value="-- اختر مندوب أولاً --" style="background-color: #f8f9fa; font-weight: bold;">
                                     <span class="input-group-text">ج.م</span>
+                                    <input type="text" class="form-control" id="collectFromRepCardRepBalanceAmount" readonly value="-- اختر مندوب أولاً --" style="background:#f5f5f5; cursor:not-allowed; font-weight: bold;">
                                 </div>
                             </div>
                             
-                            <div class="mb-3">
+                            <div class="col-12">
                                 <label for="collectFromRepCardAmount" class="form-label">مبلغ التحصيل <span class="text-danger">*</span></label>
                                 <div class="input-group">
                                     <span class="input-group-text">ج.م</span>
                                     <input type="number" step="0.01" min="0.01" class="form-control" id="collectFromRepCardAmount" name="amount" required placeholder="أدخل المبلغ">
                                 </div>
-                                <small class="text-muted">يجب أن يكون المبلغ أقل من أو يساوي رصيد المندوب</small>
+                                <small class="text-muted d-block mt-1">يجب أن يكون المبلغ أقل من أو يساوي رصيد المندوب</small>
                             </div>
                             
-                            <div class="d-flex justify-content-end gap-2">
+                            <div class="col-12 d-flex justify-content-end gap-2">
+                                <button type="reset" class="btn btn-outline-secondary">تفريغ الحقول</button>
                                 <button type="submit" class="btn btn-primary" id="collectFromRepCardSubmitBtn">
                                     <i class="bi bi-check-circle me-1"></i>تحصيل
                                 </button>
