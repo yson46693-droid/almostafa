@@ -1421,6 +1421,7 @@ function showCollectFromRepModal() {
     closeAllForms();
     
     if (isMobile()) {
+        // على الموبايل: استخدام Card فقط - منع فتح Modal تماماً
         const card = document.getElementById('collectFromRepCard');
         if (card) {
             card.style.display = 'block';
@@ -1428,7 +1429,17 @@ function showCollectFromRepModal() {
                 scrollToElement(card);
             }, 50);
         }
+        
+        // منع فتح Modal على الموبايل - إغلاق أي Modal مفتوح
+        const modal = document.getElementById('collectFromRepModal');
+        if (modal) {
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            if (modalInstance) {
+                modalInstance.hide();
+            }
+        }
     } else {
+        // على الكمبيوتر: استخدام Modal فقط
         const modal = document.getElementById('collectFromRepModal');
         if (modal) {
             const modalInstance = new bootstrap.Modal(modal);
@@ -1442,6 +1453,7 @@ function showGenerateReportModal() {
     closeAllForms();
     
     if (isMobile()) {
+        // على الموبايل: استخدام Card فقط - منع فتح Modal تماماً
         const card = document.getElementById('generateReportCard');
         if (card) {
             card.style.display = 'block';
@@ -1449,7 +1461,17 @@ function showGenerateReportModal() {
                 scrollToElement(card);
             }, 50);
         }
+        
+        // منع فتح Modal على الموبايل - إغلاق أي Modal مفتوح
+        const modal = document.getElementById('generateReportModal');
+        if (modal) {
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            if (modalInstance) {
+                modalInstance.hide();
+            }
+        }
     } else {
+        // على الكمبيوتر: استخدام Modal فقط
         const modal = document.getElementById('generateReportModal');
         if (modal) {
             const modalInstance = new bootstrap.Modal(modal);
@@ -1738,6 +1760,47 @@ function loadSalesRepBalance(salesRepId, repBalanceElement, collectAmountElement
 
 // معالجة تحصيل من مندوب
 document.addEventListener('DOMContentLoaded', function() {
+    // منع فتح Modal على الموبايل - حماية إضافية
+    const collectFromRepModal = document.getElementById('collectFromRepModal');
+    const generateReportModal = document.getElementById('generateReportModal');
+    
+    // منع فتح Modal على الموبايل حتى لو تم استدعاؤه مباشرة
+    if (collectFromRepModal) {
+        collectFromRepModal.addEventListener('show.bs.modal', function(event) {
+            if (isMobile()) {
+                event.preventDefault();
+                event.stopPropagation();
+                // فتح Card بدلاً من Modal
+                const card = document.getElementById('collectFromRepCard');
+                if (card) {
+                    card.style.display = 'block';
+                    setTimeout(function() {
+                        scrollToElement(card);
+                    }, 50);
+                }
+                return false;
+            }
+        });
+    }
+    
+    if (generateReportModal) {
+        generateReportModal.addEventListener('show.bs.modal', function(event) {
+            if (isMobile()) {
+                event.preventDefault();
+                event.stopPropagation();
+                // فتح Card بدلاً من Modal
+                const card = document.getElementById('generateReportCard');
+                if (card) {
+                    card.style.display = 'block';
+                    setTimeout(function() {
+                        scrollToElement(card);
+                    }, 50);
+                }
+                return false;
+            }
+        });
+    }
+    
     // Modal elements
     const salesRepSelect = document.getElementById('salesRepSelect');
     const repBalanceAmount = document.getElementById('repBalanceAmount');
@@ -2067,6 +2130,15 @@ document.addEventListener('DOMContentLoaded', function() {
     #collectFromRepModal,
     #generateReportModal {
         display: none !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+    }
+    
+    /* منع backdrop على الموبايل */
+    .modal-backdrop {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
     }
 }
 
@@ -2075,6 +2147,8 @@ document.addEventListener('DOMContentLoaded', function() {
     #collectFromRepCard,
     #generateReportCard {
         display: none !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
     }
 }
 

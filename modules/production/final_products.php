@@ -3657,14 +3657,18 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
     
     transferButtons.forEach(function(button) {
         button.addEventListener('click', function() {
-            closeAllForms();
+            if (typeof window.closeAllForms === 'function') {
+                window.closeAllForms();
+            }
             
             const productId = this.getAttribute('data-product-id');
             const productName = this.getAttribute('data-product-name');
             const availableQty = parseFloat(this.getAttribute('data-available-qty') || '0');
             const unit = this.getAttribute('data-unit') || 'قطعة';
             
-            if (isMobile()) {
+            const isMobileDevice = typeof window.isMobile === 'function' ? window.isMobile() : window.innerWidth <= 768;
+            
+            if (isMobileDevice) {
                 // على الموبايل: استخدام Card
                 const card = document.getElementById('transferExternalProductCard');
                 const cardForm = document.getElementById('transferExternalProductCardForm');
@@ -3686,7 +3690,9 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
                     
                     card.style.display = 'block';
                     setTimeout(function() {
-                        scrollToElement(card);
+                        if (typeof window.scrollToElement === 'function') {
+                        window.scrollToElement(card);
+                    }
                     }, 50);
                 }
             } else {
@@ -5640,9 +5646,11 @@ if (!window.transferFormInitialized) {
                 renderBatchDetailsCard(cachedData);
                 if (contentWrapper) contentWrapper.classList.remove('d-none');
                 card.style.display = 'block';
-                setTimeout(function() {
-                    scrollToElement(card);
-                }, 50);
+                if (typeof window.scrollToElement === 'function') {
+                    setTimeout(function() {
+                        window.scrollToElement(card);
+                    }, 50);
+                }
                 return;
             }
             
@@ -5653,9 +5661,11 @@ if (!window.transferFormInitialized) {
             batchDetailsIsLoading = true;
             
             card.style.display = 'block';
-            setTimeout(function() {
-                scrollToElement(card);
-            }, 50);
+            if (typeof window.scrollToElement === 'function') {
+                setTimeout(function() {
+                    window.scrollToElement(card);
+                }, 50);
+            }
             
             // تحميل البيانات
             fetch(batchDetailsEndpoint, {
@@ -5785,9 +5795,13 @@ if (!window.transferFormInitialized) {
         if (!button) return;
         
         // إغلاق جميع النماذج المفتوحة أولاً
-        closeAllForms();
+        if (typeof window.closeAllForms === 'function') {
+            window.closeAllForms();
+        }
         
-        if (isMobile()) {
+        const isMobileDevice = typeof window.isMobile === 'function' ? window.isMobile() : window.innerWidth <= 768;
+        
+        if (isMobileDevice) {
             // على الموبايل: هذا المودال معقد جداً، نتركه كـ Modal فقط
             // يمكن إضافة Card لاحقاً إذا لزم الأمر
             alert('هذه الميزة متاحة على الكمبيوتر فقط. يرجى استخدام جهاز كمبيوتر.');
@@ -5812,14 +5826,20 @@ if (!window.transferFormInitialized) {
     
     // دالة فتح Modal/Card إضافة منتج خارجي
     function showAddExternalProductModal() {
-        closeAllForms();
+        if (typeof window.closeAllForms === 'function') {
+            window.closeAllForms();
+        }
         
-        if (isMobile()) {
+        const isMobileDevice = typeof window.isMobile === 'function' ? window.isMobile() : window.innerWidth <= 768;
+        
+        if (isMobileDevice) {
             const card = document.getElementById('addExternalProductCard');
             if (card) {
                 card.style.display = 'block';
                 setTimeout(function() {
-                    scrollToElement(card);
+                    if (typeof window.scrollToElement === 'function') {
+                        window.scrollToElement(card);
+                    }
                 }, 50);
             }
         } else {
@@ -6066,6 +6086,9 @@ if (!window.transferFormInitialized) {
 
     window.showBatchDetailsModal = showBatchDetailsModal;
     window.clearBatchDetailsCache = clearBatchDetailsCache;
+    window.isMobile = isMobile;
+    window.closeAllForms = closeAllForms;
+    window.scrollToElement = scrollToElement;
     
     // تهيئة الأحداث عند تحميل الصفحة
     if (document.readyState === 'loading') {
@@ -6084,12 +6107,16 @@ const PRINT_BARCODE_URL = <?php echo json_encode(getRelativeUrl('print_barcode.p
 window.PRINT_BARCODE_URL = PRINT_BARCODE_URL;
 
 function showBarcodePrintModal(batchNumber, productName, defaultQuantity) {
-    closeAllForms();
+    if (typeof window.closeAllForms === 'function') {
+        window.closeAllForms();
+    }
     
     const quantity = defaultQuantity > 0 ? defaultQuantity : 1;
     window.batchNumbersToPrint = [batchNumber];
     
-    if (isMobile()) {
+    const isMobileDevice = typeof window.isMobile === 'function' ? window.isMobile() : window.innerWidth <= 768;
+    
+    if (isMobileDevice) {
         // على الموبايل: استخدام Card
         const card = document.getElementById('printBarcodesCard');
         if (!card) {
@@ -6121,9 +6148,11 @@ function showBarcodePrintModal(batchNumber, productName, defaultQuantity) {
         }
         
         card.style.display = 'block';
-        setTimeout(function() {
-            scrollToElement(card);
-        }, 50);
+        if (typeof window.scrollToElement === 'function') {
+            setTimeout(function() {
+                window.scrollToElement(card);
+            }, 50);
+        }
     } else {
         // على الكمبيوتر: استخدام Modal
         const modalElement = document.getElementById('printBarcodesModal');
