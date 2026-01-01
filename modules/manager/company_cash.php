@@ -1392,22 +1392,16 @@ function closeAllForms() {
     const collectCard = document.getElementById('collectFromRepCard');
     const reportCard = document.getElementById('generateReportCard');
     
-    if (collectCard) {
-        const computedStyle = window.getComputedStyle(collectCard);
-        if (computedStyle.display !== 'none') {
-            collectCard.style.setProperty('display', 'none', 'important');
-            const form = collectCard.querySelector('form');
-            if (form) form.reset();
-        }
+    if (collectCard && collectCard.style.display !== 'none') {
+        collectCard.style.display = 'none';
+        const form = collectCard.querySelector('form');
+        if (form) form.reset();
     }
     
-    if (reportCard) {
-        const computedStyle = window.getComputedStyle(reportCard);
-        if (computedStyle.display !== 'none') {
-            reportCard.style.setProperty('display', 'none', 'important');
-            const form = reportCard.querySelector('form');
-            if (form) form.reset();
-        }
+    if (reportCard && reportCard.style.display !== 'none') {
+        reportCard.style.display = 'none';
+        const form = reportCard.querySelector('form');
+        if (form) form.reset();
     }
     
     // إغلاق جميع Modals على الكمبيوتر
@@ -1472,7 +1466,7 @@ function showGenerateReportModal() {
 function closeCollectFromRepCard() {
     const card = document.getElementById('collectFromRepCard');
     if (card) {
-        card.style.setProperty('display', 'none', 'important');
+        card.style.display = 'none';
         const form = card.querySelector('form');
         if (form) form.reset();
         
@@ -1500,7 +1494,7 @@ function closeCollectFromRepCard() {
 function closeGenerateReportCard() {
     const card = document.getElementById('generateReportCard');
     if (card) {
-        card.style.setProperty('display', 'none', 'important');
+        card.style.display = 'none';
         const form = card.querySelector('form');
         if (form) form.reset();
     }

@@ -8,14 +8,38 @@ if (!defined('ACCESS_ALLOWED')) {
     define('ACCESS_ALLOWED', true);
 }
 
-require_once __DIR__ . '/../../includes/config.php';
-require_once __DIR__ . '/../../includes/db.php';
-require_once __DIR__ . '/../../includes/auth.php';
-require_once __DIR__ . '/../../includes/salary_calculator.php';
-require_once __DIR__ . '/../../includes/attendance.php';
-require_once __DIR__ . '/../../includes/notifications.php';
-require_once __DIR__ . '/../../includes/audit_log.php';
-require_once __DIR__ . '/../../includes/path_helper.php';
+// تحميل الملفات الأساسية فقط إذا لم تكن محملة بالفعل
+if (!defined('CONFIG_LOADED')) {
+    require_once __DIR__ . '/../../includes/config.php';
+}
+
+if (!function_exists('db')) {
+    require_once __DIR__ . '/../../includes/db.php';
+}
+
+if (!function_exists('isLoggedIn')) {
+    require_once __DIR__ . '/../../includes/auth.php';
+}
+
+if (!function_exists('getSalarySummary')) {
+    require_once __DIR__ . '/../../includes/salary_calculator.php';
+}
+
+if (!function_exists('canRequestAdvance')) {
+    require_once __DIR__ . '/../../includes/attendance.php';
+}
+
+if (!function_exists('createNotification')) {
+    require_once __DIR__ . '/../../includes/notifications.php';
+}
+
+if (!function_exists('logAudit')) {
+    require_once __DIR__ . '/../../includes/audit_log.php';
+}
+
+if (!function_exists('getRelativeUrl')) {
+    require_once __DIR__ . '/../../includes/path_helper.php';
+}
 
 // التحقق من تسجيل الدخول فقط إذا لم يتم التحقق بالفعل
 if (!function_exists('isLoggedIn') || !isLoggedIn()) {

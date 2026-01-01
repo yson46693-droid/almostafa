@@ -2540,9 +2540,27 @@ if ($isCashRegisterAjax) {
                 $modulePath = __DIR__ . '/../modules/user/my_salary.php';
                 if (file_exists($modulePath)) {
                     try {
+                        // تمكين عرض الأخطاء للتصحيح (يمكن تعطيله لاحقاً)
+                        $displayErrors = ini_get('display_errors');
+                        $errorReporting = error_reporting();
+                        
+                        // التحقق من وجود دوال مطلوبة قبل التضمين
+                        if (!function_exists('getSalarySummary')) {
+                            require_once __DIR__ . '/../includes/salary_calculator.php';
+                        }
+                        
                         include $modulePath;
                     } catch (Throwable $e) {
                         error_log('Error loading my_salary.php: ' . $e->getMessage());
+                        error_log('Stack trace: ' . $e->getTraceAsString());
+                        
+                        // عرض رسالة خطأ مفصلة للتصحيح
+                        $errorMessage = 'حدث خطأ أثناء تحميل صفحة الراتب: ' . htmlspecialchars($e->getMessage());
+                        $errorMessage .= '<br><small>الملف: ' . htmlspecialchars($e->getFile()) . ' - السطر: ' . $e->getLine() . '</small>';
+                        $errorMessage .= '<br><small>Stack trace: <pre>' . htmlspecialchars($e->getTraceAsString()) . '</pre></small>';
+                        echo '<div class="alert alert-danger">' . $errorMessage . '</div>';
+                    } catch (Exception $e) {
+                        error_log('Exception loading my_salary.php: ' . $e->getMessage());
                         echo '<div class="alert alert-danger">حدث خطأ أثناء تحميل صفحة الراتب. يرجى المحاولة مرة أخرى أو التواصل مع الإدارة.</div>';
                     }
                 } else {
