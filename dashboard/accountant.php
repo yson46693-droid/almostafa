@@ -1403,46 +1403,108 @@ if ($isAjaxNavigation) {
                     </div>
                 </div>
                 <div class="col-12 col-xxl-5">
-                    <div class="card shadow-sm h-100">
-                        <div class="card-header bg-light fw-bold">
-                            <i class="bi bi-pencil-square me-2 text-success"></i>تسجيل مصروف سريع
+                    <div class="row g-3">
+                        <!-- تسجيل مصروف سريع -->
+                        <div class="col-12 col-md-6">
+                            <div class="card shadow-sm h-100">
+                                <div class="card-header bg-light fw-bold">
+                                    <i class="bi bi-pencil-square me-2 text-success"></i>تسجيل مصروف سريع
+                                </div>
+                                <div class="card-body">
+                                    <form method="POST" class="row g-3">
+                                        <input type="hidden" name="action" value="add_quick_expense">
+                                        <div class="col-12">
+                                            <label for="quickExpenseAmount" class="form-label">قيمة المصروف <span class="text-danger">*</span></label>
+                                            <div class="input-group">
+                                                <span class="input-group-text">ج.م</span>
+                                                <input type="number" step="0.01" min="0.01" class="form-control" id="quickExpenseAmount" name="amount" required value="<?php echo htmlspecialchars($financialFormData['amount'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                                            </div>
+                                        </div>
+                                        <div class="col-12">
+                                            <label for="quickExpenseReference" class="form-label">رقم مرجعي</label>
+                                            <?php
+                                            $generatedRef = 'REF-' . mt_rand(100000, 999999);?>
+                                            <input type="text" class="form-control" id="quickExpenseReference" name="reference_number" value="<?php echo $generatedRef; ?>" readonly style="background:#f5f5f5; cursor:not-allowed;">
+                                        </div>
+                                        <div class="col-12">
+                                            <label for="quickExpenseDescription" class="form-label">وصف المصروف <span class="text-danger">*</span></label>
+                                            <textarea class="form-control" id="quickExpenseDescription" name="description" rows="3" required placeholder="أدخل تفاصيل المصروف..."><?php echo htmlspecialchars($financialFormData['description'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea>
+                                        </div>
+                                        <div class="col-12">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="quickExpenseApproved" name="mark_as_approved" value="1" <?php echo isset($financialFormData['mark_as_approved']) && $financialFormData['mark_as_approved'] === '1' ? 'checked' : ''; ?>>
+                                                <label class="form-check-label" for="quickExpenseApproved">
+                                                    اعتماد المعاملة فوراً (يُستخدم عند تسجيل مصروف مؤكد)
+                                                </label>
+                                            </div>
+                                            <small class="text-muted d-block mt-1">إذا تُرك غير محدد فسيتم إرسال المصروف للموافقة لاحقاً.</small>
+                                        </div>
+                                        <div class="col-12 d-flex justify-content-end gap-2">
+                                            <button type="reset" class="btn btn-outline-secondary">تفريغ الحقول</button>
+                                            <button type="submit" class="btn btn-success">
+                                                <i class="bi bi-send me-1"></i>حفظ المصروف
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
                         </div>
-                        <div class="card-body">
-                            <form method="POST" class="row g-3">
-                                <input type="hidden" name="action" value="add_quick_expense">
-                                <div class="col-12 col-sm-6">
-                                    <label for="quickExpenseAmount" class="form-label">قيمة المصروف <span class="text-danger">*</span></label>
-                                    <div class="input-group">
-                                        <span class="input-group-text">ج.م</span>
-                                        <input type="number" step="0.01" min="0.01" class="form-control" id="quickExpenseAmount" name="amount" required value="<?php echo htmlspecialchars($financialFormData['amount'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
-                                    </div>
+                        
+                        <!-- تحصيل من مندوب -->
+                        <div class="col-12 col-md-6">
+                            <div class="card shadow-sm h-100">
+                                <div class="card-header bg-light fw-bold">
+                                    <i class="bi bi-cash-coin me-2 text-primary"></i>تحصيل من مندوب
                                 </div>
-                                <div class="col-12 col-sm-6">
-                                    <label for="quickExpenseReference" class="form-label">رقم مرجعي</label>
-                                    <?php
-                                    $generatedRef = 'REF-' . mt_rand(100000, 999999);?>
-                                    <input type="text" class="form-control" id="quickExpenseReference" name="reference_number" value="<?php echo $generatedRef; ?>" readonly style="background:#f5f5f5; cursor:not-allowed;">
+                                <div class="card-body">
+                                    <form method="POST" id="collectFromRepCardForm" class="row g-3">
+                                        <input type="hidden" name="action" value="collect_from_sales_rep">
+                                        <div class="col-12">
+                                            <label for="collectFromRepCardSalesRepSelect" class="form-label">اختر المندوب <span class="text-danger">*</span></label>
+                                            <select class="form-select" id="collectFromRepCardSalesRepSelect" name="sales_rep_id" required>
+                                                <option value="">-- اختر المندوب --</option>
+                                                <?php
+                                                $salesReps = $db->query("
+                                                    SELECT id, username, full_name 
+                                                    FROM users 
+                                                    WHERE role = 'sales' AND status = 'active'
+                                                    ORDER BY full_name ASC, username ASC
+                                                ") ?: [];
+                                                foreach ($salesReps as $rep):
+                                                ?>
+                                                    <option value="<?php echo $rep['id']; ?>">
+                                                        <?php echo htmlspecialchars($rep['full_name'] ?? $rep['username'], ENT_QUOTES, 'UTF-8'); ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                        
+                                        <div class="col-12">
+                                            <label for="collectFromRepCardRepBalanceAmount" class="form-label">رصيد المندوب</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text">ج.م</span>
+                                                <input type="text" class="form-control" id="collectFromRepCardRepBalanceAmount" readonly value="-- اختر مندوب أولاً --" style="background:#f5f5f5; cursor:not-allowed; font-weight: bold;">
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="col-12">
+                                            <label for="collectFromRepCardAmount" class="form-label">مبلغ التحصيل <span class="text-danger">*</span></label>
+                                            <div class="input-group">
+                                                <span class="input-group-text">ج.م</span>
+                                                <input type="number" step="0.01" min="0.01" class="form-control" id="collectFromRepCardAmount" name="amount" required placeholder="أدخل المبلغ">
+                                            </div>
+                                            <small class="text-muted d-block mt-1">يجب أن يكون المبلغ أقل من أو يساوي رصيد المندوب</small>
+                                        </div>
+                                        
+                                        <div class="col-12 d-flex justify-content-end gap-2">
+                                            <button type="reset" class="btn btn-outline-secondary">تفريغ الحقول</button>
+                                            <button type="submit" class="btn btn-primary" id="collectFromRepCardSubmitBtn">
+                                                <i class="bi bi-check-circle me-1"></i>تحصيل
+                                            </button>
+                                        </div>
+                                    </form>
                                 </div>
-                                <div class="col-12">
-                                    <label for="quickExpenseDescription" class="form-label">وصف المصروف <span class="text-danger">*</span></label>
-                                    <textarea class="form-control" id="quickExpenseDescription" name="description" rows="3" required placeholder="أدخل تفاصيل المصروف..."><?php echo htmlspecialchars($financialFormData['description'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea>
-                                </div>
-                                <div class="col-12">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="quickExpenseApproved" name="mark_as_approved" value="1" <?php echo isset($financialFormData['mark_as_approved']) && $financialFormData['mark_as_approved'] === '1' ? 'checked' : ''; ?>>
-                                        <label class="form-check-label" for="quickExpenseApproved">
-                                            اعتماد المعاملة فوراً (يُستخدم عند تسجيل مصروف مؤكد)
-                                        </label>
-                                    </div>
-                                    <small class="text-muted d-block mt-1">إذا تُرك غير محدد فسيتم إرسال المصروف للموافقة لاحقاً.</small>
-                                </div>
-                                <div class="col-12 d-flex justify-content-end gap-2">
-                                    <button type="reset" class="btn btn-outline-secondary">تفريغ الحقول</button>
-                                    <button type="submit" class="btn btn-success">
-                                        <i class="bi bi-send me-1"></i>حفظ المصروف
-                                    </button>
-                                </div>
-                            </form>
+                            </div>
                         </div>
                     </div>
                 </div>

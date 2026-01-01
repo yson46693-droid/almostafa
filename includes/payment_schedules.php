@@ -632,10 +632,13 @@ function sendPaymentReminders($salesRepId = null) {
             }
         }
         
-        // إرسال للمحاسبين والمديرين (للعملاء المحليين أو إذا كان sent_to = 'manager_accountant' أو 'both')
-        if ($reminder['sent_to'] === 'manager_accountant' || 
-            $reminder['sent_to'] === 'both' ||
-            empty($reminder['sales_rep_id'])) {
+        // إرسال للمحاسبين والمديرين (للعملاء غير المحليين فقط)
+        // ملاحظة: تم إيقاف إرسال الإشعارات الداخلية للعملاء المحليين (sales_rep_id IS NULL)
+        // سيتم إرسال تقرير يومي واحد عبر Telegram بدلاً منها
+        if (($reminder['sent_to'] === 'manager_accountant' || 
+             $reminder['sent_to'] === 'both') &&
+            !empty($reminder['sales_rep_id'])) {
+            // هذا للعملاء غير المحليين فقط (يوجد sales_rep_id)
             
             error_log('Sending to managers/accountants. sent_to: ' . ($reminder['sent_to'] ?? 'null') . ', sales_rep_id: ' . ($reminder['sales_rep_id'] ?? 'null'));
             
@@ -696,6 +699,12 @@ function sendPaymentReminders($salesRepId = null) {
                     }
                 }
             }
+        } elseif (empty($reminder['sales_rep_id'])) {
+            // للعملاء المحليين: تخطي إرسال الإشعارات الداخلية
+            // سيتم إرسال تقرير يومي واحد عبر Telegram بدلاً منها
+            error_log('Skipping internal notifications for local customer (schedule ID: ' . $reminder['payment_schedule_id'] . ') - Daily Telegram report will be sent instead');
+            // نعتبر التذكير قد أُرسل لتحديث الحالة
+            $notificationSent = true;
         }
         
         // تحديث حالة التذكير فقط إذا تم إرسال إشعار
@@ -907,8 +916,15 @@ function notifyTodayPaymentSchedules($salesRepId) {
 
 /**
  * إرسال إشعارات للمواعيد المتأخرة للمحاسبين والمديرين (للعملاء المحليين)
+ * ملاحظة: تم تعطيل إرسال الإشعارات الداخلية - سيتم إرسال تقرير يومي واحد عبر Telegram بدلاً منها
  */
 function notifyOverduePaymentSchedulesForManagers() {
+    // تم تعطيل إرسال الإشعارات الداخلية للعملاء المحليين
+    // سيتم إرسال تقرير يومي واحد عبر Telegram بدلاً منها
+    error_log('notifyOverduePaymentSchedulesForManagers: Internal notifications disabled - Daily Telegram report will be sent instead');
+    return 0;
+    
+    /* الكود القديم - معطل
     try {
         if (session_status() === PHP_SESSION_NONE) {
             session_start();
@@ -1094,6 +1110,7 @@ function notifyOverduePaymentSchedulesForManagers() {
     }
 
     return $notifiedCount;
+    */ // نهاية الكود القديم المعطل
 }
 
 /**

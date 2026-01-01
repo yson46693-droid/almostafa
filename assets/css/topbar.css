@@ -74,6 +74,19 @@
         justify-content: flex-end;
     }
     
+    /* إظهار القائمة السريعة على الموبايل */
+    .quick-actions-dropdown {
+        display: block !important;
+    }
+    
+    .quick-actions-toggle {
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        width: 36px;
+        height: 36px;
+    }
+    
     .topbar-action {
         width: 36px;
         height: 36px;

@@ -49,6 +49,16 @@
     } else {
         initDarkMode();
     }
+    
+    // إعادة تطبيق الوضع الليلي فوراً (حتى قبل DOMContentLoaded)
+    // هذا يضمن التطبيق حتى لو تم تحميل الملف بعد تحميل DOM
+    try {
+        const currentTheme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-theme', currentTheme);
+        updateAllToggles(currentTheme === 'dark');
+    } catch (e) {
+        console.warn('Dark mode immediate application error:', e);
+    }
 
     // Add event listeners to all dark mode toggles
     function attachDarkModeListeners() {
@@ -105,7 +115,50 @@
             const currentTheme = localStorage.getItem('theme') || 'light';
             document.documentElement.setAttribute('data-theme', currentTheme);
             updateAllToggles(currentTheme === 'dark');
+            
+            // إجبار إعادة تطبيق الأنماط
+            const html = document.documentElement;
+            const theme = html.getAttribute('data-theme');
+            html.removeAttribute('data-theme');
+            // Trigger reflow
+            void html.offsetHeight;
+            html.setAttribute('data-theme', theme);
         }, 300);
+    });
+    
+    // مراقبة تغييرات الصفحة (للمساعدة في SPA أو التنقل الديناميكي)
+    // استخدام MutationObserver لمراقبة تغييرات DOM
+    const observer = new MutationObserver(function(mutations) {
+        const currentTheme = localStorage.getItem('theme') || 'light';
+        const appliedTheme = document.documentElement.getAttribute('data-theme');
+        if (appliedTheme !== currentTheme) {
+            document.documentElement.setAttribute('data-theme', currentTheme);
+            updateAllToggles(currentTheme === 'dark');
+        }
+    });
+    
+    // مراقبة تغييرات في document.documentElement
+    observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['data-theme']
+    });
+    
+    // التأكد من تطبيق الوضع الليلي عند التنقل بين الصفحات
+    // استخدام pageshow event (يعمل مع back/forward cache)
+    window.addEventListener('pageshow', function(event) {
+        const currentTheme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-theme', currentTheme);
+        updateAllToggles(currentTheme === 'dark');
+    });
+    
+    // التأكد من تطبيق الوضع الليلي عند focus على الصفحة
+    window.addEventListener('focus', function() {
+        const currentTheme = localStorage.getItem('theme') || 'light';
+        const appliedTheme = document.documentElement.getAttribute('data-theme');
+        if (appliedTheme !== currentTheme) {
+            document.documentElement.setAttribute('data-theme', currentTheme);
+            updateAllToggles(currentTheme === 'dark');
+        }
     });
 
     // Listen for theme changes from other tabs/windows

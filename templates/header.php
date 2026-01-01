@@ -685,11 +685,61 @@ if (ob_get_level() > 0) {
     <script>
         // Dark Mode - تطبيق فوري قبل تحميل الصفحة (منع FOUC)
         (function() {
+            'use strict';
             try {
+                // قراءة الوضع الليلي من localStorage
                 const currentTheme = localStorage.getItem('theme') || 'light';
+                
+                // تطبيق الوضع الليلي فوراً على html element
                 document.documentElement.setAttribute('data-theme', currentTheme);
+                
+                // إضافة class للـ body أيضاً للتأكد من التطبيق
+                if (currentTheme === 'dark') {
+                    document.documentElement.classList.add('dark-theme');
+                } else {
+                    document.documentElement.classList.remove('dark-theme');
+                }
+                
+                // مراقبة تغييرات localStorage من نوافذ أخرى
+                window.addEventListener('storage', function(e) {
+                    if (e.key === 'theme') {
+                        const newTheme = e.newValue || 'light';
+                        document.documentElement.setAttribute('data-theme', newTheme);
+                        if (newTheme === 'dark') {
+                            document.documentElement.classList.add('dark-theme');
+                        } else {
+                            document.documentElement.classList.remove('dark-theme');
+                        }
+                    }
+                });
+                
+                // إعادة تطبيق الوضع الليلي بعد تحميل DOM
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', function() {
+                        const theme = localStorage.getItem('theme') || 'light';
+                        document.documentElement.setAttribute('data-theme', theme);
+                    });
+                } else {
+                    const theme = localStorage.getItem('theme') || 'light';
+                    document.documentElement.setAttribute('data-theme', theme);
+                }
+                
+                // إعادة تطبيق الوضع الليلي بعد تحميل الصفحة بالكامل
+                window.addEventListener('load', function() {
+                    setTimeout(function() {
+                        const theme = localStorage.getItem('theme') || 'light';
+                        document.documentElement.setAttribute('data-theme', theme);
+                        if (theme === 'dark') {
+                            document.documentElement.classList.add('dark-theme');
+                        } else {
+                            document.documentElement.classList.remove('dark-theme');
+                        }
+                    }, 100);
+                });
+                
             } catch (e) {
                 // تجاهل الأخطاء في حالة عدم توفر localStorage
+                console.warn('Dark mode initialization error:', e);
             }
         })();
     </script>
