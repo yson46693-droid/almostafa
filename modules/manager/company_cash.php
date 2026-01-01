@@ -1290,217 +1290,10 @@ $typeColorMap = [
     </div>
 </div>
 
-<!-- Modal تحصيل من مندوب - للكمبيوتر فقط -->
-<div class="modal fade d-none d-md-block" id="collectFromRepModal" tabindex="-1" aria-labelledby="collectFromRepModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="collectFromRepModalLabel">
-                    <i class="bi bi-cash-coin me-2"></i>تحصيل من مندوب
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <form method="POST" id="collectFromRepForm">
-                <input type="hidden" name="action" value="collect_from_sales_rep">
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label for="salesRepSelect" class="form-label">اختر المندوب <span class="text-danger">*</span></label>
-                        <select class="form-select" id="salesRepSelect" name="sales_rep_id" required>
-                            <option value="">-- اختر المندوب --</option>
-                            <?php
-                            $salesReps = $db->query("
-                                SELECT id, username, full_name 
-                                FROM users 
-                                WHERE role = 'sales' AND status = 'active'
-                                ORDER BY full_name ASC, username ASC
-                            ") ?: [];
-                            foreach ($salesReps as $rep):
-                            ?>
-                                <option value="<?php echo $rep['id']; ?>">
-                                    <?php echo htmlspecialchars($rep['full_name'] ?? $rep['username'], ENT_QUOTES, 'UTF-8'); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="repBalanceAmount" class="form-label">رصيد المندوب</label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="bi bi-wallet2 me-1"></i>رصيد المندوب</span>
-                            <input type="text" class="form-control" id="repBalanceAmount" readonly value="-- اختر مندوب أولاً --" style="background-color: #f8f9fa; font-weight: bold;">
-                            <span class="input-group-text">ج.م</span>
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="collectAmount" class="form-label">مبلغ التحصيل <span class="text-danger">*</span></label>
-                        <div class="input-group">
-                            <span class="input-group-text">ج.م</span>
-                            <input type="number" step="0.01" min="0.01" class="form-control" id="collectAmount" name="amount" required placeholder="أدخل المبلغ">
-                        </div>
-                        <small class="text-muted">يجب أن يكون المبلغ أقل من أو يساوي رصيد المندوب</small>
-                    </div>
-                    
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-                    <button type="submit" class="btn btn-primary" id="submitCollectBtn">
-                        <i class="bi bi-check-circle me-1"></i>تحصيل
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
+<!-- تم حذف المودالات - Cards أصبحت ثابتة دائماً ظاهرة -->
 
 <script>
-// ===== الحل النهائي: منع Bootstrap Modal على الموبايل تماماً =====
-// هذا الكود يعمل فوراً قبل تحميل Bootstrap
-(function() {
-    'use strict';
-    
-    function isMobileCheck() {
-        return window.innerWidth <= 768;
-    }
-    
-    // إزالة Modal من DOM على الموبايل - الحل النهائي
-    function removeModalsFromDOM() {
-        if (isMobileCheck()) {
-            const collectModal = document.getElementById('collectFromRepModal');
-            const reportModal = document.getElementById('generateReportModal');
-            
-            if (collectModal) {
-                // إزالة class "modal" لمنع Bootstrap من التعرف عليه
-                collectModal.classList.remove('modal', 'fade');
-                collectModal.style.display = 'none';
-                collectModal.style.visibility = 'hidden';
-                collectModal.setAttribute('data-bs-no-modal', 'true');
-                // نقل Modal خارج الشاشة
-                collectModal.style.position = 'fixed';
-                collectModal.style.left = '-9999px';
-                collectModal.style.top = '-9999px';
-                collectModal.style.zIndex = '-1';
-            }
-            
-            if (reportModal) {
-                // إزالة class "modal" لمنع Bootstrap من التعرف عليه
-                reportModal.classList.remove('modal', 'fade');
-                reportModal.style.display = 'none';
-                reportModal.style.visibility = 'hidden';
-                reportModal.setAttribute('data-bs-no-modal', 'true');
-                // نقل Modal خارج الشاشة
-                reportModal.style.position = 'fixed';
-                reportModal.style.left = '-9999px';
-                reportModal.style.top = '-9999px';
-                reportModal.style.zIndex = '-1';
-            }
-        }
-    }
-    
-    // إزالة backdrop فوراً
-    function removeAllBackdropsImmediate() {
-        const backdrops = document.querySelectorAll('.modal-backdrop');
-        backdrops.forEach(function(backdrop) {
-            backdrop.remove();
-        });
-        document.body.classList.remove('modal-open');
-        document.body.style.overflow = '';
-        document.body.style.paddingRight = '';
-    }
-    
-    // تنفيذ فوراً
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', function() {
-            removeModalsFromDOM();
-            removeAllBackdropsImmediate();
-            // مراقبة مستمرة لإزالة backdrop
-            setInterval(removeAllBackdropsImmediate, 50);
-        });
-    } else {
-        removeModalsFromDOM();
-        removeAllBackdropsImmediate();
-        // مراقبة مستمرة لإزالة backdrop
-        setInterval(removeAllBackdropsImmediate, 50);
-    }
-    
-    // مراقبة DOM لإزالة backdrop فور إضافته
-    const backdropObserver = new MutationObserver(function(mutations) {
-        mutations.forEach(function(mutation) {
-            mutation.addedNodes.forEach(function(node) {
-                if (node.nodeType === 1 && node.classList && node.classList.contains('modal-backdrop')) {
-                    node.remove();
-                    removeAllBackdropsImmediate();
-                }
-            });
-        });
-    });
-    backdropObserver.observe(document.body, {
-        childList: true,
-        subtree: true
-    });
-    
-    // تنفيذ مرة أخرى بعد تحميل الصفحة
-    window.addEventListener('load', removeModalsFromDOM);
-    
-    // منع Bootstrap من فتح Modal على الموبايل
-    function preventBootstrapModal() {
-        if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-            const originalShow = bootstrap.Modal.prototype.show;
-            
-            bootstrap.Modal.prototype.show = function() {
-                if (!isMobileCheck()) {
-                    return originalShow.call(this);
-                }
-                
-                const element = this._element || this.element || (this._config && this._config.element);
-                const modalId = element ? (element.id || '') : '';
-                
-                if (modalId === 'collectFromRepModal' || modalId === 'generateReportModal') {
-                    // منع فتح Modal تماماً على الموبايل
-                    return;
-                }
-                
-                return originalShow.call(this);
-            };
-        }
-    }
-    
-    // مراقبة متى يتم تحميل Bootstrap
-    const checkBootstrap = setInterval(function() {
-        if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-            preventBootstrapModal();
-            removeModalsFromDOM();
-            clearInterval(checkBootstrap);
-        }
-    }, 10);
-})();
-
-// ===== دوال أساسية للـ Modal/Card Dual System =====
-
-// دالة التحقق من الموبايل
-function isMobile() {
-    return window.innerWidth <= 768;
-}
-
-// دالة للـ scroll تلقائي محسّنة
-function scrollToElement(element) {
-    if (!element) return;
-    
-    setTimeout(function() {
-        const rect = element.getBoundingClientRect();
-        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-        const elementTop = rect.top + scrollTop;
-        const offset = 80; // مساحة للـ header
-        const targetPosition = elementTop - offset;
-        
-        requestAnimationFrame(function() {
-            window.scrollTo({
-                top: Math.max(0, targetPosition),
-                behavior: 'smooth'
-            });
-        });
-    }, 200);
-}
+// ===== دوال أساسية للـ Cards =====
 
 // دالة لإغلاق جميع النماذج المفتوحة
 function closeAllForms() {
@@ -1601,38 +1394,7 @@ function handleReportCardSubmit(event) {
     return false;
 }
 
-// معالجة إرسال نموذج التقرير (يجب أن تكون في النطاق العام)
-function handleReportSubmit(event) {
-    event.preventDefault();
-    
-    const form = document.getElementById('reportForm');
-    if (!form) return false;
-    
-    const dateFrom = document.getElementById('reportDateFrom');
-    const dateTo = document.getElementById('reportDateTo');
-    
-    if (!dateFrom || !dateTo) return false;
-    
-    const fromDate = new Date(dateFrom.value);
-    const toDate = new Date(dateTo.value);
-    
-    if (fromDate > toDate) {
-        alert('تاريخ البداية يجب أن يكون قبل تاريخ النهاية');
-        dateFrom.focus();
-        return false;
-    }
-    
-    // بناء URL للتقرير
-    // استخدام window.location.origin للحصول على النطاق
-    const origin = window.location.origin;
-    const currentPath = window.location.pathname;
-    
-    // استخراج المسار الأساسي (إزالة dashboard/manager.php أو أي مسار آخر)
-    let basePath = currentPath;
-    // إزالة /dashboard/manager.php أو /dashboard/accountant.php
-    basePath = basePath.replace(/\/dashboard\/[^\/]+\.php.*$/, '');
-    // إزالة /modules/manager/company_cash.php إذا كان موجوداً
-    basePath = basePath.replace(/\/modules\/[^\/]+\/[^\/]+\.php.*$/, '');
+// تم حذف handleReportSubmit - لم تعد هناك مودالات
     
     // تنظيف المسار
     basePath = basePath.replace(/\/$/, ''); // إزالة / من النهاية
@@ -1779,11 +1541,7 @@ function loadSalesRepBalance(salesRepId, repBalanceElement, collectAmountElement
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    const collectFromRepModal = document.getElementById('collectFromRepModal');
-    const generateReportModal = document.getElementById('generateReportModal');
-    
-    // على الموبايل: منع Bootstrap من فتح Modal تماماً
-    if (isMobile()) {
+    // Cards فقط - لا توجد مودالات بعد الآن
         // دالة لإزالة backdrop وإغلاق Modal - يجب تعريفها أولاً
         function forceCloseModals() {
             if (collectFromRepModal) {
@@ -1942,26 +1700,12 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Modal elements
-    const salesRepSelect = document.getElementById('salesRepSelect');
-    const repBalanceAmount = document.getElementById('repBalanceAmount');
-    const collectAmount = document.getElementById('collectAmount');
-    const collectForm = document.getElementById('collectFromRepForm');
-    const submitBtn = document.getElementById('submitCollectBtn');
-    
-    // Card elements
+    // Card elements only
     const collectCardSalesRepSelect = document.getElementById('collectFromRepCardSalesRepSelect');
     const collectCardRepBalanceAmount = document.getElementById('collectFromRepCardRepBalanceAmount');
     const collectCardAmount = document.getElementById('collectFromRepCardAmount');
     const collectCardForm = document.getElementById('collectFromRepCardForm');
     const collectCardSubmitBtn = document.getElementById('collectFromRepCardSubmitBtn');
-    
-    // معالجة تغيير المندوب في Modal
-    if (salesRepSelect) {
-        salesRepSelect.addEventListener('change', function() {
-            loadSalesRepBalance(this.value, repBalanceAmount, collectAmount);
-        });
-    }
     
     // معالجة تغيير المندوب في Card
     if (collectCardSalesRepSelect) {
@@ -1995,16 +1739,6 @@ document.addEventListener('DOMContentLoaded', function() {
         return true;
     }
     
-    // التحقق من المبلغ قبل الإرسال - Modal
-    if (collectForm) {
-        collectForm.addEventListener('submit', function(e) {
-            if (!validateCollectAmount(collectAmount, collectAmount.getAttribute('data-max-balance'), submitBtn)) {
-                e.preventDefault();
-                return false;
-            }
-        });
-    }
-    
     // التحقق من المبلغ قبل الإرسال - Card
     if (collectCardForm) {
         collectCardForm.addEventListener('submit', function(e) {
@@ -2034,281 +1768,14 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
-<!-- Modal إنشاء تقرير تفصيلي - للكمبيوتر فقط -->
-<div class="modal fade d-none d-md-block" id="generateReportModal" tabindex="-1" aria-labelledby="generateReportModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header bg-success text-white">
-                <h5 class="modal-title" id="generateReportModalLabel">
-                    <i class="bi bi-file-earmark-text me-2"></i>إنشاء تقرير تفصيلي
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <form method="GET" id="reportForm" onsubmit="return handleReportSubmit(event)">
-                <div class="modal-body">
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle me-2"></i>
-                        <strong>ملاحظة:</strong> سيتم إنشاء تقرير تفصيلي لجميع حركات خزنة الشركة في الفترة المحددة.
-                    </div>
-                    <div class="row g-3">
-                        <div class="col-12 col-md-6">
-                            <label for="reportDateFrom" class="form-label">
-                                <i class="bi bi-calendar-event me-1"></i>من تاريخ <span class="text-danger">*</span>
-                            </label>
-                            <input type="date" 
-                                   class="form-control" 
-                                   id="reportDateFrom" 
-                                   name="date_from" 
-                                   required
-                                   value="<?php echo date('Y-m-01'); ?>">
-                        </div>
-                        <div class="col-12 col-md-6">
-                            <label for="reportDateTo" class="form-label">
-                                <i class="bi bi-calendar-event me-1"></i>إلى تاريخ <span class="text-danger">*</span>
-                            </label>
-                            <input type="date" 
-                                   class="form-control" 
-                                   id="reportDateTo" 
-                                   name="date_to" 
-                                   required
-                                   value="<?php echo date('Y-m-d'); ?>">
-                        </div>
-                        <div class="col-12">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="includePending" name="include_pending" value="1">
-                                <label class="form-check-label" for="includePending">
-                                    تضمين المعاملات المعلقة
-                                </label>
-                            </div>
-                        </div>
-                        <div class="col-12">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="groupByType" name="group_by_type" value="1" checked>
-                                <label class="form-check-label" for="groupByType">
-                                    تجميع الحركات حسب النوع
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-                    <button type="submit" class="btn btn-success">
-                        <i class="bi bi-file-earmark-pdf me-1"></i>إنشاء التقرير
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
+<!-- تم حذف المودالات - Cards أصبحت ثابتة دائماً ظاهرة -->
 
 <style>
 /* إصلاح شامل للمساحة البيضاء في النماذج */
 
-/* إصلاح النماذج المركزية على جميع الأحجام (للشاشات الكبيرة فقط) */
-@media (min-width: 769px) {
-    #generateReportModal .modal-dialog.modal-dialog-centered,
-    #collectFromRepModal .modal-dialog.modal-dialog-centered {
-        margin: 0.5rem auto;
-        display: flex;
-        flex-direction: column;
-        max-height: calc(100vh - 1rem);
-    }
+/* تم إزالة CSS المتعلق بالمودالات - Cards أصبحت ثابتة دائماً ظاهرة */
 
-    #generateReportModal .modal-content,
-    #collectFromRepModal .modal-content {
-        display: flex !important;
-        flex-direction: column !important;
-        height: auto !important;
-        max-height: 100% !important;
-        overflow: hidden !important;
-    }
+/* Cards ظاهرة دائماً على جميع الأجهزة */
 
-    /* إصلاح المساحة البيضاء - منع modal-body من التمدد */
-    #generateReportModal .modal-body,
-    #collectFromRepModal .modal-body {
-        flex: 0 1 auto !important; /* منع التمدد التلقائي */
-        flex-grow: 0 !important;
-        flex-shrink: 1 !important;
-        flex-basis: auto !important;
-        min-height: 0 !important;
-        height: auto !important;
-        max-height: none !important;
-        overflow-y: auto !important;
-        overflow-x: hidden !important;
-        padding-bottom: 1rem !important;
-        margin-bottom: 0 !important;
-    }
-}
-
-/* قواعد عامة للـ header والـ footer (لا تتعارض مع media queries) */
-#generateReportModal .modal-header,
-#collectFromRepModal .modal-header {
-    flex-shrink: 0 !important;
-    flex-grow: 0 !important;
-}
-
-#generateReportModal .modal-footer,
-#collectFromRepModal .modal-footer {
-    flex-shrink: 0 !important;
-    flex-grow: 0 !important;
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
-    border-top: 1px solid #dee2e6 !important;
-}
-
-/* padding للـ header والـ footer على الشاشات الكبيرة فقط */
-@media (min-width: 769px) {
-    #generateReportModal .modal-footer,
-    #collectFromRepModal .modal-footer {
-        padding-top: 1rem !important;
-        padding-bottom: 1rem !important;
-    }
-}
-
-/* إزالة أي pseudo-elements قد تسبب مساحة فارغة */
-#generateReportModal .modal-content::after,
-#collectFromRepModal .modal-content::after,
-#generateReportModal .modal-content::before,
-#collectFromRepModal .modal-content::before {
-    display: none !important;
-    content: none !important;
-}
-
-/* إصلاح خاص لـ modal-dialog-scrollable (للشاشات الكبيرة فقط) */
-@media (min-width: 769px) {
-    #generateReportModal .modal-dialog.modal-dialog-scrollable .modal-content,
-    #collectFromRepModal .modal-dialog.modal-dialog-scrollable .modal-content {
-        max-height: 100% !important;
-        overflow: hidden !important;
-    }
-
-    #generateReportModal .modal-dialog.modal-dialog-scrollable .modal-body,
-    #collectFromRepModal .modal-dialog.modal-dialog-scrollable .modal-body {
-        flex: 0 1 auto !important;
-        overflow-y: auto !important;
-        max-height: calc(100vh - 250px) !important;
-    }
-}
-
-/* إزالة modal-backdrop تماماً - لا تظهر الطبقة الداكنة */
-.modal-backdrop,
-.modal-backdrop.fade,
-.modal-backdrop.show,
-#generateReportModal ~ .modal-backdrop,
-#collectFromRepModal ~ .modal-backdrop {
-    display: none !important;
-    visibility: hidden !important;
-    opacity: 0 !important;
-    z-index: -1 !important;
-    pointer-events: none !important;
-}
-
-/* تسريع إغلاق النماذج - إزالة جميع الـ transitions */
-.modal-backdrop {
-    transition: none !important;
-}
-
-.modal.fade .modal-dialog {
-    transition: none !important;
-}
-
-.modal.fade:not(.show) .modal-dialog {
-    transform: none !important;
-    opacity: 0 !important;
-}
-
-/* ===== CSS مبسط - Modal للكمبيوتر فقط، Card للموبايل ===== */
-
-/* إخفاء Modal على الموبايل */
-@media (max-width: 768px) {
-    #collectFromRepModal,
-    #generateReportModal {
-        display: none !important;
-        visibility: hidden !important;
-        pointer-events: none !important;
-        opacity: 0 !important;
-        z-index: -1 !important;
-    }
-    
-    #collectFromRepModal.show,
-    #generateReportModal.show {
-        display: none !important;
-        visibility: hidden !important;
-    }
-    
-    /* منع backdrop على الموبايل */
-    .modal-backdrop,
-    .modal-backdrop.fade,
-    .modal-backdrop.show {
-        display: none !important;
-        visibility: hidden !important;
-        opacity: 0 !important;
-        z-index: -1 !important;
-    }
-    
-    /* منع body من أن يصبح modal-open على الموبايل */
-    body.modal-open {
-        overflow: auto !important;
-        padding-right: 0 !important;
-    }
-}
-
-/* إزالة backdrop على جميع الأجهزة (الكمبيوتر والموبايل) */
-@media (min-width: 769px) {
-    .modal-backdrop,
-    .modal-backdrop.fade,
-    .modal-backdrop.show {
-        display: none !important;
-        visibility: hidden !important;
-        opacity: 0 !important;
-        z-index: -1 !important;
-        pointer-events: none !important;
-    }
-    
-    body.modal-open {
-        overflow: auto !important;
-        padding-right: 0 !important;
-    }
-}
-
-/* إخفاء Card على الكمبيوتر */
-@media (min-width: 769px) {
-    #collectFromRepCard,
-    #generateReportCard {
-        display: none !important;
-        visibility: hidden !important;
-        pointer-events: none !important;
-    }
-}
-
-/* منع الملفات العامة من التأثير على Modals */
-#collectFromRepModal,
-#generateReportModal {
-    height: auto !important;
-    max-height: none !important;
-}
-
-#collectFromRepModal .modal-dialog,
-#generateReportModal .modal-dialog {
-    display: block !important;
-    height: auto !important;
-    max-height: none !important;
-    margin: 1.75rem auto !important;
-}
-
-#collectFromRepModal .modal-content,
-#generateReportModal .modal-content {
-    height: auto !important;
-    max-height: none !important;
-}
-
-#collectFromRepModal .modal-body,
-#generateReportModal .modal-body {
-    height: auto !important;
-    max-height: none !important;
-    overflow-y: visible !important;
-}
-
-/* Responsive rules are now handled by responsive-modals.css */
+/* تم إزالة CSS المتعلق بالمودالات */
 </style>

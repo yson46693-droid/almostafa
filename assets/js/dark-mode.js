@@ -100,6 +100,12 @@
     // إعادة إضافة event listeners بعد تحميل الصفحة بالكامل
     window.addEventListener('load', function() {
         setTimeout(attachDarkModeListeners, 100);
+        // إعادة تطبيق الوضع الليلي بعد تحميل جميع ملفات CSS (لضمان التطبيق الكامل)
+        setTimeout(function() {
+            const currentTheme = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', currentTheme);
+            updateAllToggles(currentTheme === 'dark');
+        }, 300);
     });
 
     // Listen for theme changes from other tabs/windows

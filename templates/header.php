@@ -389,9 +389,6 @@ if (ob_get_level() > 0) {
     <link href="<?php echo $assetsUrl; ?>css/modal-iframe.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet" media="print" onload="this.media='all'">
     <noscript><link href="<?php echo $assetsUrl; ?>css/modal-iframe.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet"></noscript>
     
-    <!-- Dark Mode CSS - تحميل مباشر لضمان التطبيق الفوري -->
-    <link href="<?php echo $assetsUrl; ?>css/dark-mode.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet">
-    
     <!-- Accessibility Improvements - تحميل غير متزامن -->
     <link href="<?php echo $assetsUrl; ?>css/accessibility-improvements.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet" media="print" onload="this.media='all'">
     <noscript><link href="<?php echo $assetsUrl; ?>css/accessibility-improvements.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet"></noscript>
@@ -443,6 +440,9 @@ if (ob_get_level() > 0) {
     <link href="<?php echo $assetsUrl; ?>css/rtl.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet">
     <?php endif; ?>
     <?php endif; ?>
+    
+    <!-- Dark Mode CSS - يجب أن يكون آخر ملف CSS لضمان الأولوية -->
+    <link href="<?php echo $assetsUrl; ?>css/dark-mode.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet">
     
     <!-- Structured Data (JSON-LD) for SEO -->
     <script type="application/ld+json">
