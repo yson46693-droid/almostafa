@@ -97,6 +97,20 @@
     
     /* إخفاء بعض الأيقونات على الشاشات الصغيرة جداً */
     @media (max-width: 480px) {
+        /* إخفاء جميع الأزرار الفردية على الهواتف */
+        .version-badge-container:not(.version-badge-container-inline),
+        #fingerprintRegisterBtn,
+        #refreshPageBtn,
+        #darkModeToggle,
+        .mobile-logout-btn {
+            display: none !important;
+        }
+        
+        /* إظهار القائمة المنسدلة على الهواتف */
+        .quick-actions-dropdown {
+            display: block !important;
+        }
+        
         .topbar-left {
             min-width: auto;
         }
@@ -1156,13 +1170,17 @@
 
 /* ===== Quick Actions Dropdown ===== */
 .quick-actions-dropdown {
-    display: block; /* مرئي دائماً على جميع الشاشات */
+    display: block !important; /* مرئي دائماً على جميع الشاشات */
+    position: relative;
+    z-index: 1000;
 }
 
 .quick-actions-toggle {
-    display: flex;
+    display: flex !important;
     align-items: center;
     justify-content: center;
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
 .quick-actions-menu {
@@ -1259,4 +1277,21 @@
 .dark-mode .quick-actions-menu .dropdown-item:hover {
     background-color: var(--gray-700);
     color: var(--gray-100);
+}
+
+/* ===== إظهار القائمة المنسدلة على الهواتف وإخفاء الأزرار الفردية ===== */
+@media (max-width: 768px) {
+    /* إظهار القائمة المنسدلة على الهواتف */
+    .quick-actions-dropdown {
+        display: block !important;
+    }
+    
+    /* إخفاء جميع الأزرار الفردية على الهواتف */
+    .version-badge-container:not(.version-badge-container-inline),
+    #fingerprintRegisterBtn,
+    #refreshPageBtn,
+    #darkModeToggle,
+    .mobile-logout-btn {
+        display: none !important;
+    }
 }

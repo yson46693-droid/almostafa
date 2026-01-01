@@ -3060,6 +3060,86 @@ if (ob_get_level() > 0) {
     })();
     </script>
     
+    <!-- تهيئة زر الوضع الداكن في القائمة المنسدلة -->
+    <script>
+    (function() {
+        'use strict';
+        
+        function initDarkModeDropdown() {
+            const darkModeToggleDropdown = document.getElementById('darkModeToggleDropdown');
+            if (!darkModeToggleDropdown) return;
+            
+            // الحصول على الوضع الحالي
+            const currentTheme = localStorage.getItem('theme') || 'light';
+            darkModeToggleDropdown.checked = currentTheme === 'dark';
+            
+            // إضافة event listener
+            darkModeToggleDropdown.addEventListener('change', function(e) {
+                e.stopPropagation();
+                
+                const newTheme = darkModeToggleDropdown.checked ? 'dark' : 'light';
+                
+                // حفظ الوضع الجديد
+                localStorage.setItem('theme', newTheme);
+                
+                // تطبيق الوضع الجديد
+                document.documentElement.setAttribute('data-theme', newTheme);
+                
+                // تحديث جميع الـ toggles الأخرى
+                const allToggles = document.querySelectorAll('#darkModeToggle, #darkModeToggleDropdown');
+                allToggles.forEach(toggle => {
+                    if (toggle !== darkModeToggleDropdown) {
+                        toggle.checked = darkModeToggleDropdown.checked;
+                    }
+                });
+                
+                // إرسال event للتحديثات الأخرى
+                window.dispatchEvent(new CustomEvent('themeChange', { detail: { theme: newTheme } }));
+            });
+            
+            // إضافة click listener لمنع إغلاق القائمة المنسدلة
+            darkModeToggleDropdown.addEventListener('click', function(e) {
+                e.stopPropagation();
+            });
+            
+            // التأكد من أن pointer-events مفعلة
+            darkModeToggleDropdown.style.pointerEvents = 'auto';
+            darkModeToggleDropdown.style.cursor = 'pointer';
+        }
+        
+        // تهيئة عند تحميل DOM
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initDarkModeDropdown);
+        } else {
+            initDarkModeDropdown();
+        }
+        
+        // إعادة المحاولة بعد تحميل الصفحة بالكامل
+        window.addEventListener('load', function() {
+            setTimeout(initDarkModeDropdown, 100);
+        });
+        
+        // الاستماع لتغييرات الوضع الداكن من مصادر أخرى
+        window.addEventListener('storage', function(e) {
+            if (e.key === 'theme') {
+                const darkModeToggleDropdown = document.getElementById('darkModeToggleDropdown');
+                if (darkModeToggleDropdown) {
+                    const newTheme = e.newValue || 'light';
+                    darkModeToggleDropdown.checked = newTheme === 'dark';
+                }
+            }
+        });
+        
+        // الاستماع لـ themeChange event
+        window.addEventListener('themeChange', function(e) {
+            const darkModeToggleDropdown = document.getElementById('darkModeToggleDropdown');
+            if (darkModeToggleDropdown && e.detail) {
+                darkModeToggleDropdown.checked = e.detail.theme === 'dark';
+            }
+        });
+    })();
+    </script>
+    
     <!-- معالج الأخطاء JavaScript - منع ظهور رسائل خطأ المتصفح (ERR_FAILED) -->
     <script>
     (function() {
