@@ -777,9 +777,9 @@ $typeColorMap = [
                                 </button>
                             </div>
                         </form>
-                                </div>
-                            </div>
-                        </div>
+                    </div>
+                </div>
+            </div>
             
             <!-- إنشاء تقرير تفصيلي -->
             <div class="col-12 col-md-4">
