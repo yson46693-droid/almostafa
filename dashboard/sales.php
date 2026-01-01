@@ -2539,7 +2539,14 @@ if ($isCashRegisterAjax) {
                 <?php 
                 $modulePath = __DIR__ . '/../modules/user/my_salary.php';
                 if (file_exists($modulePath)) {
-                    include $modulePath;
+                    try {
+                        include $modulePath;
+                    } catch (Throwable $e) {
+                        error_log('Error loading my_salary.php: ' . $e->getMessage());
+                        echo '<div class="alert alert-danger">حدث خطأ أثناء تحميل صفحة الراتب. يرجى المحاولة مرة أخرى أو التواصل مع الإدارة.</div>';
+                    }
+                } else {
+                    echo '<div class="alert alert-warning">صفحة الراتب غير متاحة.</div>';
                 }
                 ?>
                 

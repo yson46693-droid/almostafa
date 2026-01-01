@@ -3405,11 +3405,10 @@ if (ob_get_level() > 0) {
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end notifications-dropdown" aria-labelledby="notificationsDropdown" data-bs-auto-close="outside">
                         <li><h6 class="dropdown-header">
-                            <?php echo isset($lang['notifications']) ? $lang['notifications'] : 'الإشعارات'; ?>
                             <form method="POST" 
                                   action="<?php echo getRelativeUrl('api/notifications.php'); ?>" 
                                   id="clearAllNotificationsForm"
-                                  style="display: inline-block; float: right; margin-left: 0.5rem;"
+                                  style="display: inline-block; float: left; margin-right: 0.5rem;"
                                   onsubmit="if(typeof handleClearAllNotifications === 'function') { event.preventDefault(); event.stopPropagation(); return handleClearAllNotifications(event); } return false;">
                                 <input type="hidden" name="action" value="delete_all">
                                 <button type="submit" 
@@ -3422,6 +3421,7 @@ if (ob_get_level() > 0) {
                                     <span>مسح الكل</span>
                                 </button>
                             </form>
+                            <?php echo isset($lang['notifications']) ? $lang['notifications'] : 'الإشعارات'; ?>
                         </h6></li>
                         <li><hr class="dropdown-divider"></li>
                         <li><div class="dropdown-item-text text-center" id="notificationsList">

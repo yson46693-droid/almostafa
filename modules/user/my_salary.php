@@ -17,9 +17,22 @@ require_once __DIR__ . '/../../includes/notifications.php';
 require_once __DIR__ . '/../../includes/audit_log.php';
 require_once __DIR__ . '/../../includes/path_helper.php';
 
-requireLogin();
+// التحقق من تسجيل الدخول فقط إذا لم يتم التحقق بالفعل
+if (!function_exists('isLoggedIn') || !isLoggedIn()) {
+    requireLogin();
+}
 
 $currentUser = getCurrentUser();
+
+// التحقق من وجود المستخدم
+if (!$currentUser || !is_array($currentUser) || empty($currentUser['id'])) {
+    // إذا لم يكن هناك مستخدم، إعادة توجيه إلى صفحة تسجيل الدخول
+    $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';
+    if (!headers_sent()) {
+        header('Location: ' . $loginUrl);
+        exit;
+    }
+}
 
 // تنظيف hourly_rate من currentUser مباشرة عند تحميل الصفحة
 if (isset($currentUser['hourly_rate'])) {
@@ -27,13 +40,19 @@ if (isset($currentUser['hourly_rate'])) {
 }
 
 // استبعاد المدير - ليس له راتب
+// ملاحظة: عند التضمين من dashboard، لا نقوم بـ redirect لتجنب مشاكل output
+// بدلاً من ذلك، نتحقق من الدور قبل عرض المحتوى
 if ($currentUser['role'] === 'manager') {
-    // تنظيف أي output buffer قبل redirect
-    while (ob_get_level() > 0) {
-        ob_end_clean();
+    // عند الاستدعاء المباشر، قم بـ redirect
+    // عند التضمين من dashboard، سنعرض رسالة بدلاً من ذلك
+    $isDirectAccess = !defined('ACCESS_ALLOWED') || !defined('SALES_PAGE_ACTIVE');
+    if ($isDirectAccess && !headers_sent()) {
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        header('Location: ' . getDashboardUrl('manager'));
+        exit;
     }
-    header('Location: ' . getDashboardUrl('manager'));
-    exit;
 }
 
 $db = db();
@@ -1327,9 +1346,15 @@ $maxAdvance = cleanFinancialValue(max(0, $remainingAmount * 0.5));
 
 $dashboardUrl = getDashboardUrl($currentUser['role']);
 $monthName = date('F', mktime(0, 0, 0, $selectedMonth, 1));
+
+// التحقق من أن المستخدم ليس مديراً قبل عرض المحتوى
+if ($currentUser['role'] === 'manager') {
+    echo '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>المديرون ليس لديهم صفحة راتب.</div>';
+    return; // إنهاء تنفيذ الملف دون عرض المحتوى
+}
 ?>
 
-<div class="container-fluid px-0">
+<div class="container-fluid px-3">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
 
