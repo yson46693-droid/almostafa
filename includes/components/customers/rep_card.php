@@ -47,12 +47,8 @@ if (!function_exists('renderRepresentativeCards')) {
                     <div class="col-12 col-md-6 col-xl-4">
                         <div 
                             class="card representative-card h-100 shadow-sm"
-                            style="cursor: pointer;"
-                            data-bs-toggle="modal"
-                            data-bs-target="#repDetailsModal"
                             data-rep-id="<?php echo $repId; ?>"
                             data-rep-name="<?php echo htmlspecialchars($repName); ?>"
-                            onclick="loadRepDetails(<?php echo $repId; ?>, '<?php echo htmlspecialchars($repName, ENT_QUOTES); ?>')"
                         >
                                 <div class="card-body d-flex flex-column gap-3">
                                     <div class="d-flex align-items-center gap-3">

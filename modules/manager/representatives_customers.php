@@ -1065,6 +1065,7 @@ $allCustomersOffset = ($allCustomersPageNum - 1) * $allCustomersPerPage;
 
 $allCustomersSearch = trim($_GET['cs'] ?? '');
 $allCustomersDebtStatus = $_GET['cds'] ?? 'all';
+$allCustomersRepFilter = isset($_GET['rep_filter']) ? (int)$_GET['rep_filter'] : 0;
 $allowedDebtStatuses = ['all', 'debtor', 'clear'];
 if (!in_array($allCustomersDebtStatus, $allowedDebtStatuses, true)) {
     $allCustomersDebtStatus = 'all';
@@ -1096,6 +1097,15 @@ if ($allCustomersDebtStatus === 'debtor') {
 } elseif ($allCustomersDebtStatus === 'clear') {
     $allCustomersSql .= " AND (c.balance IS NULL OR c.balance <= 0)";
     $allCustomersCountSql .= " AND (c.balance IS NULL OR c.balance <= 0)";
+}
+
+if ($allCustomersRepFilter > 0) {
+    $allCustomersSql .= " AND (c.rep_id = ? OR c.created_by = ?)";
+    $allCustomersCountSql .= " AND (c.rep_id = ? OR c.created_by = ?)";
+    $allCustomersParams[] = $allCustomersRepFilter;
+    $allCustomersParams[] = $allCustomersRepFilter;
+    $allCustomersCountParams[] = $allCustomersRepFilter;
+    $allCustomersCountParams[] = $allCustomersRepFilter;
 }
 
 if ($allCustomersSearch) {
@@ -1169,6 +1179,28 @@ try {
                                 autocomplete="off"
                             >
                         </div>
+                    </div>
+                    <div class="col-6 col-md-3 col-lg-2">
+                        <label for="allCustomersRepFilter" class="visually-hidden">تصفية حسب المندوب</label>
+                        <select class="form-select form-select-sm shadow-sm" id="allCustomersRepFilter" name="rep_filter">
+                            <option value="0" <?php echo $allCustomersRepFilter === 0 ? 'selected' : ''; ?>>جميع المندوبين</option>
+                            <?php
+                            // جلب قائمة المندوبين للفلتر
+                            try {
+                                $filterReps = $db->query(
+                                    "SELECT id, full_name, username FROM users WHERE role = 'sales' ORDER BY full_name ASC"
+                                );
+                                foreach ($filterReps as $rep) {
+                                    $repId = (int)($rep['id'] ?? 0);
+                                    $repName = htmlspecialchars($rep['full_name'] ?? $rep['username'] ?? 'غير معروف');
+                                    $selected = ($allCustomersRepFilter === $repId) ? 'selected' : '';
+                                    echo "<option value=\"{$repId}\" {$selected}>{$repName}</option>";
+                                }
+                            } catch (Throwable $e) {
+                                error_log('Error fetching reps for filter: ' . $e->getMessage());
+                            }
+                            ?>
+                        </select>
                     </div>
                     <div class="col-6 col-md-3 col-lg-2">
                         <label for="allCustomersDebtStatusFilter" class="visually-hidden">تصفية حسب حالة الديون</label>
@@ -1381,7 +1413,7 @@ try {
         <nav aria-label="Page navigation" class="mt-3">
             <ul class="pagination justify-content-center">
                 <li class="page-item <?php echo $allCustomersPageNum <= 1 ? 'disabled' : ''; ?>">
-                    <a class="page-link" href="?page=representatives_customers&cp=<?php echo $allCustomersPageNum - 1; ?><?php echo $allCustomersSearch ? '&cs=' . urlencode($allCustomersSearch) : ''; ?>&cds=<?php echo urlencode($allCustomersDebtStatus); ?>">
+                    <a class="page-link" href="?page=representatives_customers&cp=<?php echo $allCustomersPageNum - 1; ?><?php echo $allCustomersSearch ? '&cs=' . urlencode($allCustomersSearch) : ''; ?>&cds=<?php echo urlencode($allCustomersDebtStatus); ?><?php echo $allCustomersRepFilter > 0 ? '&rep_filter=' . $allCustomersRepFilter : ''; ?>">
                         <i class="bi bi-chevron-right"></i>
                     </a>
                 </li>
@@ -1414,12 +1446,12 @@ try {
                 // عرض أزرار الصفحات
                 for ($i = $startPage; $i <= $endPage; $i++): ?>
                     <li class="page-item <?php echo $i == $allCustomersPageNum ? 'active' : ''; ?>">
-                        <a class="page-link" href="?page=representatives_customers&cp=<?php echo $i; ?><?php echo $allCustomersSearch ? '&cs=' . urlencode($allCustomersSearch) : ''; ?>&cds=<?php echo urlencode($allCustomersDebtStatus); ?>"><?php echo $i; ?></a>
+                        <a class="page-link" href="?page=representatives_customers&cp=<?php echo $i; ?><?php echo $allCustomersSearch ? '&cs=' . urlencode($allCustomersSearch) : ''; ?>&cds=<?php echo urlencode($allCustomersDebtStatus); ?><?php echo $allCustomersRepFilter > 0 ? '&rep_filter=' . $allCustomersRepFilter : ''; ?>"><?php echo $i; ?></a>
                     </li>
                 <?php endfor; ?>
                 
                 <li class="page-item <?php echo $allCustomersPageNum >= $allCustomersTotalPages ? 'disabled' : ''; ?>">
-                    <a class="page-link" href="?page=representatives_customers&cp=<?php echo $allCustomersPageNum + 1; ?><?php echo $allCustomersSearch ? '&cs=' . urlencode($allCustomersSearch) : ''; ?>&cds=<?php echo urlencode($allCustomersDebtStatus); ?>">
+                    <a class="page-link" href="?page=representatives_customers&cp=<?php echo $allCustomersPageNum + 1; ?><?php echo $allCustomersSearch ? '&cs=' . urlencode($allCustomersSearch) : ''; ?>&cds=<?php echo urlencode($allCustomersDebtStatus); ?><?php echo $allCustomersRepFilter > 0 ? '&rep_filter=' . $allCustomersRepFilter : ''; ?>">
                         <i class="bi bi-chevron-left"></i>
                     </a>
                 </li>
