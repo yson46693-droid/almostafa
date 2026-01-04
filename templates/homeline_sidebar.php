@@ -65,7 +65,7 @@ if (empty($role) && function_exists('getUserFromToken')) {
     }
 }
 
-$currentPageParam = $_GET['page'] ?? '';
+$currentPageParam = trim($_GET['page'] ?? '');
 
 // محاولة تحديد role من الصفحة الحالية إذا كان غير معروف
 if (empty($role)) {
@@ -719,14 +719,14 @@ if (empty($menuItems)) {
                 'title' => isset($lang['dashboard']) ? $lang['dashboard'] : 'لوحة التحكم',
                 'icon' => 'bi-speedometer2',
                 'url' => $baseUrl . 'sales.php',
-                'active' => ($currentPageParam === ''),
+                'active' => ($currentPage === 'sales.php' && $currentPageParam === ''),
                 'badge' => null
             ],
             [
                 'title' => 'الشات',
                 'icon' => 'bi-chat-dots',
                 'url' => $baseUrl . 'sales.php?page=chat',
-                'active' => ($currentPageParam === 'chat'),
+                'active' => ($currentPage === 'sales.php' && $currentPageParam === 'chat'),
                 'badge' => null
             ],
             ['divider' => true, 'title' => isset($lang['sales_section']) ? $lang['sales_section'] : 'المبيعات'],
@@ -734,28 +734,28 @@ if (empty($menuItems)) {
                 'title' => isset($lang['customers']) ? $lang['customers'] : 'العملاء',
                 'icon' => 'bi-people',
                 'url' => $baseUrl . 'sales.php?page=customers',
-                'active' => ($currentPageParam === 'customers'),
+                'active' => ($currentPage === 'sales.php' && $currentPageParam === 'customers'),
                 'badge' => null
             ],
             [
                 'title' => isset($lang['customer_orders']) ? $lang['customer_orders'] : 'طلبات العملاء',
                 'icon' => 'bi-clipboard-check',
                 'url' => $baseUrl . 'sales.php?page=orders',
-                'active' => ($currentPageParam === 'orders'),
+                'active' => ($currentPage === 'sales.php' && $currentPageParam === 'orders'),
                 'badge' => (isset($currentUser) && $currentUser['role'] === 'sales' && function_exists('getNewOrdersCount')) ? getNewOrdersCount($currentUser['id']) : null
             ],
             [
                 'title' => 'سجلات المندوب',
                 'icon' => 'bi-journal-text',
                 'url' => $baseUrl . 'sales.php?page=my_records',
-                'active' => ($currentPageParam === 'my_records'),
+                'active' => ($currentPage === 'sales.php' && $currentPageParam === 'my_records'),
                 'badge' => null
             ],
             [
                 'title' => isset($lang['sales_pos']) ? $lang['sales_pos'] : 'نقطة البيع',
                 'icon' => 'bi-shop',
                 'url' => $baseUrl . 'sales.php?page=pos',
-                'active' => ($currentPageParam === 'pos'),
+                'active' => ($currentPage === 'sales.php' && $currentPageParam === 'pos'),
                 'badge' => null
             ],
         ];

@@ -1397,7 +1397,7 @@ if ($isAjaxNavigation) {
                 <div class="col-12 col-xxl-5">
                     <div class="row g-3">
                         <!-- تسجيل مصروف سريع -->
-                        <div class="col-12 col-md-4">
+                        <div class="col-12 col-lg-12 col-xxl-12">
                             <div class="card shadow-sm h-100">
                                 <div class="card-header bg-light fw-bold">
                                     <i class="bi bi-pencil-square me-2 text-success"></i>تسجيل مصروف سريع
@@ -1443,7 +1443,7 @@ if ($isAjaxNavigation) {
                         </div>
                         
                         <!-- تحصيل من مندوب -->
-                        <div class="col-12 col-md-4">
+                        <div class="col-12 col-lg-12 col-xxl-12">
                             <div class="card shadow-sm h-100">
                                 <div class="card-header bg-light fw-bold">
                                     <i class="bi bi-cash-coin me-2 text-primary"></i>تحصيل من مندوب
@@ -1500,7 +1500,7 @@ if ($isAjaxNavigation) {
                         </div>
                         
                         <!-- إنشاء تقرير تفصيلي -->
-                        <div class="col-12 col-md-4">
+                        <div class="col-12 col-lg-12 col-xxl-12">
                             <div class="card shadow-sm h-100">
                                 <div class="card-header bg-light fw-bold">
                                     <i class="bi bi-file-earmark-text me-2 text-success"></i>إنشاء تقرير تفصيلي
