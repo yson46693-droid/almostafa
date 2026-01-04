@@ -2694,6 +2694,13 @@ if (!$error) {
             .pos-content {
                 grid-template-columns: 1fr;
             }
+            /* جعل نموذج سلة المشتريات يأخذ 90% من عرض الشاشة على الهواتف */
+            .pos-checkout-panel {
+                width: 90%;
+                max-width: 90%;
+                margin-left: auto;
+                margin-right: auto;
+            }
         }
         @media (max-width: 768px) {
             .pos-summary-card {
@@ -2710,6 +2717,10 @@ if (!$error) {
             }
             .pos-checkout-panel {
                 gap: 1rem;
+                width: 90% !important;
+                max-width: 90% !important;
+                margin-left: auto !important;
+                margin-right: auto !important;
             }
             .pos-cart-table {
                 font-size: 0.9rem;
@@ -2777,6 +2788,12 @@ if (!$error) {
             }
             .pos-panel {
                 padding: 0.9rem;
+            }
+            .pos-checkout-panel {
+                width: 90% !important;
+                max-width: 90% !important;
+                margin-left: auto !important;
+                margin-right: auto !important;
             }
             .pos-panel-header h4,
             .pos-panel-header h5 {
@@ -3045,6 +3062,12 @@ if (!$error) {
         }
         
         @media (max-width: 480px) {
+            .pos-checkout-panel {
+                width: 90% !important;
+                max-width: 90% !important;
+                margin-left: auto !important;
+                margin-right: auto !important;
+            }
             .pos-product-grid {
                 grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
                 gap: 0.6rem;
