@@ -139,6 +139,45 @@
     }
 
     /**
+     * تحديث حالة active في الشريط الجانبي
+     */
+    function updateSidebarActiveState() {
+        const currentUrlObj = new URL(window.location.href);
+        const currentPage = currentUrlObj.pathname.split('/').pop() || '';
+        const currentPageParam = currentUrlObj.searchParams.get('page') || '';
+        
+        // إزالة active من جميع الروابط
+        const allNavLinks = document.querySelectorAll('.homeline-sidebar .nav-link, .sidebar-nav .nav-link');
+        allNavLinks.forEach(link => {
+            link.classList.remove('active');
+        });
+        
+        // إضافة active للرابط المطابق
+        allNavLinks.forEach(link => {
+            if (!link.href) return;
+            
+            try {
+                const linkUrl = new URL(link.href, window.location.origin);
+                const linkPage = linkUrl.pathname.split('/').pop() || '';
+                const linkPageParam = linkUrl.searchParams.get('page') || '';
+                
+                // مطابقة الصفحة والمعامل
+                if (linkPage === currentPage) {
+                    if (currentPageParam === '' && linkPageParam === '') {
+                        // الصفحة الرئيسية
+                        link.classList.add('active');
+                    } else if (currentPageParam !== '' && linkPageParam === currentPageParam) {
+                        // نفس معامل page
+                        link.classList.add('active');
+                    }
+                }
+            } catch (e) {
+                // تجاهل أخطاء URL parsing
+            }
+        });
+    }
+
+    /**
      * تحديث المحتوى في الصفحة
      */
     function updatePageContent(data) {
@@ -155,6 +194,9 @@
 
         // تحديث المحتوى
         mainElement.innerHTML = data.content;
+
+        // تحديث حالة active في الشريط الجانبي
+        updateSidebarActiveState();
 
         // إعادة تهيئة الأحداث
         reinitializeEvents();
@@ -396,6 +438,9 @@
      * تهيئة النظام
      */
     function init() {
+        // تحديث حالة active في الشريط الجانبي عند التحميل الأولي
+        updateSidebarActiveState();
+
         // إضافة معالج النقر على الروابط
         document.addEventListener('click', handleLinkClick, true);
 
