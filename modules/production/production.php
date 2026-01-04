@@ -7105,6 +7105,7 @@ $lang = isset($translations) ? $translations : [];
                     <a href="<?php echo htmlspecialchars($printUrlWithParams); ?>" 
                        target="_blank" 
                        class="btn btn-primary btn-lg shadow-sm"
+                       id="printComprehensiveReportBtn"
                        style="font-size: 1.1rem; padding: 0.75rem 1.5rem; font-weight: 600;">
                         <i class="bi bi-printer-fill me-2"></i>طباعة تقرير شهر <?php echo htmlspecialchars($monthDisplayName); ?>
                     </a>
@@ -11092,3 +11093,38 @@ body.modal-open .modal-backdrop {
     display: none !important;
 }
 </style>
+
+<script>
+// معالج زر طباعة التقرير الشامل
+document.addEventListener('DOMContentLoaded', function() {
+    const printReportBtn = document.getElementById('printComprehensiveReportBtn');
+    if (printReportBtn) {
+        // التأكد من أن الزر يعمل حتى لو كان هناك event listeners أخرى
+        printReportBtn.addEventListener('click', function(e) {
+            const href = this.getAttribute('href');
+            if (!href || href === '#' || href === '') {
+                e.preventDefault();
+                console.error('رابط الطباعة غير صحيح:', href);
+                alert('عذراً، حدث خطأ في رابط الطباعة. يرجى المحاولة مرة أخرى.');
+                return false;
+            }
+            
+            // فتح الرابط في تبويب جديد
+            try {
+                const url = new URL(href, window.location.origin);
+                window.open(url.toString(), '_blank', 'noopener,noreferrer');
+                // لا نمنع السلوك الافتراضي إذا كان الرابط صحيحاً
+                // لكن نتركه للسلوك الافتراضي للرابط
+            } catch (error) {
+                console.error('خطأ في فتح رابط الطباعة:', error);
+                // إذا كان هناك خطأ في URL، نحاول فتحه مباشرة
+                window.open(href, '_blank', 'noopener,noreferrer');
+            }
+        });
+        
+        // أيضاً، التأكد من أن الرابط يعمل بالطريقة التقليدية
+        printReportBtn.style.cursor = 'pointer';
+        printReportBtn.setAttribute('role', 'button');
+    }
+});
+</script>

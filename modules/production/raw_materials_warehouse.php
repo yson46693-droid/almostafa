@@ -6310,9 +6310,9 @@ if ($section === 'honey') {
         <h5 class="mb-0">إضافة شمع عسل</h5>
     </div>
     <div class="card-body">
-        <form method="POST" id="addBeeswaxFormCard">
+        <form method="POST" id="addBeeswaxFormCard" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
             <input type="hidden" name="action" value="add_beeswax">
-            <input type="hidden" name="submit_token" value="">
+            <input type="hidden" name="submit_token" value="<?php echo uniqid('tok_', true); ?>">
             <div class="mb-3">
                 <label class="form-label">المورد <span class="text-danger">*</span></label>
                 <select class="form-select" name="supplier_id" required>
@@ -6340,7 +6340,7 @@ if ($section === 'honey') {
         <h5 class="mb-0"><i class="bi bi-exclamation-square me-2"></i>تسجيل تالف شمع العسل</h5>
     </div>
     <div class="card-body">
-        <form method="POST" id="damageBeeswaxFormCard">
+        <form method="POST" id="damageBeeswaxFormCard" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
             <input type="hidden" name="action" value="record_damage">
             <input type="hidden" name="material_category" value="beeswax">
             <input type="hidden" name="redirect_section" value="beeswax">
@@ -6488,9 +6488,9 @@ if ($section === 'honey') {
                     <h5 class="modal-title">إضافة شمع عسل</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <form method="POST">
+                <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
                     <input type="hidden" name="action" value="add_beeswax">
-                    <input type="hidden" name="submit_token" value="">
+                    <input type="hidden" name="submit_token" value="<?php echo uniqid('tok_', true); ?>">
                     <div class="modal-body scrollable-modal-body">
                         <div class="mb-3">
                             <label class="form-label">المورد <span class="text-danger">*</span></label>
@@ -6523,7 +6523,7 @@ if ($section === 'honey') {
                 <h5 class="modal-title"><i class="bi bi-exclamation-square me-2"></i>تسجيل تالف شمع العسل</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST">
+            <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
                 <input type="hidden" name="action" value="record_damage">
                 <input type="hidden" name="material_category" value="beeswax">
                 <input type="hidden" name="redirect_section" value="beeswax">
