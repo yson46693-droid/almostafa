@@ -1020,13 +1020,6 @@ if (isset($_GET['id'])) {
                                 <td>
                                     <?php if ($schedule['status'] !== 'paid' && $schedule['status'] !== 'cancelled'): ?>
                                     <div class="d-flex gap-2 flex-wrap">
-                                        <button class="btn btn-sm btn-warning rounded-pill px-3" 
-                                                data-schedule-id="<?php echo $schedule['id']; ?>"
-                                                onclick="showReminderModal(<?php echo $schedule['id']; ?>)"
-                                                title="تحديد عدد أيام التنبيه"
-                                                style="border: 2px solid #ffc107; background-color: #ffc107; color: #000; font-weight: 500;">
-                                            <i class="bi bi-bell-fill me-1"></i>تنبيه
-                                        </button>
                                         <button class="btn btn-sm btn-primary rounded-pill px-3"
                                                 data-schedule-id="<?php echo $schedule['id']; ?>"
                                                 data-customer="<?php echo htmlspecialchars($schedule['customer_name'] ?? '-', ENT_QUOTES, 'UTF-8'); ?>"
