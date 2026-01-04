@@ -402,8 +402,37 @@ if (!function_exists('storeRawMaterialsReportDocument')) {
             $viewerPath = '/reports/view.php?type=export&file=' . rawurlencode($relativePath) . '&token=' . $token;
             $printPath = $viewerPath . '&print=1';
 
-            $absoluteViewer = getAbsoluteUrl(ltrim($viewerPath, '/'));
-            $absolutePrint = getAbsoluteUrl(ltrim($printPath, '/'));
+            // بناء URL المطلق بشكل صحيح - تجنب مشكلة getBasePath() عند الاستدعاء من api/
+            $isHttps = (
+                (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
+                (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443') ||
+                (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ||
+                (!empty($_SERVER['HTTP_X_FORWARDED_SSL']) && $_SERVER['HTTP_X_FORWARDED_SSL'] === 'on')
+            );
+            $isLocalhost = (
+                ($_SERVER['HTTP_HOST'] ?? '') === 'localhost' ||
+                strpos($_SERVER['HTTP_HOST'] ?? '', 'localhost:') === 0 ||
+                ($_SERVER['HTTP_HOST'] ?? '') === '127.0.0.1' ||
+                strpos($_SERVER['HTTP_HOST'] ?? '', '127.0.0.1:') === 0
+            );
+            $protocol = ($isHttps || !$isLocalhost) ? "https://" : "http://";
+            $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+            
+            // حساب base path بشكل صحيح - إزالة /api/ من المسار
+            $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
+            $scriptName = str_replace('\\', '/', $scriptName);
+            $parts = explode('/', trim($scriptName, '/'));
+            $baseParts = [];
+            foreach ($parts as $part) {
+                if ($part === 'dashboard' || $part === 'modules' || $part === 'api' || strpos($part, '.php') !== false) {
+                    break;
+                }
+                $baseParts[] = $part;
+            }
+            $basePath = !empty($baseParts) ? '/' . implode('/', $baseParts) : '';
+            
+            $absoluteViewer = $protocol . $host . $basePath . $viewerPath;
+            $absolutePrint = $protocol . $host . $basePath . $printPath;
 
             return [
                 'relative_path' => $relativePath,

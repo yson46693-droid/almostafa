@@ -3811,8 +3811,13 @@ if (!$error) {
     }
 
     function addToCart(uniqueId) {
+        if (!uniqueId) {
+            console.warn('addToCart: uniqueId is missing');
+            return;
+        }
         const product = inventoryMap.get(uniqueId);
         if (!product) {
+            console.warn('addToCart: Product not found in inventoryMap for uniqueId:', uniqueId);
             return;
         }
         product.quantity = sanitizeNumber(product.quantity);
@@ -3904,13 +3909,21 @@ if (!$error) {
         renderCart(); // renderCart() تستدعي updateSummary() تلقائياً
     }
 
-    elements.inventoryButtons.forEach((button) => {
-        button.addEventListener('click', function (event) {
-            event.stopPropagation();
-            const uniqueId = this.dataset.uniqueId || this.dataset.productId;
-            addToCart(uniqueId);
+    if (elements.inventoryButtons && elements.inventoryButtons.length > 0) {
+        elements.inventoryButtons.forEach((button) => {
+            button.addEventListener('click', function (event) {
+                event.stopPropagation();
+                const uniqueId = this.dataset.uniqueId || this.dataset.productId;
+                if (uniqueId) {
+                    addToCart(uniqueId);
+                } else {
+                    console.warn('addToCart: Button clicked but uniqueId is missing', this);
+                }
+            });
         });
-    });
+    } else {
+        console.warn('elements.inventoryButtons is empty or not found');
+    }
 
     elements.inventoryCards.forEach((card) => {
         card.addEventListener('click', function () {
