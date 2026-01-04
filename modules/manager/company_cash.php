@@ -1593,11 +1593,66 @@ document.addEventListener('DOMContentLoaded', function() {
 <!-- تم حذف المودالات - Cards أصبحت ثابتة دائماً ظاهرة -->
 
 <style>
-/* إصلاح شامل للمساحة البيضاء في النماذج */
-
-/* تم إزالة CSS المتعلق بالمودالات - Cards أصبحت ثابتة دائماً ظاهرة */
+/* ضمان أن جميع البطاقات تظهر عمودياً (كل واحدة تحت الأخرى) على سطح المكتب */
+@media (min-width: 769px) {
+    /* إزالة أي grid أو flex يجعل البطاقات بجوار بعضها - تحديد مباشر لصفحة الخزنة */
+    .page-header.mb-4 ~ .mt-4,
+    .page-header.mb-4 ~ .alert ~ .mt-4,
+    .alert ~ .mt-4 {
+        display: block !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: none !important;
+        float: none !important;
+        clear: both !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+    }
+    
+    /* ضمان أن البطاقات تأخذ العرض الكامل */
+    .mt-4 > .card,
+    .mt-4 .card,
+    .mt-4 > .card.shadow-sm {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        float: none !important;
+        clear: both !important;
+        display: block !important;
+    }
+    
+    /* منع أي grid layout على البطاقات */
+    .mt-4 {
+        grid-column: 1 / -1 !important;
+        grid-row: auto !important;
+        grid-template-columns: none !important;
+        display: block !important;
+    }
+    
+    /* منع أي container يجعل البطاقات في grid */
+    .container-fluid > .mt-4,
+    .container > .mt-4,
+    .row > .mt-4,
+    [class*="col-"] > .mt-4 {
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: 0 0 100% !important;
+        display: block !important;
+    }
+    
+    /* منع أي wrapper div يجعل البطاقات في grid */
+    div:has(> .mt-4) {
+        display: block !important;
+    }
+    
+    /* إزالة أي تأثير من cards-grid */
+    .cards-grid .mt-4,
+    .mt-4.cards-grid {
+        display: block !important;
+        grid-template-columns: none !important;
+    }
+}
 
 /* Cards ظاهرة دائماً على جميع الأجهزة */
-
-/* تم إزالة CSS المتعلق بالمودالات */
 </style>

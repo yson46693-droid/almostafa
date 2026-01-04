@@ -3810,15 +3810,8 @@ if (!$error) {
     }
 
     function addToCart(uniqueId) {
-        if (!uniqueId) {
-            console.warn('addToCart: uniqueId is missing');
-            return;
-        }
         const product = inventoryMap.get(uniqueId);
-        if (!product) {
-            console.warn('addToCart: Product not found in inventoryMap for uniqueId:', uniqueId);
-            return;
-        }
+        if (!product) return;
         product.quantity = sanitizeNumber(product.quantity);
         product.unit_price = sanitizeNumber(product.unit_price);
         const existing = cart.find((item) => item.unique_id === uniqueId);
@@ -3908,34 +3901,13 @@ if (!$error) {
         renderCart(); // renderCart() تستدعي updateSummary() تلقائياً
     }
 
-    // استخدام event delegation للتعامل مع أزرار إضافة المنتجات
-    const productGrid = document.getElementById('posProductGrid');
-    if (productGrid) {
-        productGrid.addEventListener('click', function (event) {
-            const button = event.target.closest('[data-select-product]');
-            if (!button) {
-                return;
-            }
+    elements.inventoryButtons.forEach((button) => {
+        button.addEventListener('click', function (event) {
             event.stopPropagation();
-            const uniqueId = button.getAttribute('data-unique-id') || button.getAttribute('data-product-id');
-            if (uniqueId) {
-                addToCart(uniqueId);
-            }
+            const uniqueId = this.dataset.uniqueId || this.dataset.productId;
+            addToCart(uniqueId);
         });
-    } else {
-        // Fallback: استخدام الطريقة القديمة إذا لم يتم العثور على productGrid
-        if (elements.inventoryButtons && elements.inventoryButtons.length > 0) {
-            elements.inventoryButtons.forEach((button) => {
-                button.addEventListener('click', function (event) {
-                    event.stopPropagation();
-                    const uniqueId = button.getAttribute('data-unique-id') || button.getAttribute('data-product-id');
-                    if (uniqueId) {
-                        addToCart(uniqueId);
-                    }
-                });
-            });
-        }
-    }
+    });
 
     elements.inventoryCards.forEach((card) => {
         card.addEventListener('click', function () {
