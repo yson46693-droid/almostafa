@@ -4532,6 +4532,32 @@ if ($isApiMode) {
 }
 </style>
 
+<!-- دوال JavaScript عامة لجميع الأقسام -->
+<script>
+// ===== دوال أساسية للموبايل - متاحة لجميع الأقسام =====
+function isMobile() {
+    return window.innerWidth <= 768;
+}
+
+function scrollToElement(element) {
+    if (!element) return;
+    
+    setTimeout(function() {
+        const rect = element.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const elementTop = rect.top + scrollTop;
+        const offset = 80;
+        
+        requestAnimationFrame(function() {
+            window.scrollTo({
+                top: Math.max(0, elementTop - offset),
+                behavior: 'smooth'
+            });
+        });
+    }, 200);
+}
+</script>
+
 <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
     <h2 class="mb-0"><i class="bi bi-box-seam me-2"></i>مخزن الخامات</h2>
     <div class="d-flex flex-wrap gap-2">
@@ -5415,29 +5441,9 @@ if ($section === 'honey') {
 </div>
 
     <script>
-    // ===== دوال أساسية للموبايل =====
-    function isMobile() {
-        return window.innerWidth <= 768;
-    }
-
-    function scrollToElement(element) {
-        if (!element) return;
-        
-        setTimeout(function() {
-            const rect = element.getBoundingClientRect();
-            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-            const elementTop = rect.top + scrollTop;
-            const offset = 80;
-            
-            requestAnimationFrame(function() {
-                window.scrollTo({
-                    top: Math.max(0, elementTop - offset),
-                    behavior: 'smooth'
-                });
-            });
-        }, 200);
-    }
-
+    // ===== دوال قسم العسل =====
+    // ملاحظة: دوال isMobile() و scrollToElement() معرّفة في المكان العام في بداية الصفحة
+    
     function closeAllForms() {
         const cards = [
             'addHoneyCard', 'filterHoneyCard', 'addRemainingFilteredCard', 'damageHoneyCard',
