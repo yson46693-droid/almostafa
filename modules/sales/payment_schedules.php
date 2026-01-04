@@ -428,6 +428,9 @@ if (isset($_GET['id'])) {
         );
     }
 }
+
+// Initialize sentReminders variable (reminders are sent via cron job, not on page load)
+$sentReminders = 0;
 ?>
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
     <h2 class="mb-0"><i class="bi bi-calendar-check me-2"></i>الجداول الزمنية للتحصيل</h2>
