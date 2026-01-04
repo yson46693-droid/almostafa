@@ -3285,7 +3285,7 @@ try {
                     </div>
                 </div>
 
-                <div class="pos-panel pos-checkout-panel" style="grid-column: span 5;">
+                <div class="pos-panel pos-checkout-panel" style="grid-column: span 7;">
                     <div class="pos-selected-product" id="posSelectedProduct">
                         <h5 class="mb-3">تفاصيل المنتج المختار</h5>
                         <div class="meta-row">
