@@ -4684,6 +4684,14 @@ function showAddBeeswaxModal() {
         // على الموبايل: استخدام Card
         const card = document.getElementById('addBeeswaxCard');
         if (card) {
+            // تحديث submit_token عند فتح النموذج
+            const form = card.querySelector('form');
+            if (form) {
+                const tokenInput = form.querySelector('input[name="submit_token"]');
+                if (tokenInput) {
+                    tokenInput.value = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                }
+            }
             card.style.display = 'block';
             setTimeout(function() {
                 scrollToElement(card);
@@ -4693,6 +4701,14 @@ function showAddBeeswaxModal() {
         // على الكمبيوتر: استخدام Modal
         const modal = document.getElementById('addBeeswaxModal');
         if (modal) {
+            // تحديث submit_token عند فتح النموذج
+            const form = modal.querySelector('form');
+            if (form) {
+                const tokenInput = form.querySelector('input[name="submit_token"]');
+                if (tokenInput) {
+                    tokenInput.value = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                }
+            }
             const modalInstance = new bootstrap.Modal(modal);
             modalInstance.show();
         }
@@ -4711,6 +4727,15 @@ function openBeeswaxDamageModal(id, supplier, quantity) {
         // على الموبايل: استخدام Card
         const card = document.getElementById('damageBeeswaxCard');
         if (!card) return;
+        
+        // تحديث submit_token عند فتح النموذج
+        const form = card.querySelector('form');
+        if (form) {
+            const tokenInput = form.querySelector('input[name="submit_token"]');
+            if (tokenInput) {
+                tokenInput.value = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            }
+        }
         
         const stockIdInput = document.getElementById('damage_wax_stock_id_card');
         const supplierInput = document.getElementById('damage_wax_supplier_card');
@@ -4736,6 +4761,18 @@ function openBeeswaxDamageModal(id, supplier, quantity) {
         }, 50);
     } else {
         // على الكمبيوتر: استخدام Modal
+        const modal = document.getElementById('damageBeeswaxModal');
+        if (!modal) return;
+        
+        // تحديث submit_token عند فتح النموذج
+        const form = modal.querySelector('form');
+        if (form) {
+            const tokenInput = form.querySelector('input[name="submit_token"]');
+            if (tokenInput) {
+                tokenInput.value = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            }
+        }
+        
         const stockIdInput = document.getElementById('damage_wax_stock_id');
         const supplierInput = document.getElementById('damage_wax_supplier');
         const availableInput = document.getElementById('damage_wax_available');
@@ -4754,7 +4791,7 @@ function openBeeswaxDamageModal(id, supplier, quantity) {
         if (reasonInput) reasonInput.value = '';
         if (submitBtn) submitBtn.disabled = qty <= 0;
         
-        new bootstrap.Modal(document.getElementById('damageBeeswaxModal')).show();
+        new bootstrap.Modal(modal).show();
     }
 }
 </script>

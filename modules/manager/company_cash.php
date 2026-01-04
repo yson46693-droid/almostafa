@@ -1593,12 +1593,10 @@ document.addEventListener('DOMContentLoaded', function() {
 <!-- تم حذف المودالات - Cards أصبحت ثابتة دائماً ظاهرة -->
 
 <style>
-/* ضمان أن جميع البطاقات تظهر عمودياً (كل واحدة تحت الأخرى) على سطح المكتب */
+/* ضمان أن جميع البطاقات تظهر عمودياً - كل بطاقة في صف منفصل على سطح المكتب */
 @media (min-width: 769px) {
-    /* إزالة أي grid أو flex يجعل البطاقات بجوار بعضها - تحديد مباشر لصفحة الخزنة */
-    .page-header.mb-4 ~ .mt-4,
-    .page-header.mb-4 ~ .alert ~ .mt-4,
-    .alert ~ .mt-4 {
+    /* فرض أن كل div.mt-4 يأخذ العرض الكامل ويظهر في صف منفصل */
+    div.mt-4 {
         display: block !important;
         width: 100% !important;
         max-width: 100% !important;
@@ -1607,50 +1605,53 @@ document.addEventListener('DOMContentLoaded', function() {
         clear: both !important;
         margin-left: 0 !important;
         margin-right: 0 !important;
+        grid-column: 1 / -1 !important;
+        grid-row: auto !important;
     }
     
-    /* ضمان أن البطاقات تأخذ العرض الكامل */
-    .mt-4 > .card,
-    .mt-4 .card,
-    .mt-4 > .card.shadow-sm {
+    /* ضمان أن البطاقات الداخلية تأخذ العرض الكامل */
+    div.mt-4 > .card,
+    div.mt-4 .card,
+    div.mt-4 > .card.shadow-sm {
+        display: block !important;
         width: 100% !important;
         max-width: 100% !important;
         margin-left: 0 !important;
         margin-right: 0 !important;
         float: none !important;
         clear: both !important;
-        display: block !important;
+        box-sizing: border-box !important;
     }
     
-    /* منع أي grid layout على البطاقات */
-    .mt-4 {
-        grid-column: 1 / -1 !important;
-        grid-row: auto !important;
-        grid-template-columns: none !important;
-        display: block !important;
-    }
-    
-    /* منع أي container يجعل البطاقات في grid */
-    .container-fluid > .mt-4,
-    .container > .mt-4,
-    .row > .mt-4,
-    [class*="col-"] > .mt-4 {
+    /* منع أي container يجعل البطاقات في grid أو flex */
+    .container-fluid > div.mt-4,
+    .container > div.mt-4,
+    .row > div.mt-4,
+    [class*="col-"] > div.mt-4,
+    .cards-grid > div.mt-4 {
         width: 100% !important;
         max-width: 100% !important;
         flex: 0 0 100% !important;
         display: block !important;
+        clear: both !important;
     }
     
-    /* منع أي wrapper div يجعل البطاقات في grid */
-    div:has(> .mt-4) {
+    /* إزالة أي grid layout من أي parent container */
+    body .dashboard-main > div.mt-4,
+    body .dashboard-main .page-header ~ div.mt-4,
+    body .dashboard-main .alert ~ div.mt-4 {
         display: block !important;
+        width: 100% !important;
+        clear: both !important;
     }
     
-    /* إزالة أي تأثير من cards-grid */
-    .cards-grid .mt-4,
-    .mt-4.cards-grid {
+    /* منع أي flexbox يجعل البطاقات بجوار بعضها - استخدام selector مباشر */
+    .row .mt-4,
+    .d-flex .mt-4,
+    .flex .mt-4 {
         display: block !important;
-        grid-template-columns: none !important;
+        width: 100% !important;
+        clear: both !important;
     }
 }
 
