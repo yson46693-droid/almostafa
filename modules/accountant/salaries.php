@@ -3922,8 +3922,6 @@ $pageTitle = ($view === 'advances') ? 'السلف' : (($view === 'pending') ? '�
                         <div class="detail-actions">
                             <button class="btn btn-warning btn-sm" 
                                     onclick="openModifyModal(<?php echo $hasSalaryId ? $salary['id'] : 0; ?>, <?php echo htmlspecialchars(json_encode($salary), ENT_QUOTES); ?>)" 
-                                    data-bs-toggle="modal" 
-                                    data-bs-target="#modifySalaryModal"
                                     title="تعديل">
                                 <i class="bi bi-pencil me-1"></i>تعديل
                             </button>
@@ -3975,8 +3973,6 @@ $pageTitle = ($view === 'advances') ? 'السلف' : (($view === 'pending') ? '�
                             ?>
                             <button class="btn btn-success btn-sm" 
                                     onclick="openSettleModal(<?php echo $salary['id']; ?>, <?php echo htmlspecialchars(json_encode($salaryForJson, JSON_UNESCAPED_UNICODE), ENT_QUOTES); ?>, <?php echo $settleRemaining; ?>, <?php echo $settleAccumulated; ?>)" 
-                                    data-bs-toggle="modal" 
-                                    data-bs-target="#settleSalaryModal"
                                     title="تسوية مستحقات">
                                 <i class="bi bi-cash-coin me-1"></i>تسوية
                             </button>
@@ -3993,8 +3989,6 @@ $pageTitle = ($view === 'advances') ? 'السلف' : (($view === 'pending') ? '�
                             <?php if ($hasSalaryId): ?>
                             <button class="btn btn-primary btn-sm" 
                                     onclick="openStatementModal(<?php echo $salary['id']; ?>, <?php echo $userId; ?>, '<?php echo htmlspecialchars($employeeName); ?>')" 
-                                    data-bs-toggle="modal" 
-                                    data-bs-target="#salaryStatementModal"
                                     title="كشف حساب">
                                 <i class="bi bi-file-earmark-text me-1"></i>كشف حساب
                             </button>
@@ -4117,7 +4111,7 @@ $pageTitle = ($view === 'advances') ? 'السلف' : (($view === 'pending') ? '�
 <?php endif; ?>
 
 <!-- Modal تفاصيل الراتب -->
-<div class="modal fade" id="salaryDetailsModal" tabindex="-1">
+<div class="modal fade d-none d-md-block" id="salaryDetailsModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-info text-white">
@@ -4136,7 +4130,7 @@ $pageTitle = ($view === 'advances') ? 'السلف' : (($view === 'pending') ? '�
 </div>
 
 <!-- Modal تعديل الراتب -->
-<div class="modal fade" id="modifySalaryModal" tabindex="-1">
+<div class="modal fade d-none d-md-block" id="modifySalaryModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header bg-warning text-dark">
@@ -4448,7 +4442,7 @@ $advanceStatusLabels = [
 </div>
 
 <!-- Modal طلب سلفة جديدة -->
-<div class="modal fade" id="requestAdvanceModal" tabindex="-1">
+<div class="modal fade d-none d-md-block" id="requestAdvanceModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
@@ -4509,7 +4503,7 @@ $advanceStatusLabels = [
 </div>
 
 <!-- Modal رفض السلفة -->
-<div class="modal fade" id="rejectModal" tabindex="-1">
+<div class="modal fade d-none d-md-block" id="rejectModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header bg-danger text-white">
@@ -4541,17 +4535,62 @@ $advanceStatusLabels = [
     </div>
 </div>
 
-<script>
-function openRejectModal(advanceId) {
-    document.getElementById('rejectAdvanceId').value = advanceId;
-    const rejectModal = new bootstrap.Modal(document.getElementById('rejectModal'));
-    rejectModal.show();
-}
-</script>
 
 <?php endif; ?>
 
 <script>
+// ===== دوال أساسية للموبايل - متاحة لجميع الأقسام =====
+function isMobile() {
+    return window.innerWidth <= 768;
+}
+
+function scrollToElement(element) {
+    if (!element) return;
+    
+    setTimeout(function() {
+        const rect = element.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const elementTop = rect.top + scrollTop;
+        const offset = 80; // مساحة للـ header
+        
+        requestAnimationFrame(function() {
+            window.scrollTo({
+                top: Math.max(0, elementTop - offset),
+                behavior: 'smooth'
+            });
+        });
+    }, 200);
+}
+
+function closeAllForms() {
+    // إغلاق جميع Cards على الموبايل
+    const cards = [
+        'salaryDetailsCard', 'modifySalaryCard', 'requestAdvanceCard',
+        'rejectCard', 'settleSalaryCard', 'salaryStatementCard'
+    ];
+    cards.forEach(function(cardId) {
+        const card = document.getElementById(cardId);
+        if (card && card.style.display !== 'none') {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    });
+    
+    // إغلاق جميع Modals على الكمبيوتر
+    const modals = [
+        'salaryDetailsModal', 'modifySalaryModal', 'requestAdvanceModal',
+        'rejectModal', 'settleSalaryModal', 'salaryStatementModal'
+    ];
+    modals.forEach(function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            if (modalInstance) modalInstance.hide();
+        }
+    });
+}
+
 // Export Functions
 function exportToPDF() {
     // Placeholder for PDF export - can be connected to backend handler
@@ -4593,69 +4632,176 @@ function calculateAllSalaries() {
     }
 }
 
+// ===== دوال إغلاق Cards =====
+function closeSalaryDetailsCard() {
+    const card = document.getElementById('salaryDetailsCard');
+    if (card) card.style.display = 'none';
+}
+
+function closeModifySalaryCard() {
+    const card = document.getElementById('modifySalaryCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closeRequestAdvanceCard() {
+    const card = document.getElementById('requestAdvanceCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closeRejectCard() {
+    const card = document.getElementById('rejectCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closeSettleSalaryCard() {
+    const card = document.getElementById('settleSalaryCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closeSalaryStatementCard() {
+    const card = document.getElementById('salaryStatementCard');
+    if (card) card.style.display = 'none';
+}
+
 function viewSalaryDetails(salaryId) {
-    const modal = document.getElementById('salaryDetailsModal');
-    const content = document.getElementById('salaryDetailsContent');
+    closeAllForms();
     
-    // تحميل التفاصيل عبر AJAX
-    fetch(<?php echo json_encode($currentUrl, JSON_UNESCAPED_SLASHES); ?> + '?page=salaries&ajax=1&id=' + salaryId)
-        .then(response => response.text())
-        .then(html => {
-            content.innerHTML = html;
-        })
-        .catch(error => {
-            content.innerHTML = '<div class="alert alert-danger">حدث خطأ أثناء تحميل التفاصيل</div>';
-        });
+    if (isMobile()) {
+        const card = document.getElementById('salaryDetailsCard');
+        const content = document.getElementById('salaryDetailsContentCard');
+        if (card && content) {
+            // تحميل AJAX
+            fetch(<?php echo json_encode($currentUrl, JSON_UNESCAPED_SLASHES); ?> + '?page=salaries&ajax=1&id=' + salaryId)
+                .then(response => response.text())
+                .then(html => {
+                    content.innerHTML = html;
+                    card.style.display = 'block';
+                    setTimeout(() => scrollToElement(card), 50);
+                })
+                .catch(error => {
+                    content.innerHTML = '<div class="alert alert-danger">حدث خطأ أثناء تحميل التفاصيل</div>';
+                    card.style.display = 'block';
+                    setTimeout(() => scrollToElement(card), 50);
+                });
+        }
+    } else {
+        const modal = document.getElementById('salaryDetailsModal');
+        const content = document.getElementById('salaryDetailsContent');
+        if (modal && content) {
+            fetch(<?php echo json_encode($currentUrl, JSON_UNESCAPED_SLASHES); ?> + '?page=salaries&ajax=1&id=' + salaryId)
+                .then(response => response.text())
+                .then(html => {
+                    content.innerHTML = html;
+                    new bootstrap.Modal(modal).show();
+                })
+                .catch(error => {
+                    content.innerHTML = '<div class="alert alert-danger">حدث خطأ أثناء تحميل التفاصيل</div>';
+                });
+        }
+    }
 }
 
 function openModifyModal(salaryId, salaryData) {
+    closeAllForms();
+    
     // التحقق من أن salaryId صحيح (ليس null أو 0 أو 'null')
     const validSalaryId = (salaryId && salaryId !== 'null' && salaryId !== null && salaryId !== 0) ? salaryId : '';
-    document.getElementById('modifySalaryId').value = validSalaryId;
-    document.getElementById('modifyUserName').value = salaryData.full_name || salaryData.username;
     
     // استخدام المتبقي كالراتب الأساسي الفعلي من بطاقة الموظف
-    // هذا يضمن أن نافذة تعديل الراتب تستخدم نفس قيمة المتبقي المعروضة في بطاقة الموظف
-    // حتى لو لم يكن الراتب مسجل في قاعدة البيانات
     const remaining = salaryData.calculated_remaining !== undefined ? salaryData.calculated_remaining : 
                       (salaryData.remaining || 
                        ((salaryData.calculated_accumulated || salaryData.accumulated_amount || salaryData.total_amount || 0) - (salaryData.paid_amount || 0)));
-    
-    // استخدام المتبقي كالراتب الأساسي الفعلي - هذا هو المبلغ الذي يجب أن يتعامل معه المودال
-    // حتى لو لم يكن الراتب مسجل في قاعدة البيانات
     const baseAmount = Math.max(0, remaining);
-    
-    const baseAmountElement = document.getElementById('modifyBaseAmount');
-    baseAmountElement.value = formatCurrency(baseAmount);
-    // حفظ القيمة الرقمية في data attribute لاستخدامها في الحساب
-    baseAmountElement.setAttribute('data-numeric-value', baseAmount);
-    
-    // استخدام القيم الحالية من salaryData (نفس القيم المستخدمة في الإشعار)
-    document.getElementById('modifyBonus').value = salaryData.bonus || 0;
-    document.getElementById('modifyDeductions').value = salaryData.deductions || 0;
-    
-    // حفظ collectionsBonus في حقل مخفي
     const collectionsBonus = salaryData.calculated_collections_bonus !== undefined ? salaryData.calculated_collections_bonus : (salaryData.collections_bonus || 0);
-    document.getElementById('modifyCollectionsBonus').value = collectionsBonus;
     
-    // حساب الراتب الجديد - سيتم حسابه في calculateNewTotal() بناءً على القيم الحالية
-    // الراتب الجديد = baseAmount + bonus + collectionsBonus - deductions
-    // حيث bonus و deductions هما القيم الحالية من salaryData (نفس القيم المستخدمة في الإشعار)
-    calculateNewTotal();
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('modifySalaryCard');
+        if (card) {
+            document.getElementById('modifySalaryIdCard').value = validSalaryId;
+            document.getElementById('modifyUserNameCard').value = salaryData.full_name || salaryData.username;
+            
+            const baseAmountElement = document.getElementById('modifyBaseAmountCard');
+            baseAmountElement.value = formatCurrency(baseAmount);
+            baseAmountElement.setAttribute('data-numeric-value', baseAmount);
+            
+            document.getElementById('modifyBonusCard').value = salaryData.bonus || 0;
+            document.getElementById('modifyDeductionsCard').value = salaryData.deductions || 0;
+            document.getElementById('modifyCollectionsBonusCard').value = collectionsBonus;
+            
+            calculateNewTotalCard();
+            card.style.display = 'block';
+            setTimeout(() => scrollToElement(card), 50);
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        document.getElementById('modifySalaryId').value = validSalaryId;
+        document.getElementById('modifyUserName').value = salaryData.full_name || salaryData.username;
+        
+        const baseAmountElement = document.getElementById('modifyBaseAmount');
+        baseAmountElement.value = formatCurrency(baseAmount);
+        baseAmountElement.setAttribute('data-numeric-value', baseAmount);
+        
+        document.getElementById('modifyBonus').value = salaryData.bonus || 0;
+        document.getElementById('modifyDeductions').value = salaryData.deductions || 0;
+        document.getElementById('modifyCollectionsBonus').value = collectionsBonus;
+        
+        calculateNewTotal();
+        const modal = document.getElementById('modifySalaryModal');
+        if (modal) {
+            new bootstrap.Modal(modal).show();
+        }
+    }
 }
 
 function calculateNewTotal() {
-    // استخدام القيمة الرقمية المحفوظة في data attribute بدلاً من قراءة القيمة المنسقة
+    // للـ Modal
     const baseAmountElement = document.getElementById('modifyBaseAmount');
-    const baseAmount = parseFloat(baseAmountElement.getAttribute('data-numeric-value') || baseAmountElement.value.replace(/[^\d.]/g, '')) || 0;
-    const bonus = parseFloat(document.getElementById('modifyBonus').value) || 0;
-    const deductions = parseFloat(document.getElementById('modifyDeductions').value) || 0;
-    const collectionsBonus = parseFloat(document.getElementById('modifyCollectionsBonus').value) || 0;
-    
-    // حساب الراتب الجديد بنفس طريقة بطاقة الموظف
-    // الراتب الإجمالي = الراتب الأساسي + المكافآت + نسبة التحصيلات - الخصومات
-    const newTotal = baseAmount + bonus + collectionsBonus - deductions;
-    document.getElementById('newTotalAmount').textContent = formatCurrency(Math.max(0, newTotal));
+    if (baseAmountElement) {
+        const baseAmount = parseFloat(baseAmountElement.getAttribute('data-numeric-value') || baseAmountElement.value.replace(/[^\d.]/g, '')) || 0;
+        const bonus = parseFloat(document.getElementById('modifyBonus')?.value) || 0;
+        const deductions = parseFloat(document.getElementById('modifyDeductions')?.value) || 0;
+        const collectionsBonus = parseFloat(document.getElementById('modifyCollectionsBonus')?.value) || 0;
+        
+        const newTotal = baseAmount + bonus + collectionsBonus - deductions;
+        const newTotalElement = document.getElementById('newTotalAmount');
+        if (newTotalElement) {
+            newTotalElement.textContent = formatCurrency(Math.max(0, newTotal));
+        }
+    }
+}
+
+function calculateNewTotalCard() {
+    // للـ Card
+    const baseAmountElement = document.getElementById('modifyBaseAmountCard');
+    if (baseAmountElement) {
+        const baseAmount = parseFloat(baseAmountElement.getAttribute('data-numeric-value') || baseAmountElement.value.replace(/[^\d.]/g, '')) || 0;
+        const bonus = parseFloat(document.getElementById('modifyBonusCard')?.value) || 0;
+        const deductions = parseFloat(document.getElementById('modifyDeductionsCard')?.value) || 0;
+        const collectionsBonus = parseFloat(document.getElementById('modifyCollectionsBonusCard')?.value) || 0;
+        
+        const newTotal = baseAmount + bonus + collectionsBonus - deductions;
+        const newTotalElement = document.getElementById('newTotalAmountCard');
+        if (newTotalElement) {
+            newTotalElement.textContent = formatCurrency(Math.max(0, newTotal));
+        }
+    }
 }
 
 function formatCurrency(amount) {
@@ -4702,6 +4848,23 @@ function rejectAdvance(advanceId) {
     openRejectModal(advanceId);
 }
 
+function openRejectModal(advanceId) {
+    closeAllForms();
+    
+    if (isMobile()) {
+        document.getElementById('rejectAdvanceIdCard').value = advanceId;
+        const card = document.getElementById('rejectCard');
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(() => scrollToElement(card), 50);
+        }
+    } else {
+        document.getElementById('rejectAdvanceId').value = advanceId;
+        const rejectModal = new bootstrap.Modal(document.getElementById('rejectModal'));
+        rejectModal.show();
+    }
+}
+
 function viewAdvanceDetails(advanceId) {
     alert('عرض تفاصيل السلفة #' + advanceId);
     // يمكن إضافة modal لعرض التفاصيل لاحقاً
@@ -4719,6 +4882,8 @@ let settleModalCalculatedValues = {
 let settleModalRemainingValue = 0;
 
 function openSettleModal(salaryId, salaryData, remainingAmount, calculatedAccumulated) {
+    closeAllForms();
+    
     // الحصول على user_id من البيانات - محاولة عدة مصادر
     let userId = null;
     if (salaryData.user_id !== undefined && salaryData.user_id !== null && salaryData.user_id > 0) {
@@ -4746,7 +4911,56 @@ function openSettleModal(salaryId, salaryData, remainingAmount, calculatedAccumu
         return;
     }
     
-    // التحقق من وجود Modal أولاً
+    // استخدام القيم المحسوبة مباشرة من بطاقة الموظف
+    const accumulated = parseFloat(calculatedAccumulated || salaryData.calculated_accumulated || salaryData.accumulated_amount || salaryData.total_amount || 0);
+    const remaining = parseFloat(remainingAmount || salaryData.calculated_remaining || 0);
+    
+    // حفظ القيم في متغير عام
+    settleModalCalculatedValues = {
+        accumulated: accumulated,
+        remaining: remaining,
+        salaryId: salaryId
+    };
+    settleModalRemainingValue = remaining;
+    
+    if (isMobile()) {
+        // على الموبايل: استخدام Card (سيتم إضافة دوال Card لاحقاً - معقدة)
+        const card = document.getElementById('settleSalaryCard');
+        if (!card) {
+            console.error('settleSalaryCard element not found in DOM');
+            alert('خطأ: لم يتم العثور على نافذة التسوية. يرجى تحديث الصفحة والمحاولة مرة أخرى.');
+            return;
+        }
+        
+        document.getElementById('settleSalaryIdCard').value = salaryId;
+        document.getElementById('settleUserIdCard').value = userId;
+        document.getElementById('settleUserNameCard').textContent = salaryData.full_name || salaryData.username || 'غير محدد';
+        
+        document.getElementById('settleAccumulatedAmountCard').textContent = formatCurrency(accumulated);
+        document.getElementById('settleRemainingAmountCard').textContent = formatCurrency(remaining);
+        document.getElementById('settleRemainingAmount2Card').textContent = formatCurrency(remaining);
+        
+        const settleAmountEl = document.getElementById('settleAmountCard');
+        if (settleAmountEl) {
+            settleAmountEl.value = '';
+            settleAmountEl.max = remaining;
+            settleAmountEl.min = 0;
+        }
+        
+        const submitBtn = document.getElementById('settleSubmitBtnCard');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+        }
+        
+        // تحميل الرواتب للموظف (دالة Card سيتم إضافتها لاحقاً)
+        // loadUserSalariesForSettlementCard(userId, salaryId);
+        
+        card.style.display = 'block';
+        setTimeout(() => scrollToElement(card), 50);
+        return;
+    }
+    
+    // على الكمبيوتر: استخدام Modal
     const settleModal = document.getElementById('settleSalaryModal');
     if (!settleModal) {
         console.error('settleSalaryModal element not found in DOM');
@@ -4775,22 +4989,6 @@ function openSettleModal(salaryId, salaryData, remainingAmount, calculatedAccumu
         userNameSpan.textContent = salaryData.full_name || salaryData.username || 'غير محدد';
     }
     
-    // استخدام القيم المحسوبة مباشرة من بطاقة الموظف
-    // هذا يضمن تطابق الأرقام مع ما هو معروض في بطاقة الموظف
-    const accumulated = parseFloat(calculatedAccumulated || salaryData.calculated_accumulated || salaryData.accumulated_amount || salaryData.total_amount || 0);
-    // استخدام calculated_remaining الذي يتم حسابه بناءً على settlements_advances وليس paid_amount
-    const remaining = parseFloat(remainingAmount || salaryData.calculated_remaining || 0);
-    
-    // حفظ القيم في متغير عام لاستخدامها عند تغيير الراتب
-    settleModalCalculatedValues = {
-        accumulated: accumulated,
-        remaining: remaining,
-        salaryId: salaryId
-    };
-    
-    // حفظ القيمة الفعلية للمتبقي (بدون تنسيق) لاستخدامها في updateSettleRemaining
-    settleModalRemainingValue = remaining;
-    
     console.log('Using calculated values from employee card:', {
         accumulated: accumulated,
         remaining: remaining,
@@ -4808,14 +5006,12 @@ function openSettleModal(salaryId, salaryData, remainingAmount, calculatedAccumu
     if (settleAmountEl) {
         settleAmountEl.value = '';
         settleAmountEl.max = remaining;
-        // إزالة أي قيود على الحد الأدنى
         settleAmountEl.min = 0;
     }
     
     // تحديث حالة الزر مباشرة بعد تعيين القيم
     const submitBtn = document.getElementById('settleSubmitBtn');
     if (submitBtn && remaining > 0) {
-        // الزر يبدأ معطلاً حتى يتم إدخال مبلغ
         submitBtn.disabled = true;
         console.log('Submit button initialized as disabled (waiting for amount input), remaining:', remaining);
     } else if (submitBtn && remaining <= 0) {
@@ -4831,11 +5027,9 @@ function openSettleModal(salaryId, salaryData, remainingAmount, calculatedAccumu
     
     // إضافة مستمع لحدث shown.bs.modal قبل فتح Modal
     const updateAfterModalShown = function() {
-        // تحديث المتبقي بعد فتح Modal
         setTimeout(() => {
             updateSettleRemaining();
             
-            // التأكد من تحديث حالة الزر بعد التحديث
             const submitBtn = document.getElementById('settleSubmitBtn');
             if (submitBtn) {
                 const settleAmountEl = document.getElementById('settleAmount');
@@ -4845,7 +5039,6 @@ function openSettleModal(salaryId, salaryData, remainingAmount, calculatedAccumu
                     const remainingText = remainingEl.textContent || remainingEl.innerText || '0';
                     const remaining = parseFormattedCurrency(remainingText);
                     
-                    // تفعيل الزر فقط إذا كان هناك مبلغ متبقي للمساعدة في التشخيص
                     console.log('Checking submit button after modal shown:', {
                         settleAmount: settleAmount,
                         remaining: remaining,
@@ -4853,22 +5046,18 @@ function openSettleModal(salaryId, salaryData, remainingAmount, calculatedAccumu
                     });
                 }
             }
-        }, 300); // زيادة الوقت قليلاً للتأكد من أن جميع العناصر جاهزة
+        }, 300);
         
-        // تحميل جميع الرواتب للموظف (لاختيار راتب آخر إذا لزم الأمر)
         console.log('Loading salaries for user_id:', userId, 'currentSalaryId:', salaryId);
         loadUserSalariesForSettlement(userId, salaryId);
         
-        // تعيين الراتب الحالي كافتراضي في القائمة المنسدلة
         if (salaryId > 0) {
             setTimeout(() => {
                 const select = document.getElementById('settleSalarySelect');
                 if (select) {
                     select.value = salaryId;
-                    // لا نستدعي loadSelectedSalaryData() هنا لأننا استخدمنا القيم من بطاقة الموظف
-                    // فقط نحدد القيمة في القائمة المنسدلة
                 }
-            }, 500); // انتظار تحميل القائمة
+            }, 500);
         }
     };
     
@@ -5324,39 +5513,75 @@ function updateSettleRemaining() {
 }
 
 function openStatementModal(salaryId, userId, employeeName) {
-    document.getElementById('statementSalaryId').value = salaryId;
-    document.getElementById('statementUserId').value = userId;
-    document.getElementById('statementEmployeeName').textContent = employeeName;
+    closeAllForms();
     
-    // تعيين القيم الافتراضية
     const today = new Date();
     const currentMonth = today.getMonth() + 1;
     const currentYear = today.getFullYear();
-    const currentDay = today.getDate();
     
-    // الشهر الحالي حتى اليوم
-    document.getElementById('statementPeriodType').value = 'current_month';
-    document.getElementById('statementMonth').value = currentMonth;
-    document.getElementById('statementYear').value = currentYear;
-    
-    // تحديث عرض الحقول حسب نوع الفترة
-    updateStatementPeriodFields();
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('salaryStatementCard');
+        if (card) {
+            document.getElementById('statementSalaryIdCard').value = salaryId;
+            document.getElementById('statementUserIdCard').value = userId;
+            document.getElementById('statementEmployeeNameCard').value = employeeName;
+            
+            document.getElementById('statementPeriodTypeCard').value = 'current_month';
+            document.getElementById('statementMonthCard').value = currentMonth;
+            document.getElementById('statementYearCard').value = currentYear;
+            
+            updateStatementPeriodFieldsCard();
+            card.style.display = 'block';
+            setTimeout(() => scrollToElement(card), 50);
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        document.getElementById('statementSalaryId').value = salaryId;
+        document.getElementById('statementUserId').value = userId;
+        document.getElementById('statementEmployeeName').value = employeeName;
+        
+        document.getElementById('statementPeriodType').value = 'current_month';
+        document.getElementById('statementMonth').value = currentMonth;
+        document.getElementById('statementYear').value = currentYear;
+        
+        updateStatementPeriodFields();
+        const modal = document.getElementById('salaryStatementModal');
+        if (modal) {
+            new bootstrap.Modal(modal).show();
+        }
+    }
 }
 
 function updateStatementPeriodFields() {
-    const periodType = document.getElementById('statementPeriodType').value;
+    const periodType = document.getElementById('statementPeriodType')?.value;
     const monthFields = document.getElementById('statementMonthFields');
     const dateRangeFields = document.getElementById('statementDateRangeFields');
     
-    if (periodType === 'current_month') {
-        monthFields.style.display = 'block';
-        dateRangeFields.style.display = 'none';
-    } else if (periodType === 'specific_month') {
-        monthFields.style.display = 'block';
-        dateRangeFields.style.display = 'none';
-    } else if (periodType === 'date_range') {
-        monthFields.style.display = 'none';
-        dateRangeFields.style.display = 'block';
+    if (monthFields && dateRangeFields) {
+        if (periodType === 'current_month' || periodType === 'specific_month') {
+            monthFields.style.display = 'block';
+            dateRangeFields.style.display = 'none';
+        } else if (periodType === 'date_range') {
+            monthFields.style.display = 'none';
+            dateRangeFields.style.display = 'block';
+        }
+    }
+}
+
+function updateStatementPeriodFieldsCard() {
+    const periodType = document.getElementById('statementPeriodTypeCard')?.value;
+    const monthFields = document.getElementById('statementMonthFieldsCard');
+    const dateRangeFields = document.getElementById('statementDateRangeFieldsCard');
+    
+    if (monthFields && dateRangeFields) {
+        if (periodType === 'current_month' || periodType === 'specific_month') {
+            monthFields.style.display = 'block';
+            dateRangeFields.style.display = 'none';
+        } else if (periodType === 'date_range') {
+            monthFields.style.display = 'none';
+            dateRangeFields.style.display = 'block';
+        }
     }
 }
 
@@ -5383,14 +5608,14 @@ function printSalaryStatement() {
     let url = baseUrl + (baseUrl.includes('?') ? '&' : '?') + 'page=salaries&action=print_statement&salary_id=' + salaryId + '&user_id=' + userId + '&period_type=' + periodType;
     
     if (periodType === 'current_month' || periodType === 'specific_month') {
-        const month = document.getElementById('statementMonth').value;
-        const year = document.getElementById('statementYear').value;
+        const month = document.getElementById('statementMonth')?.value;
+        const year = document.getElementById('statementYear')?.value;
         if (month && year) {
             url += '&month=' + encodeURIComponent(month) + '&year=' + encodeURIComponent(year);
         }
     } else if (periodType === 'date_range') {
-        const fromDate = document.getElementById('statementFromDate').value;
-        const toDate = document.getElementById('statementToDate').value;
+        const fromDate = document.getElementById('statementFromDate')?.value;
+        const toDate = document.getElementById('statementToDate')?.value;
         if (fromDate && toDate) {
             url += '&from_date=' + encodeURIComponent(fromDate) + '&to_date=' + encodeURIComponent(toDate);
         }
@@ -5422,10 +5647,53 @@ function printSalaryStatement() {
     
     return false;
 }
+
+function printSalaryStatementCard() {
+    const salaryId = document.getElementById('statementSalaryIdCard')?.value;
+    const userId = document.getElementById('statementUserIdCard')?.value;
+    const periodType = document.getElementById('statementPeriodTypeCard')?.value;
+    
+    if (!salaryId || !userId) {
+        alert('خطأ: يرجى التأكد من تحديد الموظف والراتب');
+        return false;
+    }
+    
+    let baseUrl = '<?php echo isset($currentUrl) && !empty($currentUrl) ? htmlspecialchars($currentUrl) : htmlspecialchars($_SERVER["PHP_SELF"] ?? "/dashboard/accountant.php"); ?>';
+    if (!baseUrl || baseUrl.trim() === '') {
+        baseUrl = window.location.pathname;
+    }
+    
+    let url = baseUrl + (baseUrl.includes('?') ? '&' : '?') + 'page=salaries&action=print_statement&salary_id=' + salaryId + '&user_id=' + userId + '&period_type=' + periodType;
+    
+    if (periodType === 'current_month' || periodType === 'specific_month') {
+        const month = document.getElementById('statementMonthCard')?.value;
+        const year = document.getElementById('statementYearCard')?.value;
+        if (month && year) {
+            url += '&month=' + encodeURIComponent(month) + '&year=' + encodeURIComponent(year);
+        }
+    } else if (periodType === 'date_range') {
+        const fromDate = document.getElementById('statementFromDateCard')?.value;
+        const toDate = document.getElementById('statementToDateCard')?.value;
+        if (fromDate && toDate) {
+            url += '&from_date=' + encodeURIComponent(fromDate) + '&to_date=' + encodeURIComponent(toDate);
+        }
+    }
+    
+    try {
+        const printWindow = window.open(url, '_blank', 'width=1200,height=800,scrollbars=yes');
+        if (!printWindow || printWindow.closed || typeof printWindow.closed === 'undefined') {
+            window.location.href = url;
+        }
+    } catch (e) {
+        window.location.href = url;
+    }
+    
+    return false;
+}
 </script>
 
 <!-- Modal تسوية مستحقات الموظف -->
-<div class="modal fade" id="settleSalaryModal" tabindex="-1">
+<div class="modal fade d-none d-md-block" id="settleSalaryModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
@@ -5570,7 +5838,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <!-- Modal كشف حساب المرتب -->
-<div class="modal fade" id="salaryStatementModal" tabindex="-1">
+<div class="modal fade d-none d-md-block" id="salaryStatementModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
@@ -5638,6 +5906,300 @@ document.addEventListener('DOMContentLoaded', function() {
                     <i class="bi bi-printer me-2"></i>طباعة كشف الحساب
                 </button>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cards للموبايل - نماذج الرواتب -->
+<!-- Card تفاصيل الراتب - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="salaryDetailsCard" style="display: none;">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0">تفاصيل الراتب</h5>
+    </div>
+    <div class="card-body" id="salaryDetailsContentCard">
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">جاري التحميل...</span>
+            </div>
+        </div>
+    </div>
+    <div class="card-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeSalaryDetailsCard()">إغلاق</button>
+    </div>
+</div>
+
+<!-- Card تعديل الراتب - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="modifySalaryCard" style="display: none;">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0">تعديل الراتب</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="modifySalaryFormCard">
+            <input type="hidden" name="action" value="modify_salary">
+            <input type="hidden" name="salary_id" id="modifySalaryIdCard">
+            <input type="hidden" name="month" value="<?php echo $selectedMonth; ?>">
+            <input type="hidden" name="year" value="<?php echo $selectedYear; ?>">
+            <div class="mb-3">
+                <label class="form-label">المستخدم</label>
+                <input type="text" class="form-control" id="modifyUserNameCard" readonly>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الراتب الأساسي</label>
+                <input type="text" class="form-control" id="modifyBaseAmountCard" readonly>
+            </div>
+            <input type="hidden" id="modifyCollectionsBonusCard" value="0">
+            <div class="row">
+                <div class="col-6 mb-3">
+                    <label for="modifyBonusCard" class="form-label">مكافأة</label>
+                    <input type="number" step="0.01" class="form-control" id="modifyBonusCard" name="bonus" value="0" min="0">
+                </div>
+                <div class="col-6 mb-3">
+                    <label for="modifyDeductionsCard" class="form-label">خصومات</label>
+                    <input type="number" step="0.01" class="form-control" id="modifyDeductionsCard" name="deductions" value="0" min="0">
+                </div>
+            </div>
+            <div class="mb-3">
+                <label for="modifyNotesCard" class="form-label">ملاحظات</label>
+                <textarea class="form-control" id="modifyNotesCard" name="notes" rows="3" 
+                          placeholder="اذكر سبب التعديل (اختياري)"></textarea>
+            </div>
+            <div class="alert alert-info">
+                <strong>الراتب الجديد:</strong> <span id="newTotalAmountCard">0.00</span>
+            </div>
+            <?php if ($currentUser['role'] === 'accountant'): ?>
+                <div class="alert alert-warning">
+                    <i class="bi bi-info-circle me-2"></i>
+                    هذا التعديل يحتاج موافقة من المدير
+                </div>
+            <?php endif; ?>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-warning">
+                    <i class="bi bi-check-circle me-2"></i>
+                    <?php echo $currentUser['role'] === 'accountant' ? 'إرسال للموافقة' : 'تأكيد التعديل'; ?>
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeModifySalaryCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card طلب سلفة جديدة - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="requestAdvanceCard" style="display: none;">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0"><i class="bi bi-cash-coin me-2"></i>طلب سلفة جديدة</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="action" value="request_advance">
+            <?php if (in_array($currentUser['role'] ?? '', ['accountant', 'manager', 'developer'], true)): ?>
+            <div class="mb-3">
+                <label class="form-label">الموظف <span class="text-danger">*</span></label>
+                <select name="user_id" class="form-select" required>
+                    <option value="">اختر الموظف</option>
+                    <?php foreach ($users as $user): ?>
+                        <option value="<?php echo $user['id']; ?>">
+                            <?php echo htmlspecialchars($user['full_name'] ?? $user['username']); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <?php else: ?>
+            <input type="hidden" name="user_id" value="<?php echo $currentUser['id']; ?>">
+            <?php endif; ?>
+            
+            <div class="mb-3">
+                <label class="form-label">مبلغ السلفة (ج.م) <span class="text-danger">*</span></label>
+                <input type="number" name="amount" class="form-control" step="0.01" min="1" required 
+                       placeholder="0.00">
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">سبب الطلب (اختياري)</label>
+                <textarea name="reason" class="form-control" rows="3" 
+                          placeholder="اذكر سبب طلب السلفة..."></textarea>
+                <small class="text-muted">يمكنك ترك هذا الحقل فارغاً</small>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">تاريخ الطلب</label>
+                <input type="date" name="request_date" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
+            </div>
+            
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>ملاحظة:</strong> سيتم خصم مبلغ السلفة من راتبك القادم بعد موافقة المحاسب والمدير.
+            </div>
+            
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-success">
+                    <i class="bi bi-send me-1"></i>إرسال الطلب
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeRequestAdvanceCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card رفض السلفة - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="rejectCard" style="display: none;">
+    <div class="card-header bg-danger text-white">
+        <h5 class="mb-0"><i class="bi bi-x-circle me-2"></i>رفض طلب السلفة</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="action" value="reject">
+            <input type="hidden" name="advance_id" id="rejectAdvanceIdCard">
+            <input type="hidden" name="month" value="<?php echo htmlspecialchars($selectedMonth); ?>">
+            <input type="hidden" name="year" value="<?php echo htmlspecialchars($selectedYear); ?>">
+            <input type="hidden" name="view" value="<?php echo htmlspecialchars($view); ?>">
+            <div class="mb-3">
+                <label for="rejection_reasonCard" class="form-label">سبب الرفض <span class="text-danger">*</span></label>
+                <textarea name="rejection_reason" id="rejection_reasonCard" class="form-control" rows="3" required placeholder="اذكر سبب الرفض"></textarea>
+            </div>
+            <div class="alert alert-warning mb-3">
+                <i class="bi bi-info-circle me-2"></i>
+                سيتم إرسال السبب للموظف في إشعار فوري.
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-danger">رفض الطلب</button>
+                <button type="button" class="btn btn-secondary" onclick="closeRejectCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card تسوية مستحقات - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="settleSalaryCard" style="display: none;">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0"><i class="bi bi-cash-coin me-2"></i>تسوية مستحقات موظف</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="settleSalaryFormCard">
+            <input type="hidden" name="action" value="settle_salary">
+            <input type="hidden" name="salary_id" id="settleSalaryIdCard">
+            <input type="hidden" name="user_id" id="settleUserIdCard">
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>الموظف:</strong> <span id="settleUserNameCard"></span>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">اختر الراتب للتسوية <span class="text-danger">*</span></label>
+                <select class="form-select" name="selected_salary_id" id="settleSalarySelectCard" required onchange="loadSelectedSalaryDataCard()">
+                    <option value="">-- اختر راتب للتسوية --</option>
+                </select>
+                <small class="text-muted">يمكنك اختيار راتب من الشهر الحالي أو شهر ماضي.</small>
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col-6">
+                    <label class="form-label">المبلغ التراكمي</label>
+                    <div class="form-control-plaintext fw-bold text-primary" id="settleAccumulatedAmountCard">0.00</div>
+                </div>
+                <div class="col-6">
+                    <label class="form-label">المتبقي</label>
+                    <div class="form-control-plaintext fw-bold text-warning" id="settleRemainingAmountCard">0.00</div>
+                </div>
+            </div>
+            
+            <hr>
+            
+            <div class="mb-3">
+                <label class="form-label">مبلغ التسوية <span class="text-danger">*</span></label>
+                <input type="number" step="0.01" min="0" class="form-control" name="settlement_amount" id="settleAmountCard" required oninput="updateSettleRemainingCard()" onchange="updateSettleRemainingCard()" onkeyup="updateSettleRemainingCard()">
+                <small class="text-muted">أقصى مبلغ متاح: <span id="settleRemainingAmount2Card"></span></small>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">تاريخ التسوية <span class="text-danger">*</span></label>
+                <input type="date" class="form-control" name="settlement_date" id="settleDateCard" required value="<?php echo date('Y-m-d'); ?>">
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">ملاحظات</label>
+                <textarea class="form-control" name="notes" id="settleNotesCard" rows="3" placeholder="ملاحظات إضافية (اختياري)"></textarea>
+            </div>
+            
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <strong>المتبقي بعد التسوية:</strong> <span id="settleNewRemainingCard" class="fw-bold">0.00</span>
+            </div>
+            
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-success" id="settleSubmitBtnCard" disabled>
+                    <i class="bi bi-check-circle me-2"></i>تأكيد التسوية
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeSettleSalaryCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card كشف حساب المرتب - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="salaryStatementCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-file-earmark-text me-2"></i>كشف حساب المرتب</h5>
+    </div>
+    <div class="card-body">
+        <div class="mb-3">
+            <label class="form-label">الموظف</label>
+            <input type="text" class="form-control" id="statementEmployeeNameCard" readonly>
+            <input type="hidden" id="statementSalaryIdCard">
+            <input type="hidden" id="statementUserIdCard">
+        </div>
+        
+        <div class="mb-3">
+            <label class="form-label">نوع الفترة <span class="text-danger">*</span></label>
+            <select class="form-select" id="statementPeriodTypeCard" onchange="updateStatementPeriodFieldsCard()">
+                <option value="current_month">الشهر الحالي حتى اليوم</option>
+                <option value="specific_month">شهر محدد</option>
+                <option value="date_range">فترة محددة</option>
+            </select>
+        </div>
+        
+        <div id="statementMonthFieldsCard">
+            <div class="row">
+                <div class="col-6 mb-3">
+                    <label class="form-label">الشهر</label>
+                    <select class="form-select" id="statementMonthCard">
+                        <?php for ($m = 1; $m <= 12; $m++): ?>
+                            <option value="<?php echo $m; ?>" <?php echo $m == date('n') ? 'selected' : ''; ?>>
+                                <?php echo date('F', mktime(0, 0, 0, $m, 1)); ?>
+                            </option>
+                        <?php endfor; ?>
+                    </select>
+                </div>
+                <div class="col-6 mb-3">
+                    <label class="form-label">السنة</label>
+                    <select class="form-select" id="statementYearCard">
+                        <?php for ($y = date('Y'); $y >= date('Y') - 10; $y--): ?>
+                            <option value="<?php echo $y; ?>" <?php echo $y == date('Y') ? 'selected' : ''; ?>>
+                                <?php echo $y; ?>
+                            </option>
+                        <?php endfor; ?>
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <div id="statementDateRangeFieldsCard" style="display: none;">
+            <div class="row">
+                <div class="col-6 mb-3">
+                    <label class="form-label">من تاريخ</label>
+                    <input type="date" class="form-control" id="statementFromDateCard" value="<?php echo date('Y-m-01'); ?>">
+                </div>
+                <div class="col-6 mb-3">
+                    <label class="form-label">إلى تاريخ</label>
+                    <input type="date" class="form-control" id="statementToDateCard" value="<?php echo date('Y-m-d'); ?>">
+                </div>
+            </div>
+        </div>
+        
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-primary" onclick="printSalaryStatementCard()">
+                <i class="bi bi-printer me-2"></i>طباعة كشف الحساب
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="closeSalaryStatementCard()">إلغاء</button>
         </div>
     </div>
 </div>
