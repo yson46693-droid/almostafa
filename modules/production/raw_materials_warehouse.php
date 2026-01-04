@@ -4569,7 +4569,11 @@ function scrollToElement(element) {
             data-print-url="<?php echo htmlspecialchars((string)$rawMaterialsReportAbsolutePrint, ENT_QUOTES, 'UTF-8'); ?>"
             data-report-ready="<?php echo $rawMaterialsReportViewUrl !== '' ? '1' : '0'; ?>"
             data-generated-at="<?php echo htmlspecialchars((string)$rawMaterialsReportGeneratedAt, ENT_QUOTES, 'UTF-8'); ?>"
-            data-api-url="<?php echo htmlspecialchars(getRelativeUrl('api/generate_raw_materials_report.php'), ENT_QUOTES, 'UTF-8'); ?>"
+            data-api-url="<?php 
+                // Use absolute URL to ensure correct path
+                $apiPath = getAbsoluteUrl('api/generate_raw_materials_report.php');
+                echo htmlspecialchars($apiPath, ENT_QUOTES, 'UTF-8'); 
+            ?>"
         >
             <i class="bi bi-file-bar-graph me-1"></i>
             انشاء تقرير المخزن
@@ -9119,48 +9123,67 @@ document.addEventListener('DOMContentLoaded', function () {
             reportButton.disabled = true;
             reportButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>جاري التوليد...';
             
+            // Declare apiUrl outside try block so it's available in catch
+            let apiUrl = '';
+            
             try {
-                // Calculate API URL based on current page location
-                // Method: Find the base path by removing 'dashboard' or 'modules' and everything after
-                const origin = window.location.origin;
-                const currentPath = window.location.pathname;
-                
-                // Split path into parts
-                const pathParts = currentPath.split('/').filter(p => p);
-                
-                // Find where 'dashboard' or 'modules' appears
-                let basePath = '/';
-                const dashboardIndex = pathParts.indexOf('dashboard');
-                const modulesIndex = pathParts.indexOf('modules');
-                const stopIndex = dashboardIndex >= 0 ? dashboardIndex : (modulesIndex >= 0 ? modulesIndex : -1);
-                
-                if (stopIndex > 0) {
-                    // Get everything before 'dashboard' or 'modules'
-                    basePath = '/' + pathParts.slice(0, stopIndex).join('/') + '/';
-                } else if (stopIndex === 0) {
-                    // 'dashboard' or 'modules' is at root level
-                    basePath = '/';
+                // Method 1: Try to get API URL from button data attribute (set by PHP)
+                const dataApiUrl = reportButton.getAttribute('data-api-url');
+                if (dataApiUrl && dataApiUrl.trim() !== '') {
+                    // If it's already absolute, use it
+                    if (dataApiUrl.startsWith('http://') || dataApiUrl.startsWith('https://')) {
+                        apiUrl = dataApiUrl;
+                    } else if (dataApiUrl.startsWith('/')) {
+                        // Absolute path from root
+                        apiUrl = window.location.origin + dataApiUrl;
+                    } else {
+                        // Relative path, resolve from current location
+                        const baseUrl = window.location.origin + window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
+                        apiUrl = new URL(dataApiUrl, baseUrl).href;
+                    }
+                    console.log('Using API URL from data attribute:', apiUrl);
                 } else {
-                    // No 'dashboard' or 'modules' found, assume root
-                    basePath = '/';
+                    console.log('data-api-url not found or empty, calculating from current path...');
+                    // Method 2: Calculate API URL based on current page location
+                    const origin = window.location.origin;
+                    const currentPath = window.location.pathname;
+                    
+                    // Split path into parts
+                    const pathParts = currentPath.split('/').filter(p => p);
+                    
+                    // Find where 'dashboard' or 'modules' appears
+                    let basePath = '/';
+                    const dashboardIndex = pathParts.indexOf('dashboard');
+                    const modulesIndex = pathParts.indexOf('modules');
+                    const stopIndex = dashboardIndex >= 0 ? dashboardIndex : (modulesIndex >= 0 ? modulesIndex : -1);
+                    
+                    if (stopIndex > 0) {
+                        // Get everything before 'dashboard' or 'modules'
+                        basePath = '/' + pathParts.slice(0, stopIndex).join('/') + '/';
+                    } else {
+                        // 'dashboard' or 'modules' is at root level, or not found
+                        // Try to get base path from current script location
+                        // If we're at /dashboard/accountant.php, the base should be /
+                        // But if we're at /albarakah/dashboard/accountant.php, base should be /albarakah/
+                        basePath = '/';
+                    }
+                    
+                    // Normalize path (remove duplicate slashes, ensure ends with /)
+                    basePath = basePath.replace(/\/+/g, '/');
+                    if (basePath !== '/' && !basePath.endsWith('/')) {
+                        basePath += '/';
+                    }
+                    
+                    // Build absolute URL
+                    apiUrl = origin + basePath + 'api/generate_raw_materials_report.php';
+                    
+                    // Remove any duplicate slashes in the final URL
+                    apiUrl = apiUrl.replace(/([^:]\/)\/+/g, '$1');
                 }
-                
-                // Normalize path (remove duplicate slashes, ensure ends with /)
-                basePath = basePath.replace(/\/+/g, '/');
-                if (basePath !== '/' && !basePath.endsWith('/')) {
-                    basePath += '/';
-                }
-                
-                // Build absolute URL
-                let apiUrl = origin + basePath + 'api/generate_raw_materials_report.php';
-                
-                // Remove any duplicate slashes in the final URL
-                apiUrl = apiUrl.replace(/([^:]\/)\/+/g, '$1');
                 
                 // Debug logging (can be removed in production)
                 console.log('Report generation - Calculated API URL:', apiUrl);
-                console.log('Report generation - Current path:', currentPath);
-                console.log('Report generation - Base path:', basePath);
+                console.log('Report generation - Current path:', window.location.pathname);
                 
                 // Call API to generate report
                 const response = await fetch(apiUrl, {
@@ -9249,10 +9272,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             } catch (error) {
                 console.error('Error generating report:', error);
-                console.error('API URL attempted:', apiUrl);
+                console.error('API URL attempted:', apiUrl || 'undefined');
                 console.error('Current location:', window.location.href);
                 const errorMessage = error.message || 'حدث خطأ في الاتصال بالخادم. يرجى المحاولة مرة أخرى.';
-                alert('فشل التوليد: ' + errorMessage + '\n\nURL: ' + apiUrl);
+                const urlInfo = apiUrl ? ('\n\nURL: ' + apiUrl) : '\n\n(لم يتم حساب URL)';
+                alert('فشل التوليد: ' + errorMessage + urlInfo);
             } finally {
                 // Restore button state
                 reportButton.disabled = false;
