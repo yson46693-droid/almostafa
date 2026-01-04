@@ -2341,13 +2341,15 @@ if (!$error) {
             grid-template-columns: repeat(12, 1fr);
             gap: 1.5rem;
         }
-        /* على سطح المكتب: المنتجات في اليمين والنماذج في اليسار */
+        /* على سطح المكتب: المنتجات في اليمين والنماذج في اليسار - في نفس الصف */
         @media (min-width: 993px) {
             .pos-content > .pos-panel:has(.pos-product-grid) {
                 grid-column: 6 / -1; /* المنتجات في العامود الأيمن */
+                grid-row: 1; /* في نفس الصف */
             }
             .pos-content > .pos-checkout-panel {
                 grid-column: 1 / 6; /* النماذج في العامود الأيسر */
+                grid-row: 1; /* في نفس الصف */
             }
         }
         .pos-panel {
