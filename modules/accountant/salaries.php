@@ -5020,8 +5020,9 @@ function openSettleModal(salaryId, salaryData, remainingAmount, calculatedAccumu
         console.log('Submit button disabled (no remaining amount)');
     }
     
-    // انتظار قليل لضمان إغلاق النماذج السابقة
-    setTimeout(function() {
+    // التحقق من وجود modal instance سابق وإغلاقه أولاً
+    let existingModalInstance = bootstrap.Modal.getInstance(settleModal);
+    const openNewModal = function() {
         // إنشاء Modal instance إذا لم يكن موجوداً
         let modalInstance = bootstrap.Modal.getInstance(settleModal);
         if (!modalInstance) {
@@ -5068,7 +5069,22 @@ function openSettleModal(salaryId, salaryData, remainingAmount, calculatedAccumu
         
         // فتح Modal
         modalInstance.show();
-    }, 150);
+    };
+    
+    // إذا كان هناك modal مفتوح، ننتظر حتى يُغلق أولاً
+    if (existingModalInstance && settleModal.classList.contains('show')) {
+        // الانتظار حتى يكتمل إغلاق النموذج السابق
+        const waitForClose = function() {
+            settleModal.removeEventListener('hidden.bs.modal', waitForClose);
+            // انتظار قليل إضافي لضمان اكتمال الإغلاق
+            setTimeout(openNewModal, 100);
+        };
+        settleModal.addEventListener('hidden.bs.modal', waitForClose, { once: true });
+        existingModalInstance.hide();
+    } else {
+        // لا يوجد modal مفتوح، يمكن فتحه مباشرة
+        setTimeout(openNewModal, 150);
+    }
 }
 
 function loadUserSalariesForSettlement(userId, currentSalaryId) {
@@ -5281,8 +5297,23 @@ function loadUserSalariesForSettlementCard(userId, currentSalaryId) {
                     data.salaries.forEach(function(salary) {
                         const option = document.createElement('option');
                         option.value = salary.id;
-                        const monthLabel = salary.month_name || 'شهر غير محدد';
                         const remaining = parseFloat(salary.calculated_remaining || salary.remaining || 0);
+                        // استخدام month_label إذا كان موجوداً، وإلا إنشاء تسمية من month و year
+                        let monthLabel = salary.month_label || '';
+                        if (!monthLabel && salary.month && salary.year) {
+                            const monthNames = ['', 'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 
+                                               'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+                            const month = parseInt(salary.month) || 0;
+                            const year = parseInt(salary.year) || new Date().getFullYear();
+                            if (month >= 1 && month <= 12) {
+                                monthLabel = monthNames[month] + ' ' + year;
+                            } else {
+                                monthLabel = 'شهر غير معروف ' + year;
+                            }
+                        }
+                        if (!monthLabel) {
+                            monthLabel = 'غير محدد';
+                        }
                         option.textContent = monthLabel + ' - المتبقي: ' + formatCurrency(remaining);
                         if (salary.id == currentSalaryId) {
                             option.selected = true;
