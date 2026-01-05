@@ -2,6 +2,9 @@
 /**
  * ملف اختبار لإرسال التذكيرات اليومية
  * يمكن تشغيله يدوياً للتحقق من عمل الدالة
+ * 
+ * الاستخدام:
+ * php test_daily_reminders.php
  */
 
 define('ACCESS_ALLOWED', true);
@@ -63,17 +66,30 @@ $sampleSchedules = $db->query("
     LIMIT 5
 ");
 echo "4. أمثلة على الجداول (أول 5):\n";
-foreach ($sampleSchedules as $schedule) {
-    $daysDiff = (int)($schedule['days_diff'] ?? 0);
-    $status = $schedule['status'] ?? 'pending';
-    $lastReminder = $schedule['reminder_sent_at'] ?? 'لم يتم إرسال تذكير';
-    echo "   - ID: {$schedule['id']} | العميل: {$schedule['customer_name']} | المبلغ: " . formatCurrency($schedule['amount']) . " | الاستحقاق: {$schedule['due_date']} | متأخر: {$daysDiff} يوم | الحالة: {$status} | آخر تذكير: {$lastReminder}\n";
+if (empty($sampleSchedules)) {
+    echo "   لا توجد جداول مستحقة أو متأخرة\n";
+} else {
+    foreach ($sampleSchedules as $schedule) {
+        $daysDiff = (int)($schedule['days_diff'] ?? 0);
+        $status = $schedule['status'] ?? 'pending';
+        $lastReminder = $schedule['reminder_sent_at'] ?? 'لم يتم إرسال تذكير';
+        echo "   - ID: {$schedule['id']} | العميل: {$schedule['customer_name']} | المبلغ: " . formatCurrency($schedule['amount']) . " | الاستحقاق: {$schedule['due_date']} | متأخر: {$daysDiff} يوم | الحالة: {$status} | آخر تذكير: {$lastReminder}\n";
+    }
 }
 echo "\n";
 
+// التحقق من إعداد Telegram
+echo "5. التحقق من إعداد Telegram...\n";
+if (function_exists('isTelegramConfigured') && isTelegramConfigured()) {
+    echo "   ✓ Telegram Bot مُعد بشكل صحيح\n\n";
+} else {
+    echo "   ✗ Telegram Bot غير مُعد - لن يتم إرسال التذكيرات\n\n";
+}
+
 // استدعاء الدالة
-echo "5. استدعاء دالة إرسال التذكيرات...\n";
+echo "6. استدعاء دالة إرسال التذكيرات...\n";
 $sentCount = sendDailyLocalPaymentSchedulesReminders();
 echo "   تم إرسال {$sentCount} تذكير\n\n";
 
 echo "=== انتهى الاختبار ===\n";
+echo "\nملاحظة: راجع error_log لمزيد من التفاصيل\n";

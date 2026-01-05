@@ -554,12 +554,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // تحديث الحالات المتأخرة
 updateOverdueSchedules();
 
-// ملاحظة: إرسال التذكيرات يتم عبر cron job فقط (cron/payment_reminders.php)
-// لا يتم إرسال التذكيرات عند الدخول للصفحة لتجنب الإشعارات المكررة
+// ضمان إرسال التذكيرات اليومية للجداول المستحقة والمتأخرة
+// يتم التحقق من إرسال التذكيرات اليومية مرة واحدة فقط في اليوم
+// إذا لم يتم الإرسال اليوم عبر cron job، سيتم الإرسال عند فتح الصفحة
+try {
+    // التأكد من وجود جدول system_daily_jobs
+    $db->execute("
+        CREATE TABLE IF NOT EXISTS `system_daily_jobs` (
+          `job_key` varchar(120) NOT NULL,
+          `last_sent_at` datetime DEFAULT NULL,
+          `last_file_path` varchar(512) DEFAULT NULL,
+          `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (`job_key`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+    
+    $today = date('Y-m-d');
+    $lastReminderCheck = $db->queryOne(
+        "SELECT last_sent_at FROM system_daily_jobs 
+         WHERE job_key = 'daily_local_payment_reminders_check' 
+         AND DATE(last_sent_at) = ?",
+        [$today]
+    );
+    
+    // إذا لم يتم فحص التذكيرات اليوم، قم بالفحص والإرسال
+    if (!$lastReminderCheck) {
+        // تحديث وقت آخر فحص أولاً لتجنب الإرسال المكرر
+        $db->execute(
+            "INSERT INTO system_daily_jobs (job_key, last_sent_at) 
+             VALUES ('daily_local_payment_reminders_check', NOW()) 
+             ON DUPLICATE KEY UPDATE last_sent_at = NOW()",
+            []
+        );
+        
+        // محاولة إرسال التذكيرات اليومية (فقط إذا لم يتم الإرسال اليوم)
+        if (function_exists('sendDailyLocalPaymentSchedulesReminders')) {
+            $sentCount = sendDailyLocalPaymentSchedulesReminders();
+            if ($sentCount > 0) {
+                error_log('[COMPANY_PAYMENT_SCHEDULES] Sent ' . $sentCount . ' daily payment reminders via page load');
+            }
+        }
+    }
+} catch (Throwable $e) {
+    // تجاهل الأخطاء لتجنب تعطيل الصفحة
+    error_log('Error checking daily reminders: ' . $e->getMessage());
+}
 
-// ملاحظة: إرسال إشعارات المواعيد المتأخرة يتم عبر cron job أيضاً
-// تم إزالة استدعاء notifyOverduePaymentSchedulesForManagers لتجنب الإشعارات المكررة
-// يمكن إضافة هذه الدالة إلى cron job إذا لزم الأمر
+// ملاحظة: إرسال التذكيرات يتم عبر cron job (cron/payment_reminders.php)
+// بالإضافة إلى الفحص التلقائي عند فتح الصفحة لضمان الإرسال اليومي
 
 // الحصول على البيانات - فقط جداول العملاء المحليين
 $saleNumberColumnCheck = $db->queryOne("SHOW COLUMNS FROM sales LIKE 'sale_number'");
