@@ -132,27 +132,9 @@
         // استخراج العنوان
         const title = doc.querySelector('title')?.textContent || document.title;
 
-        // استخراج scripts من المحتوى
-        const scriptElements = Array.from(mainContent.querySelectorAll('script'));
-        const scripts = scriptElements.map(script => {
-            return {
-                text: script.textContent || script.innerHTML,
-                src: script.src,
-                type: script.type,
-                async: script.async,
-                defer: script.defer
-            };
-        });
-
-        // إزالة scripts من المحتوى (سيتم تنفيذها لاحقاً)
-        scriptElements.forEach(scriptElement => {
-            scriptElement.remove();
-        });
-
         return {
             content: mainContent.innerHTML,
-            title: title,
-            scripts: scripts
+            title: title
         };
     }
 
@@ -210,40 +192,6 @@
     }
 
     /**
-     * تنفيذ scripts المحملة
-     */
-    function executeScripts(scripts) {
-        if (!scripts || scripts.length === 0) {
-            return;
-        }
-
-        scripts.forEach(scriptData => {
-            try {
-                if (scriptData.src) {
-                    // Script خارجي - تحميله
-                    const script = document.createElement('script');
-                    script.src = scriptData.src;
-                    if (scriptData.async) script.async = true;
-                    if (scriptData.defer) script.defer = true;
-                    if (scriptData.type) script.type = scriptData.type;
-                    document.head.appendChild(script);
-                } else if (scriptData.text) {
-                    // Script مدمج - تنفيذه مباشرة
-                    // استخدام Function constructor لتجنب مشاكل scope
-                    const script = document.createElement('script');
-                    script.textContent = scriptData.text;
-                    if (scriptData.type) script.type = scriptData.type;
-                    document.head.appendChild(script);
-                    // إزالة script بعد التنفيذ
-                    script.remove();
-                }
-            } catch (e) {
-                console.error('Error executing script:', e);
-            }
-        });
-    }
-
-    /**
      * تحديث المحتوى في الصفحة
      */
     function updatePageContent(data) {
@@ -261,13 +209,52 @@
         // تحديث المحتوى
         mainElement.innerHTML = data.content;
 
-        // تنفيذ scripts إذا كانت موجودة
-        if (data.scripts && data.scripts.length > 0) {
-            // تنفيذ scripts بعد تحديث DOM
+        // تنفيذ scripts المدمجة في المحتوى
+        // يجب تنفيذ scripts بعد تحديث innerHTML مباشرة
+        const scripts = Array.from(mainElement.querySelectorAll('script'));
+        scripts.forEach((oldScript, index) => {
+            // استخدام setTimeout لتنفيذ scripts بشكل متسلسل
             setTimeout(() => {
-                executeScripts(data.scripts);
-            }, 0);
-        }
+                const newScript = document.createElement('script');
+                
+                // نسخ جميع attributes
+                Array.from(oldScript.attributes).forEach(attr => {
+                    newScript.setAttribute(attr.name, attr.value);
+                });
+                
+                if (oldScript.src) {
+                    // Script خارجي - تحميله
+                    newScript.src = oldScript.src;
+                    document.head.appendChild(newScript);
+                } else {
+                    // Script مدمج - تنفيذه مباشرة
+                    // استخدام eval أو Function لتجنب مشاكل scope
+                    try {
+                        newScript.textContent = oldScript.textContent;
+                        document.head.appendChild(newScript);
+                        // إزالة script بعد التنفيذ لتجنب التكرار
+                        setTimeout(() => {
+                            if (newScript.parentNode) {
+                                newScript.parentNode.removeChild(newScript);
+                            }
+                        }, 100);
+                    } catch (e) {
+                        console.error('Error executing inline script:', e);
+                        // Fallback: استخدام eval مباشرة
+                        try {
+                            eval(oldScript.textContent);
+                        } catch (evalError) {
+                            console.error('Error with eval fallback:', evalError);
+                        }
+                    }
+                }
+                
+                // إزالة الـ script القديم من المحتوى
+                if (oldScript.parentNode) {
+                    oldScript.parentNode.removeChild(oldScript);
+                }
+            }, index * 10); // تأخير بسيط بين كل script
+        });
 
         // تحديث حالة active في الشريط الجانبي - مع تأخير بسيط لضمان اكتمال تحديث DOM
         // استخدام requestAnimationFrame لضمان تحديث DOM قبل تحديث حالة active
