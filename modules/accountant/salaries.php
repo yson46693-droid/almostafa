@@ -5016,7 +5016,7 @@ let originalSalaryValues = {
 let settleModalRemainingValue = 0;
 
 // دالة منفصلة لفتح نموذج التسوية على الموبايل
-function openSettleModalMobile(salaryId, salaryData, remainingAmount, calculatedAccumulated) {
+function openSettleModalMobile(salaryId, salaryData, remainingAmount, calculatedAccumulated, retryCount = 0) {
     // الحصول على user_id من البيانات
     let userId = null;
     if (salaryData.user_id !== undefined && salaryData.user_id !== null && salaryData.user_id > 0) {
@@ -5050,7 +5050,13 @@ function openSettleModalMobile(salaryId, salaryData, remainingAmount, calculated
     // على الموبايل: استخدام Card
     const card = document.getElementById('settleSalaryCard');
     if (!card) {
-        console.error('settleSalaryCard element not found in DOM');
+        if (retryCount < 5) {
+            setTimeout(() => {
+                openSettleModalMobile(salaryId, salaryData, remainingAmount, calculatedAccumulated, retryCount + 1);
+            }, 200);
+            return;
+        }
+        console.error('settleSalaryCard element not found in DOM after retries');
         alert('خطأ: لم يتم العثور على نافذة التسوية. يرجى تحديث الصفحة والمحاولة مرة أخرى.');
         return;
     }
@@ -5061,7 +5067,7 @@ function openSettleModalMobile(salaryId, salaryData, remainingAmount, calculated
     const settleUserIdCard = card.querySelector('#settleUserIdCard') || document.getElementById('settleUserIdCard');
     const settleUserNameCard = card.querySelector('#settleUserNameCard') || document.getElementById('settleUserNameCard');
     
-    console.log('Checking required elements:', {
+    console.log('Checking required elements (attempt ' + (retryCount + 1) + '):', {
         settleSalaryIdCard: !!settleSalaryIdCard,
         settleUserIdCard: !!settleUserIdCard,
         settleUserNameCard: !!settleUserNameCard,
@@ -5070,57 +5076,47 @@ function openSettleModalMobile(salaryId, salaryData, remainingAmount, calculated
     });
     
     if (!settleSalaryIdCard || !settleUserIdCard || !settleUserNameCard) {
-        console.error('Required elements not found in settleSalaryCard', {
+        // إعادة المحاولة حتى 5 مرات مع زيادة وقت الانتظار تدريجياً
+        if (retryCount < 5) {
+            const delay = Math.min(200 * (retryCount + 1), 1000); // زيادة تدريجية حتى 1000ms
+            console.log('Elements not found, retrying in ' + delay + 'ms (attempt ' + (retryCount + 1) + '/5)');
+            setTimeout(() => {
+                openSettleModalMobile(salaryId, salaryData, remainingAmount, calculatedAccumulated, retryCount + 1);
+            }, delay);
+            return;
+        }
+        
+        console.error('Required elements not found in settleSalaryCard after all retries', {
             settleSalaryIdCard: settleSalaryIdCard,
             settleUserIdCard: settleUserIdCard,
             settleUserNameCard: settleUserNameCard,
             card: card,
-            cardHTML: card ? card.innerHTML.substring(0, 200) : 'card is null'
+            cardHTML: card ? card.innerHTML.substring(0, 500) : 'card is null'
         });
-        
-        // التحقق مرة أخرى بعد انتظار قصير
-        setTimeout(() => {
-            const retryCard = document.getElementById('settleSalaryCard');
-            if (!retryCard) {
-                console.error('Card not found on retry');
-                alert('خطأ: لم يتم العثور على نافذة التسوية. يرجى تحديث الصفحة والمحاولة مرة أخرى.');
-                return;
-            }
-            
-            const retrySettleSalaryIdCard = retryCard.querySelector('#settleSalaryIdCard') || document.getElementById('settleSalaryIdCard');
-            const retrySettleUserIdCard = retryCard.querySelector('#settleUserIdCard') || document.getElementById('settleUserIdCard');
-            const retrySettleUserNameCard = retryCard.querySelector('#settleUserNameCard') || document.getElementById('settleUserNameCard');
-            
-            console.log('Retry check:', {
-                retrySettleSalaryIdCard: !!retrySettleSalaryIdCard,
-                retrySettleUserIdCard: !!retrySettleUserIdCard,
-                retrySettleUserNameCard: !!retrySettleUserNameCard,
-                retryCardExists: !!retryCard
-            });
-            
-            if (retrySettleSalaryIdCard && retrySettleUserIdCard && retrySettleUserNameCard) {
-                console.log('Elements found on retry, opening modal again');
-                // استدعاء الدالة مرة أخرى مع نفس المعاملات
-                openSettleModalMobile(salaryId, salaryData, remainingAmount, calculatedAccumulated);
-            } else {
-                console.error('Elements still not found after retry');
-                alert('خطأ: بعض العناصر المطلوبة غير موجودة. يرجى تحديث الصفحة والمحاولة مرة أخرى.');
-            }
-        }, 300);
+        alert('خطأ: بعض العناصر المطلوبة غير موجودة. يرجى تحديث الصفحة والمحاولة مرة أخرى.');
         return;
     }
     
-    const settleAccumulatedAmountCard = document.getElementById('settleAccumulatedAmountCard');
-    const settleRemainingAmountCard = document.getElementById('settleRemainingAmountCard');
-    const settleRemainingAmount2Card = document.getElementById('settleRemainingAmount2Card');
-    const settleAmountCard = document.getElementById('settleAmountCard');
-    const settleSubmitBtnCard = document.getElementById('settleSubmitBtnCard');
+    // البحث عن العناصر الإضافية داخل Card أو في الصفحة
+    const settleAccumulatedAmountCard = card.querySelector('#settleAccumulatedAmountCard') || document.getElementById('settleAccumulatedAmountCard');
+    const settleRemainingAmountCard = card.querySelector('#settleRemainingAmountCard') || document.getElementById('settleRemainingAmountCard');
+    const settleRemainingAmount2Card = card.querySelector('#settleRemainingAmount2Card') || document.getElementById('settleRemainingAmount2Card');
+    const settleAmountCard = card.querySelector('#settleAmountCard') || document.getElementById('settleAmountCard');
+    const settleSubmitBtnCard = card.querySelector('#settleSubmitBtnCard') || document.getElementById('settleSubmitBtnCard');
     
     try {
-        settleSalaryIdCard.value = salaryId;
-        settleUserIdCard.value = userId;
-        settleUserNameCard.textContent = salaryData.full_name || salaryData.username || 'غير محدد';
+        // تعيين القيم الأساسية
+        if (settleSalaryIdCard) {
+            settleSalaryIdCard.value = salaryId;
+        }
+        if (settleUserIdCard) {
+            settleUserIdCard.value = userId;
+        }
+        if (settleUserNameCard) {
+            settleUserNameCard.textContent = salaryData.full_name || salaryData.username || 'غير محدد';
+        }
         
+        // تعيين المبالغ
         if (settleAccumulatedAmountCard) {
             settleAccumulatedAmountCard.textContent = formatCurrency(accumulated);
         }
@@ -5131,25 +5127,37 @@ function openSettleModalMobile(salaryId, salaryData, remainingAmount, calculated
             settleRemainingAmount2Card.textContent = formatCurrency(remaining);
         }
         
+        // تعيين حقل المبلغ
         if (settleAmountCard) {
             settleAmountCard.value = '';
             settleAmountCard.max = remaining;
             settleAmountCard.min = 0;
         }
         
+        // تعطيل زر الإرسال حتى يتم اختيار راتب
         if (settleSubmitBtnCard) {
             settleSubmitBtnCard.disabled = true;
         }
         
         // تحميل الرواتب للموظف
-        loadUserSalariesForSettlementCard(userId, salaryId);
+        if (typeof loadUserSalariesForSettlementCard === 'function') {
+            loadUserSalariesForSettlementCard(userId, salaryId);
+        } else {
+            console.warn('loadUserSalariesForSettlementCard function not found');
+        }
         
         // إظهار Card
         card.style.display = 'block';
         console.log('Settle card displayed on mobile');
+        
+        // الانتظار قليلاً قبل التمرير لضمان عرض Card
         setTimeout(() => {
-            scrollToElement(card);
-        }, 50);
+            if (typeof scrollToElement === 'function') {
+                scrollToElement(card);
+            } else {
+                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }, 100);
     } catch (error) {
         console.error('Error in openSettleModalMobile:', error);
         console.error('Error stack:', error.stack);
@@ -5222,8 +5230,8 @@ function openSettleModal(salaryId, salaryData, remainingAmount, calculatedAccumu
         // على الموبايل: استخدام دالة منفصلة لفتح Card
         // انتظار قليل لضمان اكتمال إغلاق النماذج السابقة وإعادة تهيئة العناصر
         setTimeout(() => {
-            openSettleModalMobile(salaryId, salaryData, remainingAmount, calculatedAccumulated);
-        }, 200);
+            openSettleModalMobile(salaryId, salaryData, remainingAmount, calculatedAccumulated, 0);
+        }, 300);
         return;
     }
     
