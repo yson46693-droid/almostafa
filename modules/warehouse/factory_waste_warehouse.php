@@ -1175,57 +1175,277 @@ console.log('API Path from PHP:', '<?php echo $apiPath; ?>');
 console.log('API Path calculated from JS:', factoryWasteApiPath);
 console.log('Window location:', window.location.pathname);
 
-// وظائف تعديل المنتجات التالفة
+// ===== دوال مساعدة =====
+
+// التحقق من الموبايل
+function isMobile() {
+    return window.innerWidth <= 768;
+}
+
+// Scroll تلقائي للعنصر
+function scrollToElement(element) {
+    if (!element) return;
+    
+    setTimeout(function() {
+        const rect = element.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const elementTop = rect.top + scrollTop;
+        const offset = 80;
+        
+        requestAnimationFrame(function() {
+            window.scrollTo({
+                top: Math.max(0, elementTop - offset),
+                behavior: 'smooth'
+            });
+        });
+    }, 200);
+}
+
+// إغلاق جميع النماذج
+function closeAllForms() {
+    // إغلاق جميع Cards على الموبايل
+    const cards = [
+        'editProductCard', 'deleteProductCard',
+        'editPackagingCard', 'deletePackagingCard',
+        'editRawMaterialCard', 'deleteRawMaterialCard'
+    ];
+    cards.forEach(function(cardId) {
+        const card = document.getElementById(cardId);
+        if (card && card.style.display !== 'none') {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    });
+    
+    // إغلاق جميع Modals على الكمبيوتر
+    const modals = [
+        'editProductModal', 'deleteProductModal',
+        'editPackagingModal', 'deletePackagingModal',
+        'editRawMaterialModal', 'deleteRawMaterialModal'
+    ];
+    modals.forEach(function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            if (modalInstance) modalInstance.hide();
+        }
+    });
+}
+
+// ===== دوال إغلاق Cards =====
+
+function closeEditProductCard() {
+    const card = document.getElementById('editProductCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closeDeleteProductCard() {
+    const card = document.getElementById('deleteProductCard');
+    if (card) {
+        card.style.display = 'none';
+    }
+}
+
+function closeEditPackagingCard() {
+    const card = document.getElementById('editPackagingCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closeDeletePackagingCard() {
+    const card = document.getElementById('deletePackagingCard');
+    if (card) {
+        card.style.display = 'none';
+    }
+}
+
+function closeEditRawMaterialCard() {
+    const card = document.getElementById('editRawMaterialCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closeDeleteRawMaterialCard() {
+    const card = document.getElementById('deleteRawMaterialCard');
+    if (card) {
+        card.style.display = 'none';
+    }
+}
+
+// ===== وظائف تعديل المنتجات التالفة =====
+
 function editProduct(item) {
-    document.getElementById('edit_product_id').value = item.id;
-    document.getElementById('edit_product_data_source').value = item.data_source || 'factory_waste';
-    document.getElementById('edit_product_quantity').value = item.damaged_quantity || '';
-    document.getElementById('edit_product_date').value = item.added_date || '';
-    <?php if ($canViewFinancials): ?>
-    document.getElementById('edit_product_value').value = item.waste_value || '';
-    <?php endif; ?>
-    new bootstrap.Modal(document.getElementById('editProductModal')).show();
+    closeAllForms();
+    
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('editProductCard');
+        if (card) {
+            document.getElementById('edit_product_card_id').value = item.id;
+            document.getElementById('edit_product_card_data_source').value = item.data_source || 'factory_waste';
+            document.getElementById('edit_product_card_quantity').value = item.damaged_quantity || '';
+            document.getElementById('edit_product_card_date').value = item.added_date || '';
+            <?php if ($canViewFinancials): ?>
+            document.getElementById('edit_product_card_value').value = item.waste_value || '';
+            <?php endif; ?>
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        document.getElementById('edit_product_id').value = item.id;
+        document.getElementById('edit_product_data_source').value = item.data_source || 'factory_waste';
+        document.getElementById('edit_product_quantity').value = item.damaged_quantity || '';
+        document.getElementById('edit_product_date').value = item.added_date || '';
+        <?php if ($canViewFinancials): ?>
+        document.getElementById('edit_product_value').value = item.waste_value || '';
+        <?php endif; ?>
+        new bootstrap.Modal(document.getElementById('editProductModal')).show();
+    }
 }
 
 function deleteProduct(id, name, dataSource) {
+    closeAllForms();
+    
     currentDeleteId = id;
     currentDeleteType = 'product';
     currentDeleteDataSource = dataSource || 'factory_waste';
-    document.getElementById('delete_product_name').textContent = name;
-    new bootstrap.Modal(document.getElementById('deleteProductModal')).show();
+    
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('deleteProductCard');
+        if (card) {
+            document.getElementById('delete_product_card_name').textContent = name;
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        document.getElementById('delete_product_name').textContent = name;
+        new bootstrap.Modal(document.getElementById('deleteProductModal')).show();
+    }
 }
 
-// وظائف تعديل أدوات التعبئة التالفة
+// ===== وظائف تعديل أدوات التعبئة التالفة =====
+
 function editPackaging(item) {
-    document.getElementById('edit_packaging_id').value = item.id;
-    document.getElementById('edit_packaging_quantity').value = item.damaged_quantity || '';
-    document.getElementById('edit_packaging_date').value = item.added_date || '';
-    new bootstrap.Modal(document.getElementById('editPackagingModal')).show();
+    closeAllForms();
+    
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('editPackagingCard');
+        if (card) {
+            document.getElementById('edit_packaging_card_id').value = item.id;
+            document.getElementById('edit_packaging_card_quantity').value = item.damaged_quantity || '';
+            document.getElementById('edit_packaging_card_date').value = item.added_date || '';
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        document.getElementById('edit_packaging_id').value = item.id;
+        document.getElementById('edit_packaging_quantity').value = item.damaged_quantity || '';
+        document.getElementById('edit_packaging_date').value = item.added_date || '';
+        new bootstrap.Modal(document.getElementById('editPackagingModal')).show();
+    }
 }
 
 function deletePackaging(id, name) {
+    closeAllForms();
+    
     currentDeleteId = id;
     currentDeleteType = 'packaging';
-    document.getElementById('delete_packaging_name').textContent = name;
-    new bootstrap.Modal(document.getElementById('deletePackagingModal')).show();
+    
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('deletePackagingCard');
+        if (card) {
+            document.getElementById('delete_packaging_card_name').textContent = name;
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        document.getElementById('delete_packaging_name').textContent = name;
+        new bootstrap.Modal(document.getElementById('deletePackagingModal')).show();
+    }
 }
 
-// وظائف تعديل الخامات المهدرة
+// ===== وظائف تعديل الخامات المهدرة =====
+
 function editRawMaterial(item) {
-    document.getElementById('edit_raw_material_id').value = item.id;
-    document.getElementById('edit_raw_material_quantity').value = item.wasted_quantity || '';
-    document.getElementById('edit_raw_material_date').value = item.added_date || '';
-    <?php if ($canViewFinancials): ?>
-    document.getElementById('edit_raw_material_value').value = item.waste_value || '';
-    <?php endif; ?>
-    new bootstrap.Modal(document.getElementById('editRawMaterialModal')).show();
+    closeAllForms();
+    
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('editRawMaterialCard');
+        if (card) {
+            document.getElementById('edit_raw_material_card_id').value = item.id;
+            document.getElementById('edit_raw_material_card_quantity').value = item.wasted_quantity || '';
+            document.getElementById('edit_raw_material_card_date').value = item.added_date || '';
+            <?php if ($canViewFinancials): ?>
+            document.getElementById('edit_raw_material_card_value').value = item.waste_value || '';
+            <?php endif; ?>
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        document.getElementById('edit_raw_material_id').value = item.id;
+        document.getElementById('edit_raw_material_quantity').value = item.wasted_quantity || '';
+        document.getElementById('edit_raw_material_date').value = item.added_date || '';
+        <?php if ($canViewFinancials): ?>
+        document.getElementById('edit_raw_material_value').value = item.waste_value || '';
+        <?php endif; ?>
+        new bootstrap.Modal(document.getElementById('editRawMaterialModal')).show();
+    }
 }
 
 function deleteRawMaterial(id, name) {
+    closeAllForms();
+    
     currentDeleteId = id;
     currentDeleteType = 'raw_material';
-    document.getElementById('delete_raw_material_name').textContent = name;
-    new bootstrap.Modal(document.getElementById('deleteRawMaterialModal')).show();
+    
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('deleteRawMaterialCard');
+        if (card) {
+            document.getElementById('delete_raw_material_card_name').textContent = name;
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        document.getElementById('delete_raw_material_name').textContent = name;
+        new bootstrap.Modal(document.getElementById('deleteRawMaterialModal')).show();
+    }
 }
 
 // معالجة النماذج
@@ -1389,8 +1609,150 @@ document.getElementById('editRawMaterialForm')?.addEventListener('submit', funct
     });
 });
 
+// معالجة النماذج في Cards للموبايل
+document.getElementById('editProductCardForm')?.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    formData.append('action', 'edit_product');
+    formData.append('tab', '<?php echo $activeTab; ?>');
+    
+    const apiUrl = '<?php echo $apiPath; ?>' || factoryWasteApiPath;
+    
+    fetch(apiUrl, {
+        method: 'POST',
+        body: formData,
+        credentials: 'same-origin'
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`خطأ في الخادم: ${response.status} ${response.statusText}`);
+        }
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+            return response.json();
+        } else {
+            return response.text().then(text => {
+                console.error('Non-JSON response:', text);
+                throw new Error('استجابة غير صالحة من الخادم');
+            });
+        }
+    })
+    .then(data => {
+        if (data.success) {
+            alert('تم التعديل بنجاح');
+            location.reload();
+        } else {
+            alert('حدث خطأ: ' + (data.message || 'خطأ غير معروف'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        let errorMessage = error.message || 'يرجى المحاولة مرة أخرى';
+        if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+            errorMessage = 'فشل الاتصال بالخادم. يرجى التحقق من الاتصال والمحاولة مرة أخرى.';
+        }
+        alert('حدث خطأ أثناء التعديل: ' + errorMessage);
+    });
+});
+
+document.getElementById('editPackagingCardForm')?.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    formData.append('action', 'edit_packaging');
+    formData.append('tab', '<?php echo $activeTab; ?>');
+    
+    const apiUrl = '<?php echo $apiPath; ?>' || factoryWasteApiPath;
+    
+    fetch(apiUrl, {
+        method: 'POST',
+        body: formData,
+        credentials: 'same-origin'
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`خطأ في الخادم: ${response.status} ${response.statusText}`);
+        }
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+            return response.json();
+        } else {
+            return response.text().then(text => {
+                console.error('Non-JSON response:', text);
+                throw new Error('استجابة غير صالحة من الخادم');
+            });
+        }
+    })
+    .then(data => {
+        if (data.success) {
+            alert('تم التعديل بنجاح');
+            location.reload();
+        } else {
+            alert('حدث خطأ: ' + (data.message || 'خطأ غير معروف'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        let errorMessage = error.message || 'يرجى المحاولة مرة أخرى';
+        if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+            errorMessage = 'فشل الاتصال بالخادم. يرجى التحقق من الاتصال والمحاولة مرة أخرى.';
+        }
+        alert('حدث خطأ أثناء التعديل: ' + errorMessage);
+    });
+});
+
+document.getElementById('editRawMaterialCardForm')?.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    formData.append('action', 'edit_raw_material');
+    formData.append('tab', '<?php echo $activeTab; ?>');
+    
+    const apiUrl = '<?php echo $apiPath; ?>' || factoryWasteApiPath;
+    
+    fetch(apiUrl, {
+        method: 'POST',
+        body: formData,
+        credentials: 'same-origin'
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`خطأ في الخادم: ${response.status} ${response.statusText}`);
+        }
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+            return response.json();
+        } else {
+            return response.text().then(text => {
+                console.error('Non-JSON response:', text);
+                throw new Error('استجابة غير صالحة من الخادم');
+            });
+        }
+    })
+    .then(data => {
+        if (data.success) {
+            alert('تم التعديل بنجاح');
+            location.reload();
+        } else {
+            alert('حدث خطأ: ' + (data.message || 'خطأ غير معروف'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        let errorMessage = error.message || 'يرجى المحاولة مرة أخرى';
+        if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+            errorMessage = 'فشل الاتصال بالخادم. يرجى التحقق من الاتصال والمحاولة مرة أخرى.';
+        }
+        alert('حدث خطأ أثناء التعديل: ' + errorMessage);
+    });
+});
+
 // معالجة الحذف
 document.getElementById('confirmDeleteProduct')?.addEventListener('click', function() {
+    if (currentDeleteId && currentDeleteType === 'product') {
+        deleteItem(currentDeleteId, 'product', currentDeleteDataSource);
+    }
+});
+
+document.getElementById('confirmDeleteProductCard')?.addEventListener('click', function() {
     if (currentDeleteId && currentDeleteType === 'product') {
         deleteItem(currentDeleteId, 'product', currentDeleteDataSource);
     }
@@ -1402,7 +1764,19 @@ document.getElementById('confirmDeletePackaging')?.addEventListener('click', fun
     }
 });
 
+document.getElementById('confirmDeletePackagingCard')?.addEventListener('click', function() {
+    if (currentDeleteId && currentDeleteType === 'packaging') {
+        deleteItem(currentDeleteId, 'packaging');
+    }
+});
+
 document.getElementById('confirmDeleteRawMaterial')?.addEventListener('click', function() {
+    if (currentDeleteId && currentDeleteType === 'raw_material') {
+        deleteItem(currentDeleteId, 'raw_material');
+    }
+});
+
+document.getElementById('confirmDeleteRawMaterialCard')?.addEventListener('click', function() {
     if (currentDeleteId && currentDeleteType === 'raw_material') {
         deleteItem(currentDeleteId, 'raw_material');
     }

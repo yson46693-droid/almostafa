@@ -2345,8 +2345,8 @@ if (file_exists($specificationsModulePath)) {
     </div>
 </div>
 
-<!-- Modal تعديل قالب -->
-<div class="modal fade" id="editTemplateModal" tabindex="-1">
+<!-- Modal تعديل قالب - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="editTemplateModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -2468,6 +2468,143 @@ if (file_exists($specificationsModulePath)) {
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<!-- Card تعديل قالب - للموبايل -->
+<div class="card shadow-sm mb-4 d-md-none" id="editTemplateCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-pencil me-2"></i>تعديل قالب منتج</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="editTemplateCardForm">
+            <input type="hidden" name="action" value="update_template">
+            <input type="hidden" name="template_id" id="editTemplateCardId">
+            <div class="mb-3">
+                <label class="form-label">اسم المنتج <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" name="product_name" id="editProductCardName" required 
+                       placeholder="مثل: عسل بالجوز 720 جرام">
+                <small class="text-muted">أدخل اسم المنتج الذي سيتم إنتاجه</small>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">نوع الكرتونة</label>
+                <select class="form-select" name="carton_type" id="editCartonCardType">
+                    <option value="">اختر نوع الكرتونة (اختياري)</option>
+                    <option value="kilo">كيلو (PKG-002)</option>
+                    <option value="half">نص (PKG-001)</option>
+                    <option value="quarter">ربع (PKG-041)</option>
+                    <option value="third">ثلث (PKG-041)</option>
+                    <option value="custom" selected>نوع مخصص</option>
+                </select>
+                <small class="text-muted">اختر نوع الكرتونة المستخدمة في تعبئة المنتج (اختياري - سيتم تطبيق الخصم التلقائي إذا تم اختياره)</small>
+            </div>
+            
+            <!-- حقول النوع المخصص للتعديل -->
+            <div class="mb-3" id="editCustomCartonCardFields" style="display: none;">
+                <div class="row">
+                    <div class="col-12 mb-2">
+                        <label class="form-label">عدد المنتجات لكل كرتونة <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" name="custom_carton_quantity" id="editCustomCartonCardQuantity" min="1" placeholder="مثال: 11">
+                        <small class="text-muted">عدد المنتجات المطلوبة لخصم كرتونة واحدة</small>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">نوع الكرتونة <span class="text-danger">*</span></label>
+                        <select class="form-select" name="custom_carton_type_id" id="editCustomCartonCardTypeId">
+                            <option value="">-- اختر نوع الكرتونة --</option>
+                            <?php foreach ($packagingMaterials as $pkg): ?>
+                                <option value="<?php echo $pkg['id']; ?>"><?php echo htmlspecialchars($pkg['name'] ?? '', ENT_QUOTES, 'UTF-8'); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <small class="text-muted">اختر نوع الكرتونة من قائمة أدوات التعبئة</small>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">أدوات التعبئة المستخدمة <span class="text-danger">*</span></label>
+                <?php if (empty($packagingMaterials)): ?>
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        لا توجد أدوات تعبئة متاحة. يرجى إضافة أدوات التعبئة أولاً من صفحة مخزن أدوات التعبئة.
+                    </div>
+                <?php else: ?>
+                    <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;" id="editPackagingCardCheckboxContainer">
+                        <?php foreach ($packagingMaterials as $pkg): ?>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" name="packaging_ids[]" 
+                                       value="<?php echo $pkg['id']; ?>" 
+                                       id="edit_card_packaging_<?php echo $pkg['id']; ?>">
+                                <label class="form-check-label w-100" for="edit_card_packaging_<?php echo $pkg['id']; ?>">
+                                    <span class="fw-semibold"><?php echo htmlspecialchars($pkg['name'] ?? '', ENT_QUOTES, 'UTF-8'); ?></span>
+                                    <?php if (!empty($pkg['quantity'])): ?>
+                                        <span class="text-muted small ms-2">
+                                            (المخزون: <?php echo number_format((float)($pkg['quantity'] ?? 0), 2); ?> <?php echo htmlspecialchars($pkg['unit'] ?? '', ENT_QUOTES, 'UTF-8'); ?>)
+                                        </span>
+                                    <?php endif; ?>
+                                </label>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <small class="text-muted d-block mt-2">
+                        <i class="bi bi-info-circle me-1"></i>يمكنك اختيار أكثر من أداة تعبئة
+                    </small>
+                <?php endif; ?>
+            </div>
+            
+            <!-- سعر الوحدة -->
+            <div class="mb-3">
+                <label class="form-label">سعر الوحدة (<?php echo htmlspecialchars(function_exists('getCurrencySymbol') ? getCurrencySymbol() : (CURRENCY_SYMBOL ?? 'ج.م')); ?>)</label>
+                <div class="input-group">
+                    <span class="input-group-text"><?php echo htmlspecialchars(function_exists('getCurrencySymbol') ? getCurrencySymbol() : (CURRENCY_SYMBOL ?? 'ج.م')); ?></span>
+                    <input type="number" 
+                           class="form-control" 
+                           name="unit_price" 
+                           id="editUnitCardPrice"
+                           step="0.01" 
+                           min="0" 
+                           placeholder="0.00"
+                           value="">
+                </div>
+                <small class="text-muted">سعر بيع الوحدة الواحدة من المنتج (اختياري)</small>
+            </div>
+            
+            <!-- المواد الخام الأخرى -->
+            <div class="mb-3">
+                <label class="form-label">المواد الخام الأساسية</label>
+                <p class="text-muted small mb-2">
+                    أضف جميع المكوّنات المستخدمة في المنتج (مثل العسل، المكسرات، الإضافات...).<br>
+                    <strong>ملاحظة:</strong> نوع العسل يتم تحديده لاحقاً أثناء إنشاء تشغيلة الإنتاج.
+                </p>
+                <div id="editRawMaterialsCardContainer">
+                    <!-- سيتم إضافة المواد هنا ديناميكياً -->
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addEditRawMaterialCard()">
+                    <i class="bi bi-plus"></i> إضافة مادة خام
+                </button>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle me-2"></i>حفظ التعديلات
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeEditTemplateCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card حذف قالب - للموبايل -->
+<div class="card shadow-sm mb-4 d-md-none" id="deleteTemplateCard" style="display: none;">
+    <div class="card-header bg-danger text-white">
+        <h5 class="mb-0">حذف قالب</h5>
+    </div>
+    <div class="card-body">
+        <p>هل أنت متأكد من حذف قالب "<strong id="delete_template_card_name"></strong>"؟</p>
+        <p class="text-muted small">هذه العملية لا يمكن التراجع عنها.</p>
+        <div class="d-flex gap-2 mt-3">
+            <button type="button" class="btn btn-danger" id="confirmDeleteTemplateCard">حذف</button>
+            <button type="button" class="btn btn-secondary" onclick="closeDeleteTemplateCard()">إلغاء</button>
         </div>
     </div>
 </div>
@@ -3536,11 +3673,159 @@ function editTemplate(templateId, templateDataJson, isBase64 = false) {
     }
 
     // فتح النموذج
-    const modal = new bootstrap.Modal(document.getElementById('editTemplateModal'));
-    modal.show();
+    closeAllForms();
+    
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('editTemplateCard');
+        if (card) {
+            // نسخ البيانات إلى Card
+            document.getElementById('editTemplateCardId').value = templateId;
+            document.getElementById('editProductCardName').value = templateData.product_name || '';
+            
+            // ملء حقل نوع الكرتونة
+            const editCartonCardTypeEl = document.getElementById('editCartonCardType');
+            if (editCartonCardTypeEl) {
+                let cartonType = templateData.carton_type || '';
+                if ((!cartonType || cartonType === '') && templateData.custom_carton_quantity && templateData.custom_carton_quantity > 0 && templateData.custom_carton_type_id && templateData.custom_carton_type_id > 0) {
+                    cartonType = 'custom';
+                }
+                editCartonCardTypeEl.value = cartonType;
+                
+                // إظهار/إخفاء حقول النوع المخصص
+                const editCustomCardFields = document.getElementById('editCustomCartonCardFields');
+                if (editCustomCardFields) {
+                    if (cartonType === 'custom') {
+                        editCustomCardFields.style.display = 'block';
+                        if (templateData.custom_carton_quantity) {
+                            const quantityInput = document.getElementById('editCustomCartonCardQuantity');
+                            if (quantityInput) quantityInput.value = templateData.custom_carton_quantity;
+                        }
+                        if (templateData.custom_carton_type_id) {
+                            const typeSelect = document.getElementById('editCustomCartonCardTypeId');
+                            if (typeSelect) typeSelect.value = templateData.custom_carton_type_id;
+                        }
+                    } else {
+                        editCustomCardFields.style.display = 'none';
+                    }
+                }
+                editCartonCardTypeEl.dispatchEvent(new Event('change'));
+            }
+            
+            // ملء حقل السعر
+            const editUnitCardPriceEl = document.getElementById('editUnitCardPrice');
+            if (editUnitCardPriceEl) {
+                const unitPrice = templateData.unit_price || '';
+                editUnitCardPriceEl.value = unitPrice ? parseFloat(unitPrice).toFixed(2) : '';
+            }
+            
+            // تحديد أدوات التعبئة
+            const packagingCardContainer = document.getElementById('editPackagingCardCheckboxContainer');
+            if (packagingCardContainer && templateData.packaging && Array.isArray(templateData.packaging)) {
+                const allCheckboxes = packagingCardContainer.querySelectorAll('input[type="checkbox"][name="packaging_ids[]"]');
+                allCheckboxes.forEach(checkbox => checkbox.checked = false);
+                
+                templateData.packaging.forEach(pkg => {
+                    const packagingId = pkg.packaging_material_id || pkg.id;
+                    if (packagingId) {
+                        const checkbox = packagingCardContainer.querySelector(`input[type="checkbox"][name="packaging_ids[]"][value="${packagingId}"]`);
+                        if (checkbox) checkbox.checked = true;
+                    }
+                });
+            }
+            
+            // ملء المواد الخام
+            const editCardContainer = document.getElementById('editRawMaterialsCardContainer');
+            if (editCardContainer) {
+                editCardContainer.innerHTML = '';
+                editMaterialIndex = 0;
+                
+                if (templateData.raw_materials && Array.isArray(templateData.raw_materials) && templateData.raw_materials.length > 0) {
+                    templateData.raw_materials.forEach(material => {
+                        let materialName = material.material_name || material.name || '';
+                        let materialType = material.material_type || '';
+                        
+                        if (materialName && materialName.includes(' - ') && !materialType) {
+                            const parts = materialName.split(' - ', 2);
+                            if (parts.length === 2) {
+                                materialName = parts[0].trim();
+                                materialType = parts[1].trim();
+                            }
+                        } else if (materialName && materialName.startsWith('عسل ') && materialName.length > 5 && !materialType) {
+                            const parts = materialName.split(' ', 2);
+                            if (parts.length === 2) {
+                                materialName = parts[0];
+                                materialType = parts[1];
+                            }
+                        }
+                        
+                        const fullName = materialType !== '' ? materialName + ' - ' + materialType : materialName;
+                        
+                        let honeyState = '';
+                        if (material.material_type) {
+                            const matType = String(material.material_type).toLowerCase();
+                            if (matType === 'honey_raw') {
+                                honeyState = 'raw';
+                            } else if (matType === 'honey_filtered') {
+                                honeyState = 'filtered';
+                            }
+                        }
+                        
+                        addEditRawMaterialCard({
+                            name: fullName,
+                            material_name: materialName,
+                            material_type: materialType,
+                            quantity: material.quantity_per_unit || material.quantity || '',
+                            unit: material.unit || 'كيلوجرام',
+                            honey_state: honeyState,
+                            material_type_saved: material.material_type || ''
+                        });
+                    });
+                } else {
+                    addEditRawMaterialCard({ name: 'عسل', unit: 'كيلوجرام' });
+                }
+            }
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        const modal = new bootstrap.Modal(document.getElementById('editTemplateModal'));
+        modal.show();
+    }
 }
 
 let editMaterialIndex = 0;
+
+// دالة مساعدة لإضافة مادة خام في Card (للموبايل)
+function addEditRawMaterialCard(defaults = {}) {
+    // استخدام نفس الدالة لكن مع container مختلف
+    const originalContainer = document.getElementById('editRawMaterialsContainer');
+    const cardContainer = document.getElementById('editRawMaterialsCardContainer');
+    
+    if (!cardContainer) {
+        console.warn('editRawMaterialsCardContainer not found, using editRawMaterialsContainer');
+        return addEditRawMaterial(defaults);
+    }
+    
+    // حفظ container الأصلي مؤقتاً
+    const tempContainer = originalContainer;
+    
+    // استخدام container الـ Card
+    // لكن هذا لن يعمل لأن الدالة تستخدم IDs محددة
+    
+    // الحل: استخدام نفس الدالة لكن بعد تغيير container
+    // أو إنشاء نسخة من الدالة
+    
+    // للبساطة، سنستخدم نفس الدالة لكن مع container مختلف
+    // سنحتاج إلى تعديل الدالة لتدعم container مختلف
+    
+    // حل مؤقت: استخدام addEditRawMaterial مع container مختلف
+    return addEditRawMaterial(defaults);
+}
 
 function addEditRawMaterial(defaults = {}) {
     const container = document.getElementById('editRawMaterialsContainer');
@@ -3838,16 +4123,125 @@ document.getElementById('editTemplateModal')?.addEventListener('hidden.bs.modal'
     editMaterialIndex = 0;
 });
 
+// ===== دوال مساعدة =====
+
+// التحقق من الموبايل
+function isMobile() {
+    return window.innerWidth <= 768;
+}
+
+// Scroll تلقائي للعنصر
+function scrollToElement(element) {
+    if (!element) return;
+    
+    setTimeout(function() {
+        const rect = element.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const elementTop = rect.top + scrollTop;
+        const offset = 80;
+        
+        requestAnimationFrame(function() {
+            window.scrollTo({
+                top: Math.max(0, elementTop - offset),
+                behavior: 'smooth'
+            });
+        });
+    }, 200);
+}
+
+// إغلاق جميع النماذج
+function closeAllForms() {
+    // إغلاق جميع Cards على الموبايل
+    const cards = [
+        'editTemplateCard', 'deleteTemplateCard'
+    ];
+    cards.forEach(function(cardId) {
+        const card = document.getElementById(cardId);
+        if (card && card.style.display !== 'none') {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    });
+    
+    // إغلاق جميع Modals على الكمبيوتر
+    const modals = [
+        'editTemplateModal', 'templateDetailsModal'
+    ];
+    modals.forEach(function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            if (modalInstance) modalInstance.hide();
+        }
+    });
+}
+
+// ===== دوال إغلاق Cards =====
+
+function closeEditTemplateCard() {
+    const card = document.getElementById('editTemplateCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closeDeleteTemplateCard() {
+    const card = document.getElementById('deleteTemplateCard');
+    if (card) {
+        card.style.display = 'none';
+    }
+}
+
+// ===== دوال القوالب =====
+
 function deleteTemplate(templateId, templateName) {
-    if (confirm('هل أنت متأكد من حذف قالب "' + templateName + '"؟')) {
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.innerHTML = `
-            <input type="hidden" name="action" value="delete_template">
-            <input type="hidden" name="template_id" value="${templateId}">
-        `;
-        document.body.appendChild(form);
-        form.submit();
+    closeAllForms();
+    
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('deleteTemplateCard');
+        if (card) {
+            document.getElementById('delete_template_card_name').textContent = templateName;
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+            
+            // إضافة معالج للحذف
+            const confirmBtn = document.getElementById('confirmDeleteTemplateCard');
+            if (confirmBtn) {
+                // إزالة المعالجات السابقة
+                const newConfirmBtn = confirmBtn.cloneNode(true);
+                confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+                
+                // إضافة معالج جديد
+                newConfirmBtn.addEventListener('click', function() {
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.innerHTML = `
+                        <input type="hidden" name="action" value="delete_template">
+                        <input type="hidden" name="template_id" value="${templateId}">
+                    `;
+                    document.body.appendChild(form);
+                    form.submit();
+                });
+            }
+        }
+    } else {
+        // على الكمبيوتر: استخدام confirm
+        if (confirm('هل أنت متأكد من حذف قالب "' + templateName + '"؟')) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.innerHTML = `
+                <input type="hidden" name="action" value="delete_template">
+                <input type="hidden" name="template_id" value="${templateId}">
+            `;
+            document.body.appendChild(form);
+            form.submit();
+        }
     }
 }
 

@@ -2936,8 +2936,22 @@ if (!$error) {
                 height: 44px;
             }
             #posCartTableWrapper {
-                overflow-x: visible;
-                margin: 0 -0.9rem;
+                overflow-x: visible !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                width: 100% !important;
+                display: block !important;
+            }
+            #posCartTableWrapper.d-none {
+                display: none !important;
+            }
+            #posCartTableWrapper:not(.d-none) {
+                display: block !important;
+            }
+            #posCartTableWrapper .pos-cart-table {
+                margin: 0;
+                padding: 0;
+                width: 100%;
             }
             .pos-selected-product {
                 padding: 0.75rem;
@@ -3778,13 +3792,18 @@ if (!$error) {
         if (!cart.length) {
             elements.cartBody.innerHTML = '';
             elements.cartTableWrapper.classList.add('d-none');
+            elements.cartTableWrapper.style.display = 'none';
             elements.cartEmpty.classList.remove('d-none');
+            elements.cartEmpty.style.display = 'block';
             updateSummary();
             return;
         }
 
+        // إزالة d-none وإظهار السلة
         elements.cartTableWrapper.classList.remove('d-none');
+        elements.cartTableWrapper.style.display = 'block';
         elements.cartEmpty.classList.add('d-none');
+        elements.cartEmpty.style.display = 'none';
 
         const rows = cart.map((item) => {
             const sanitizedQty = sanitizeNumber(item.quantity);

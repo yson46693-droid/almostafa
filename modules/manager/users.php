@@ -1121,15 +1121,33 @@ function resetPassword(userId, username) {
 }
 
 function deleteUser(userId, username) {
-    if (confirm('هل أنت متأكد من حذف المستخدم "' + username + '"؟\n\nهذه العملية لا يمكن التراجع عنها.')) {
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.innerHTML = `
-            <input type="hidden" name="action" value="delete_user">
-            <input type="hidden" name="user_id" value="${userId}">
-        `;
-        document.body.appendChild(form);
-        form.submit();
+    closeAllForms();
+    
+    if (isMobile()) {
+        // على الموبايل: استخدام Card (يمكن إضافة Card للحذف إذا لزم الأمر)
+        // حالياً نستخدم confirm على الموبايل أيضاً
+        if (confirm('هل أنت متأكد من حذف المستخدم "' + username + '"؟\n\nهذه العملية لا يمكن التراجع عنها.')) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.innerHTML = `
+                <input type="hidden" name="action" value="delete_user">
+                <input type="hidden" name="user_id" value="${userId}">
+            `;
+            document.body.appendChild(form);
+            form.submit();
+        }
+    } else {
+        // على الكمبيوتر: استخدام confirm
+        if (confirm('هل أنت متأكد من حذف المستخدم "' + username + '"؟\n\nهذه العملية لا يمكن التراجع عنها.')) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.innerHTML = `
+                <input type="hidden" name="action" value="delete_user">
+                <input type="hidden" name="user_id" value="${userId}">
+            `;
+            document.body.appendChild(form);
+            form.submit();
+        }
     }
 }
 </script>

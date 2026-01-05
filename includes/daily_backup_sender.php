@@ -713,6 +713,18 @@ if (!function_exists('triggerDailyBackupDelivery')) {
                     'file_path' => $backupRelativePath ?? $backupFilePath,
                 ]));
                 
+                // تحديث حالة النسخة الاحتياطية في جدول backups إلى failed
+                if ($backupId) {
+                    try {
+                        $db->execute(
+                            "UPDATE backups SET status = 'failed', error_message = ? WHERE id = ?",
+                            [$errorMessage, $backupId]
+                        );
+                    } catch (Throwable $updateError) {
+                        error_log('Daily Backup: failed updating backup status to failed - ' . $updateError->getMessage());
+                    }
+                }
+                
                 // تسجيل الفشل في السجل
                 try {
                     $db->beginTransaction();
@@ -743,10 +755,33 @@ if (!function_exists('triggerDailyBackupDelivery')) {
                 
                 dailyBackupNotifyManagerThrottled($errorMessage, 'danger', $jobState);
                 return;
+            } else {
+                // عند نجاح الإرسال، التأكد من أن حالة النسخة الاحتياطية في جدول backups هي success
+                if ($backupId) {
+                    try {
+                        $db->execute(
+                            "UPDATE backups SET status = 'success', error_message = NULL WHERE id = ?",
+                            [$backupId]
+                        );
+                    } catch (Throwable $updateError) {
+                        error_log('Daily Backup: failed updating backup status to success - ' . $updateError->getMessage());
+                    }
+                }
             }
         } else {
             // إذا لم يكن Telegram مُعداً، نكتفي بإنشاء النسخة الاحتياطية فقط
             error_log('Daily Backup: Telegram not configured, backup created but not sent');
+            // التأكد من أن حالة النسخة الاحتياطية في جدول backups هي success حتى لو لم يتم الإرسال
+            if ($backupId) {
+                try {
+                    $db->execute(
+                        "UPDATE backups SET status = 'success', error_message = NULL WHERE id = ?",
+                        [$backupId]
+                    );
+                } catch (Throwable $updateError) {
+                    error_log('Daily Backup: failed updating backup status to success - ' . $updateError->getMessage());
+                }
+            }
         }
 
         // تم نقل تسجيل نجاح الإرسال إلى قبل الإرسال أعلاه لمنع التكرار
