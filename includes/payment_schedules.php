@@ -1273,6 +1273,8 @@ function sendDailyLocalPaymentSchedulesTelegramReport() {
 function sendDailyLocalPaymentSchedulesReminders() {
     require_once __DIR__ . '/simple_telegram.php';
     
+    error_log('=== sendDailyLocalPaymentSchedulesReminders START ===');
+    
     if (!isTelegramConfigured()) {
         error_log('Daily Payment Schedules Reminders: Telegram not configured');
         return 0;
@@ -1282,8 +1284,27 @@ function sendDailyLocalPaymentSchedulesReminders() {
     $today = date('Y-m-d');
     $sentCount = 0;
     
+    error_log('Daily Payment Schedules Reminders: Today is ' . $today);
+    
+    // أولاً: تحديث الحالات المتأخرة لضمان أن جميع الجداول المتأخرة status = 'overdue'
+    $updatedOverdue = updateOverdueSchedules();
+    error_log('Daily Payment Schedules Reminders: Updated ' . $updatedOverdue . ' overdue schedules');
+    
+    // فحص أولي: عدد الجداول المستحقة والمتأخرة
+    $totalCheck = $db->queryOne("
+        SELECT COUNT(*) as total
+        FROM payment_schedules ps
+        INNER JOIN local_customers lc ON ps.customer_id = lc.id
+        WHERE lc.status = 'active' 
+          AND ps.sales_rep_id IS NULL
+          AND ps.status IN ('pending', 'overdue')
+          AND ps.due_date <= CURDATE()
+    ");
+    $totalSchedules = (int)($totalCheck['total'] ?? 0);
+    error_log('Daily Payment Schedules Reminders: Total schedules due today or overdue: ' . $totalSchedules);
+    
     // جلب الجداول المستحقة اليوم والمتأخرة للعملاء المحليين
-    // التي لم يتم إرسال تذكير لها اليوم
+    // التي لم يتم إرسال تذكير لها اليوم (نفحص reminder_sent_at)
     $schedules = $db->query("
         SELECT ps.id, ps.amount, ps.due_date, ps.status, ps.customer_id,
                ps.reminder_sent_at,
@@ -1294,10 +1315,7 @@ function sendDailyLocalPaymentSchedulesReminders() {
         WHERE lc.status = 'active' 
           AND ps.sales_rep_id IS NULL
           AND ps.status IN ('pending', 'overdue')
-          AND (
-              ps.due_date = CURDATE() OR  -- مستحقة اليوم
-              ps.due_date < CURDATE()  -- متأخرة (أي جدول تاريخ استحقاقه قبل اليوم)
-          )
+          AND ps.due_date <= CURDATE()  -- مستحقة اليوم أو متأخرة
           AND (
               ps.reminder_sent_at IS NULL OR  -- لم يتم إرسال تذكير من قبل
               DATE(ps.reminder_sent_at) != CURDATE()  -- أو تم إرسال تذكير ولكن ليس اليوم
@@ -1305,12 +1323,17 @@ function sendDailyLocalPaymentSchedulesReminders() {
         ORDER BY ps.due_date ASC, ps.amount DESC
     ");
     
+    error_log('Daily Payment Schedules Reminders: Found ' . count($schedules) . ' schedules to send reminders for (after filtering by reminder_sent_at)');
+    
     if (empty($schedules)) {
-        error_log('Daily Payment Schedules Reminders: No schedules found to send reminders for');
+        if ($totalSchedules > 0) {
+            // هناك جداول لكن تم إرسال تذكير لها اليوم
+            error_log('Daily Payment Schedules Reminders: No schedules to send - all ' . $totalSchedules . ' schedules already have reminders sent today');
+        } else {
+            error_log('Daily Payment Schedules Reminders: No schedules found (due today or overdue)');
+        }
         return 0;
     }
-    
-    error_log('Daily Payment Schedules Reminders: Found ' . count($schedules) . ' schedules to send reminders for');
     
     foreach ($schedules as $schedule) {
         $scheduleId = (int)($schedule['id'] ?? 0);
@@ -1323,6 +1346,9 @@ function sendDailyLocalPaymentSchedulesReminders() {
         $dueDate = $schedule['due_date'] ?? '';
         $daysDiff = (int)($schedule['days_diff'] ?? 0);
         $status = $schedule['status'] ?? 'pending';
+        $lastReminderSent = $schedule['reminder_sent_at'] ?? null;
+        
+        error_log('Processing schedule ID: ' . $scheduleId . ' | Customer: ' . $customerName . ' | Due: ' . $dueDate . ' | Days diff: ' . $daysDiff . ' | Last reminder: ' . ($lastReminderSent ?? 'never'));
         
         // بناء الرسالة
         $message = "🔔 <b>تذكير بموعد تحصيل</b>\n\n";
@@ -1332,13 +1358,14 @@ function sendDailyLocalPaymentSchedulesReminders() {
         
         if ($daysDiff == 0) {
             $message .= "⚠️ <b>مستحقة الدفع اليوم</b>\n";
-        } elseif ($daysDiff > 0 && $status === 'overdue') {
+        } elseif ($daysDiff > 0) {
             $message .= "🚨 <b>متأخرة " . $daysDiff . " يوم</b>\n";
         }
         
         $message .= "\n🔗 للتفاصيل: افتح صفحة جداول التحصيل - العملاء المحليين";
         
         // إرسال الرسالة عبر تليجرام
+        error_log('Sending Telegram message for schedule ID: ' . $scheduleId);
         $result = sendTelegramMessage($message);
         
         if ($result) {
@@ -1367,11 +1394,12 @@ function sendDailyLocalPaymentSchedulesReminders() {
                 error_log('ERROR updating reminder_sent_at for schedule ' . $scheduleId . ': ' . $e->getMessage());
             }
         } else {
-            error_log('ERROR sending Telegram reminder for schedule ' . $scheduleId);
+            error_log('ERROR sending Telegram reminder for schedule ' . $scheduleId . ' - sendTelegramMessage returned false');
         }
     }
     
     error_log('Daily Payment Schedules Reminders: Sent ' . $sentCount . ' reminders out of ' . count($schedules) . ' schedules');
+    error_log('=== sendDailyLocalPaymentSchedulesReminders END ===');
     
     return $sentCount;
 }
