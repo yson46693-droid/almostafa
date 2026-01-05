@@ -847,8 +847,8 @@ $totalPages = ceil($totalCount / $perPage);
 </div>
 
 <?php if ($isManager): ?>
-<!-- Modal تعديل منتج تالف -->
-<div class="modal fade" id="editProductModal" tabindex="-1">
+<!-- Modal تعديل منتج تالف - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="editProductModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -883,8 +883,8 @@ $totalPages = ceil($totalCount / $perPage);
     </div>
 </div>
 
-<!-- Modal حذف منتج تالف -->
-<div class="modal fade" id="deleteProductModal" tabindex="-1">
+<!-- Modal حذف منتج تالف - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="deleteProductModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -904,8 +904,8 @@ $totalPages = ceil($totalCount / $perPage);
     </div>
 </div>
 
-<!-- Modal تعديل أداة تعبئة تالفة -->
-<div class="modal fade" id="editPackagingModal" tabindex="-1">
+<!-- Modal تعديل أداة تعبئة تالفة - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="editPackagingModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -933,8 +933,8 @@ $totalPages = ceil($totalCount / $perPage);
     </div>
 </div>
 
-<!-- Modal حذف أداة تعبئة تالفة -->
-<div class="modal fade" id="deletePackagingModal" tabindex="-1">
+<!-- Modal حذف أداة تعبئة تالفة - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="deletePackagingModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -954,8 +954,8 @@ $totalPages = ceil($totalCount / $perPage);
     </div>
 </div>
 
-<!-- Modal تعديل خامة مهدرة -->
-<div class="modal fade" id="editRawMaterialModal" tabindex="-1">
+<!-- Modal تعديل خامة مهدرة - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="editRawMaterialModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -990,7 +990,7 @@ $totalPages = ceil($totalCount / $perPage);
 </div>
 
 <!-- Modal حذف خامة مهدرة -->
-<div class="modal fade" id="deleteRawMaterialModal" tabindex="-1">
+<div class="modal fade d-none d-md-block" id="deleteRawMaterialModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -1006,6 +1006,140 @@ $totalPages = ceil($totalCount / $perPage);
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
                 <button type="button" class="btn btn-danger" id="confirmDeleteRawMaterial">حذف</button>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cards للموبايل -->
+<!-- Card تعديل منتج تالف - للموبايل -->
+<div class="card shadow-sm mb-4 d-md-none" id="editProductCard" style="display: none;">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0">تعديل منتج تالف</h5>
+    </div>
+    <div class="card-body">
+        <form id="editProductCardForm">
+            <input type="hidden" id="edit_product_card_id" name="id">
+            <input type="hidden" id="edit_product_card_data_source" name="data_source">
+            <div class="mb-3">
+                <label class="form-label">الكمية التالفة</label>
+                <input type="number" step="0.01" min="0" class="form-control" id="edit_product_card_quantity" name="damaged_quantity" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">تاريخ الإضافة</label>
+                <input type="date" class="form-control" id="edit_product_card_date" name="added_date" required>
+            </div>
+            <?php if ($canViewFinancials): ?>
+            <div class="mb-3">
+                <label class="form-label">قيمة التوالف</label>
+                <input type="number" step="0.01" min="0" class="form-control" id="edit_product_card_value" name="waste_value">
+            </div>
+            <?php endif; ?>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">حفظ التعديلات</button>
+                <button type="button" class="btn btn-secondary" onclick="closeEditProductCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card حذف منتج تالف - للموبايل -->
+<div class="card shadow-sm mb-4 d-md-none" id="deleteProductCard" style="display: none;">
+    <div class="card-header bg-danger text-white">
+        <h5 class="mb-0">حذف منتج تالف</h5>
+    </div>
+    <div class="card-body">
+        <p>هل أنت متأكد من حذف هذا المنتج التالف؟</p>
+        <p class="text-danger"><strong id="delete_product_card_name"></strong></p>
+        <p class="text-muted small">هذه العملية لا يمكن التراجع عنها.</p>
+        <div class="d-flex gap-2 mt-3">
+            <button type="button" class="btn btn-danger" id="confirmDeleteProductCard">حذف</button>
+            <button type="button" class="btn btn-secondary" onclick="closeDeleteProductCard()">إلغاء</button>
+        </div>
+    </div>
+</div>
+
+<!-- Card تعديل أداة تعبئة تالفة - للموبايل -->
+<div class="card shadow-sm mb-4 d-md-none" id="editPackagingCard" style="display: none;">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0">تعديل أداة تعبئة تالفة</h5>
+    </div>
+    <div class="card-body">
+        <form id="editPackagingCardForm">
+            <input type="hidden" id="edit_packaging_card_id" name="id">
+            <div class="mb-3">
+                <label class="form-label">الكمية التالفة</label>
+                <input type="number" step="0.01" min="0" class="form-control" id="edit_packaging_card_quantity" name="damaged_quantity" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">تاريخ الإضافة</label>
+                <input type="date" class="form-control" id="edit_packaging_card_date" name="added_date" required>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">حفظ التعديلات</button>
+                <button type="button" class="btn btn-secondary" onclick="closeEditPackagingCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card حذف أداة تعبئة تالفة - للموبايل -->
+<div class="card shadow-sm mb-4 d-md-none" id="deletePackagingCard" style="display: none;">
+    <div class="card-header bg-danger text-white">
+        <h5 class="mb-0">حذف أداة تعبئة تالفة</h5>
+    </div>
+    <div class="card-body">
+        <p>هل أنت متأكد من حذف هذه الأداة التالفة؟</p>
+        <p class="text-danger"><strong id="delete_packaging_card_name"></strong></p>
+        <p class="text-muted small">هذه العملية لا يمكن التراجع عنها.</p>
+        <div class="d-flex gap-2 mt-3">
+            <button type="button" class="btn btn-danger" id="confirmDeletePackagingCard">حذف</button>
+            <button type="button" class="btn btn-secondary" onclick="closeDeletePackagingCard()">إلغاء</button>
+        </div>
+    </div>
+</div>
+
+<!-- Card تعديل خامة مهدرة - للموبايل -->
+<div class="card shadow-sm mb-4 d-md-none" id="editRawMaterialCard" style="display: none;">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0">تعديل خامة مهدرة</h5>
+    </div>
+    <div class="card-body">
+        <form id="editRawMaterialCardForm">
+            <input type="hidden" id="edit_raw_material_card_id" name="id">
+            <div class="mb-3">
+                <label class="form-label">الكمية المهدرة</label>
+                <input type="number" step="0.01" min="0" class="form-control" id="edit_raw_material_card_quantity" name="wasted_quantity" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">تاريخ الإضافة</label>
+                <input type="date" class="form-control" id="edit_raw_material_card_date" name="added_date" required>
+            </div>
+            <?php if ($canViewFinancials): ?>
+            <div class="mb-3">
+                <label class="form-label">قيمة الهدر</label>
+                <input type="number" step="0.01" min="0" class="form-control" id="edit_raw_material_card_value" name="waste_value">
+            </div>
+            <?php endif; ?>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">حفظ التعديلات</button>
+                <button type="button" class="btn btn-secondary" onclick="closeEditRawMaterialCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card حذف خامة مهدرة - للموبايل -->
+<div class="card shadow-sm mb-4 d-md-none" id="deleteRawMaterialCard" style="display: none;">
+    <div class="card-header bg-danger text-white">
+        <h5 class="mb-0">حذف خامة مهدرة</h5>
+    </div>
+    <div class="card-body">
+        <p>هل أنت متأكد من حذف هذه الخامة المهدرة؟</p>
+        <p class="text-danger"><strong id="delete_raw_material_card_name"></strong></p>
+        <p class="text-muted small">هذه العملية لا يمكن التراجع عنها.</p>
+        <div class="d-flex gap-2 mt-3">
+            <button type="button" class="btn btn-danger" id="confirmDeleteRawMaterialCard">حذف</button>
+            <button type="button" class="btn btn-secondary" onclick="closeDeleteRawMaterialCard()">إلغاء</button>
         </div>
     </div>
 </div>
