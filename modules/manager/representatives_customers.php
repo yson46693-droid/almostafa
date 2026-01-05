@@ -3953,15 +3953,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 // انتظار قليل لضمان إغلاق النماذج السابقة
                 setTimeout(function() {
                     if (isMobile()) {
-                        // على الموبايل: استخدام Card (سيتم إضافة Card لاحقاً - معقد)
-                        // حالياً: استخدام Modal حتى يتم إنشاء Card
-                        if (editRepCustomerModal) {
-                            var idInput = document.getElementById('editRepCustomerId');
-                            var nameInput = document.getElementById('editRepCustomerName');
-                            var addressInput = document.getElementById('editRepCustomerAddress');
-                            var regionInput = document.getElementById('editRepCustomerRegionId');
-                            var balanceInput = document.getElementById('editRepCustomerBalance');
-                            var editPhoneContainer = document.getElementById('editRepPhoneNumbersContainer');
+                        // على الموبايل: استخدام Card
+                        const card = document.getElementById('editRepCustomerCard');
+                        if (card) {
+                            var idInput = document.getElementById('editRepCustomerCardId');
+                            var nameInput = document.getElementById('editRepCustomerCardName');
+                            var addressInput = document.getElementById('editRepCustomerCardAddress');
+                            var regionInput = document.getElementById('editRepCustomerCardRegionId');
+                            var balanceInput = document.getElementById('editRepCustomerCardBalance');
+                            var editPhoneContainer = document.getElementById('editRepPhoneNumbersCardContainer');
                             
                             if (idInput) idInput.value = customerId;
                             if (nameInput) nameInput.value = customerName || '';
@@ -4008,8 +4008,8 @@ document.addEventListener('DOMContentLoaded', function() {
                                             `;
                                             editPhoneContainer.appendChild(phoneGroup);
                                         }
-                                        if (typeof updateEditRepRemoveButtons === 'function') {
-                                            updateEditRepRemoveButtons();
+                                        if (typeof updateEditRepCardRemoveButtons === 'function') {
+                                            updateEditRepCardRemoveButtons();
                                         }
                                     })
                                     .catch(error => {
@@ -4025,14 +4025,16 @@ document.addEventListener('DOMContentLoaded', function() {
                                             `;
                                             editPhoneContainer.appendChild(phoneGroup);
                                         }
-                                        if (typeof updateEditRepRemoveButtons === 'function') {
-                                            updateEditRepRemoveButtons();
+                                        if (typeof updateEditRepCardRemoveButtons === 'function') {
+                                            updateEditRepCardRemoveButtons();
                                         }
                                     });
                             }
                             
-                            var modal = bootstrap.Modal.getOrCreateInstance(editRepCustomerModal);
-                            modal.show();
+                            card.style.display = 'block';
+                            setTimeout(function() {
+                                scrollToElement(card);
+                            }, 50);
                         }
                     } else {
                         // على الكمبيوتر: استخدام Modal
@@ -4176,6 +4178,46 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     window.updateEditRepRemoveButtons = updateEditRepRemoveButtons;
+    
+    // معالج إضافة رقم هاتف في Card التعديل (للموبايل)
+    const addEditRepPhoneCardBtn = document.getElementById('addEditRepPhoneCardBtn');
+    const editRepPhoneCardContainer = document.getElementById('editRepPhoneNumbersCardContainer');
+    
+    if (addEditRepPhoneCardBtn && editRepPhoneCardContainer) {
+        addEditRepPhoneCardBtn.addEventListener('click', function() {
+            var phoneInputGroup = document.createElement('div');
+            phoneInputGroup.className = 'input-group mb-2';
+            phoneInputGroup.innerHTML = `
+                <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
+                <button type="button" class="btn btn-outline-danger remove-phone-btn">
+                    <i class="bi bi-trash"></i>
+                </button>
+            `;
+            editRepPhoneCardContainer.appendChild(phoneInputGroup);
+            updateEditRepCardRemoveButtons();
+        });
+        
+        editRepPhoneCardContainer.addEventListener('click', function(e) {
+            if (e.target.closest('.remove-phone-btn')) {
+                e.target.closest('.input-group').remove();
+                updateEditRepCardRemoveButtons();
+            }
+        });
+    }
+    
+    // تحديث حالة أزرار الحذف لـ Card التعديل
+    function updateEditRepCardRemoveButtons() {
+        if (editRepPhoneCardContainer) {
+            const phoneGroups = editRepPhoneCardContainer.querySelectorAll('.input-group');
+            phoneGroups.forEach(function(group, index) {
+                const removeBtn = group.querySelector('.remove-phone-btn');
+                if (removeBtn) {
+                    removeBtn.style.display = phoneGroups.length > 1 ? 'block' : 'none';
+                }
+            });
+        }
+    }
+    window.updateEditRepCardRemoveButtons = updateEditRepCardRemoveButtons;
 });
 </script>
 
@@ -4246,6 +4288,77 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             </form>
         </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<!-- Card تعديل عميل المندوب - للموبايل فقط -->
+<?php if (in_array($currentRole, ['manager', 'accountant', 'sales'], true)): ?>
+<div class="card shadow-sm mb-4 d-md-none" id="editRepCustomerCard" style="display: none;">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">
+            <i class="bi bi-pencil-square me-2"></i>تعديل بيانات عميل المندوب
+        </h5>
+        <button type="button" class="btn btn-sm btn-light" onclick="closeEditRepCustomerCard()">
+            <i class="bi bi-x-lg"></i>
+        </button>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>" id="editRepCustomerCardForm">
+            <input type="hidden" name="action" value="edit_customer">
+            <input type="hidden" name="customer_id" id="editRepCustomerCardId">
+            <div class="mb-3">
+                <label class="form-label">اسم العميل</label>
+                <input type="text" class="form-control" id="editRepCustomerCardName" disabled>
+                <small class="text-muted">لا يمكن تعديل اسم العميل</small>
+            </div>
+            <?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
+            <div class="mb-3">
+                <label class="form-label">ديون العميل / رصيد العميل</label>
+                <input type="number" class="form-control" name="balance" id="editRepCustomerCardBalance" step="0.01" placeholder="مثال: 0 أو -500">
+                <small class="text-muted">
+                    <strong>إدخال قيمة سالبة:</strong> يتم اعتبارها رصيد دائن للعميل (مبلغ متاح للعميل).
+                </small>
+            </div>
+            <?php endif; ?>
+            <div class="mb-3">
+                <label class="form-label">أرقام الهاتف</label>
+                <div id="editRepPhoneNumbersCardContainer">
+                    <div class="input-group mb-2">
+                        <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
+                        <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="addEditRepPhoneCardBtn">
+                    <i class="bi bi-plus-circle"></i> إضافة رقم آخر
+                </button>
+                <input type="hidden" name="phone" id="editRepCustomerCardPhone" value="">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">العنوان</label>
+                <textarea class="form-control" name="address" id="editRepCustomerCardAddress" rows="2"></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">المنطقة</label>
+                <div class="input-group">
+                    <select class="form-select" name="region_id" id="editRepCustomerCardRegionId">
+                        <option value="">اختر المنطقة</option>
+                        <?php
+                        $regions = $db->query("SELECT id, name FROM regions ORDER BY name ASC");
+                        foreach ($regions as $region):
+                        ?>
+                            <option value="<?php echo $region['id']; ?>"><?php echo htmlspecialchars($region['name']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+            <div class="d-flex gap-2 mt-4">
+                <button type="button" class="btn btn-secondary flex-fill" onclick="closeEditRepCustomerCard()">إلغاء</button>
+                <button type="submit" class="btn btn-primary flex-fill">حفظ التعديلات</button>
+            </div>
+        </form>
     </div>
 </div>
 <?php endif; ?>
@@ -5469,6 +5582,40 @@ function closeSetCreditLimitCard() {
         if (customerNameEl) customerNameEl.textContent = '-';
         if (balanceEl) balanceEl.textContent = '-';
         if (customerIdInput) customerIdInput.value = '';
+    }
+}
+
+// دالة إغلاق Card تعديل عميل المندوب
+function closeEditRepCustomerCard() {
+    const card = document.getElementById('editRepCustomerCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+        const idInput = card.querySelector('#editRepCustomerCardId');
+        const nameInput = card.querySelector('#editRepCustomerCardName');
+        const addressInput = card.querySelector('#editRepCustomerCardAddress');
+        const regionInput = card.querySelector('#editRepCustomerCardRegionId');
+        const balanceInput = card.querySelector('#editRepCustomerCardBalance');
+        const phoneContainer = card.querySelector('#editRepPhoneNumbersCardContainer');
+        if (idInput) idInput.value = '';
+        if (nameInput) nameInput.value = '';
+        if (addressInput) addressInput.value = '';
+        if (regionInput) regionInput.value = '';
+        if (balanceInput) balanceInput.value = '';
+        if (phoneContainer) {
+            phoneContainer.innerHTML = `
+                <div class="input-group mb-2">
+                    <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
+                    <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            `;
+        }
+        if (typeof updateEditRepCardRemoveButtons === 'function') {
+            updateEditRepCardRemoveButtons();
+        }
     }
 }
 </script>
