@@ -56,7 +56,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.15);
+            background: rgba(0, 0, 0, 0);
             z-index: 9999;
             display: none;
             align-items: center;
@@ -322,8 +322,8 @@
         // إعادة تهيئة الأحداث على مراحل لضمان اكتمال جميع العمليات
         setTimeout(() => {
             reinitializeEvents();
-            // إعادة تهيئة الشريط العلوي مرة أخرى بعد reinitializeEvents
-            reinitializeTopbarEvents();
+            // إعادة تهيئة جميع الأحداث بشكل شامل
+            reinitializeAllEvents();
         }, reinitDelay);
         
         // إعادة تهيئة إضافية بعد تأخير أكبر لضمان عمل جميع الأزرار
@@ -959,65 +959,229 @@
         init();
     }
 
+    /**
+     * إعادة تهيئة جميع الأحداث بشكل شامل
+     * هذه الدالة تعيد تهيئة جميع الأحداث بعد التنقل عبر AJAX
+     */
+    function reinitializeAllEvents() {
+        // 1. إعادة تهيئة Bootstrap Dropdowns
+        if (typeof bootstrap !== 'undefined' && bootstrap.Dropdown) {
+            const dropdowns = document.querySelectorAll('[data-bs-toggle="dropdown"]');
+            dropdowns.forEach(dropdown => {
+                try {
+                    const oldInstance = bootstrap.Dropdown.getInstance(dropdown);
+                    if (oldInstance) {
+                        oldInstance.dispose();
+                    }
+                    new bootstrap.Dropdown(dropdown);
+                } catch (e) {
+                    console.warn('Error reinitializing dropdown:', e);
+                }
+            });
+        }
+
+        // 2. إعادة تهيئة Bootstrap Tooltips
+        if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+            const tooltips = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+            tooltips.forEach(tooltipEl => {
+                try {
+                    const oldInstance = bootstrap.Tooltip.getInstance(tooltipEl);
+                    if (oldInstance) {
+                        oldInstance.dispose();
+                    }
+                    new bootstrap.Tooltip(tooltipEl);
+                } catch (e) {
+                    console.warn('Error reinitializing tooltip:', e);
+                }
+            });
+        }
+
+        // 3. إعادة تهيئة Bootstrap Popovers
+        if (typeof bootstrap !== 'undefined' && bootstrap.Popover) {
+            const popovers = document.querySelectorAll('[data-bs-toggle="popover"]');
+            popovers.forEach(popoverEl => {
+                try {
+                    const oldInstance = bootstrap.Popover.getInstance(popoverEl);
+                    if (oldInstance) {
+                        oldInstance.dispose();
+                    }
+                    new bootstrap.Popover(popoverEl);
+                } catch (e) {
+                    console.warn('Error reinitializing popover:', e);
+                }
+            });
+        }
+
+        // 4. إعادة تهيئة زر إعادة التحميل على الموبايل
+        const mobileReloadBtn = document.getElementById('mobileReloadBtn');
+        if (mobileReloadBtn) {
+            // إزالة event listeners القديمة
+            const newReloadBtn = mobileReloadBtn.cloneNode(true);
+            if (mobileReloadBtn.parentNode) {
+                mobileReloadBtn.parentNode.replaceChild(newReloadBtn, mobileReloadBtn);
+            }
+            // إعادة ربط event listener
+            newReloadBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                try {
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('_refresh', Date.now().toString());
+                    window.location.href = url.toString();
+                } catch (err) {
+                    window.location.reload();
+                }
+            });
+        }
+
+        // 5. إعادة تهيئة زر الوضع الداكن على الموبايل
+        const mobileDarkToggle = document.getElementById('mobileDarkToggle');
+        if (mobileDarkToggle) {
+            // إزالة event listeners القديمة
+            const newDarkToggle = mobileDarkToggle.cloneNode(true);
+            if (mobileDarkToggle.parentNode) {
+                mobileDarkToggle.parentNode.replaceChild(newDarkToggle, mobileDarkToggle);
+            }
+            // دالة لتحديث الأيقونة
+            function updateMobileDarkIcon(theme) {
+                const icon = newDarkToggle.querySelector('i');
+                if (!icon) return;
+                if ((theme || '').toLowerCase() === 'dark') {
+                    icon.classList.remove('bi-moon-stars');
+                    icon.classList.add('bi-brightness-high');
+                } else {
+                    icon.classList.remove('bi-brightness-high');
+                    icon.classList.add('bi-moon-stars');
+                }
+            }
+            // تحديث الأيقونة حسب الوضع الحالي
+            const currentTheme = document.documentElement.getAttribute('data-theme') || localStorage.getItem('theme') || 'light';
+            updateMobileDarkIcon(currentTheme);
+            // إعادة ربط event listener
+            newDarkToggle.addEventListener('click', function(e) {
+                e.preventDefault();
+                const currentTheme = localStorage.getItem('theme') || 'light';
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                localStorage.setItem('theme', newTheme);
+                document.documentElement.setAttribute('data-theme', newTheme);
+                if (newTheme === 'dark') {
+                    document.documentElement.classList.add('dark-theme');
+                } else {
+                    document.documentElement.classList.remove('dark-theme');
+                }
+                updateMobileDarkIcon(newTheme);
+                window.dispatchEvent(new CustomEvent('themeChange', { detail: { theme: newTheme } }));
+            });
+            // الاستماع لتغييرات الوضع الداكن
+            window.addEventListener('themeChange', function(e) {
+                const theme = e && e.detail && e.detail.theme ? e.detail.theme : (document.documentElement.getAttribute('data-theme') || localStorage.getItem('theme') || 'light');
+                updateMobileDarkIcon(theme);
+            });
+        }
+
+        // 6. إعادة تهيئة notifications dropdown
+        const notificationDropdown = document.getElementById('notificationsDropdown');
+        if (notificationDropdown) {
+            // إعادة تهيئة Bootstrap Dropdown للإشعارات
+            try {
+                const oldInstance = bootstrap.Dropdown.getInstance(notificationDropdown);
+                if (oldInstance) {
+                    oldInstance.dispose();
+                }
+                new bootstrap.Dropdown(notificationDropdown);
+            } catch (e) {
+                console.warn('Error reinitializing notifications dropdown:', e);
+            }
+            
+            // إعادة ربط event listener لطلب الإذن
+            notificationDropdown.addEventListener('click', function(e) {
+                if (typeof checkNotificationPermission === 'function' && 
+                    typeof requestNotificationPermission === 'function') {
+                    if (checkNotificationPermission() === 'default') {
+                        requestNotificationPermission().catch(err => {
+                            console.error('Error requesting notification permission:', err);
+                        });
+                    }
+                }
+            }, { once: false, passive: true });
+        }
+
+        // 7. إعادة تهيئة mobile menu
+        const mobileMenuToggle = document.getElementById('mobileMenuToggle');
+        if (mobileMenuToggle && typeof window.initMobileMenu === 'function') {
+            try {
+                window.initMobileMenu();
+            } catch (e) {
+                console.warn('Error reinitializing mobile menu:', e);
+            }
+        }
+
+        // 8. إزالة جميع قيود pointer-events من الأزرار والعناصر القابلة للنقر
+        const allClickableElements = document.querySelectorAll('button, a.btn, input[type="button"], input[type="submit"], .topbar-action, a[href], [onclick], .dropdown-toggle, [data-bs-toggle]');
+        allClickableElements.forEach(element => {
+            // إزالة قيود pointer-events
+            if (element.style.pointerEvents === 'none') {
+                element.style.pointerEvents = '';
+            }
+            // إزالة قيود cursor
+            if (element.style.cursor === 'not-allowed' && !element.disabled) {
+                element.style.cursor = '';
+            }
+            // التأكد من أن العنصر ليس معطلاً بدون سبب
+            if (element.hasAttribute('disabled') && !element.classList.contains('disabled') && !element.disabled) {
+                // لا نفعل شيء - العنصر معطّل بشكل صحيح
+            }
+            // إزالة أي opacity منخفضة قد تشير إلى تعطيل
+            if (element.style.opacity === '0.5' || element.style.opacity === '0.6') {
+                // لا نغير opacity - قد يكون مقصوداً
+            }
+        });
+        
+        // 8.1. إعادة تهيئة جميع العناصر في الشريط العلوي بشكل خاص
+        const topbarElements = document.querySelectorAll('.homeline-topbar button, .homeline-topbar a, .homeline-topbar .topbar-action');
+        topbarElements.forEach(element => {
+            // إزالة جميع القيود
+            element.style.pointerEvents = '';
+            if (!element.disabled) {
+                element.style.cursor = '';
+                element.style.opacity = '';
+            }
+            // التأكد من أن العنصر قابل للنقر
+            if (element.onclick || element.getAttribute('onclick') || element.getAttribute('data-bs-toggle')) {
+                // العنصر لديه event handler - لا نحتاج لفعل شيء
+            }
+        });
+
+        // 9. إعادة تهيئة الأحداث المخصصة إذا كانت متاحة
+        if (typeof window.initPageEvents === 'function') {
+            try {
+                window.initPageEvents();
+            } catch (e) {
+                console.warn('Error calling initPageEvents:', e);
+            }
+        }
+
+        // 10. إعادة تهيئة البحث العام إذا كانت الدالة متاحة
+        if (typeof window.initGlobalSearch === 'function') {
+            try {
+                window.initGlobalSearch();
+            } catch (e) {
+                console.warn('Error calling initGlobalSearch:', e);
+            }
+        }
+    }
+
     // الاستماع لحدث ajaxNavigationComplete لإعادة تهيئة الأحداث
     // هذا يضمن أن جميع الأحداث تعمل بعد التنقل
     window.addEventListener('ajaxNavigationComplete', function(event) {
         // إعادة تهيئة الأحداث بعد تأخير بسيط لضمان اكتمال تحديث DOM
         setTimeout(() => {
-            // إعادة تهيئة الشريط العلوي
-            reinitializeTopbarEvents();
-            
-            // إعادة تهيئة Bootstrap components
-            if (typeof bootstrap !== 'undefined') {
-                // إعادة تهيئة جميع Dropdowns
-                const dropdowns = document.querySelectorAll('[data-bs-toggle="dropdown"]');
-                dropdowns.forEach(dropdown => {
-                    try {
-                        const oldInstance = bootstrap.Dropdown.getInstance(dropdown);
-                        if (oldInstance) {
-                            oldInstance.dispose();
-                        }
-                        new bootstrap.Dropdown(dropdown);
-                    } catch (e) {
-                        // تجاهل الأخطاء
-                    }
-                });
-                
-                // إعادة تهيئة جميع Tooltips
-                const tooltips = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-                tooltips.forEach(tooltipEl => {
-                    try {
-                        const oldInstance = bootstrap.Tooltip.getInstance(tooltipEl);
-                        if (oldInstance) {
-                            oldInstance.dispose();
-                        }
-                        new bootstrap.Tooltip(tooltipEl);
-                    } catch (e) {
-                        // تجاهل الأخطاء
-                    }
-                });
-            }
-            
-            // إعادة تهيئة الأحداث المخصصة إذا كانت متاحة
-            if (typeof window.initPageEvents === 'function') {
-                try {
-                    window.initPageEvents();
-                } catch (e) {
-                    console.warn('Error calling initPageEvents after navigation:', e);
-                }
-            }
-            
-            // التأكد من أن جميع الأزرار قابلة للنقر
-            const allButtons = document.querySelectorAll('button, a.btn, input[type="button"], input[type="submit"], .topbar-action');
-            allButtons.forEach(button => {
-                if (button.style.pointerEvents === 'none') {
-                    button.style.pointerEvents = '';
-                }
-                if (button.style.cursor === 'not-allowed' && !button.disabled) {
-                    button.style.cursor = '';
-                }
-            });
-        }, 150);
+            reinitializeAllEvents();
+        }, 100);
+        
+        // إعادة تهيئة إضافية بعد تأخير أكبر لضمان اكتمال جميع العمليات
+        setTimeout(() => {
+            reinitializeAllEvents();
+        }, 500);
     });
 
     // تصدير API عام
@@ -1026,7 +1190,8 @@
         clearCache: () => pageCache.clear(),
         isEnabled: () => true,
         reinitializeEvents: reinitializeEvents,
-        reinitializeTopbarEvents: reinitializeTopbarEvents
+        reinitializeTopbarEvents: reinitializeTopbarEvents,
+        reinitializeAllEvents: reinitializeAllEvents
     };
 })();
 
