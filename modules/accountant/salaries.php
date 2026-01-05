@@ -4541,8 +4541,40 @@ $advanceStatusLabels = [
 <script>
 // ===== دوال أساسية للموبايل - متاحة لجميع الأقسام =====
 function isMobile() {
-    return window.innerWidth <= 768;
+    // التحقق من عرض الشاشة
+    const width = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth;
+    return width <= 768;
 }
+
+// التأكد من أن النماذج مخفية على الموبايل حتى لو تم فتحها
+(function() {
+    function hideModalsOnMobile() {
+        if (isMobile()) {
+            const modals = document.querySelectorAll('.modal.d-none.d-md-block');
+            modals.forEach(function(modal) {
+                modal.style.display = 'none';
+                // إغلاق أي modal instance مفتوح
+                const modalInstance = bootstrap.Modal.getInstance(modal);
+                if (modalInstance) {
+                    modalInstance.hide();
+                }
+            });
+        }
+    }
+    
+    // تشغيل عند تحميل الصفحة
+    hideModalsOnMobile();
+    
+    // تشغيل عند تغيير حجم النافذة
+    let resizeTimer;
+    window.addEventListener('resize', function() {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(hideModalsOnMobile, 100);
+    });
+    
+    // تشغيل بشكل دوري للتأكد (في حالة فتح modal بطريقة غير متوقعة)
+    setInterval(hideModalsOnMobile, 500);
+})();
 
 function scrollToElement(element) {
     if (!element) return;
@@ -6572,6 +6604,95 @@ function updateTotalHours() {
         document.getElementById('updateHoursForm').submit();
     }
 }
+
+// منع فتح النماذج مباشرة على الموبايل - استخدام البطاقات بدلاً منها
+(function() {
+    const modalToCardMap = {
+        'salaryDetailsModal': 'salaryDetailsCard',
+        'modifySalaryModal': 'modifySalaryCard',
+        'requestAdvanceModal': 'requestAdvanceCard',
+        'rejectModal': 'rejectCard',
+        'settleSalaryModal': 'settleSalaryCard',
+        'salaryStatementModal': 'salaryStatementCard'
+    };
+    
+    // مستمع لحدث shown.bs.modal لإخفاء النماذج فوراً على الموبايل
+    document.addEventListener('shown.bs.modal', function(event) {
+        if (isMobile()) {
+            const modal = event.target;
+            const modalId = modal.id;
+            
+            // إخفاء النموذج فوراً
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            if (modalInstance) {
+                modalInstance.hide();
+            }
+            modal.style.display = 'none';
+            modal.classList.remove('show');
+            
+            // إزالة backdrop
+            const backdrop = document.querySelector('.modal-backdrop');
+            if (backdrop) {
+                backdrop.remove();
+            }
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
+            
+            // محاولة استخدام البطاقة المقابلة
+            const cardId = modalToCardMap[modalId];
+            if (cardId) {
+                const card = document.getElementById(cardId);
+                if (card) {
+                    card.style.display = 'block';
+                    setTimeout(() => scrollToElement(card), 50);
+                }
+            }
+        }
+    });
+    
+    // منع فتح النماذج عبر data-bs-toggle على الموبايل
+    document.addEventListener('click', function(event) {
+        if (!isMobile()) return;
+        
+        const target = event.target.closest('[data-bs-toggle="modal"]');
+        if (target) {
+            const modalSelector = target.getAttribute('data-bs-target') || target.getAttribute('href');
+            if (modalSelector) {
+                event.preventDefault();
+                event.stopPropagation();
+                
+                const modalId = modalSelector.replace('#', '');
+                const cardId = modalToCardMap[modalId];
+                if (cardId) {
+                    const card = document.getElementById(cardId);
+                    if (card) {
+                        card.style.display = 'block';
+                        setTimeout(() => scrollToElement(card), 50);
+                    }
+                }
+            }
+        }
+    }, true);
+    
+    // منع فتح النماذج عبر show.bs.modal
+    document.addEventListener('show.bs.modal', function(event) {
+        if (isMobile()) {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            const modalId = event.target.id;
+            const cardId = modalToCardMap[modalId];
+            if (cardId) {
+                const card = document.getElementById(cardId);
+                if (card) {
+                    card.style.display = 'block';
+                    setTimeout(() => scrollToElement(card), 50);
+                }
+            }
+        }
+    }, true);
+})();
 
 // إعادة تحميل الصفحة تلقائياً بعد أي رسالة (نجاح أو خطأ) لمنع تكرار الطلبات
 (function() {
