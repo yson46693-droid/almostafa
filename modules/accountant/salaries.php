@@ -4676,9 +4676,14 @@ function closeAllForms() {
     cards.forEach(function(cardId) {
         const card = document.getElementById(cardId);
         if (card && card.style.display !== 'none') {
+            // إخفاء Card أولاً
             card.style.display = 'none';
+            // إعادة تعيين النموذج بعد إخفاء Card (لكن لا نمسح القيم المخفية)
             const form = card.querySelector('form');
-            if (form) form.reset();
+            if (form) {
+                // إعادة تعيين النموذج لكن مع الحفاظ على العناصر المخفية
+                form.reset();
+            }
         }
     });
     
@@ -5046,21 +5051,55 @@ function openSettleModalMobile(salaryId, salaryData, remainingAmount, calculated
         return;
     }
     
-    // التحقق من وجود جميع العناصر المطلوبة
+    // التحقق من وجود جميع العناصر المطلوبة مع تسجيل تفصيلي
     const settleSalaryIdCard = document.getElementById('settleSalaryIdCard');
     const settleUserIdCard = document.getElementById('settleUserIdCard');
     const settleUserNameCard = document.getElementById('settleUserNameCard');
+    
+    console.log('Checking required elements:', {
+        settleSalaryIdCard: !!settleSalaryIdCard,
+        settleUserIdCard: !!settleUserIdCard,
+        settleUserNameCard: !!settleUserNameCard,
+        cardExists: !!card
+    });
+    
+    if (!settleSalaryIdCard || !settleUserIdCard || !settleUserNameCard) {
+        console.error('Required elements not found in settleSalaryCard', {
+            settleSalaryIdCard: settleSalaryIdCard,
+            settleUserIdCard: settleUserIdCard,
+            settleUserNameCard: settleUserNameCard,
+            card: card
+        });
+        
+        // التحقق مرة أخرى بعد انتظار قصير (قد تكون العناصر لا تزال في حالة إعادة تعيين)
+        setTimeout(() => {
+            const retrySettleSalaryIdCard = document.getElementById('settleSalaryIdCard');
+            const retrySettleUserIdCard = document.getElementById('settleUserIdCard');
+            const retrySettleUserNameCard = document.getElementById('settleUserNameCard');
+            
+            console.log('Retry check:', {
+                retrySettleSalaryIdCard: !!retrySettleSalaryIdCard,
+                retrySettleUserIdCard: !!retrySettleUserIdCard,
+                retrySettleUserNameCard: !!retrySettleUserNameCard
+            });
+            
+            if (retrySettleSalaryIdCard && retrySettleUserIdCard && retrySettleUserNameCard) {
+                console.log('Elements found on retry, opening modal again');
+                // استدعاء الدالة مرة أخرى مع نفس المعاملات
+                openSettleModalMobile(salaryId, salaryData, remainingAmount, calculatedAccumulated);
+            } else {
+                console.error('Elements still not found after retry');
+                alert('خطأ: بعض العناصر المطلوبة غير موجودة. يرجى تحديث الصفحة والمحاولة مرة أخرى.');
+            }
+        }, 200);
+        return;
+    }
+    
     const settleAccumulatedAmountCard = document.getElementById('settleAccumulatedAmountCard');
     const settleRemainingAmountCard = document.getElementById('settleRemainingAmountCard');
     const settleRemainingAmount2Card = document.getElementById('settleRemainingAmount2Card');
     const settleAmountCard = document.getElementById('settleAmountCard');
     const settleSubmitBtnCard = document.getElementById('settleSubmitBtnCard');
-    
-    if (!settleSalaryIdCard || !settleUserIdCard || !settleUserNameCard) {
-        console.error('Required elements not found in settleSalaryCard');
-        alert('خطأ: بعض العناصر المطلوبة غير موجودة. يرجى تحديث الصفحة والمحاولة مرة أخرى.');
-        return;
-    }
     
     try {
         settleSalaryIdCard.value = salaryId;
@@ -5161,10 +5200,10 @@ function openSettleModal(salaryId, salaryData, remainingAmount, calculatedAccumu
     
     if (isMobile()) {
         // على الموبايل: استخدام دالة منفصلة لفتح Card
-        // انتظار قليل لضمان اكتمال إغلاق النماذج السابقة
+        // انتظار قليل لضمان اكتمال إغلاق النماذج السابقة وإعادة تهيئة العناصر
         setTimeout(() => {
             openSettleModalMobile(salaryId, salaryData, remainingAmount, calculatedAccumulated);
-        }, 100);
+        }, 200);
         return;
     }
     

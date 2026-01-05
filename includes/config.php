@@ -847,37 +847,13 @@ if (!defined('ENABLE_DAILY_ATTENDANCE_PHOTOS_CLEANUP')) {
     define('ENABLE_DAILY_ATTENDANCE_PHOTOS_CLEANUP', true);
 }
 
-# وظيفة مساعده لجدولة المهام اليومية بفاصل زمني
-// تم نقل triggerDailyLowStockReport إلى api/background-tasks.php
-// لتجنب التنفيذ المتكرر - يتم تنفيذها مرة واحدة يومياً عبر AJAX
-// if (ENABLE_DAILY_LOW_STOCK_REPORT) {
-//     require_once __DIR__ . '/daily_low_stock_report.php';
-//     triggerDailyLowStockReport();
-// }
-
-// تم نقل processDailyPackagingAlert إلى api/background-tasks.php
-// لتجنب التنفيذ المتكرر - يتم تنفيذها مرة واحدة يومياً عبر AJAX
-// if (ENABLE_DAILY_PACKAGING_ALERT) {
-//     require_once __DIR__ . '/packaging_alerts.php';
-//     processDailyPackagingAlert();
-// }
 
 if (ENABLE_DAILY_CONSUMPTION_REPORT) {
     require_once __DIR__ . '/daily_consumption_sender.php';
     triggerDailyConsumptionReport();
 }
 
-// تم نقل triggerDailyBackupDelivery إلى api/background-tasks.php
-// لتجنب التنفيذ المتكرر - يتم تنفيذها مرة واحدة يومياً عبر AJAX
-// if (ENABLE_DAILY_BACKUP_DELIVERY) {
-//     require_once __DIR__ . '/daily_backup_sender.php';
-//     triggerDailyBackupDelivery();
-// }
 
-/**
- * تشغيل تنظيف صور الحضور والانصراف تلقائياً مرة واحدة يومياً
- * يتم تشغيله مع أول زائر لأي صفحة من صفحات الموقع
- */
 if (ENABLE_DAILY_ATTENDANCE_PHOTOS_CLEANUP) {
     // ملف العلم لتتبع آخر مرة تم فيها التنظيف
     $cleanupFlagFile = PRIVATE_STORAGE_PATH . '/logs/attendance_photos_cleanup_last_run.txt';

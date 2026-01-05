@@ -1167,7 +1167,7 @@ try {
     <div class="card-header bg-primary text-white">
         <div class="d-flex justify-content-between align-items-center">
             <h5 class="mb-0">جميع عملاء المندوبين (<?php echo $allCustomersTotal; ?>)</h5>
-            <button class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#customerExportModal">
+            <button class="btn btn-light btn-sm" id="openCustomerExportBtn" onclick="openCustomerExport()">
                 <i class="bi bi-download me-2"></i>تصدير عملاء محددين
             </button>
         </div>
@@ -2378,28 +2378,106 @@ document.addEventListener('DOMContentLoaded', function() {
             const customerId = button.getAttribute('data-customer-id');
             const customerName = button.getAttribute('data-customer-name') || '-';
             
-            const historyModal = document.getElementById('repCustomerHistoryModal');
-            if (historyModal) {
-                const nameElement = historyModal.querySelector('.rep-history-customer-name');
-                const loadingElement = historyModal.querySelector('.rep-history-loading');
-                const contentElement = historyModal.querySelector('.rep-history-content');
-                const errorElement = historyModal.querySelector('.rep-history-error');
-                const invoicesTableBody = historyModal.querySelector('.rep-history-table tbody');
-                const returnsContainer = historyModal.querySelector('.rep-history-returns');
-                const totalInvoicesEl = historyModal.querySelector('.rep-history-total-invoices');
-                const totalInvoicedEl = historyModal.querySelector('.rep-history-total-invoiced');
-                const totalReturnsEl = historyModal.querySelector('.rep-history-total-returns');
-                const netTotalEl = historyModal.querySelector('.rep-history-net-total');
-                
-                if (nameElement) nameElement.textContent = customerName;
-                if (loadingElement) loadingElement.classList.remove('d-none');
-                if (contentElement) contentElement.classList.add('d-none');
-                if (errorElement) errorElement.classList.add('d-none');
-                if (invoicesTableBody) invoicesTableBody.innerHTML = '';
-                if (returnsContainer) returnsContainer.innerHTML = '';
-                
-                const modalInstance = bootstrap.Modal.getOrCreateInstance(historyModal);
-                modalInstance.show();
+            closeAllForms();
+            
+            if (isMobile()) {
+                // على الموبايل: استخدام Card
+                const card = document.getElementById('repCustomerHistoryCard');
+                if (card) {
+                    const nameElement = card.querySelector('.rep-history-card-customer-name');
+                    const loadingElement = card.querySelector('.rep-history-card-loading');
+                    const contentElement = card.querySelector('.rep-history-card-content');
+                    const errorElement = card.querySelector('.rep-history-card-error');
+                    const invoicesTableBody = card.querySelector('.rep-history-card-table tbody');
+                    const returnsContainer = card.querySelector('.rep-history-card-returns');
+                    const totalInvoicesEl = card.querySelector('.rep-history-card-total-invoices');
+                    const totalInvoicedEl = card.querySelector('.rep-history-card-total-invoiced');
+                    const totalReturnsEl = card.querySelector('.rep-history-card-total-returns');
+                    const netTotalEl = card.querySelector('.rep-history-card-net-total');
+                    
+                    if (nameElement) nameElement.textContent = customerName;
+                    if (loadingElement) loadingElement.classList.remove('d-none');
+                    if (contentElement) contentElement.classList.add('d-none');
+                    if (errorElement) errorElement.classList.add('d-none');
+                    if (invoicesTableBody) invoicesTableBody.innerHTML = '';
+                    if (returnsContainer) returnsContainer.innerHTML = '';
+                    
+                    card.style.display = 'block';
+                    setTimeout(function() {
+                        scrollToElement(card);
+                    }, 50);
+                    
+                    // جلب بيانات سجل المشتريات من API endpoint
+                    const basePath = '<?php echo getBasePath(); ?>';
+                    const historyUrl = basePath + '/api/customer_history_api.php?customer_id=' + encodeURIComponent(customerId);
+                    
+                    console.log('Fetching history from:', historyUrl);
+                    
+                    fetchJson(historyUrl)
+                    .then(payload => {
+                        if (!payload || !payload.success) {
+                            throw new Error(payload?.message || 'فشل تحميل بيانات السجل.');
+                        }
+                        
+                        const history = payload.history || {};
+                        const totals = history.totals || {};
+                        
+                        // تحديث الإحصائيات
+                        if (totalInvoicesEl) {
+                            totalInvoicesEl.textContent = Number(totals.invoice_count || 0).toLocaleString('ar-EG');
+                        }
+                        if (totalInvoicedEl) {
+                            totalInvoicedEl.textContent = formatCurrencySimple(totals.total_invoiced || 0);
+                        }
+                        if (totalReturnsEl) {
+                            totalReturnsEl.textContent = formatCurrencySimple(totals.total_returns || 0);
+                        }
+                        if (netTotalEl) {
+                            netTotalEl.textContent = formatCurrencySimple(totals.net_total || 0);
+                        }
+                        
+                        // عرض البيانات
+                        renderRepInvoicesCard(Array.isArray(history.invoices) ? history.invoices : [], invoicesTableBody);
+                        renderRepReturnsCard(Array.isArray(history.returns) ? history.returns : [], returnsContainer);
+                        
+                        // إخفاء loading وإظهار المحتوى
+                        if (loadingElement) loadingElement.classList.add('d-none');
+                        if (contentElement) contentElement.classList.remove('d-none');
+                        if (errorElement) errorElement.classList.add('d-none');
+                    })
+                    .catch(error => {
+                        console.error('Error loading history:', error);
+                        if (loadingElement) loadingElement.classList.add('d-none');
+                        if (errorElement) {
+                            errorElement.textContent = error.message || 'حدث خطأ أثناء تحميل سجل المشتريات';
+                            errorElement.classList.remove('d-none');
+                        }
+                    });
+                }
+            } else {
+                // على الكمبيوتر: استخدام Modal
+                const historyModal = document.getElementById('repCustomerHistoryModal');
+                if (historyModal) {
+                    const nameElement = historyModal.querySelector('.rep-history-customer-name');
+                    const loadingElement = historyModal.querySelector('.rep-history-loading');
+                    const contentElement = historyModal.querySelector('.rep-history-content');
+                    const errorElement = historyModal.querySelector('.rep-history-error');
+                    const invoicesTableBody = historyModal.querySelector('.rep-history-table tbody');
+                    const returnsContainer = historyModal.querySelector('.rep-history-returns');
+                    const totalInvoicesEl = historyModal.querySelector('.rep-history-total-invoices');
+                    const totalInvoicedEl = historyModal.querySelector('.rep-history-total-invoiced');
+                    const totalReturnsEl = historyModal.querySelector('.rep-history-total-returns');
+                    const netTotalEl = historyModal.querySelector('.rep-history-net-total');
+                    
+                    if (nameElement) nameElement.textContent = customerName;
+                    if (loadingElement) loadingElement.classList.remove('d-none');
+                    if (contentElement) contentElement.classList.add('d-none');
+                    if (errorElement) errorElement.classList.add('d-none');
+                    if (invoicesTableBody) invoicesTableBody.innerHTML = '';
+                    if (returnsContainer) returnsContainer.innerHTML = '';
+                    
+                    const modalInstance = bootstrap.Modal.getOrCreateInstance(historyModal);
+                    modalInstance.show();
                 
                 // جلب بيانات سجل المشتريات من API endpoint
                 const basePath = '<?php echo getBasePath(); ?>';
@@ -3145,6 +3223,92 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 
+<!-- Card سجل المشتريات - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="repCustomerHistoryCard" style="display: none;">
+    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">
+            <i class="bi bi-journal-text me-2"></i>
+            سجل مشتريات العميل - <span class="rep-history-card-customer-name">-</span>
+        </h5>
+        <button type="button" class="btn btn-sm btn-light" onclick="closeRepCustomerHistoryCard()">
+            <i class="bi bi-x-lg"></i>
+        </button>
+    </div>
+    <div class="card-body">
+        <div class="rep-history-card-loading text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">جاري التحميل...</span>
+            </div>
+            <p class="mt-3 text-muted">جاري تحميل سجل المشتريات...</p>
+        </div>
+        <div class="rep-history-card-error alert alert-danger d-none" role="alert"></div>
+        <div class="rep-history-card-content d-none">
+            <!-- الإحصائيات -->
+            <div class="row g-3 mb-4">
+                <div class="col-6">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-body">
+                            <div class="text-muted small">عدد الفواتير</div>
+                            <div class="fs-4 fw-semibold rep-history-card-total-invoices">0</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-body">
+                            <div class="text-muted small">إجمالي الفواتير</div>
+                            <div class="fs-4 fw-semibold rep-history-card-total-invoiced">0.00 ج.م</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-body">
+                            <div class="text-muted small">إجمالي المرتجعات</div>
+                            <div class="fs-4 fw-semibold text-danger rep-history-card-total-returns">0.00 ج.م</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-body">
+                            <div class="text-muted small">الصافي</div>
+                            <div class="fs-4 fw-semibold text-primary rep-history-card-net-total">0.00 ج.م</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- الفواتير -->
+            <div class="mb-4">
+                <h6 class="mb-3"><i class="bi bi-receipt me-2"></i>الفواتير</h6>
+                <div class="table-responsive">
+                    <table class="table table-hover rep-history-card-table">
+                        <thead>
+                            <tr>
+                                <th>رقم الفاتورة</th>
+                                <th>التاريخ</th>
+                                <th>الإجمالي</th>
+                                <th>الحالة</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- المرتجعات -->
+            <div class="mb-4">
+                <h6 class="mb-3"><i class="bi bi-arrow-left me-2"></i>المرتجعات</h6>
+                <div class="rep-history-card-returns"></div>
+            </div>
+        </div>
+    </div>
+    <div class="card-footer">
+        <button type="button" class="btn btn-secondary w-100" onclick="closeRepCustomerHistoryCard()">إغلاق</button>
+    </div>
+</div>
+
 <!-- Modal إنشاء مرتجع - للكمبيوتر فقط -->
 <div class="modal fade d-none d-md-block" id="repCustomerReturnModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
@@ -3219,6 +3383,75 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 
+<!-- Card إنشاء مرتجع - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="repCustomerReturnCard" style="display: none;">
+    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">
+            <i class="bi bi-arrow-return-left me-2"></i>
+            سجل مشتريات العميل - إنشاء مرتجع - <span class="rep-return-card-customer-name">-</span>
+        </h5>
+        <button type="button" class="btn btn-sm btn-light" onclick="closeRepCustomerReturnCard()">
+            <i class="bi bi-x-lg"></i>
+        </button>
+    </div>
+    <div class="card-body">
+        <!-- معلومات العميل -->
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-12 mb-2">
+                        <div class="text-muted small">العميل</div>
+                        <div class="fs-5 fw-bold rep-return-card-customer-name">-</div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-muted small">الهاتف</div>
+                        <div class="rep-return-card-customer-phone">-</div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-muted small">العنوان</div>
+                        <div class="rep-return-card-customer-address">-</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="rep-return-card-loading text-center py-5">
+            <div class="spinner-border text-success" role="status">
+                <span class="visually-hidden">جاري التحميل...</span>
+            </div>
+            <p class="mt-3 text-muted">جاري تحميل بيانات المشتريات...</p>
+        </div>
+        <div class="rep-return-card-error alert alert-danger d-none" role="alert"></div>
+        <div class="rep-return-card-content d-none">
+            <div class="table-responsive">
+                <table class="table table-hover table-bordered rep-return-card-table">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 50px;">
+                                <input type="checkbox" id="repSelectAllItemsCard" onchange="repToggleAllItemsCard()">
+                            </th>
+                            <th>رقم الفاتورة</th>
+                            <th>اسم المنتج</th>
+                            <th>المتاح للإرجاع</th>
+                            <th>سعر الوحدة</th>
+                            <th style="width: 100px;">إجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="card-footer">
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-secondary flex-fill" onclick="closeRepCustomerReturnCard()">إلغاء</button>
+            <button type="button" class="btn btn-success flex-fill" id="repCreateReturnCardBtn" style="display: none;">
+                <i class="bi bi-arrow-return-left me-1"></i>إنشاء مرتجع
+            </button>
+        </div>
+    </div>
+</div>
+
 <script>
 function repToggleAllItems() {
     const selectAll = document.getElementById('repSelectAllItems');
@@ -3226,6 +3459,37 @@ function repToggleAllItems() {
     checkboxes.forEach(cb => {
         cb.checked = selectAll.checked;
     });
+}
+
+function repToggleAllItemsCard() {
+    const selectAll = document.getElementById('repSelectAllItemsCard');
+    const checkboxes = document.querySelectorAll('.rep-return-card-item-checkbox');
+    checkboxes.forEach(cb => {
+        cb.checked = selectAll.checked;
+    });
+}
+
+// دالة فتح Card/Modal تصدير العملاء
+function openCustomerExport() {
+    closeAllForms();
+    
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('customerExportCard');
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        const modal = document.getElementById('customerExportModal');
+        if (modal) {
+            const modalInstance = bootstrap.Modal.getOrCreateInstance(modal);
+            modalInstance.show();
+        }
+    }
 }
 </script>
 
@@ -4444,6 +4708,75 @@ try {
     </div>
 </div>
 
+<!-- Card تصدير عملاء محددين - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="customerExportCard" style="display: none;">
+    <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">
+            <i class="bi bi-download me-2"></i>تصدير عملاء محددين إلى Excel
+        </h5>
+        <button type="button" class="btn btn-sm btn-light" onclick="closeCustomerExportCard()">
+            <i class="bi bi-x-lg"></i>
+        </button>
+    </div>
+    <div class="card-body">
+        <div class="customer-export-card-alerts mb-3"></div>
+        
+        <!-- اختيار المندوب -->
+        <div class="mb-4">
+            <label class="form-label fw-semibold">اختر المندوب:</label>
+            <select class="form-select" id="exportRepSelectCard" required>
+                <option value="">-- اختر المندوب --</option>
+                <?php foreach ($salesRepsList as $rep): ?>
+                    <option value="<?php echo (int)$rep['id']; ?>">
+                        <?php echo htmlspecialchars($rep['full_name'] ?? $rep['username'] ?? ''); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        
+        <!-- قائمة العملاء -->
+        <div class="mb-3" id="customersCardSection" style="display: none;">
+            <div class="d-flex flex-column justify-content-between align-items-center mb-2 gap-2">
+                <h6 class="mb-0">حدد العملاء المراد تصديرهم:</h6>
+                <div class="btn-group btn-group-sm w-100">
+                    <button type="button" class="btn btn-outline-primary" id="selectAllCustomersCard">
+                        <i class="bi bi-check-square me-1"></i>تحديد الكل
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" id="deselectAllCustomersCard">
+                        <i class="bi bi-square me-1"></i>إلغاء التحديد
+                    </button>
+                </div>
+            </div>
+            <div id="exportCustomersCardList" class="table-responsive">
+                <!-- سيتم ملؤه عبر JavaScript -->
+            </div>
+        </div>
+        
+        <!-- رسالة اختيار المندوب -->
+        <div id="selectRepCardMessage" class="text-center text-muted py-4">
+            <i class="bi bi-info-circle me-2"></i>يرجى اختيار المندوب أولاً لعرض عملائه
+        </div>
+        
+        <!-- أزرار الإجراءات بعد التوليد -->
+        <div id="exportCardActionButtons" style="display: none;" class="mt-3 p-3 bg-light rounded">
+            <h6 class="mb-3">تم توليد ملف Excel بنجاح</h6>
+            <div class="d-flex gap-2 flex-wrap">
+                <button type="button" class="btn btn-primary btn-sm" id="printExcelCardBtn">
+                    <i class="bi bi-printer me-2"></i>طباعة
+                </button>
+            </div>
+        </div>
+    </div>
+    <div class="card-footer">
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-secondary flex-fill" onclick="closeCustomerExportCard()">إغلاق</button>
+            <button type="button" class="btn btn-primary flex-fill" id="generateExcelCardBtn" disabled>
+                <i class="bi bi-file-earmark-excel me-1"></i>توليد ملف Excel
+            </button>
+        </div>
+    </div>
+</div>
+
 <style>
 /* تحسينات عامة للأداء - إزالة animations على الهواتف */
 @media (max-width: 768px) {
@@ -5150,6 +5483,79 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 
+<!-- Card نقل العميل لمندوب آخر - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="changeSalesRepCard" style="display: none;">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">
+            <i class="bi bi-arrow-left-right me-2"></i>نقل العميل لمندوب آخر
+        </h5>
+        <button type="button" class="btn btn-sm btn-light" onclick="closeChangeSalesRepCard()">
+            <i class="bi bi-x-lg"></i>
+        </button>
+    </div>
+    <form id="changeSalesRepCardForm">
+        <div class="card-body">
+            <input type="hidden" id="changeSalesRepCardCustomerId" name="customer_id">
+            
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>العميل:</strong> <span id="changeSalesRepCardCustomerName"></span><br>
+                <strong>المندوب الحالي:</strong> <span id="changeSalesRepCardCurrentRepName"></span>
+            </div>
+            
+            <div class="mb-3">
+                <label for="newSalesRepCardSelect" class="form-label">
+                    <i class="bi bi-person-badge me-2"></i>اختر المندوب الجديد <span class="text-danger">*</span>
+                </label>
+                <select class="form-select" id="newSalesRepCardSelect" name="new_sales_rep_id" required>
+                    <option value="">-- اختر المندوب --</option>
+                    <?php
+                    // جلب قائمة المندوبين النشطين
+                    $salesReps = $db->query(
+                        "SELECT id, full_name, username FROM users WHERE role = 'sales' AND status = 'active' ORDER BY full_name ASC, username ASC"
+                    );
+                    foreach ($salesReps as $rep):
+                        $repName = htmlspecialchars($rep['full_name'] ?? $rep['username'] ?? '');
+                        $repId = (int)$rep['id'];
+                    ?>
+                        <option value="<?php echo $repId; ?>"><?php echo $repName; ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <div class="form-text">سيتم نقل العميل وجميع بياناته المرتبطة إلى المندوب الجديد</div>
+            </div>
+            
+            <div class="mb-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="transferInvoicesCard" name="transfer_invoices" value="1" checked>
+                    <label class="form-check-label" for="transferInvoicesCard">
+                        نقل الفواتير المرتبطة بهذا العميل
+                    </label>
+                </div>
+            </div>
+            
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <strong>ملاحظة مهمة:</strong> التحصيلات <strong>لن يتم نقلها</strong> وستبقى مع المندوب الأصلي للحفاظ على السجلات التاريخية.
+            </div>
+            
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                <strong>تحذير:</strong> هذه العملية لا يمكن التراجع عنها. سيتم تحديث جميع السجلات المرتبطة بالعميل.
+            </div>
+        </div>
+        <div class="card-footer">
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-secondary flex-fill" onclick="closeChangeSalesRepCard()">
+                    <i class="bi bi-x-circle me-2"></i>إلغاء
+                </button>
+                <button type="submit" class="btn btn-primary flex-fill">
+                    <i class="bi bi-check-circle me-2"></i>نقل العميل
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
 <script>
     // دالة فتح Modal تغيير المندوب
 function openChangeSalesRepModal(button) {
@@ -5162,41 +5568,73 @@ function openChangeSalesRepModal(button) {
     const currentRepId = button.getAttribute('data-current-rep-id');
     const currentRepName = button.getAttribute('data-current-rep-name');
     
-    const changeSalesRepModal = document.getElementById('changeSalesRepModal');
-    const changeSalesRepCustomerId = document.getElementById('changeSalesRepCustomerId');
-    const changeSalesRepCustomerName = document.getElementById('changeSalesRepCustomerName');
-    const changeSalesRepCurrentRepName = document.getElementById('changeSalesRepCurrentRepName');
-    const newSalesRepSelect = document.getElementById('newSalesRepSelect');
-    
-    if (!changeSalesRepModal || !changeSalesRepCustomerId || !changeSalesRepCustomerName || !changeSalesRepCurrentRepName || !newSalesRepSelect) {
-        console.error('Change sales rep modal elements not found');
-        return;
-    }
-    
-    // انتظار قليل لضمان إغلاق النماذج السابقة
-    setTimeout(function() {
-        // تعيين القيم
-        changeSalesRepCustomerId.value = customerId;
-        changeSalesRepCustomerName.textContent = customerName;
-        changeSalesRepCurrentRepName.textContent = currentRepName;
-        
-        // إزالة التحديد السابق
-        newSalesRepSelect.value = '';
-        
-        // إخفاء المندوب الحالي من القائمة
-        const options = newSalesRepSelect.querySelectorAll('option');
-        options.forEach(option => {
-            if (option.value === currentRepId) {
-                option.style.display = 'none';
-            } else {
-                option.style.display = '';
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('changeSalesRepCard');
+        if (card) {
+            const cardCustomerId = card.querySelector('#changeSalesRepCardCustomerId');
+            const cardCustomerName = card.querySelector('#changeSalesRepCardCustomerName');
+            const cardCurrentRepName = card.querySelector('#changeSalesRepCardCurrentRepName');
+            const newSalesRepCardSelect = card.querySelector('#newSalesRepCardSelect');
+            
+            if (cardCustomerId) cardCustomerId.value = customerId;
+            if (cardCustomerName) cardCustomerName.textContent = customerName;
+            if (cardCurrentRepName) cardCurrentRepName.textContent = currentRepName;
+            if (newSalesRepCardSelect) {
+                newSalesRepCardSelect.value = '';
+                const options = newSalesRepCardSelect.querySelectorAll('option');
+                options.forEach(option => {
+                    if (option.value === currentRepId) {
+                        option.style.display = 'none';
+                    } else {
+                        option.style.display = '';
+                    }
+                });
             }
-        });
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        const changeSalesRepModal = document.getElementById('changeSalesRepModal');
+        const changeSalesRepCustomerId = document.getElementById('changeSalesRepCustomerId');
+        const changeSalesRepCustomerName = document.getElementById('changeSalesRepCustomerName');
+        const changeSalesRepCurrentRepName = document.getElementById('changeSalesRepCurrentRepName');
+        const newSalesRepSelect = document.getElementById('newSalesRepSelect');
         
-        // فتح Modal
-        const modalInstance = bootstrap.Modal.getOrCreateInstance(changeSalesRepModal);
-        modalInstance.show();
-    }, 100);
+        if (!changeSalesRepModal || !changeSalesRepCustomerId || !changeSalesRepCustomerName || !changeSalesRepCurrentRepName || !newSalesRepSelect) {
+            console.error('Change sales rep modal elements not found');
+            return;
+        }
+        
+        // انتظار قليل لضمان إغلاق النماذج السابقة
+        setTimeout(function() {
+            // تعيين القيم
+            changeSalesRepCustomerId.value = customerId;
+            changeSalesRepCustomerName.textContent = customerName;
+            changeSalesRepCurrentRepName.textContent = currentRepName;
+            
+            // إزالة التحديد السابق
+            newSalesRepSelect.value = '';
+            
+            // إخفاء المندوب الحالي من القائمة
+            const options = newSalesRepSelect.querySelectorAll('option');
+            options.forEach(option => {
+                if (option.value === currentRepId) {
+                    option.style.display = 'none';
+                } else {
+                    option.style.display = '';
+                }
+            });
+            
+            // فتح Modal
+            const modalInstance = bootstrap.Modal.getOrCreateInstance(changeSalesRepModal);
+            modalInstance.show();
+        }, 100);
+    }
 }
 
     // معالجة Modal تغيير المندوب
@@ -5582,6 +6020,90 @@ function closeSetCreditLimitCard() {
         if (customerNameEl) customerNameEl.textContent = '-';
         if (balanceEl) balanceEl.textContent = '-';
         if (customerIdInput) customerIdInput.value = '';
+    }
+}
+
+// دالة إغلاق Card سجل المشتريات
+function closeRepCustomerHistoryCard() {
+    const card = document.getElementById('repCustomerHistoryCard');
+    if (card) {
+        card.style.display = 'none';
+        const nameElement = card.querySelector('.rep-history-card-customer-name');
+        const loadingElement = card.querySelector('.rep-history-card-loading');
+        const contentElement = card.querySelector('.rep-history-card-content');
+        const errorElement = card.querySelector('.rep-history-card-error');
+        const invoicesTableBody = card.querySelector('.rep-history-card-table tbody');
+        const returnsContainer = card.querySelector('.rep-history-card-returns');
+        if (nameElement) nameElement.textContent = '-';
+        if (loadingElement) loadingElement.classList.remove('d-none');
+        if (contentElement) contentElement.classList.add('d-none');
+        if (errorElement) {
+            errorElement.classList.add('d-none');
+            errorElement.textContent = '';
+        }
+        if (invoicesTableBody) invoicesTableBody.innerHTML = '';
+        if (returnsContainer) returnsContainer.innerHTML = '';
+    }
+}
+
+// دالة إغلاق Card المرتجع
+function closeRepCustomerReturnCard() {
+    const card = document.getElementById('repCustomerReturnCard');
+    if (card) {
+        card.style.display = 'none';
+        const nameElement = card.querySelector('.rep-return-card-customer-name');
+        const phoneElement = card.querySelector('.rep-return-card-customer-phone');
+        const addressElement = card.querySelector('.rep-return-card-customer-address');
+        const loadingElement = card.querySelector('.rep-return-card-loading');
+        const contentElement = card.querySelector('.rep-return-card-content');
+        const errorElement = card.querySelector('.rep-return-card-error');
+        const tableBody = card.querySelector('.rep-return-card-table tbody');
+        if (nameElement) nameElement.textContent = '-';
+        if (phoneElement) phoneElement.textContent = '-';
+        if (addressElement) addressElement.textContent = '-';
+        if (loadingElement) loadingElement.classList.remove('d-none');
+        if (contentElement) contentElement.classList.add('d-none');
+        if (errorElement) {
+            errorElement.classList.add('d-none');
+            errorElement.textContent = '';
+        }
+        if (tableBody) tableBody.innerHTML = '';
+    }
+}
+
+// دالة إغلاق Card تصدير العملاء
+function closeCustomerExportCard() {
+    const card = document.getElementById('customerExportCard');
+    if (card) {
+        card.style.display = 'none';
+        const repSelect = card.querySelector('#exportRepSelectCard');
+        const customersSection = card.querySelector('#customersCardSection');
+        const selectRepMessage = card.querySelector('#selectRepCardMessage');
+        const exportCardList = card.querySelector('#exportCustomersCardList');
+        const actionButtons = card.querySelector('#exportCardActionButtons');
+        if (repSelect) repSelect.value = '';
+        if (customersSection) customersSection.style.display = 'none';
+        if (selectRepMessage) selectRepMessage.style.display = 'block';
+        if (exportCardList) exportCardList.innerHTML = '';
+        if (actionButtons) actionButtons.style.display = 'none';
+    }
+}
+
+// دالة إغلاق Card نقل المندوب
+function closeChangeSalesRepCard() {
+    const card = document.getElementById('changeSalesRepCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+        const customerIdInput = card.querySelector('#changeSalesRepCardCustomerId');
+        const customerNameEl = card.querySelector('#changeSalesRepCardCustomerName');
+        const currentRepNameEl = card.querySelector('#changeSalesRepCardCurrentRepName');
+        const newRepSelect = card.querySelector('#newSalesRepCardSelect');
+        if (customerIdInput) customerIdInput.value = '';
+        if (customerNameEl) customerNameEl.textContent = '';
+        if (currentRepNameEl) currentRepNameEl.textContent = '';
+        if (newRepSelect) newRepSelect.value = '';
     }
 }
 
