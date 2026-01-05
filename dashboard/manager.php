@@ -614,7 +614,7 @@ $pageDescription = 'لوحة تحكم المدير - إدارة شاملة لل�
                 <div class="cards-grid mt-4">
                     <?php
                     $lastBackup = $db->queryOne(
-                        "SELECT created_at FROM backups WHERE status IN ('completed', 'success') ORDER BY created_at DESC LIMIT 1"
+                        "SELECT created_at, DATE_FORMAT(created_at, '%d/%m/%Y') as formatted_date FROM backups WHERE status IN ('completed', 'success') ORDER BY created_at DESC LIMIT 1"
                     );
                     $totalUsers = $db->queryOne("SELECT COUNT(*) as count FROM users WHERE status = 'active'");
                     
@@ -673,7 +673,12 @@ $pageDescription = 'لوحة تحكم المدير - إدارة شاملة لل�
                         <div class="stat-card-value">
                             <?php 
                             if ($lastBackup && isset($lastBackup['created_at'])) {
-                                echo formatDate($lastBackup['created_at']);
+                                // استخدام التاريخ المنسق من قاعدة البيانات مباشرة لتجنب مشاكل التحويل
+                                if (isset($lastBackup['formatted_date'])) {
+                                    echo $lastBackup['formatted_date'];
+                                } else {
+                                    echo formatDate($lastBackup['created_at']);
+                                }
                             } else {
                                 echo 'لا توجد';
                             }
