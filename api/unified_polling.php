@@ -150,6 +150,29 @@ try {
                 }
             }
             
+            // Daily backup delivery (once per day only)
+            if (defined('ENABLE_DAILY_BACKUP_DELIVERY') && ENABLE_DAILY_BACKUP_DELIVERY) {
+                try {
+                    if (!function_exists('triggerDailyBackupDelivery')) {
+                        require_once __DIR__ . '/../includes/daily_backup_sender.php';
+                    }
+                    
+                    if (function_exists('triggerDailyBackupDelivery')) {
+                        $cacheKey = 'daily_backup_' . date('Y-m-d');
+                        if (!Cache::get($cacheKey)) {
+                            triggerDailyBackupDelivery();
+                            Cache::put($cacheKey, true, 86400); // 24 hours
+                            $bgTasksResults['daily_backup'] = ['success' => true];
+                        } else {
+                            $bgTasksResults['daily_backup'] = ['success' => true, 'skipped' => 'already_processed'];
+                        }
+                    }
+                } catch (Throwable $e) {
+                    error_log('Unified polling: Daily backup error: ' . $e->getMessage());
+                    $bgTasksResults['daily_backup'] = ['success' => false, 'error' => $e->getMessage()];
+                }
+            }
+            
             $response['background_tasks'] = [
                 'executed' => true,
                 'results' => $bgTasksResults

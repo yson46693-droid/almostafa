@@ -997,7 +997,7 @@ function logout() {
     if (isset($_COOKIE[$sessionName])) {
         // حذف من جميع المسارات الممكنة
         setcookie($sessionName, '', time() - 3600, '/', '', $isHttps, true);
-        setcookie($sessionName, '', time() - 3600, '/', null, false, true);
+        setcookie($sessionName, '', time() - 3600, '/', '', false, true);
         setcookie($sessionName, '', time() - 3600);
     }
     

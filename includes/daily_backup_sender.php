@@ -559,12 +559,15 @@ if (!function_exists('triggerDailyBackupDelivery')) {
             return;
         }
 
-        if (!function_exists('isTelegramConfigured') || !isTelegramConfigured()) {
-            dailyBackupSaveStatus(array_merge($statusData, [
-                'status' => 'failed',
-                'error' => 'Telegram integration is not configured',
-            ]));
-            return;
+        // التحقق من إعداد Telegram (اختياري - النسخة الاحتياطية تُنشأ حتى بدون Telegram)
+        // إذا لم يكن Telegram مُعداً، ننشئ النسخة الاحتياطية فقط بدون إرسال
+        $telegramConfigured = false;
+        try {
+            if (function_exists('isTelegramConfigured')) {
+                $telegramConfigured = isTelegramConfigured();
+            }
+        } catch (Throwable $telegramCheckError) {
+            error_log('Daily Backup: Telegram check error - ' . $telegramCheckError->getMessage());
         }
 
         $backupRecord = null;
