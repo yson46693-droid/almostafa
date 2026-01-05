@@ -4416,15 +4416,34 @@ document.addEventListener('DOMContentLoaded', function () {
                 
                 card.style.display = 'block';
                 setTimeout(function() {
-                    scrollToElement(card);
+                    if (typeof scrollToElement === 'function') {
+                        scrollToElement(card);
+                    } else {
+                        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
                 }, 50);
                 
                 // جلب بيانات سجل المشتريات للإرجاع من API
                 const basePath = '<?php echo getBasePath(); ?>';
                 const returnUrl = basePath + '/api/customer_purchase_history.php?action=get_history&customer_id=' + encodeURIComponent(customerId);
                 
+                console.log('Fetching return history from:', returnUrl);
+                
+                // التحقق من وجود fetchJson
+                if (typeof fetchJson !== 'function') {
+                    console.error('fetchJson is not defined');
+                    if (loadingElement) loadingElement.classList.add('d-none');
+                    if (errorElement) {
+                        errorElement.textContent = 'خطأ في تحميل البيانات: الدالة fetchJson غير معرفة';
+                        errorElement.classList.remove('d-none');
+                    }
+                    return;
+                }
+                
                 fetchJson(returnUrl)
                 .then(data => {
+                    console.log('Return history data received:', data);
+                    
                     if (loadingElement) loadingElement.classList.add('d-none');
                     
                     if (data.success) {
@@ -4436,8 +4455,15 @@ document.addEventListener('DOMContentLoaded', function () {
                         
                         // عرض بيانات المشتريات
                         const purchaseHistory = data.purchase_history || [];
-                        if (tableBody) {
+                        console.log('Purchase history:', purchaseHistory);
+                        
+                        if (tableBody && typeof displayRepReturnHistory === 'function') {
                             displayRepReturnHistory(purchaseHistory, tableBody);
+                        } else {
+                            console.error('displayRepReturnHistory is not defined or tableBody is null');
+                            if (tableBody) {
+                                tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">خطأ في عرض البيانات</td></tr>';
+                            }
                         }
                         
                         if (contentElement) {

@@ -36,7 +36,19 @@ if (!function_exists('getApprovalsEntityColumn')) {
 
         foreach ($candidates as $candidate) {
             try {
-                $result = $db->queryOne("SHOW COLUMNS FROM approvals LIKE ?", [$candidate]);
+                // SHOW COLUMNS ... LIKE لا يدعم prepared statements
+                // استخدام rawQuery مع escape آمن للقيم
+                $connection = $db->getConnection();
+                $escapedCandidate = $connection->real_escape_string($candidate);
+                $sql = "SHOW COLUMNS FROM approvals LIKE '{$escapedCandidate}'";
+                $rawResult = $db->rawQuery($sql);
+                
+                if ($rawResult instanceof mysqli_result) {
+                    $result = $rawResult->fetch_assoc();
+                    $rawResult->free();
+                } else {
+                    $result = null;
+                }
             } catch (Throwable $columnError) {
                 $result = null;
             }
