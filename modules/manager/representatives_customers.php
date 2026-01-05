@@ -4270,7 +4270,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 
                 card.style.display = 'block';
                 setTimeout(function() {
-                    scrollToElement(card);
+                    if (typeof scrollToElement === 'function') {
+                        scrollToElement(card);
+                    } else {
+                        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
                 }, 50);
                 
                 // جلب بيانات سجل المشتريات من API endpoint
@@ -4279,8 +4283,21 @@ document.addEventListener('DOMContentLoaded', function () {
                 
                 console.log('Fetching history from:', historyUrl);
                 
+                // التحقق من وجود fetchJson
+                if (typeof fetchJson !== 'function') {
+                    console.error('fetchJson is not defined');
+                    if (loadingElement) loadingElement.classList.add('d-none');
+                    if (errorElement) {
+                        errorElement.textContent = 'خطأ في تحميل البيانات: الدالة fetchJson غير معرفة';
+                        errorElement.classList.remove('d-none');
+                    }
+                    return;
+                }
+                
                 fetchJson(historyUrl)
                 .then(payload => {
+                    console.log('History payload received:', payload);
+                    
                     if (!payload || !payload.success) {
                         throw new Error(payload?.message || 'فشل تحميل بيانات السجل.');
                     }
@@ -4288,26 +4305,45 @@ document.addEventListener('DOMContentLoaded', function () {
                     const history = payload.history || {};
                     const totals = history.totals || {};
                     
+                    console.log('History data:', history);
+                    console.log('Totals:', totals);
+                    
                     // تحديث الإحصائيات
                     if (totalInvoicesEl) {
                         totalInvoicesEl.textContent = Number(totals.invoice_count || 0).toLocaleString('ar-EG');
                     }
                     if (totalInvoicedEl) {
-                        totalInvoicedEl.textContent = formatCurrencySimple(totals.total_invoiced || 0);
+                        if (typeof formatCurrencySimple === 'function') {
+                            totalInvoicedEl.textContent = formatCurrencySimple(totals.total_invoiced || 0);
+                        } else {
+                            totalInvoicedEl.textContent = (totals.total_invoiced || 0).toFixed(2) + ' ج.م';
+                        }
                     }
                     if (totalReturnsEl) {
-                        totalReturnsEl.textContent = formatCurrencySimple(totals.total_returns || 0);
+                        if (typeof formatCurrencySimple === 'function') {
+                            totalReturnsEl.textContent = formatCurrencySimple(totals.total_returns || 0);
+                        } else {
+                            totalReturnsEl.textContent = (totals.total_returns || 0).toFixed(2) + ' ج.م';
+                        }
                     }
                     if (netTotalEl) {
-                        netTotalEl.textContent = formatCurrencySimple(totals.net_total || 0);
+                        if (typeof formatCurrencySimple === 'function') {
+                            netTotalEl.textContent = formatCurrencySimple(totals.net_total || 0);
+                        } else {
+                            netTotalEl.textContent = (totals.net_total || 0).toFixed(2) + ' ج.م';
+                        }
                     }
                     
                     // عرض البيانات - استخدام نفس الدوال مع Card
-                    if (invoicesTableBody) {
+                    if (invoicesTableBody && typeof renderRepInvoices === 'function') {
                         renderRepInvoices(Array.isArray(history.invoices) ? history.invoices : [], invoicesTableBody);
+                    } else {
+                        console.error('renderRepInvoices is not defined or invoicesTableBody is null');
                     }
-                    if (returnsContainer) {
+                    if (returnsContainer && typeof renderRepReturns === 'function') {
                         renderRepReturns(Array.isArray(history.returns) ? history.returns : [], returnsContainer);
+                    } else {
+                        console.error('renderRepReturns is not defined or returnsContainer is null');
                     }
                     
                     // إخفاء loading وإظهار المحتوى

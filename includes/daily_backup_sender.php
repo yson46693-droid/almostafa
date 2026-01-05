@@ -701,46 +701,52 @@ if (!function_exists('triggerDailyBackupDelivery')) {
             // نتابع الإرسال حتى لو فشل السجل
         }
 
-        $sendResult = sendTelegramFile($backupFilePath, $caption);
+        // إرسال النسخة الاحتياطية عبر Telegram فقط إذا كان Telegram مُعداً
+        if ($telegramConfigured && function_exists('sendTelegramFile')) {
+            $sendResult = sendTelegramFile($backupFilePath, $caption);
 
-        if ($sendResult === false) {
-            $errorMessage = 'فشل إرسال النسخة الاحتياطية إلى Telegram';
-            dailyBackupSaveStatus(array_merge($statusData, [
-                'status' => 'failed',
-                'error' => $errorMessage,
-                'file_path' => $backupRelativePath ?? $backupFilePath,
-            ]));
-            
-            // تسجيل الفشل في السجل
-            try {
-                $db->beginTransaction();
-                $db->execute(
-                    "INSERT INTO daily_backup_sent_log (sent_date, sent_at, backup_file_path, backup_id, status, error_message)
-                     VALUES (?, NOW(), ?, ?, 'failed', ?)
-                     ON DUPLICATE KEY UPDATE 
-                         sent_at = NOW(),
-                         backup_file_path = VALUES(backup_file_path),
-                         backup_id = VALUES(backup_id),
-                         status = 'failed',
-                         error_message = VALUES(error_message)",
-                    [
-                        $todayDate,
-                        $backupRelativePath ?? $backupFilePath,
-                        $backupId,
-                        $errorMessage
-                    ]
-                );
-                $db->commit();
-            } catch (Throwable $logError) {
+            if ($sendResult === false) {
+                $errorMessage = 'فشل إرسال النسخة الاحتياطية إلى Telegram';
+                dailyBackupSaveStatus(array_merge($statusData, [
+                    'status' => 'failed',
+                    'error' => $errorMessage,
+                    'file_path' => $backupRelativePath ?? $backupFilePath,
+                ]));
+                
+                // تسجيل الفشل في السجل
                 try {
-                    $db->rollback();
-                } catch (Throwable $ignore) {
+                    $db->beginTransaction();
+                    $db->execute(
+                        "INSERT INTO daily_backup_sent_log (sent_date, sent_at, backup_file_path, backup_id, status, error_message)
+                         VALUES (?, NOW(), ?, ?, 'failed', ?)
+                         ON DUPLICATE KEY UPDATE 
+                             sent_at = NOW(),
+                             backup_file_path = VALUES(backup_file_path),
+                             backup_id = VALUES(backup_id),
+                             status = 'failed',
+                             error_message = VALUES(error_message)",
+                        [
+                            $todayDate,
+                            $backupRelativePath ?? $backupFilePath,
+                            $backupId,
+                            $errorMessage
+                        ]
+                    );
+                    $db->commit();
+                } catch (Throwable $logError) {
+                    try {
+                        $db->rollback();
+                    } catch (Throwable $ignore) {
+                    }
+                    error_log('Daily Backup: failed logging failed backup - ' . $logError->getMessage());
                 }
-                error_log('Daily Backup: failed logging failed backup - ' . $logError->getMessage());
+                
+                dailyBackupNotifyManagerThrottled($errorMessage, 'danger', $jobState);
+                return;
             }
-            
-            dailyBackupNotifyManagerThrottled($errorMessage, 'danger', $jobState);
-            return;
+        } else {
+            // إذا لم يكن Telegram مُعداً، نكتفي بإنشاء النسخة الاحتياطية فقط
+            error_log('Daily Backup: Telegram not configured, backup created but not sent');
         }
 
         // تم نقل تسجيل نجاح الإرسال إلى قبل الإرسال أعلاه لمنع التكرار
@@ -779,7 +785,12 @@ if (!function_exists('triggerDailyBackupDelivery')) {
         ];
 
         dailyBackupSaveStatus($completedData);
-        dailyBackupNotifyManagerThrottled('تم إنشاء النسخة الاحتياطية اليومية وإرسالها إلى شات Telegram بنجاح.', 'success', $jobState);
+        
+        if ($telegramConfigured) {
+            dailyBackupNotifyManagerThrottled('تم إنشاء النسخة الاحتياطية اليومية وإرسالها إلى شات Telegram بنجاح.', 'success', $jobState);
+        } else {
+            dailyBackupNotifyManagerThrottled('تم إنشاء النسخة الاحتياطية اليومية بنجاح. (ملاحظة: Telegram غير مُعد، لم يتم إرسال النسخة)', 'info', $jobState);
+        }
     }
 }
 
