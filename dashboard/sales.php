@@ -384,9 +384,32 @@ if ($isCashRegisterAjax) {
     exit;
 }
 
-// فقط إذا لم يكن طلب AJAX لصفحة cash_register، ندرج header
+// التحقق من طلب AJAX للتنقل (AJAX Navigation)
+$isAjaxNavigation = (
+    isset($_SERVER['HTTP_X_REQUESTED_WITH']) && 
+    strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest' &&
+    isset($_SERVER['HTTP_ACCEPT']) && 
+    stripos($_SERVER['HTTP_ACCEPT'], 'text/html') !== false
+);
+
+// إذا كان طلب AJAX للتنقل، نعيد المحتوى فقط بدون header/footer
+if ($isAjaxNavigation) {
+    // تنظيف output buffer
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    
+    // إرسال headers للـ AJAX response
+    header('Content-Type: text/html; charset=utf-8');
+    header('X-AJAX-Navigation: true');
+    
+    // بدء output buffering
+    ob_start();
+}
 ?>
+<?php if (!$isAjaxNavigation): ?>
 <?php include __DIR__ . '/../templates/header.php'; ?>
+<?php endif; ?>
 
             <?php if ($page === 'dashboard' || $page === ''): ?>
                 <!-- Page Header -->
@@ -2620,7 +2643,22 @@ if ($isCashRegisterAjax) {
                 
             <?php endif; ?>
 
+<?php if (!$isAjaxNavigation): ?>
 <?php include __DIR__ . '/../templates/footer.php'; ?>
+<?php else: ?>
+<?php
+// إذا كان طلب AJAX، نعيد المحتوى فقط
+$content = ob_get_clean();
+// استخراج المحتوى من <main> فقط
+if (preg_match('/<main[^>]*>(.*?)<\/main>/is', $content, $matches)) {
+    echo $matches[1];
+} else {
+    // Fallback: إرجاع كل المحتوى
+    echo $content;
+}
+exit;
+?>
+<?php endif; ?>
 
 <script src="<?php echo ASSETS_URL; ?>js/reports.js"></script>
 <script src="<?php echo ASSETS_URL; ?>js/attendance_notifications.js"></script>

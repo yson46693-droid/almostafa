@@ -547,32 +547,100 @@ if (response.redirected && isLoginPageUrl && isLoginPageContent) {
 
 ## نقاط مهمة
 
-### 1. استخدام Clone لإزالة Event Listeners
-```javascript
-// السطر 724
-const newDropdown = dropdown.cloneNode(true);
-parent.removeChild(dropdown);
-parent.insertBefore(newDropdown, nextSibling);
-new bootstrap.Dropdown(newDropdown);
-```
-هذا يضمن إزالة جميع event listeners القديمة وإنشاء ones جديدة.
+### 1. معالجة AJAX Navigation في الخادم (PHP)
+جميع ملفات dashboard (manager.php, accountant.php, sales.php, production.php) تستخدم نفس معالجة AJAX Navigation:
 
-### 2. Cache للصفحات
+```php
+// التحقق من طلب AJAX للتنقل (AJAX Navigation)
+$isAjaxNavigation = (
+    isset($_SERVER['HTTP_X_REQUESTED_WITH']) && 
+    strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest' &&
+    isset($_SERVER['HTTP_ACCEPT']) && 
+    stripos($_SERVER['HTTP_ACCEPT'], 'text/html') !== false
+);
+
+// إذا كان طلب AJAX للتنقل، نعيد المحتوى فقط بدون header/footer
+if ($isAjaxNavigation) {
+    // تنظيف output buffer
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    
+    // إرسال headers للـ AJAX response
+    header('Content-Type: text/html; charset=utf-8');
+    header('X-AJAX-Navigation: true');
+    
+    // بدء output buffering
+    ob_start();
+}
+
+// في البداية: تضمين header.php فقط إذا لم يكن AJAX
+<?php if (!$isAjaxNavigation): ?>
+<?php include __DIR__ . '/../templates/header.php'; ?>
+<?php endif; ?>
+
+// في النهاية: تضمين footer.php فقط إذا لم يكن AJAX
+<?php if (!$isAjaxNavigation): ?>
+<?php include __DIR__ . '/../templates/footer.php'; ?>
+<?php else: ?>
+<?php
+// إذا كان طلب AJAX، نعيد المحتوى فقط
+$content = ob_get_clean();
+// استخراج المحتوى من <main> فقط
+if (preg_match('/<main[^>]*>(.*?)<\/main>/is', $content, $matches)) {
+    echo $matches[1];
+} else {
+    // Fallback: إرجاع كل المحتوى
+    echo $content;
+}
+exit;
+?>
+<?php endif; ?>
+```
+
+**الفائدة:**
+- تحسين الأداء: إرجاع `<main>` فقط بدلاً من HTML كامل
+- تقليل حجم البيانات المرسلة
+- تسريع التنقل بين الصفحات
+
+### 2. إعادة تهيئة Bootstrap Components (بدون Clone)
+```javascript
+// السطر 676 - reinitializeTopbarEvents()
+const oldInstance = bootstrap.Dropdown.getInstance(dropdown);
+if (oldInstance) {
+    oldInstance.dispose(); // إزالة Bootstrap instance فقط
+}
+// إعادة تهيئة بدون clone للحفاظ على event listeners الأخرى
+new bootstrap.Dropdown(dropdown, {
+    boundary: 'viewport',
+    popperConfig: {
+        modifiers: [{
+            name: 'preventOverflow',
+            options: {
+                boundary: document.body
+            }
+        }]
+    }
+});
+```
+هذا يحافظ على event listeners التي تم إضافتها من scripts أخرى (مثل notifications.js, sidebar.js).
+
+### 3. Cache للصفحات
 - يحفظ آخر 10 صفحات محملة
 - يسرع التنقل بين الصفحات المفتوحة مسبقاً
 - يتم تنظيفه تلقائياً عند تجاوز الحد الأقصى
 
-### 3. معالجة Scripts
+### 4. معالجة Scripts
 - Inline scripts: تنفيذ مباشر مع معالجة الأخطاء
 - External scripts: التحقق من التحميل المسبق قبل إعادة التحميل
 - تخطي Scripts التي تحتوي على HTML/PHP tags
 
-### 4. أحداث متعددة لإعادة التهيئة
+### 5. أحداث متعددة لإعادة التهيئة
 - `ajaxNavigationComplete`: بعد اكتمال التنقل
 - `DOMContentLoaded`: عند تحميل DOM
 - `setTimeout` متعددة بفترات مختلفة (0ms, 50ms, 200ms, 500ms)
 
-### 5. معالجة Mobile
+### 6. معالجة Mobile
 - إغلاق الشريط الجانبي تلقائياً بعد التنقل
 - إعادة تهيئة أزرار الموبايل (القائمة، إعادة التحميل، الوضع الداكن)
 
