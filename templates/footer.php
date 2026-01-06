@@ -1048,16 +1048,27 @@ if (!defined('ACCESS_ALLOWED')) {
         
         // Register Service Worker (يتم تسجيله في header.php)
         
-        // Offline Detection
-        const offlineIndicator = document.getElementById('offlineIndicator');
-        if (offlineIndicator) {
-            window.addEventListener('online', () => {
-                offlineIndicator.classList.remove('show');
-            });
-            
-            window.addEventListener('offline', () => {
-                offlineIndicator.classList.add('show');
-            });
+        // Offline Detection - التحقق من عدم إعادة تعريف المتغير
+        if (typeof window.offlineIndicatorHandlersInitialized === 'undefined') {
+            window.offlineIndicatorHandlersInitialized = false;
+        }
+        
+        if (!window.offlineIndicatorHandlersInitialized) {
+            const offlineIndicator = document.getElementById('offlineIndicator');
+            if (offlineIndicator) {
+                // إزالة event listeners القديمة إذا كانت موجودة
+                const onlineHandler = () => {
+                    offlineIndicator.classList.remove('show');
+                };
+                const offlineHandler = () => {
+                    offlineIndicator.classList.add('show');
+                };
+                
+                window.addEventListener('online', onlineHandler);
+                window.addEventListener('offline', offlineHandler);
+                
+                window.offlineIndicatorHandlersInitialized = true;
+            }
         }
         
         /**

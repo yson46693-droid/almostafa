@@ -12,7 +12,13 @@ if (typeof window.deferredPrompt === 'undefined') {
     window.deferredPrompt = null;
 }
 // استخدام var للسماح بإعادة الإعلان (مع التحقق أعلاه لمنع ذلك)
-var deferredPrompt = window.deferredPrompt;
+// لكن فقط إذا لم يكن معرفاً مسبقاً
+if (typeof deferredPrompt === 'undefined') {
+    var deferredPrompt = window.deferredPrompt;
+} else {
+    // إذا كان معرفاً مسبقاً، استخدم القيمة الموجودة
+    deferredPrompt = window.deferredPrompt;
+}
 
 // التحقق من الجهاز المحمول
 function isMobileDevice() {

@@ -7,7 +7,13 @@ if (typeof window.notificationCheckInterval === 'undefined') {
     window.notificationCheckInterval = null;
 }
 // استخدام var للسماح بإعادة الإعلان (مع التحقق أعلاه لمنع ذلك)
-var notificationCheckInterval = window.notificationCheckInterval;
+// لكن فقط إذا لم يكن معرفاً مسبقاً
+if (typeof notificationCheckInterval === 'undefined') {
+    var notificationCheckInterval = window.notificationCheckInterval;
+} else {
+    // إذا كان معرفاً مسبقاً، استخدم القيمة الموجودة
+    notificationCheckInterval = window.notificationCheckInterval;
+}
 // التحقق من وجود seenNotificationIds قبل الإعلان لتجنب إعادة الإعلان عند تحميل الملف عدة مرات
 if (typeof window.seenNotificationIds === 'undefined') {
     window.seenNotificationIds = new Set();

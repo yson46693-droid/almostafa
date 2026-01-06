@@ -11,7 +11,13 @@ if (typeof window.DEBUG === 'undefined') {
                    window.location.hostname.includes('localhost:');
 }
 // استخدام var للسماح بإعادة الإعلان (مع التحقق أعلاه لمنع ذلك)
-var DEBUG = window.DEBUG;
+// لكن فقط إذا لم يكن معرفاً مسبقاً
+if (typeof DEBUG === 'undefined') {
+    var DEBUG = window.DEBUG;
+} else {
+    // إذا كان معرفاً مسبقاً، استخدم القيمة الموجودة
+    DEBUG = window.DEBUG;
+}
 
 // دالة console.log آمنة (لا تطبع في الإنتاج)
 window.safeLog = function(...args) {
