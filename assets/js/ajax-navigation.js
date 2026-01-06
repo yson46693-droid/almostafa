@@ -492,110 +492,21 @@
         
         // إعادة تهيئة إضافية بعد تأخير أكبر لضمان عمل جميع الأزرار
         setTimeout(() => {
-            // إعادة تهيئة جميع Bootstrap components مرة أخرى
+            // إعادة تهيئة جميع Bootstrap components مرة أخرى - بدون clone
             if (typeof bootstrap !== 'undefined') {
-                // إعادة تهيئة Dropdowns - بشكل شامل مع إزالة event listeners القديمة
+                // إعادة تهيئة Dropdowns - بدون clone للحفاظ على event listeners
                 const allDropdowns = document.querySelectorAll('[data-bs-toggle="dropdown"]');
                 allDropdowns.forEach(dropdown => {
                     try {
                         const instance = bootstrap.Dropdown.getInstance(dropdown);
-                        if (!instance) {
-                            // إذا لم يكن هناك instance، أنشئ واحداً جديداً
-                            // للتوب بار، استخدم clone وإعادة إدراج لإزالة event listeners القديمة
-                            const isTopbarElement = dropdown.closest('.homeline-topbar, .topbar-right');
-                            if (isTopbarElement) {
-                                const parent = dropdown.parentNode;
-                                const nextSibling = dropdown.nextSibling;
-                                const newDropdown = dropdown.cloneNode(true);
-                                
-                                if (parent) {
-                                    parent.removeChild(dropdown);
-                                    if (nextSibling) {
-                                        parent.insertBefore(newDropdown, nextSibling);
-                                    } else {
-                                        parent.appendChild(newDropdown);
-                                    }
-                                    new bootstrap.Dropdown(newDropdown, {
-                                        boundary: 'viewport',
-                                        popperConfig: {
-                                            modifiers: [
-                                                {
-                                                    name: 'preventOverflow',
-                                                    options: {
-                                                        boundary: document.body
-                                                    }
-                                                }
-                                            ]
-                                        }
-                                    });
-                                } else {
-                                    new bootstrap.Dropdown(dropdown);
-                                }
-                            } else {
-                                new bootstrap.Dropdown(dropdown);
-                            }
-                        } else {
-                            // إذا كان هناك instance، تأكد من أنه يعمل بشكل صحيح
-                            // للتوب بار، أعد تهيئته
-                            const isTopbarElement = dropdown.closest('.homeline-topbar, .topbar-right');
-                            if (isTopbarElement) {
-                                instance.dispose();
-                                const parent = dropdown.parentNode;
-                                const nextSibling = dropdown.nextSibling;
-                                const newDropdown = dropdown.cloneNode(true);
-                                
-                                if (parent) {
-                                    parent.removeChild(dropdown);
-                                    if (nextSibling) {
-                                        parent.insertBefore(newDropdown, nextSibling);
-                                    } else {
-                                        parent.appendChild(newDropdown);
-                                    }
-                                    new bootstrap.Dropdown(newDropdown, {
-                                        boundary: 'viewport',
-                                        popperConfig: {
-                                            modifiers: [
-                                                {
-                                                    name: 'preventOverflow',
-                                                    options: {
-                                                        boundary: document.body
-                                                    }
-                                                }
-                                            ]
-                                        }
-                                    });
-                                } else {
-                                    new bootstrap.Dropdown(dropdown);
-                                }
-                            }
-                        }
-                    } catch (e) {
-                        // تجاهل الأخطاء
-                        console.warn('Error in additional dropdown reinitialization:', e);
-                    }
-                });
-                
-                // إعادة تهيئة خاصة لزر القائمة السريعة (ضمان إضافي)
-                const quickActionsDropdown = document.getElementById('quickActionsDropdown');
-                if (quickActionsDropdown) {
-                    try {
-                        const instance = bootstrap.Dropdown.getInstance(quickActionsDropdown);
                         if (instance) {
                             instance.dispose();
                         }
                         
-                        const parent = quickActionsDropdown.parentNode;
-                        const nextSibling = quickActionsDropdown.nextSibling;
-                        const newQuickActions = quickActionsDropdown.cloneNode(true);
-                        
-                        if (parent) {
-                            parent.removeChild(quickActionsDropdown);
-                            if (nextSibling) {
-                                parent.insertBefore(newQuickActions, nextSibling);
-                            } else {
-                                parent.appendChild(newQuickActions);
-                            }
-                            new bootstrap.Dropdown(newQuickActions, {
+                        // إعادة تهيئة بدون clone
+                        const isTopbarElement = dropdown.closest('.homeline-topbar, .topbar-right');
+                        if (isTopbarElement) {
+                            new bootstrap.Dropdown(dropdown, {
                                 boundary: 'viewport',
                                 popperConfig: {
                                     modifiers: [
@@ -609,8 +520,37 @@
                                 }
                             });
                         } else {
-                            new bootstrap.Dropdown(quickActionsDropdown);
+                            new bootstrap.Dropdown(dropdown);
                         }
+                    } catch (e) {
+                        // تجاهل الأخطاء
+                        console.warn('Error in additional dropdown reinitialization:', e);
+                    }
+                });
+                
+                // إعادة تهيئة خاصة لزر القائمة السريعة - بدون clone
+                const quickActionsDropdown = document.getElementById('quickActionsDropdown');
+                if (quickActionsDropdown) {
+                    try {
+                        const instance = bootstrap.Dropdown.getInstance(quickActionsDropdown);
+                        if (instance) {
+                            instance.dispose();
+                        }
+                        
+                        // إعادة تهيئة بدون clone
+                        new bootstrap.Dropdown(quickActionsDropdown, {
+                            boundary: 'viewport',
+                            popperConfig: {
+                                modifiers: [
+                                    {
+                                        name: 'preventOverflow',
+                                        options: {
+                                            boundary: document.body
+                                        }
+                                    }
+                                ]
+                            }
+                        });
                     } catch (e) {
                         console.warn('Error reinitializing quick actions dropdown in updatePageContent:', e);
                     }
@@ -674,7 +614,7 @@
      * إعادة تهيئة الأحداث في الشريط العلوي (topbar)
      */
     function reinitializeTopbarEvents() {
-        // إعادة تهيئة Bootstrap Dropdowns في الشريط العلوي - بشكل شامل
+        // إعادة تهيئة Bootstrap Dropdowns في الشريط العلوي - بدون clone للحفاظ على event listeners
         if (typeof bootstrap !== 'undefined' && bootstrap.Dropdown) {
             // البحث عن جميع Dropdowns في التوب بار - باستخدام selectors متعددة
             const topbarDropdowns = document.querySelectorAll(
@@ -689,7 +629,7 @@
             
             topbarDropdowns.forEach(dropdown => {
                 try {
-                    // إزالة instance القديم إن وجد
+                    // إزالة instance القديم فقط - بدون clone للحفاظ على event listeners الأخرى
                     const oldInstance = bootstrap.Dropdown.getInstance(dropdown);
                     if (oldInstance) {
                         try {
@@ -699,42 +639,9 @@
                         }
                     }
                     
-                    // إزالة جميع event listeners القديمة عن طريق clone وإعادة الإدراج
-                    // هذا مهم جداً لضمان إزالة جميع event listeners القديمة
-                    const parent = dropdown.parentNode;
-                    if (!parent) {
-                        // إذا لم يكن هناك parent، استخدم طريقة بسيطة
-                        new bootstrap.Dropdown(dropdown, {
-                            boundary: 'viewport',
-                            popperConfig: {
-                                modifiers: [
-                                    {
-                                        name: 'preventOverflow',
-                                        options: {
-                                            boundary: document.body
-                                        }
-                                    }
-                                ]
-                            }
-                        });
-                        return;
-                    }
-                    
-                    const nextSibling = dropdown.nextSibling;
-                    const newDropdown = dropdown.cloneNode(true);
-                    
-                    // إزالة العنصر القديم
-                    parent.removeChild(dropdown);
-                    
-                    // إدراج العنصر الجديد في نفس المكان
-                    if (nextSibling) {
-                        parent.insertBefore(newDropdown, nextSibling);
-                    } else {
-                        parent.appendChild(newDropdown);
-                    }
-                    
-                    // إنشاء instance جديد على العنصر الجديد
-                    new bootstrap.Dropdown(newDropdown, {
+                    // إعادة تهيئة Bootstrap Dropdown بدون clone
+                    // هذا يحافظ على event listeners التي تم إضافتها من scripts أخرى
+                    new bootstrap.Dropdown(dropdown, {
                         boundary: 'viewport',
                         popperConfig: {
                             modifiers: [
@@ -749,39 +656,10 @@
                     });
                 } catch (e) {
                     console.warn('Error reinitializing topbar dropdown:', e);
-                    // محاولة بديلة: إعادة تهيئة بدون clone
-                    try {
-                        const dropdownElement = document.querySelector(`[data-bs-toggle="dropdown"][id="${dropdown.id}"]`) || 
-                                               document.querySelector(`[data-bs-toggle="dropdown"][href="${dropdown.href}"]`) ||
-                                               dropdown;
-                        const oldInstance = bootstrap.Dropdown.getInstance(dropdownElement);
-                        if (oldInstance) {
-                            try {
-                                oldInstance.dispose();
-                            } catch (disposeError) {
-                                // تجاهل أخطاء dispose
-                            }
-                        }
-                        new bootstrap.Dropdown(dropdownElement, {
-                            boundary: 'viewport',
-                            popperConfig: {
-                                modifiers: [
-                                    {
-                                        name: 'preventOverflow',
-                                        options: {
-                                            boundary: document.body
-                                        }
-                                    }
-                                ]
-                            }
-                        });
-                    } catch (e2) {
-                        console.warn('Error in fallback reinitialization:', e2);
-                    }
                 }
             });
             
-            // إعادة تهيئة خاصة لزر القائمة السريعة - مع معالجة خاصة
+            // إعادة تهيئة خاصة لزر القائمة السريعة - بدون clone
             const quickActionsDropdown = document.getElementById('quickActionsDropdown');
             if (quickActionsDropdown) {
                 try {
@@ -790,22 +668,8 @@
                         oldInstance.dispose();
                     }
                     
-                    // إزالة جميع event listeners القديمة
-                    const parent = quickActionsDropdown.parentNode;
-                    const nextSibling = quickActionsDropdown.nextSibling;
-                    const newQuickActions = quickActionsDropdown.cloneNode(true);
-                    
-                    if (parent) {
-                        parent.removeChild(quickActionsDropdown);
-                        if (nextSibling) {
-                            parent.insertBefore(newQuickActions, nextSibling);
-                        } else {
-                            parent.appendChild(newQuickActions);
-                        }
-                    }
-                    
-                    // إنشاء instance جديد مع إعدادات خاصة
-                    new bootstrap.Dropdown(newQuickActions, {
+                    // إعادة تهيئة بدون clone للحفاظ على event listeners
+                    new bootstrap.Dropdown(quickActionsDropdown, {
                         boundary: 'viewport',
                         popperConfig: {
                             modifiers: [
@@ -820,16 +684,6 @@
                     });
                 } catch (e) {
                     console.warn('Error reinitializing quick actions dropdown:', e);
-                    // محاولة بديلة
-                    try {
-                        const oldInstance = bootstrap.Dropdown.getInstance(quickActionsDropdown);
-                        if (oldInstance) {
-                            oldInstance.dispose();
-                        }
-                        new bootstrap.Dropdown(quickActionsDropdown);
-                    } catch (e2) {
-                        console.warn('Error in fallback quick actions reinitialization:', e2);
-                    }
                 }
             }
         }
@@ -852,19 +706,23 @@
             });
         }
 
-        // إعادة تهيئة زر إعادة التحميل على الموبايل
+        // إعادة تهيئة زر إعادة التحميل على الموبايل - بدون clone
         const mobileReloadBtn = document.getElementById('mobileReloadBtn');
         if (mobileReloadBtn) {
-            // إزالة event listeners القديمة (إذا أمكن)
-            const newReloadBtn = mobileReloadBtn.cloneNode(true);
-            if (mobileReloadBtn.parentNode) {
-                mobileReloadBtn.parentNode.replaceChild(newReloadBtn, mobileReloadBtn);
+            // التحقق من وجود event listener قبل إضافته
+            if (!mobileReloadBtn.hasAttribute('data-listener-added')) {
+                mobileReloadBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    try {
+                        const url = new URL(window.location.href);
+                        url.searchParams.set('_refresh', Date.now().toString());
+                        window.location.href = url.toString();
+                    } catch (err) {
+                        window.location.reload();
+                    }
+                });
+                mobileReloadBtn.setAttribute('data-listener-added', 'true');
             }
-            // إعادة ربط event listener
-            newReloadBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                window.location.reload();
-            });
         }
 
         // إعادة تهيئة زر القائمة على الموبايل
@@ -878,28 +736,19 @@
             }
         }
 
-        // إعادة تهيئة زر الوضع الداكن على الموبايل
+        // إعادة تهيئة زر الوضع الداكن على الموبايل - بدون clone
         const mobileDarkToggle = document.getElementById('mobileDarkToggle');
         if (mobileDarkToggle) {
-            // إزالة event listeners القديمة
-            const newDarkToggle = mobileDarkToggle.cloneNode(true);
-            if (mobileDarkToggle.parentNode) {
-                mobileDarkToggle.parentNode.replaceChild(newDarkToggle, mobileDarkToggle);
+            // التحقق من وجود event listener قبل إضافته
+            if (!mobileDarkToggle.hasAttribute('data-listener-added')) {
+                mobileDarkToggle.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    if (typeof toggleDarkMode === 'function') {
+                        toggleDarkMode();
+                    }
+                });
+                mobileDarkToggle.setAttribute('data-listener-added', 'true');
             }
-            // إعادة ربط event listener
-            newDarkToggle.addEventListener('click', function(e) {
-                e.preventDefault();
-                const currentTheme = localStorage.getItem('theme') || 'light';
-                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-                localStorage.setItem('theme', newTheme);
-                document.documentElement.setAttribute('data-theme', newTheme);
-                if (newTheme === 'dark') {
-                    document.documentElement.classList.add('dark-theme');
-                } else {
-                    document.documentElement.classList.remove('dark-theme');
-                }
-                window.dispatchEvent(new CustomEvent('themeChange', { detail: { theme: newTheme } }));
-            });
         }
 
         // إعادة تهيئة البحث العام
@@ -912,13 +761,33 @@
             }
         }
 
+        // إعادة تهيئة notifications dropdown - مهم جداً!
+        const notificationDropdown = document.getElementById('notificationsDropdown');
+        if (notificationDropdown) {
+            try {
+                const oldInstance = bootstrap.Dropdown.getInstance(notificationDropdown);
+                if (oldInstance) {
+                    oldInstance.dispose();
+                }
+                // إعادة تهيئة بدون clone
+                new bootstrap.Dropdown(notificationDropdown);
+                
+                // إعادة تهيئة notifications إذا كانت الدالة متاحة
+                if (typeof window.loadNotifications === 'function') {
+                    window.loadNotifications();
+                }
+            } catch (e) {
+                console.warn('Error reinitializing notifications dropdown:', e);
+            }
+        }
+
         // التأكد من أن جميع العناصر في الشريط العلوي قابلة للنقر
         const topbarActions = document.querySelectorAll('.homeline-topbar .topbar-action, .homeline-topbar button, .homeline-topbar a');
         topbarActions.forEach(action => {
             if (action.style.pointerEvents === 'none') {
                 action.style.pointerEvents = '';
             }
-            if (action.disabled) {
+            if (action.disabled && !action.hasAttribute('disabled')) {
                 action.disabled = false;
             }
         });
@@ -1424,91 +1293,24 @@
      * هذه الدالة تعيد تهيئة جميع الأحداث بعد التنقل عبر AJAX
      */
     function reinitializeAllEvents() {
-        // 1. إعادة تهيئة Bootstrap Dropdowns - بشكل شامل مع إزالة event listeners القديمة
+        // 1. إعادة تهيئة Bootstrap Dropdowns - بدون clone للحفاظ على event listeners
         if (typeof bootstrap !== 'undefined' && bootstrap.Dropdown) {
             // البحث عن جميع Dropdowns في الصفحة
             const dropdowns = document.querySelectorAll('[data-bs-toggle="dropdown"]');
             dropdowns.forEach(dropdown => {
                 try {
-                    // إزالة instance القديم
+                    // إزالة instance القديم فقط - بدون clone
                     const oldInstance = bootstrap.Dropdown.getInstance(dropdown);
                     if (oldInstance) {
                         oldInstance.dispose();
                     }
                     
-                    // إزالة جميع event listeners القديمة عن طريق clone وإعادة الإدراج (خاصة للتوب بار)
+                    // إعادة تهيئة Bootstrap Dropdown بدون clone
+                    // هذا يحافظ على event listeners التي تم إضافتها من scripts أخرى
                     const isTopbarElement = dropdown.closest('.homeline-topbar, .topbar-right');
                     if (isTopbarElement) {
-                        const parent = dropdown.parentNode;
-                        const nextSibling = dropdown.nextSibling;
-                        const newDropdown = dropdown.cloneNode(true);
-                        
-                        if (parent) {
-                            parent.removeChild(dropdown);
-                            if (nextSibling) {
-                                parent.insertBefore(newDropdown, nextSibling);
-                            } else {
-                                parent.appendChild(newDropdown);
-                            }
-                            // إنشاء instance جديد على العنصر الجديد
-                            new bootstrap.Dropdown(newDropdown, {
-                                boundary: 'viewport',
-                                popperConfig: {
-                                    modifiers: [
-                                        {
-                                            name: 'preventOverflow',
-                                            options: {
-                                                boundary: document.body
-                                            }
-                                        }
-                                    ]
-                                }
-                            });
-                        } else {
-                            // إذا فشل clone، استخدم العنصر الأصلي
-                            new bootstrap.Dropdown(dropdown);
-                        }
-                    } else {
-                        // للعناصر الأخرى، إعادة تهيئة عادية
-                        new bootstrap.Dropdown(dropdown);
-                    }
-                } catch (e) {
-                    console.warn('Error reinitializing dropdown:', e);
-                    // محاولة بديلة: إعادة تهيئة بدون clone
-                    try {
-                        const oldInstance = bootstrap.Dropdown.getInstance(dropdown);
-                        if (oldInstance) {
-                            oldInstance.dispose();
-                        }
-                        new bootstrap.Dropdown(dropdown);
-                    } catch (e2) {
-                        console.warn('Error in fallback dropdown reinitialization:', e2);
-                    }
-                }
-            });
-            
-            // إعادة تهيئة خاصة لزر القائمة السريعة (ضمان إضافي)
-            const quickActionsDropdown = document.getElementById('quickActionsDropdown');
-            if (quickActionsDropdown) {
-                try {
-                    const oldInstance = bootstrap.Dropdown.getInstance(quickActionsDropdown);
-                    if (oldInstance) {
-                        oldInstance.dispose();
-                    }
-                    
-                    // إزالة جميع event listeners القديمة
-                    const parent = quickActionsDropdown.parentNode;
-                    const nextSibling = quickActionsDropdown.nextSibling;
-                    const newQuickActions = quickActionsDropdown.cloneNode(true);
-                    
-                    if (parent) {
-                        parent.removeChild(quickActionsDropdown);
-                        if (nextSibling) {
-                            parent.insertBefore(newQuickActions, nextSibling);
-                        } else {
-                            parent.appendChild(newQuickActions);
-                        }
-                        new bootstrap.Dropdown(newQuickActions, {
+                        // للعناصر في التوب بار، استخدم إعدادات خاصة
+                        new bootstrap.Dropdown(dropdown, {
                             boundary: 'viewport',
                             popperConfig: {
                                 modifiers: [
@@ -1522,8 +1324,37 @@
                             }
                         });
                     } else {
-                        new bootstrap.Dropdown(quickActionsDropdown);
+                        // للعناصر الأخرى، إعادة تهيئة عادية
+                        new bootstrap.Dropdown(dropdown);
                     }
+                } catch (e) {
+                    console.warn('Error reinitializing dropdown:', e);
+                }
+            });
+            
+            // إعادة تهيئة خاصة لزر القائمة السريعة - بدون clone
+            const quickActionsDropdown = document.getElementById('quickActionsDropdown');
+            if (quickActionsDropdown) {
+                try {
+                    const oldInstance = bootstrap.Dropdown.getInstance(quickActionsDropdown);
+                    if (oldInstance) {
+                        oldInstance.dispose();
+                    }
+                    
+                    // إعادة تهيئة بدون clone
+                    new bootstrap.Dropdown(quickActionsDropdown, {
+                        boundary: 'viewport',
+                        popperConfig: {
+                            modifiers: [
+                                {
+                                    name: 'preventOverflow',
+                                    options: {
+                                        boundary: document.body
+                                    }
+                                }
+                            ]
+                        }
+                    });
                 } catch (e) {
                     console.warn('Error reinitializing quick actions dropdown in reinitializeAllEvents:', e);
                 }
@@ -1562,70 +1393,38 @@
             });
         }
 
-        // 4. إعادة تهيئة زر إعادة التحميل على الموبايل
+        // 4. إعادة تهيئة زر إعادة التحميل على الموبايل - بدون clone
         const mobileReloadBtn = document.getElementById('mobileReloadBtn');
         if (mobileReloadBtn) {
-            // إزالة event listeners القديمة
-            const newReloadBtn = mobileReloadBtn.cloneNode(true);
-            if (mobileReloadBtn.parentNode) {
-                mobileReloadBtn.parentNode.replaceChild(newReloadBtn, mobileReloadBtn);
+            // التحقق من وجود event listener قبل إضافته
+            if (!mobileReloadBtn.hasAttribute('data-listener-added')) {
+                mobileReloadBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    try {
+                        const url = new URL(window.location.href);
+                        url.searchParams.set('_refresh', Date.now().toString());
+                        window.location.href = url.toString();
+                    } catch (err) {
+                        window.location.reload();
+                    }
+                });
+                mobileReloadBtn.setAttribute('data-listener-added', 'true');
             }
-            // إعادة ربط event listener
-            newReloadBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                try {
-                    const url = new URL(window.location.href);
-                    url.searchParams.set('_refresh', Date.now().toString());
-                    window.location.href = url.toString();
-                } catch (err) {
-                    window.location.reload();
-                }
-            });
         }
 
-        // 5. إعادة تهيئة زر الوضع الداكن على الموبايل
+        // 5. إعادة تهيئة زر الوضع الداكن على الموبايل - بدون clone
         const mobileDarkToggle = document.getElementById('mobileDarkToggle');
         if (mobileDarkToggle) {
-            // إزالة event listeners القديمة
-            const newDarkToggle = mobileDarkToggle.cloneNode(true);
-            if (mobileDarkToggle.parentNode) {
-                mobileDarkToggle.parentNode.replaceChild(newDarkToggle, mobileDarkToggle);
+            // التحقق من وجود event listener قبل إضافته
+            if (!mobileDarkToggle.hasAttribute('data-listener-added')) {
+                mobileDarkToggle.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    if (typeof toggleDarkMode === 'function') {
+                        toggleDarkMode();
+                    }
+                });
+                mobileDarkToggle.setAttribute('data-listener-added', 'true');
             }
-            // دالة لتحديث الأيقونة
-            function updateMobileDarkIcon(theme) {
-                const icon = newDarkToggle.querySelector('i');
-                if (!icon) return;
-                if ((theme || '').toLowerCase() === 'dark') {
-                    icon.classList.remove('bi-moon-stars');
-                    icon.classList.add('bi-brightness-high');
-                } else {
-                    icon.classList.remove('bi-brightness-high');
-                    icon.classList.add('bi-moon-stars');
-                }
-            }
-            // تحديث الأيقونة حسب الوضع الحالي
-            const currentTheme = document.documentElement.getAttribute('data-theme') || localStorage.getItem('theme') || 'light';
-            updateMobileDarkIcon(currentTheme);
-            // إعادة ربط event listener
-            newDarkToggle.addEventListener('click', function(e) {
-                e.preventDefault();
-                const currentTheme = localStorage.getItem('theme') || 'light';
-                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-                localStorage.setItem('theme', newTheme);
-                document.documentElement.setAttribute('data-theme', newTheme);
-                if (newTheme === 'dark') {
-                    document.documentElement.classList.add('dark-theme');
-                } else {
-                    document.documentElement.classList.remove('dark-theme');
-                }
-                updateMobileDarkIcon(newTheme);
-                window.dispatchEvent(new CustomEvent('themeChange', { detail: { theme: newTheme } }));
-            });
-            // الاستماع لتغييرات الوضع الداكن
-            window.addEventListener('themeChange', function(e) {
-                const theme = e && e.detail && e.detail.theme ? e.detail.theme : (document.documentElement.getAttribute('data-theme') || localStorage.getItem('theme') || 'light');
-                updateMobileDarkIcon(theme);
-            });
         }
 
         // 6. إعادة تهيئة notifications dropdown
@@ -1637,22 +1436,31 @@
                 if (oldInstance) {
                     oldInstance.dispose();
                 }
+                // إعادة تهيئة بدون clone
                 new bootstrap.Dropdown(notificationDropdown);
+                
+                // إعادة تهيئة notifications إذا كانت الدالة متاحة
+                if (typeof window.loadNotifications === 'function') {
+                    window.loadNotifications();
+                }
             } catch (e) {
                 console.warn('Error reinitializing notifications dropdown:', e);
             }
             
-            // إعادة ربط event listener لطلب الإذن
-            notificationDropdown.addEventListener('click', function(e) {
-                if (typeof checkNotificationPermission === 'function' && 
-                    typeof requestNotificationPermission === 'function') {
-                    if (checkNotificationPermission() === 'default') {
-                        requestNotificationPermission().catch(err => {
-                            console.error('Error requesting notification permission:', err);
-                        });
+            // إعادة ربط event listener لطلب الإذن - فقط إذا لم يكن موجوداً
+            if (!notificationDropdown.hasAttribute('data-notification-listener-added')) {
+                notificationDropdown.addEventListener('click', function(e) {
+                    if (typeof checkNotificationPermission === 'function' && 
+                        typeof requestNotificationPermission === 'function') {
+                        if (checkNotificationPermission() === 'default') {
+                            requestNotificationPermission().catch(err => {
+                                console.error('Error requesting notification permission:', err);
+                            });
+                        }
                     }
-                }
-            }, { once: false, passive: true });
+                }, { once: false, passive: true });
+                notificationDropdown.setAttribute('data-notification-listener-added', 'true');
+            }
         }
 
         // 7. إعادة تهيئة mobile menu
@@ -1740,7 +1548,7 @@
         
         // إعادة تهيئة نهائية بعد تأخير أكبر لضمان عمل جميع الأزرار
         setTimeout(() => {
-            // إعادة تهيئة خاصة لزر القائمة السريعة
+            // إعادة تهيئة خاصة لزر القائمة السريعة - بدون clone
             const quickActionsDropdown = document.getElementById('quickActionsDropdown');
             if (quickActionsDropdown && typeof bootstrap !== 'undefined' && bootstrap.Dropdown) {
                 try {
@@ -1753,45 +1561,20 @@
                         }
                     }
                     
-                    const parent = quickActionsDropdown.parentNode;
-                    if (parent) {
-                        const nextSibling = quickActionsDropdown.nextSibling;
-                        const newQuickActions = quickActionsDropdown.cloneNode(true);
-                        
-                        parent.removeChild(quickActionsDropdown);
-                        if (nextSibling) {
-                            parent.insertBefore(newQuickActions, nextSibling);
-                        } else {
-                            parent.appendChild(newQuickActions);
+                    // إعادة تهيئة بدون clone
+                    new bootstrap.Dropdown(quickActionsDropdown, {
+                        boundary: 'viewport',
+                        popperConfig: {
+                            modifiers: [
+                                {
+                                    name: 'preventOverflow',
+                                    options: {
+                                        boundary: document.body
+                                    }
+                                }
+                            ]
                         }
-                        new bootstrap.Dropdown(newQuickActions, {
-                            boundary: 'viewport',
-                            popperConfig: {
-                                modifiers: [
-                                    {
-                                        name: 'preventOverflow',
-                                        options: {
-                                            boundary: document.body
-                                        }
-                                    }
-                                ]
-                            }
-                        });
-                    } else {
-                        new bootstrap.Dropdown(quickActionsDropdown, {
-                            boundary: 'viewport',
-                            popperConfig: {
-                                modifiers: [
-                                    {
-                                        name: 'preventOverflow',
-                                        options: {
-                                            boundary: document.body
-                                        }
-                                    }
-                                ]
-                            }
-                        });
-                    }
+                    });
                 } catch (e) {
                     console.warn('Error in final quick actions dropdown reinitialization:', e);
                 }

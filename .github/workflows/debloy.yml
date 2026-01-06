@@ -28,7 +28,7 @@ jobs:
           timeout: 120000
           log-level: standard
 
-          server-dir: /httpdocs/
+          server-dir: /httpdocs/2/
 
 
           # مهم: لا يحذف ملفات السيرفر 
