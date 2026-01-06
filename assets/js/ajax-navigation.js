@@ -278,21 +278,76 @@
                         }
                         
                         try {
+                            // محاولة تنفيذ الكود مباشرة أولاً
                             // استخدام Function constructor (أكثر أماناً من eval)
                             const scriptFunction = new Function(trimmedContent);
                             scriptFunction();
                         } catch (functionError) {
+                            // التحقق من خطأ "already declared" - هذا خطأ شائع عند التنقل عبر AJAX
+                            if (functionError.message && functionError.message.includes('already been declared')) {
+                                console.warn('Variable already declared, skipping script execution:', functionError.message);
+                                // محاولة تنفيذ الكود في IIFE لتجنب تعارض المتغيرات
+                                try {
+                                    // استبدال const/let بـ var في النطاق المحلي فقط
+                                    // لكن هذا معقد - بدلاً من ذلك، نغلف الكود في IIFE
+                                    const wrappedContent = `(function() {
+                                        try {
+                                            ${trimmedContent}
+                                        } catch (e) {
+                                            // تجاهل أخطاء المتغيرات المعرفة مسبقاً
+                                            if (e.message && e.message.includes('already been declared')) {
+                                                return;
+                                            }
+                                            throw e;
+                                        }
+                                    })();`;
+                                    const wrappedFunction = new Function(wrappedContent);
+                                    wrappedFunction();
+                                } catch (wrappedError) {
+                                    // إذا فشل IIFE أيضاً، نتجاهل الخطأ
+                                    if (!wrappedError.message || !wrappedError.message.includes('already been declared')) {
+                                        console.warn('Error in wrapped script execution:', wrappedError.message);
+                                    }
+                                }
+                                return;
+                            }
+                            // التحقق من خطأ "already declared"
+                            if (functionError.message && functionError.message.includes('already been declared')) {
+                                console.warn('Variable already declared, skipping script:', functionError.message);
+                                return;
+                            }
+                            
                             // Fallback: استخدام eval إذا فشل Function constructor
                             // فقط إذا لم يكن الخطأ بسبب HTML/PHP
                             if (functionError.message && functionError.message.includes('Unexpected token')) {
                                 console.warn('Skipping script with syntax error (likely HTML/PHP):', functionError.message);
                                 return;
                             }
+                            
                             try {
-                                eval(trimmedContent);
+                                // محاولة تنفيذ الكود في IIFE
+                                const wrappedContent = `(function() {
+                                    try {
+                                        ${trimmedContent}
+                                    } catch (e) {
+                                        if (e.message && e.message.includes('already been declared')) {
+                                            return;
+                                        }
+                                        throw e;
+                                    }
+                                })();`;
+                                eval(wrappedContent);
                             } catch (evalError) {
-                                // فقط تسجيل الخطأ إذا لم يكن بسبب HTML/PHP
-                                if (!evalError.message || !evalError.message.includes('Unexpected token')) {
+                                // التحقق من خطأ "already declared"
+                                if (evalError.message && evalError.message.includes('already been declared')) {
+                                    console.warn('Variable already declared, skipping:', evalError.message);
+                                    return;
+                                }
+                                
+                                // فقط تسجيل الخطأ إذا لم يكن بسبب HTML/PHP أو already declared
+                                if (!evalError.message || 
+                                    (!evalError.message.includes('Unexpected token') && 
+                                     !evalError.message.includes('already been declared'))) {
                                     console.error('Error executing inline script:', evalError);
                                 } else {
                                     console.warn('Skipping script with syntax error:', evalError.message);
@@ -309,12 +364,49 @@
         // تحميل scripts الخارجية بعد scripts المدمجة
         externalScripts.forEach((oldScript, index) => {
             setTimeout(() => {
+                const scriptSrc = oldScript.src;
+                
+                // التحقق من وجود الـ script في DOM بالفعل
+                // إذا كان موجوداً، لا نحتاج لإعادة تحميله
+                const existingScript = document.querySelector(`script[src="${scriptSrc}"]`);
+                if (existingScript && existingScript !== oldScript) {
+                    // الـ script موجود بالفعل - تخطي إعادة التحميل
+                    console.log('Script already loaded, skipping:', scriptSrc);
+                    // إزالة script القديم من DOM فقط
+                    if (oldScript.parentNode) {
+                        oldScript.parentNode.removeChild(oldScript);
+                    }
+                    return;
+                }
+                
+                // التحقق من وجود الـ script في head بالفعل
+                const scriptsInHead = document.head.querySelectorAll('script[src]');
+                let scriptExists = false;
+                scriptsInHead.forEach(script => {
+                    if (script.src === scriptSrc && script !== oldScript) {
+                        scriptExists = true;
+                    }
+                });
+                
+                if (scriptExists) {
+                    // الـ script موجود بالفعل - تخطي إعادة التحميل
+                    console.log('Script already loaded in head, skipping:', scriptSrc);
+                    // إزالة script القديم من DOM فقط
+                    if (oldScript.parentNode) {
+                        oldScript.parentNode.removeChild(oldScript);
+                    }
+                    return;
+                }
+                
                 const newScript = document.createElement('script');
                 
                 // نسخ جميع attributes
                 Array.from(oldScript.attributes).forEach(attr => {
                     newScript.setAttribute(attr.name, attr.value);
                 });
+                
+                // إضافة attribute لتتبع الـ scripts المحملة
+                newScript.setAttribute('data-ajax-loaded', 'true');
                 
                 // معالجة الأخطاء
                 newScript.onload = function() {
@@ -324,7 +416,7 @@
                     console.warn('Failed to load script:', oldScript.src);
                 };
                 
-                newScript.src = oldScript.src;
+                newScript.src = scriptSrc;
                 
                 // إزالة script القديم من DOM قبل إضافة الجديد
                 if (oldScript.parentNode) {
