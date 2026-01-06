@@ -1451,7 +1451,6 @@ $activeTab = $_GET['tab'] ?? 'security';
     }
     ?>
 </div>
-</div>
 
 <script>
 function cleanupLoginAttempts() {
