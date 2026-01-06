@@ -7,7 +7,12 @@ if (typeof window.pwaInstallHandler === 'undefined') {
     window.pwaInstallHandler = {};
 }
 
-let deferredPrompt = null;
+// التحقق من وجود deferredPrompt قبل الإعلان لتجنب إعادة الإعلان عند تحميل الملف عدة مرات
+if (typeof window.deferredPrompt === 'undefined') {
+    window.deferredPrompt = null;
+}
+// استخدام var للسماح بإعادة الإعلان (مع التحقق أعلاه لمنع ذلك)
+var deferredPrompt = window.deferredPrompt;
 
 // التحقق من الجهاز المحمول
 function isMobileDevice() {
@@ -186,6 +191,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
     
     // Stash the event so it can be triggered later
     deferredPrompt = e;
+    window.deferredPrompt = e;
     
     // معالجة فورية (لا ننتظر DOMContentLoaded)
     // لأن beforeinstallprompt يُطلق بعد تحميل الصفحة
@@ -472,6 +478,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Clear the deferredPrompt بعد استخدامه
                 deferredPrompt = null;
+                window.deferredPrompt = null;
                 
             } catch (error) {
                 console.error('Error showing install prompt:', error);
@@ -479,6 +486,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 // إذا فشل prompt()، إعادة تفعيل deferredPrompt
                 if (deferredPrompt && error.message.includes('not available')) {
                     deferredPrompt = null;
+                    window.deferredPrompt = null;
                 }
                 
                 alert('حدث خطأ أثناء محاولة التثبيت: ' + error.message);
@@ -493,6 +501,7 @@ window.addEventListener('appinstalled', () => {
     console.log('PWA was installed');
     hideInstallBanner();
     deferredPrompt = null;
+    window.deferredPrompt = null;
     
     // حفظ حالة التثبيت في sessionStorage (للدعم على الأجهزة القديمة)
     try {

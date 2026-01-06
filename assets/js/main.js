@@ -4,9 +4,14 @@
 
 // ========== إعدادات التطوير/الإنتاج ==========
 // تعيين DEBUG = false في الإنتاج لإزالة console.log
-const DEBUG = window.location.hostname === 'localhost' || 
-              window.location.hostname === '127.0.0.1' || 
-              window.location.hostname.includes('localhost:');
+// التحقق من وجود DEBUG قبل الإعلان لتجنب إعادة الإعلان عند تحميل الملف عدة مرات
+if (typeof window.DEBUG === 'undefined') {
+    window.DEBUG = window.location.hostname === 'localhost' || 
+                   window.location.hostname === '127.0.0.1' || 
+                   window.location.hostname.includes('localhost:');
+}
+// استخدام var للسماح بإعادة الإعلان (مع التحقق أعلاه لمنع ذلك)
+var DEBUG = window.DEBUG;
 
 // دالة console.log آمنة (لا تطبع في الإنتاج)
 window.safeLog = function(...args) {

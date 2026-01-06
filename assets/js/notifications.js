@@ -2,7 +2,12 @@
  * JavaScript للإشعارات
  */
 
-let notificationCheckInterval = null;
+// التحقق من وجود notificationCheckInterval قبل الإعلان لتجنب إعادة الإعلان عند تحميل الملف عدة مرات
+if (typeof window.notificationCheckInterval === 'undefined') {
+    window.notificationCheckInterval = null;
+}
+// استخدام var للسماح بإعادة الإعلان (مع التحقق أعلاه لمنع ذلك)
+var notificationCheckInterval = window.notificationCheckInterval;
 const seenNotificationIds = new Set();
 const NOTIFICATION_DEFAULT_LIMIT = 10;
 const CANCELLATION_KEYWORDS = ['تم إلغاء المهمة', 'المهمة الملغية'];
@@ -795,6 +800,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!window.__notificationAutoRefreshActive) {
             window.__notificationAutoRefreshActive = true;
             notificationCheckInterval = setInterval(loadNotifications, pollInterval);
+            window.notificationCheckInterval = notificationCheckInterval;
         }
     }
     
@@ -1017,6 +1023,8 @@ document.addEventListener('DOMContentLoaded', function() {
 window.addEventListener('beforeunload', function() {
     if (notificationCheckInterval) {
         clearInterval(notificationCheckInterval);
+        notificationCheckInterval = null;
+        window.notificationCheckInterval = null;
     }
 });
 
