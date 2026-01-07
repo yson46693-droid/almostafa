@@ -6353,6 +6353,6 @@ document.addEventListener('DOMContentLoaded', function() {
             document.body.style.touchAction = '';
         }
     }, 100);
-});
+}); // End of DOMContentLoaded
 </script>
 <?php endif; ?>

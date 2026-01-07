@@ -1594,7 +1594,7 @@ $baseUrl = getRelativeUrl('dashboard/manager.php?page=product_templates');
 <!-- قسم قوالب المنتجات -->
 <div class="page-header mb-4 d-flex justify-content-between align-items-center flex-wrap">
     <h2 class="mb-0"><i class="bi bi-file-earmark-text me-2"></i>قوالب المنتجات</h2>
-    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createTemplateModal">
+    <button class="btn btn-primary" type="button" onclick="showCreateTemplateModal()">
         <i class="bi bi-plus-circle me-2"></i>إنشاء قالب جديد
     </button>
 </div>
@@ -1649,7 +1649,7 @@ $baseUrl = getRelativeUrl('dashboard/manager.php?page=product_templates');
             <i class="bi bi-inbox fs-1 text-muted d-block mb-3"></i>
             <h5 class="text-muted">لا توجد قوالب منتجات</h5>
             <p class="text-muted">ابدأ بإنشاء قالب منتج جديد</p>
-            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createTemplateModal">
+            <button class="btn btn-primary" type="button" onclick="showCreateTemplateModal()">
                 <i class="bi bi-plus-circle me-2"></i>إنشاء قالب جديد
             </button>
         </div>
@@ -2217,8 +2217,8 @@ if (file_exists($specificationsModulePath)) {
 }
 </style>
 
-<!-- Modal إنشاء قالب جديد -->
-<div class="modal fade" id="createTemplateModal" tabindex="-1">
+<!-- Modal إنشاء قالب جديد (للكمبيوتر فقط) -->
+<div class="modal fade d-none d-md-block" id="createTemplateModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -2342,6 +2342,129 @@ if (file_exists($specificationsModulePath)) {
                 </div>
             </form>
         </div>
+    </div>
+</div>
+
+<!-- Card إنشاء قالب جديد - للموبايل -->
+<div class="card shadow-sm mb-4 d-md-none" id="createTemplateCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>إنشاء قالب منتج جديد</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="createTemplateCardForm">
+            <input type="hidden" name="action" value="create_template">
+            <div class="mb-3">
+                <label class="form-label">اسم المنتج الجديد <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" name="product_name" required placeholder="مثل: عسل بالجوز 720 جرام">
+                <small class="text-muted">أدخل اسم المنتج الذي سيتم إنتاجه</small>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">نوع الكرتونة</label>
+                <select class="form-select" name="carton_type" id="createCartonCardType">
+                    <option value="">اختر نوع الكرتونة (اختياري)</option>
+                    <option value="kilo">كيلو (PKG-002)</option>
+                    <option value="half">نص (PKG-001)</option>
+                    <option value="quarter">ربع (PKG-041)</option>
+                    <option value="third">ثلث (PKG-041)</option>
+                    <option value="custom">نوع مخصص</option>
+                </select>
+                <small class="text-muted">اختر نوع الكرتونة المستخدمة في تعبئة المنتج (اختياري - سيتم تطبيق الخصم التلقائي إذا تم اختياره)</small>
+            </div>
+            
+            <!-- حقول النوع المخصص - للموبايل -->
+            <div class="mb-3" id="customCartonCardFields" style="display: none;">
+                <div class="row">
+                    <div class="col-12 mb-2">
+                        <label class="form-label">عدد المنتجات لكل كرتونة <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" name="custom_carton_quantity" id="createCustomCartonCardQuantity" min="1" placeholder="مثال: 11">
+                        <small class="text-muted">عدد المنتجات المطلوبة لخصم كرتونة واحدة</small>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">نوع الكرتونة <span class="text-danger">*</span></label>
+                        <select class="form-select" name="custom_carton_type_id" id="createCustomCartonCardTypeId">
+                            <option value="">-- اختر نوع الكرتونة --</option>
+                            <?php foreach ($packagingMaterials as $pkg): ?>
+                                <option value="<?php echo $pkg['id']; ?>"><?php echo htmlspecialchars($pkg['name'] ?? '', ENT_QUOTES, 'UTF-8'); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <small class="text-muted">اختر نوع الكرتونة من قائمة أدوات التعبئة</small>
+                    </div>
+                </div>
+            </div>
+            <!-- حقول hidden للتأكد من إرسال القيم حتى عند إخفاء الحقول -->
+            <input type="hidden" name="custom_carton_quantity_hidden" id="createCustomCartonCardQuantityHidden" value="">
+            <input type="hidden" name="custom_carton_type_id_hidden" id="createCustomCartonCardTypeIdHidden" value="">
+            
+            <div class="mb-3">
+                <label class="form-label">أدوات التعبئة المستخدمة <span class="text-danger">*</span></label>
+                <?php if (empty($packagingMaterials)): ?>
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        لا توجد أدوات تعبئة متاحة. يرجى إضافة أدوات التعبئة أولاً من صفحة مخزن أدوات التعبئة.
+                    </div>
+                <?php else: ?>
+                    <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;" id="packagingCheckboxCardContainer">
+                        <?php foreach ($packagingMaterials as $pkg): ?>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" name="packaging_ids[]"
+                                       value="<?php echo $pkg['id']; ?>"
+                                       id="packaging_card_<?php echo $pkg['id']; ?>">
+                                <label class="form-check-label w-100" for="packaging_card_<?php echo $pkg['id']; ?>">
+                                    <span class="fw-semibold"><?php echo htmlspecialchars($pkg['name'] ?? '', ENT_QUOTES, 'UTF-8'); ?></span>
+                                    <?php if (!empty($pkg['quantity'])): ?>
+                                        <span class="text-muted small ms-2">
+                                            (المخزون: <?php echo number_format((float)($pkg['quantity'] ?? 0), 2); ?> <?php echo htmlspecialchars($pkg['unit'] ?? '', ENT_QUOTES, 'UTF-8'); ?>)
+                                        </span>
+                                    <?php endif; ?>
+                                </label>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <small class="text-muted d-block mt-2">
+                        <i class="bi bi-info-circle me-1"></i>يمكنك اختيار أكثر من أداة تعبئة
+                    </small>
+                <?php endif; ?>
+            </div>
+            
+            <!-- سعر الوحدة -->
+            <div class="mb-3">
+                <label class="form-label">سعر الوحدة (<?php echo htmlspecialchars(function_exists('getCurrencySymbol') ? getCurrencySymbol() : (CURRENCY_SYMBOL ?? 'ج.م')); ?>)</label>
+                <div class="input-group">
+                    <span class="input-group-text"><?php echo htmlspecialchars(function_exists('getCurrencySymbol') ? getCurrencySymbol() : (CURRENCY_SYMBOL ?? 'ج.م')); ?></span>
+                    <input type="number"
+                           class="form-control"
+                           name="unit_price"
+                           step="0.01"
+                           min="0"
+                           placeholder="0.00"
+                           value="">
+                </div>
+                <small class="text-muted">سعر بيع الوحدة الواحدة من المنتج (اختياري)</small>
+            </div>
+            
+            <!-- المواد الخام الأخرى -->
+            <div class="mb-3">
+                <label class="form-label">المواد الخام الأساسية</label>
+                <p class="text-muted small mb-2">
+                    أضف جميع المكوّنات المستخدمة في المنتج (مثل العسل، المكسرات، الإضافات...).<br>
+                    <strong>ملاحظة:</strong> نوع العسل يتم تحديده لاحقاً أثناء إنشاء تشغيلة الإنتاج.
+                </p>
+                <div id="rawMaterialsCardContainer">
+                    <!-- سيتم إضافة المواد هنا ديناميكياً -->
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addRawMaterialCard()">
+                    <i class="bi bi-plus"></i> إضافة مادة خام
+                </button>
+            </div>
+            
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle me-2"></i>إنشاء القالب
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeCreateTemplateCard()">إلغاء</button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -2731,6 +2854,7 @@ if (file_exists($specificationsModulePath)) {
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" crossorigin="anonymous"></script>
 <script>
 let rawMaterialIndex = 0;
+let rawMaterialCardIndex = 0;
 
 const PRINT_BARCODE_URL = '<?php echo addslashes(getRelativeUrl("print_barcode.php")); ?>';
 let lastCreatedBatchInfo = null;
@@ -2761,6 +2885,50 @@ document.getElementById('createCartonType')?.addEventListener('change', function
         
         // تحديث الحقول المخفية
         updateHiddenCartonFields('create');
+    }
+});
+
+// تحديث الحقول المخفية للنوع المخصص (لدعم المودال والكارد)
+function updateHiddenCartonFields(mode) {
+    if (mode === 'create') {
+        const qty = document.getElementById('createCustomCartonQuantity');
+        const typeId = document.getElementById('createCustomCartonTypeId');
+        const qtyHidden = document.getElementById('createCustomCartonQuantityHidden');
+        const typeHidden = document.getElementById('createCustomCartonTypeIdHidden');
+        if (qtyHidden) qtyHidden.value = qty && qty.value ? qty.value : '';
+        if (typeHidden) typeHidden.value = typeId && typeId.value ? typeId.value : '';
+        return;
+    }
+
+    if (mode === 'createCard') {
+        const qty = document.getElementById('createCustomCartonCardQuantity');
+        const typeId = document.getElementById('createCustomCartonCardTypeId');
+        const qtyHidden = document.getElementById('createCustomCartonCardQuantityHidden');
+        const typeHidden = document.getElementById('createCustomCartonCardTypeIdHidden');
+        if (qtyHidden) qtyHidden.value = qty && qty.value ? qty.value : '';
+        if (typeHidden) typeHidden.value = typeId && typeId.value ? typeId.value : '';
+    }
+}
+
+// معالجة تغيير نوع الكرتونة في نموذج الإنشاء (Card للموبايل)
+document.getElementById('createCartonCardType')?.addEventListener('change', function() {
+    const customFields = document.getElementById('customCartonCardFields');
+    if (customFields) {
+        if (this.value === 'custom') {
+            customFields.style.display = 'block';
+            const quantityInput = document.getElementById('createCustomCartonCardQuantity');
+            const typeSelect = document.getElementById('createCustomCartonCardTypeId');
+            if (quantityInput) quantityInput.required = true;
+            if (typeSelect) typeSelect.required = true;
+        } else {
+            customFields.style.display = 'none';
+            const quantityInput = document.getElementById('createCustomCartonCardQuantity');
+            const typeSelect = document.getElementById('createCustomCartonCardTypeId');
+            if (quantityInput) quantityInput.required = false;
+            if (typeSelect) typeSelect.required = false;
+        }
+
+        updateHiddenCartonFields('createCard');
     }
 });
 
@@ -3049,6 +3217,212 @@ function addRawMaterial(defaults = {}) {
         }
     }
     rawMaterialIndex++;
+}
+
+function addRawMaterialCard(defaults = {}) {
+    const container = document.getElementById('rawMaterialsCardContainer');
+    if (!container) {
+        return;
+    }
+    const defaultName = typeof defaults.name === 'string' ? defaults.name : '';
+    const defaultQuantity = typeof defaults.quantity === 'number' ? defaults.quantity : '';
+    const defaultUnit = typeof defaults.unit === 'string' ? defaults.unit : 'كيلوجرام';
+    let defaultHoneyState = defaults.honey_state || '';
+
+    const materialOptions = commonMaterials.map(material => {
+        const selected = material === defaultName ? 'selected' : '';
+        return `<option value="${material}" ${selected}>${material}</option>`;
+    }).join('');
+
+    let defaultMaterialName = defaultName;
+    let defaultMaterialType = '';
+    if (defaultName && defaultName.includes(' - ')) {
+        const parts = defaultName.split(' - ', 2);
+        if (parts.length === 2) {
+            defaultMaterialName = parts[0].trim();
+            defaultMaterialType = parts[1].trim();
+        }
+    } else if (defaultName && defaultName.startsWith('عسل ') && defaultName.length > 5) {
+        const parts = defaultName.split(' ', 2);
+        if (parts.length === 2) {
+            defaultMaterialName = parts[0];
+            defaultMaterialType = parts[1];
+        }
+    }
+
+    const idx = rawMaterialCardIndex;
+    const materialHtml = `
+        <div class="raw-material-item mb-2 border p-2 rounded bg-light">
+            <div class="row g-2 align-items-end">
+                <div class="col-12">
+                    <label class="form-label small">اسم المادة <span class="text-danger">*</span></label>
+                    <select class="form-select form-select-sm material-name-select"
+                            name="raw_materials[${idx}][material_name]"
+                            data-material-name-select-card="${idx}"
+                            required>
+                        <option value="">-- اختر المادة --</option>
+                        ${materialOptions}
+                        <option value="__custom__">-- إضافة مادة جديدة --</option>
+                    </select>
+                    <input type="text" class="form-control form-control-sm mt-1 d-none"
+                           name="raw_materials[${idx}][name_custom]"
+                           id="custom_material_card_${idx}"
+                           placeholder="أدخل اسم المادة الجديدة">
+                </div>
+                <div class="col-12">
+                    <label class="form-label small">نوع المادة</label>
+                    <select class="form-select form-select-sm material-type-select d-none"
+                            name="raw_materials[${idx}][material_type]"
+                            id="material_type_card_${idx}"
+                            data-material-type-select-card="${idx}">
+                        <option value="">-- لا يوجد نوع --</option>
+                    </select>
+                    <input type="text" class="form-control form-control-sm mt-1 d-none"
+                           name="raw_materials[${idx}][type_custom]"
+                           id="custom_type_card_${idx}"
+                           placeholder="أدخل نوع المادة">
+                </div>
+                <div class="col-12">
+                    <label class="form-label small">حالة العسل</label>
+                    <select class="form-select form-select-sm honey-state-select d-none"
+                            name="raw_materials[${idx}][honey_state]"
+                            id="honey_state_card_${idx}"
+                            data-honey-state-select-card="${idx}">
+                        <option value="">-- لا ينطبق --</option>
+                        <option value="raw" ${defaultHoneyState === 'raw' ? 'selected' : ''}>خام</option>
+                        <option value="filtered" ${defaultHoneyState === 'filtered' ? 'selected' : ''}>مصفى</option>
+                    </select>
+                </div>
+                <div class="col-12">
+                    <label class="form-label small">الكمية <span class="text-danger">*</span></label>
+                    <input type="number" class="form-control form-control-sm"
+                           name="raw_materials[${idx}][quantity]"
+                           step="0.001" min="0.001" placeholder="0.000" required>
+                </div>
+                <div class="col-12">
+                    <label class="form-label small">الوحدة</label>
+                    <input type="text" class="form-control form-control-sm material-unit-input"
+                           name="raw_materials[${idx}][unit]"
+                           id="material_unit_card_${idx}"
+                           value="كيلوجرام" readonly style="background-color: #e9ecef;">
+                </div>
+                <div class="col-12">
+                    <button type="button" class="btn btn-sm btn-danger w-100" onclick="removeRawMaterial(this)">
+                        <i class="bi bi-trash"></i> حذف
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    container.insertAdjacentHTML('beforeend', materialHtml);
+    const newItem = container.lastElementChild;
+    if (newItem) {
+        const materialSelect = newItem.querySelector(`select[data-material-name-select-card="${idx}"]`);
+        const materialTypeSelect = newItem.querySelector(`select[data-material-type-select-card="${idx}"]`);
+        const customMaterialInput = newItem.querySelector(`#custom_material_card_${idx}`);
+        const customTypeInput = newItem.querySelector(`#custom_type_card_${idx}`);
+        const quantityInput = newItem.querySelector(`input[name="raw_materials[${idx}][quantity]"]`);
+        const honeyStateSelect = newItem.querySelector(`select[data-honey-state-select-card="${idx}"]`);
+
+        const updateMaterialTypes = function(selectedMaterialName, selectedMaterialType) {
+            if (!materialTypeSelect) return;
+
+            materialTypeSelect.innerHTML = '<option value="">-- لا يوجد نوع --</option>';
+            materialTypeSelect.classList.add('d-none');
+            if (customTypeInput) customTypeInput.classList.add('d-none');
+            if (honeyStateSelect) honeyStateSelect.classList.add('d-none');
+
+            if (!selectedMaterialName || selectedMaterialName === '' || selectedMaterialName === '__custom__') {
+                return;
+            }
+
+            const isHoneyMaterial = (selectedMaterialName === 'عسل' || selectedMaterialName.toLowerCase() === 'honey') &&
+                !selectedMaterialName.includes('شمع') &&
+                !selectedMaterialName.toLowerCase().includes('beeswax');
+
+            const materialData = rawMaterialsData[selectedMaterialName];
+            const isDerivativesMaterial = selectedMaterialName === 'مشتقات' ||
+                (materialData && materialData.material_type === 'derivatives');
+
+            const unitInput = newItem.querySelector(`#material_unit_card_${idx}`);
+            if (unitInput) {
+                unitInput.value = isDerivativesMaterial ? 'كيلوجرام' : (defaultUnit || 'كيلوجرام');
+            }
+
+            if (materialData && materialData.has_types && materialData.types && materialData.types.length > 0) {
+                materialTypeSelect.classList.remove('d-none');
+
+                materialData.types.forEach(type => {
+                    const option = document.createElement('option');
+                    option.value = type;
+                    option.textContent = type;
+                    if (type === defaultMaterialType || type === selectedMaterialType) {
+                        option.selected = true;
+                    }
+                    materialTypeSelect.appendChild(option);
+                });
+
+                const finalMaterialType = selectedMaterialType || materialTypeSelect.value;
+                if (isHoneyMaterial && finalMaterialType && finalMaterialType !== '') {
+                    if (honeyStateSelect) honeyStateSelect.classList.remove('d-none');
+                }
+            } else if (isHoneyMaterial) {
+                if (honeyStateSelect) honeyStateSelect.classList.remove('d-none');
+            }
+        };
+
+        if (materialSelect) {
+            if (defaultMaterialName && commonMaterials.includes(defaultMaterialName)) {
+                materialSelect.value = defaultMaterialName;
+            }
+
+            materialSelect.addEventListener('change', function() {
+                const selectedValue = this.value;
+
+                if (selectedValue === '__custom__') {
+                    if (customMaterialInput) {
+                        customMaterialInput.classList.remove('d-none');
+                        customMaterialInput.required = true;
+                        this.required = false;
+                        this.name = '';
+                        customMaterialInput.name = `raw_materials[${idx}][material_name]`;
+                    }
+                    if (materialTypeSelect) materialTypeSelect.classList.add('d-none');
+                    if (honeyStateSelect) honeyStateSelect.classList.add('d-none');
+                } else {
+                    if (customMaterialInput) {
+                        customMaterialInput.classList.add('d-none');
+                        customMaterialInput.required = false;
+                        this.required = true;
+                        customMaterialInput.name = `raw_materials[${idx}][name_custom]`;
+                    }
+
+                    updateMaterialTypes(selectedValue);
+                }
+            });
+
+            if (defaultMaterialName && commonMaterials.includes(defaultMaterialName)) {
+                updateMaterialTypes(defaultMaterialName, defaultMaterialType);
+            }
+        }
+
+        if (quantityInput && defaultQuantity) {
+            quantityInput.value = Number(defaultQuantity).toFixed(3);
+        }
+
+        if (defaultName && !commonMaterials.includes(defaultMaterialName)) {
+            if (materialSelect) {
+                materialSelect.value = '__custom__';
+                materialSelect.dispatchEvent(new Event('change'));
+                if (customMaterialInput) {
+                    customMaterialInput.value = defaultName;
+                }
+            }
+        }
+    }
+
+    rawMaterialCardIndex++;
 }
 
 function removeRawMaterial(btn) {
@@ -4153,7 +4527,7 @@ function scrollToElement(element) {
 function closeAllForms() {
     // إغلاق جميع Cards على الموبايل
     const cards = [
-        'editTemplateCard', 'deleteTemplateCard'
+        'createTemplateCard', 'editTemplateCard', 'deleteTemplateCard'
     ];
     cards.forEach(function(cardId) {
         const card = document.getElementById(cardId);
@@ -4161,12 +4535,19 @@ function closeAllForms() {
             card.style.display = 'none';
             const form = card.querySelector('form');
             if (form) form.reset();
+            if (cardId === 'createTemplateCard') {
+                const container = document.getElementById('rawMaterialsCardContainer');
+                if (container) {
+                    container.innerHTML = '';
+                }
+                rawMaterialCardIndex = 0;
+            }
         }
     });
     
     // إغلاق جميع Modals على الكمبيوتر
     const modals = [
-        'editTemplateModal', 'templateDetailsModal'
+        'createTemplateModal', 'editTemplateModal', 'templateDetailsModal'
     ];
     modals.forEach(function(modalId) {
         const modal = document.getElementById(modalId);
@@ -4195,7 +4576,60 @@ function closeDeleteTemplateCard() {
     }
 }
 
+function closeCreateTemplateCard() {
+    const card = document.getElementById('createTemplateCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+    const container = document.getElementById('rawMaterialsCardContainer');
+    if (container) {
+        container.innerHTML = '';
+    }
+    rawMaterialCardIndex = 0;
+}
+
 // ===== دوال القوالب =====
+
+function showCreateTemplateModal() {
+    closeAllForms();
+
+    if (isMobile()) {
+        const card = document.getElementById('createTemplateCard');
+        if (card) {
+            // إعادة تهيئة النموذج ديناميكياً
+            const container = document.getElementById('rawMaterialsCardContainer');
+            if (container) {
+                container.innerHTML = '';
+            }
+            rawMaterialCardIndex = 0;
+            addRawMaterialCard({ name: 'عسل', unit: 'كيلوجرام' });
+
+            // إعادة تهيئة حقول الكرتونة المخصصة
+            const cartonType = document.getElementById('createCartonCardType');
+            const customFields = document.getElementById('customCartonCardFields');
+            const customQty = document.getElementById('createCustomCartonCardQuantity');
+            const customTypeId = document.getElementById('createCustomCartonCardTypeId');
+            if (cartonType) cartonType.value = '';
+            if (customFields) customFields.style.display = 'none';
+            if (customQty) customQty.required = false;
+            if (customTypeId) customTypeId.required = false;
+            updateHiddenCartonFields('createCard');
+
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        const modal = document.getElementById('createTemplateModal');
+        if (modal) {
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
 
 function deleteTemplate(templateId, templateName) {
     closeAllForms();
@@ -4247,8 +4681,9 @@ function deleteTemplate(templateId, templateName) {
 
 // منع إرسال النموذج إذا لم يتم اختيار أدوات تعبئة
 document.getElementById('createTemplateForm')?.addEventListener('submit', function(e) {
-    const packagingSelect = document.getElementById('packagingSelect');
-    if (packagingSelect && packagingSelect.selectedOptions.length === 0) {
+    const packagingContainer = document.getElementById('packagingCheckboxContainer');
+    const checkedPackaging = packagingContainer ? packagingContainer.querySelectorAll('input[type="checkbox"]:checked') : [];
+    if (checkedPackaging.length === 0) {
         e.preventDefault();
         alert('يرجى اختيار أداة تعبئة واحدة على الأقل');
         return false;
@@ -4282,6 +4717,7 @@ document.getElementById('createTemplateForm')?.addEventListener('submit', functi
         if (customFields) {
             customFields.style.display = 'block';
         }
+        updateHiddenCartonFields('create');
     } else if (customQuantity && customQuantity.value && customQuantity.value > 0 && 
                customTypeId && customTypeId.value && customTypeId.value > 0) {
         // إذا كانت القيم موجودة لكن carton_type ليس 'custom'، ضع 'custom'
@@ -4294,6 +4730,52 @@ document.getElementById('createTemplateForm')?.addEventListener('submit', functi
         if (customFields) {
             customFields.style.display = 'block';
         }
+        updateHiddenCartonFields('create');
+    }
+});
+
+// منع إرسال نموذج الإنشاء (Card للموبايل) إذا لم يتم اختيار أدوات تعبئة
+document.getElementById('createTemplateCardForm')?.addEventListener('submit', function(e) {
+    const packagingContainer = document.getElementById('packagingCheckboxCardContainer');
+    const checkedPackaging = packagingContainer ? packagingContainer.querySelectorAll('input[type="checkbox"]:checked') : [];
+    if (checkedPackaging.length === 0) {
+        e.preventDefault();
+        alert('يرجى اختيار أداة تعبئة واحدة على الأقل');
+        return false;
+    }
+
+    const cartonType = document.getElementById('createCartonCardType');
+    const customQuantity = document.getElementById('createCustomCartonCardQuantity');
+    const customTypeId = document.getElementById('createCustomCartonCardTypeId');
+
+    if (cartonType && cartonType.value === 'custom') {
+        if (!customQuantity || !customQuantity.value || customQuantity.value <= 0) {
+            e.preventDefault();
+            alert('يرجى إدخال عدد المنتجات لكل كرتونة');
+            return false;
+        }
+        if (!customTypeId || !customTypeId.value || customTypeId.value <= 0) {
+            e.preventDefault();
+            alert('يرجى اختيار نوع الكرتونة');
+            return false;
+        }
+        const customFields = document.getElementById('customCartonCardFields');
+        if (customFields) {
+            customFields.style.display = 'block';
+        }
+        updateHiddenCartonFields('createCard');
+    } else if (customQuantity && customQuantity.value && customQuantity.value > 0 &&
+               customTypeId && customTypeId.value && customTypeId.value > 0) {
+        if (cartonType) {
+            cartonType.value = 'custom';
+        }
+        const customFields = document.getElementById('customCartonCardFields');
+        if (customFields) {
+            customFields.style.display = 'block';
+        }
+        updateHiddenCartonFields('createCard');
+    } else {
+        updateHiddenCartonFields('createCard');
     }
 });
 
