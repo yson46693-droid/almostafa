@@ -83,90 +83,7 @@ if ($json && isset($json['icons'])) {
     unset($icon);
 }
 
-// تحديث shortcuts icons أيضاً
-if (isset($json['shortcuts'])) {
-    // الحصول على scope النهائي (سيتم تحديثه لاحقاً إذا لم يكن محدداً)
-    $finalScope = isset($json['scope']) ? $json['scope'] : ($basePath ? $basePath . '/' : '/');
-    
-    $validShortcuts = [];
-    foreach ($json['shortcuts'] as $shortcutIndex => $shortcut) {
-        if (isset($shortcut['icons'])) {
-            foreach ($shortcut['icons'] as &$icon) {
-                if (isset($icon['src'])) {
-                    // إذا كان المسار نسبي (يبدأ بـ assets/)، أضف basePath
-                    if (strpos($icon['src'], 'assets/') === 0) {
-                        $icon['src'] = $basePath . '/' . $icon['src'];
-                    }
-                    // إذا كان المسار مطلق (يبدأ بـ /assets/)، أضف basePath
-                    elseif (strpos($icon['src'], '/assets/') === 0) {
-                        $icon['src'] = $basePath . $icon['src'];
-                    }
-                }
-            }
-            unset($icon);
-        }
-        
-        // معالجة url في shortcuts - يجب أن تكون ضمن scope
-        // التأكد من أن كل shortcut لديه url صحيح
-        if (!isset($shortcut['url']) || empty(trim($shortcut['url']))) {
-            // إذا لم يكن هناك url أو كان فارغاً، استخدم start_url
-            if (isset($json['start_url']) && !empty(trim($json['start_url']))) {
-                $shortcut['url'] = trim($json['start_url']);
-            } else {
-                // إذا لم يكن هناك start_url، تخطى هذا shortcut
-                continue;
-            }
-        }
-        
-        // تنظيف URL من المسافات
-        $shortcut['url'] = trim($shortcut['url']);
-        
-        $shortcutUrl = $shortcut['url'];
-        
-        // إذا كان المسار نسبي (لا يبدأ بـ /)، أضف basePath
-        if (strpos($shortcutUrl, '/') !== 0 && strpos($shortcutUrl, 'http') !== 0) {
-            $shortcutUrl = $basePath . '/' . $shortcutUrl;
-        }
-        // إذا كان المسار مطلق (يبدأ بـ /) ولم يكن يحتوي على basePath، أضفه
-        elseif (strpos($shortcutUrl, '/') === 0 && strpos($shortcutUrl, $basePath) !== 0 && $basePath) {
-            $shortcutUrl = $basePath . $shortcutUrl;
-        }
-        
-        // التأكد من أن URL ضمن scope (يبدأ بنفس scope)
-        // إزالة أي query parameters للتحقق
-        $urlPath = parse_url($shortcutUrl, PHP_URL_PATH) ?? $shortcutUrl;
-        $scopePath = rtrim($finalScope, '/');
-        
-        // التحقق من أن URL ضمن scope
-        if ($scopePath && strpos($urlPath, $scopePath) === 0) {
-            $shortcut['url'] = $shortcutUrl;
-        } else {
-            // إذا كان خارج scope، استخدم start_url بدلاً من حذف url
-            // هذا يمنع تحذير Manifest "property 'url' not present"
-            if (isset($json['start_url'])) {
-                $shortcut['url'] = $json['start_url'];
-            } else {
-                // إذا لم يكن هناك start_url، تخطى هذا shortcut
-                continue;
-            }
-        }
-        
-        // إضافة shortcut إلى القائمة الصالحة
-        $validShortcuts[] = $shortcut;
-    }
-    // استبدال shortcuts بالقائمة الصالحة فقط
-    // التأكد من أن جميع shortcuts لديها url صحيح قبل الإضافة
-    $json['shortcuts'] = array_values(array_filter($validShortcuts, function($shortcut) {
-        return isset($shortcut['url']) && !empty(trim($shortcut['url']));
-    }));
-    
-    // إذا كانت shortcuts فارغة، احذفها تماماً لتجنب التحذيرات
-    if (empty($json['shortcuts'])) {
-        unset($json['shortcuts']);
-    }
-}
-
-// تحديث id و start_url و scope
+// تحديث id و start_url و scope أولاً (قبل معالجة shortcuts)
 if (isset($json['id'])) {
     // إذا كان المسار نسبي (لا يبدأ بـ /)، أضف basePath
     if (strpos($json['id'], '/') !== 0) {
@@ -207,6 +124,91 @@ if (isset($json['scope'])) {
     // التأكد من أن scope ينتهي بـ / (مطلوب لـ Android)
     if (substr($json['scope'], -1) !== '/') {
         $json['scope'] .= '/';
+    }
+}
+
+// تحديث shortcuts icons و URLs (بعد تحديث start_url و scope)
+if (isset($json['shortcuts']) && is_array($json['shortcuts'])) {
+    // الحصول على scope النهائي (بعد التحديث)
+    $finalScope = isset($json['scope']) ? $json['scope'] : ($basePath ? $basePath . '/' : '/');
+    $finalStartUrl = isset($json['start_url']) ? $json['start_url'] : ($basePath ? $basePath . '/' : '/');
+    
+    $validShortcuts = [];
+    foreach ($json['shortcuts'] as $shortcutIndex => $shortcut) {
+        // التأكد من أن shortcut هو array
+        if (!is_array($shortcut)) {
+            continue;
+        }
+        
+        // تحديث icons في shortcut
+        if (isset($shortcut['icons']) && is_array($shortcut['icons'])) {
+            foreach ($shortcut['icons'] as &$icon) {
+                if (isset($icon['src'])) {
+                    // إذا كان المسار نسبي (يبدأ بـ assets/)، أضف basePath
+                    if (strpos($icon['src'], 'assets/') === 0) {
+                        $icon['src'] = $basePath . '/' . $icon['src'];
+                    }
+                    // إذا كان المسار مطلق (يبدأ بـ /assets/)، أضف basePath
+                    elseif (strpos($icon['src'], '/assets/') === 0) {
+                        $icon['src'] = $basePath . $icon['src'];
+                    }
+                }
+            }
+            unset($icon);
+        }
+        
+        // معالجة url في shortcuts - يجب أن تكون ضمن scope
+        // التأكد من أن كل shortcut لديه url صحيح
+        if (!isset($shortcut['url']) || empty(trim($shortcut['url']))) {
+            // إذا لم يكن هناك url أو كان فارغاً، استخدم start_url المحدث
+            $shortcut['url'] = $finalStartUrl;
+        }
+        
+        // تنظيف URL من المسافات
+        $shortcut['url'] = trim($shortcut['url']);
+        
+        // إذا كان URL فارغاً بعد التنظيف، استخدم start_url
+        if (empty($shortcut['url'])) {
+            $shortcut['url'] = $finalStartUrl;
+        }
+        
+        $shortcutUrl = $shortcut['url'];
+        
+        // إذا كان المسار نسبي (لا يبدأ بـ / أو http)، أضف basePath
+        if (strpos($shortcutUrl, '/') !== 0 && strpos($shortcutUrl, 'http') !== 0) {
+            $shortcutUrl = $basePath . '/' . $shortcutUrl;
+        }
+        // إذا كان المسار مطلق (يبدأ بـ /) ولم يكن يحتوي على basePath، أضفه
+        elseif (strpos($shortcutUrl, '/') === 0 && strpos($shortcutUrl, $basePath) !== 0 && $basePath) {
+            $shortcutUrl = $basePath . $shortcutUrl;
+        }
+        
+        // التأكد من أن URL ضمن scope (يبدأ بنفس scope)
+        // إزالة أي query parameters للتحقق
+        $urlPath = parse_url($shortcutUrl, PHP_URL_PATH) ?? $shortcutUrl;
+        $scopePath = rtrim($finalScope, '/');
+        
+        // التحقق من أن URL ضمن scope
+        if ($scopePath && strpos($urlPath, $scopePath) === 0) {
+            $shortcut['url'] = $shortcutUrl;
+        } else {
+            // إذا كان خارج scope، استخدم start_url المحدث بدلاً من حذف url
+            // هذا يمنع تحذير Manifest "property 'url' not present"
+            $shortcut['url'] = $finalStartUrl;
+        }
+        
+        // التأكد النهائي من وجود url قبل الإضافة
+        if (isset($shortcut['url']) && !empty(trim($shortcut['url']))) {
+            $validShortcuts[] = $shortcut;
+        }
+    }
+    
+    // استبدال shortcuts بالقائمة الصالحة فقط
+    if (!empty($validShortcuts)) {
+        $json['shortcuts'] = array_values($validShortcuts);
+    } else {
+        // إذا كانت shortcuts فارغة، احذفها تماماً لتجنب التحذيرات
+        unset($json['shortcuts']);
     }
 }
 
