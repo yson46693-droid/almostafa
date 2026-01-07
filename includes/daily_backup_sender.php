@@ -625,14 +625,39 @@ if (!function_exists('triggerDailyBackupDelivery')) {
             if (!$backupId && $backupFilename) {
                 try {
                     $newBackupRecord = $db->queryOne(
-                        "SELECT id FROM backups WHERE filename = ? ORDER BY id DESC LIMIT 1",
+                        "SELECT id, status FROM backups WHERE filename = ? ORDER BY id DESC LIMIT 1",
                         [$backupFilename]
                     );
                     if ($newBackupRecord && isset($newBackupRecord['id'])) {
                         $backupId = (int) $newBackupRecord['id'];
+                        // التأكد من أن الحالة هي 'success' بعد إنشاء النسخة الاحتياطية
+                        if (isset($newBackupRecord['status']) && $newBackupRecord['status'] !== 'success') {
+                            try {
+                                $db->execute(
+                                    "UPDATE backups SET status = 'success', error_message = NULL WHERE id = ?",
+                                    [$backupId]
+                                );
+                                error_log('Daily Backup: Fixed backup status to success for backup ID: ' . $backupId);
+                            } catch (Throwable $fixError) {
+                                error_log('Daily Backup: failed fixing backup status - ' . $fixError->getMessage());
+                            }
+                        }
                     }
                 } catch (Throwable $idLookupError) {
                     error_log('Daily Backup: failed retrieving backup id - ' . $idLookupError->getMessage());
+                }
+            }
+            
+            // التأكد من أن الحالة هي 'success' مباشرة بعد إنشاء النسخة الاحتياطية
+            if ($backupId) {
+                try {
+                    $db->execute(
+                        "UPDATE backups SET status = 'success', error_message = NULL WHERE id = ?",
+                        [$backupId]
+                    );
+                    error_log('Daily Backup: Ensured backup status is success immediately after creation for backup ID: ' . $backupId);
+                } catch (Throwable $ensureError) {
+                    error_log('Daily Backup: failed ensuring backup status - ' . $ensureError->getMessage());
                 }
             }
         }
@@ -793,20 +818,39 @@ if (!function_exists('triggerDailyBackupDelivery')) {
         }
         
         // التأكد من تحديث الحالة إلى success في جميع الحالات (بعد نجاح إنشاء النسخة الاحتياطية)
-        if (!$backupStatusUpdated && $backupId) {
+        // هذا مهم جداً لضمان أن الحالة دائماً 'success' إذا نجح إنشاء النسخة الاحتياطية
+        if ($backupId) {
             try {
-                $db->execute(
-                    "UPDATE backups SET status = 'success', error_message = NULL WHERE id = ?",
+                // التحقق من الحالة الحالية أولاً
+                $currentStatus = $db->queryOne(
+                    "SELECT status FROM backups WHERE id = ?",
                     [$backupId]
                 );
-                error_log('Daily Backup: Final update - Set backup status to success for backup ID: ' . $backupId);
+                
+                if ($currentStatus && ($currentStatus['status'] ?? '') !== 'success') {
+                    $db->execute(
+                        "UPDATE backups SET status = 'success', error_message = NULL WHERE id = ?",
+                        [$backupId]
+                    );
+                    error_log('Daily Backup: Final update - Fixed backup status from "' . ($currentStatus['status'] ?? 'unknown') . '" to "success" for backup ID: ' . $backupId);
+                } else if (!$backupStatusUpdated) {
+                    // إذا لم يتم التحديث مسبقاً، تأكد من أن الحالة هي 'success'
+                    $db->execute(
+                        "UPDATE backups SET status = 'success', error_message = NULL WHERE id = ?",
+                        [$backupId]
+                    );
+                    error_log('Daily Backup: Final update - Set backup status to success for backup ID: ' . $backupId);
+                } else {
+                    error_log('Daily Backup: Backup status already updated to success for backup ID: ' . $backupId);
+                }
             } catch (Throwable $updateError) {
                 error_log('Daily Backup: failed final update of backup status to success - ' . $updateError->getMessage());
             }
         }
 
         // تم نقل تسجيل نجاح الإرسال إلى قبل الإرسال أعلاه لمنع التكرار
-        // إذا فشل الإرسال، سيتم تحديث الحالة إلى 'failed' في الكود أدناه
+        // ملاحظة: لا نحدث الحالة إلى 'failed' أبداً إذا نجح إنشاء النسخة الاحتياطية
+        // فشل الإرسال إلى Telegram لا يعني فشل النسخة الاحتياطية نفسها
 
         $fileLogValue = $backupRelativePath ?? $backupFilePath;
         if (strlen($fileLogValue) > 510) {

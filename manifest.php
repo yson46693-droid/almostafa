@@ -174,26 +174,63 @@ if (isset($json['shortcuts']) && is_array($json['shortcuts'])) {
         
         $shortcutUrl = $shortcut['url'];
         
-        // إذا كان المسار نسبي (لا يبدأ بـ / أو http)، أضف basePath
-        if (strpos($shortcutUrl, '/') !== 0 && strpos($shortcutUrl, 'http') !== 0) {
-            $shortcutUrl = $basePath . '/' . $shortcutUrl;
-        }
-        // إذا كان المسار مطلق (يبدأ بـ /) ولم يكن يحتوي على basePath، أضفه
-        elseif (strpos($shortcutUrl, '/') === 0 && strpos($shortcutUrl, $basePath) !== 0 && $basePath) {
-            $shortcutUrl = $basePath . $shortcutUrl;
+        // تنظيف scope للاستخدام (إزالة / في النهاية)
+        $scopePath = rtrim($finalScope, '/');
+        if (empty($scopePath)) {
+            $scopePath = '/';
         }
         
-        // التأكد من أن URL ضمن scope (يبدأ بنفس scope)
-        // إزالة أي query parameters للتحقق
-        $urlPath = parse_url($shortcutUrl, PHP_URL_PATH) ?? $shortcutUrl;
-        $scopePath = rtrim($finalScope, '/');
+        // معالجة URL ليكون ضمن scope
+        // إذا كان URL نسبي (لا يبدأ بـ / أو http/https)، أضف / في البداية
+        if (strpos($shortcutUrl, 'http://') !== 0 && strpos($shortcutUrl, 'https://') !== 0) {
+            // إذا كان URL لا يبدأ بـ /، أضف /
+            if (strpos($shortcutUrl, '/') !== 0) {
+                $shortcutUrl = '/' . $shortcutUrl;
+            }
+            
+            // إضافة basePath إذا كان موجوداً ولم يكن موجوداً في URL
+            if ($basePath && strpos($shortcutUrl, $basePath) !== 0) {
+                $shortcutUrl = $basePath . $shortcutUrl;
+            }
+        }
+        
+        // التأكد من أن URL ضمن scope
+        // إزالة أي query parameters و hash للتحقق
+        $urlPath = parse_url($shortcutUrl, PHP_URL_PATH);
+        if ($urlPath === null) {
+            $urlPath = $shortcutUrl;
+        }
+        
+        // تنظيف URL path (إزالة / في النهاية للتحقق)
+        $urlPathClean = rtrim($urlPath, '/');
+        if (empty($urlPathClean)) {
+            $urlPathClean = '/';
+        }
         
         // التحقق من أن URL ضمن scope
-        if ($scopePath && strpos($urlPath, $scopePath) === 0) {
+        // يجب أن يبدأ URL بنفس scope
+        $isWithinScope = false;
+        if ($scopePath === '/') {
+            // إذا كان scope هو /، فإن أي URL مطلق (يبدأ بـ /) يكون ضمن scope
+            $isWithinScope = (strpos($urlPath, '/') === 0);
+        } else {
+            // يجب أن يبدأ URL بـ scope بالضبط
+            // مثال: scope = "/albarakah" و URL = "/albarakah/dashboard/manager.php" ✓
+            // مثال: scope = "/albarakah" و URL = "/dashboard/manager.php" ✗
+            // يجب أن يكون URL يبدأ بـ scope + / أو يساوي scope
+            $isWithinScope = (
+                strpos($urlPath, $scopePath . '/') === 0 || 
+                $urlPath === $scopePath || 
+                $urlPath === $scopePath . '/'
+            );
+        }
+        
+        if ($isWithinScope) {
+            // URL ضمن scope، استخدمه
             $shortcut['url'] = $shortcutUrl;
         } else {
-            // إذا كان خارج scope، استخدم start_url المحدث بدلاً من حذف url
-            // هذا يمنع تحذير Manifest "property 'url' not present"
+            // إذا كان خارج scope، استخدم start_url المحدث
+            // هذا يمنع تحذير Manifest "property 'url' ignored, should be within scope"
             $shortcut['url'] = $finalStartUrl;
         }
         

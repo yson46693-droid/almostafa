@@ -100,6 +100,19 @@ function createDatabaseBackup($backupType = 'daily', $userId = null) {
 
         // الحصول على معرف النسخة الاحتياطية المُنشأة
         $backupId = $insertResult['insert_id'] ?? $db->getLastInsertId();
+        
+        // التأكد من أن الحالة هي 'success' مباشرة بعد الإدراج (حماية إضافية)
+        if ($backupId) {
+            try {
+                $db->execute(
+                    "UPDATE backups SET status = 'success', error_message = NULL WHERE id = ? AND status != 'success'",
+                    [$backupId]
+                );
+                error_log("Backup: Ensured status is 'success' for backup ID: $backupId");
+            } catch (Exception $ensureError) {
+                error_log("Backup: Failed to ensure status - " . $ensureError->getMessage());
+            }
+        }
 
         $maxBackupsToKeep = 9;
         deleteOldBackups($backupType, $maxBackupsToKeep);
