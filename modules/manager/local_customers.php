@@ -1370,6 +1370,114 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
 <link rel="stylesheet" href="<?php echo getRelativeUrl('assets/css/responsive-modals.css'); ?>">
 
 <!-- تعريف الدوال الأساسية للأزرار مبكراً -->
+<script>
+// تعريفات مؤقتة للدوال لضمان عمل الأزرار قبل تحميل الدوال الكاملة
+(function() {
+    if (typeof window.showImportLocalCustomersModal === 'undefined') {
+        window.showImportLocalCustomersModal = function() {
+            // سيتم استبدالها بالدالة الكاملة لاحقاً
+            if (typeof closeAllForms === 'function' && typeof isMobile === 'function') {
+                closeAllForms();
+                if (isMobile()) {
+                    const card = document.getElementById('importLocalCustomersCard');
+                    if (card) {
+                        card.style.display = 'block';
+                        setTimeout(function() {
+                            if (typeof scrollToElement === 'function') {
+                                scrollToElement(card);
+                            }
+                        }, 50);
+                    }
+                } else {
+                    const modal = document.getElementById('importLocalCustomersModal');
+                    if (modal) {
+                        const modalInstance = new bootstrap.Modal(modal);
+                        modalInstance.show();
+                    }
+                }
+            } else {
+                console.log('Waiting for helper functions to load...');
+                setTimeout(function() {
+                    if (typeof window.showImportLocalCustomersModal === 'function') {
+                        window.showImportLocalCustomersModal();
+                    }
+                }, 100);
+            }
+        };
+    }
+    
+    if (typeof window.showCustomerExportModal === 'undefined') {
+        window.showCustomerExportModal = function(event) {
+            // سيتم استبدالها بالدالة الكاملة لاحقاً
+            if (typeof closeAllForms === 'function' && typeof isMobile === 'function') {
+                closeAllForms();
+                const button = event ? (event.target.closest('button') || event.target) : null;
+                const section = button ? (button.getAttribute('data-section') || 'local') : 'local';
+                
+                if (isMobile()) {
+                    const card = document.getElementById('customerExportCard');
+                    if (card) {
+                        card.setAttribute('data-section', section);
+                        card.style.display = 'block';
+                        setTimeout(function() {
+                            if (typeof scrollToElement === 'function') {
+                                scrollToElement(card);
+                            }
+                        }, 50);
+                    }
+                } else {
+                    const modal = document.getElementById('customerExportModal');
+                    if (modal) {
+                        modal.setAttribute('data-section', section);
+                        const modalInstance = new bootstrap.Modal(modal);
+                        modalInstance.show();
+                    }
+                }
+            } else {
+                console.log('Waiting for helper functions to load...');
+                setTimeout(function() {
+                    if (typeof window.showCustomerExportModal === 'function') {
+                        window.showCustomerExportModal(event);
+                    }
+                }, 100);
+            }
+        };
+    }
+    
+    if (typeof window.showAddLocalCustomerModal === 'undefined') {
+        window.showAddLocalCustomerModal = function() {
+            // سيتم استبدالها بالدالة الكاملة لاحقاً
+            if (typeof closeAllForms === 'function' && typeof isMobile === 'function') {
+                closeAllForms();
+                if (isMobile()) {
+                    const card = document.getElementById('addLocalCustomerCard');
+                    if (card) {
+                        card.style.display = 'block';
+                        setTimeout(function() {
+                            if (typeof scrollToElement === 'function') {
+                                scrollToElement(card);
+                            }
+                        }, 50);
+                    }
+                } else {
+                    const modal = document.getElementById('addLocalCustomerModal');
+                    if (modal) {
+                        const modalInstance = new bootstrap.Modal(modal);
+                        modalInstance.show();
+                    }
+                }
+            } else {
+                console.log('Waiting for helper functions to load...');
+                setTimeout(function() {
+                    if (typeof window.showAddLocalCustomerModal === 'function') {
+                        window.showAddLocalCustomerModal();
+                    }
+                }, 100);
+            }
+        };
+    }
+})();
+</script>
 
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3">
     <h2 class="mb-2 mb-md-0">
@@ -1380,7 +1488,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
             <i class="bi bi-file-earmark-spreadsheet me-2"></i>استيراد من CSV
         </button>
         <?php if (in_array($currentRole, ['manager', 'developer', 'accountant'], true)): ?>
-        <button type="button" class="btn btn-info" onclick="showCustomerExportModal()" data-section="local">
+        <button type="button" class="btn btn-info" onclick="showCustomerExportModal(event)" data-section="local">
             <i class="bi bi-download me-2"></i>تصدير عملاء محددين
         </button>
         <?php endif; ?>
@@ -1388,6 +1496,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
             <i class="bi bi-person-plus me-2"></i>إضافة عميل محلي جديد
         </button>
     </div>
+</div>
 </div>
 
 <div class="row g-3 mb-4">
