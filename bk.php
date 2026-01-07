@@ -76,44 +76,92 @@ if (!function_exists('createBackupUsingBkScript')) {
             
             if ($mysqldumpPath) {
                 $structureOnlyFlag = $exportStructureOnly ? '--no-data' : '';
+                // إضافة خيارات كاملة لضمان تصدير جميع الجداول والبيانات
                 $cmd = escapeshellcmd($mysqldumpPath)
                     . " --host=" . escapeshellarg($dbHost)
                     . " --port=" . escapeshellarg($dbPort)
                     . " --user=" . escapeshellarg($dbUser)
                     . " --password=" . escapeshellarg($dbPass)
-                    . " --routines --triggers --events --single-transaction --quick --hex-blob "
+                    . " --routines --triggers --events --single-transaction --quick --hex-blob"
+                    . " --complete-insert --add-drop-table --extended-insert --lock-tables=false"
+                    . " --default-character-set=utf8mb4 --set-charset"
                     . " $structureOnlyFlag "
                     . " " . escapeshellarg($dbName)
                     . " 2>&1";
                 
                 $tmpSql = sys_get_temp_dir() . DIRECTORY_SEPARATOR . $filenameSql;
-                $cmdOut = $cmd . " > " . escapeshellarg($tmpSql);
+                $errorLog = sys_get_temp_dir() . DIRECTORY_SEPARATOR . $filenameSql . '.error.log';
+                $cmdOut = $cmd . " > " . escapeshellarg($tmpSql) . " 2> " . escapeshellarg($errorLog);
                 
                 exec($cmdOut, $dumpOut, $dumpRet);
+                
+                // قراءة سجل الأخطاء إن وُجد
+                $errorOutput = '';
+                if (file_exists($errorLog)) {
+                    $errorOutput = file_get_contents($errorLog);
+                    @unlink($errorLog);
+                }
+                
+                // تسجيل معلومات mysqldump
+                error_log("Backup mysqldump: Return code = $dumpRet, Output lines = " . count($dumpOut));
+                if (!empty($errorOutput)) {
+                    error_log("Backup mysqldump error output: " . $errorOutput);
+                }
+                if (!empty($dumpOut)) {
+                    error_log("Backup mysqldump stdout: " . implode("\n", array_slice($dumpOut, 0, 10)));
+                }
+                
                 if ($dumpRet === 0 && file_exists($tmpSql)) {
-                    $fpIn = fopen($tmpSql, 'rb');
-                    if ($fpIn === false) {
-                        return ['success' => false, 'message' => "فشل في فتح الملف المؤقت للتصدير."];
+                    // التحقق من أن الملف ليس فارغاً
+                    $fileSize = filesize($tmpSql);
+                    if ($fileSize === false || $fileSize === 0) {
+                        error_log("Backup mysqldump: File exists but is empty or unreadable");
+                        @unlink($tmpSql);
+                        // الاستمرار في استخدام الطريقة البديلة
+                    } else {
+                        // قراءة جزء من الملف للتحقق من محتواه
+                        $sampleContent = file_get_contents($tmpSql, false, null, 0, 1000);
+                        if (empty($sampleContent) || strpos($sampleContent, 'CREATE TABLE') === false) {
+                            error_log("Backup mysqldump: File exists but doesn't contain valid SQL content");
+                            @unlink($tmpSql);
+                            // الاستمرار في استخدام الطريقة البديلة
+                        } else {
+                            $fpIn = fopen($tmpSql, 'rb');
+                            if ($fpIn === false) {
+                                return ['success' => false, 'message' => "فشل في فتح الملف المؤقت للتصدير."];
+                            }
+                            $fpOut = gzopen($fullPathGz, 'wb9');
+                            if ($fpOut === false) {
+                                fclose($fpIn);
+                                return ['success' => false, 'message' => "فشل في إنشاء الملف المضغوط: $fullPathGz"];
+                            }
+                            while (!feof($fpIn)) {
+                                $chunk = fread($fpIn, 1024 * 512);
+                                gzwrite($fpOut, $chunk);
+                            }
+                            fclose($fpIn);
+                            gzclose($fpOut);
+                            @unlink($tmpSql);
+                            
+                            error_log("Backup mysqldump: Successfully created backup file, size = " . $fileSize . " bytes");
+                            return [
+                                'success' => true,
+                                'file_path' => $fullPathGz,
+                                'filename' => $filenameGz,
+                                'method' => 'mysqldump'
+                            ];
+                        }
                     }
-                    $fpOut = gzopen($fullPathGz, 'wb9');
-                    if ($fpOut === false) {
-                        fclose($fpIn);
-                        return ['success' => false, 'message' => "فشل في إنشاء الملف المضغوط: $fullPathGz"];
+                } else {
+                    // فشل mysqldump - تسجيل الخطأ والاستمرار في الطريقة البديلة
+                    $errorMsg = "mysqldump failed with return code: $dumpRet";
+                    if (!empty($errorOutput)) {
+                        $errorMsg .= ", Error: " . trim($errorOutput);
                     }
-                    while (!feof($fpIn)) {
-                        $chunk = fread($fpIn, 1024 * 512);
-                        gzwrite($fpOut, $chunk);
+                    if (!empty($dumpOut)) {
+                        $errorMsg .= ", Output: " . implode("; ", array_slice($dumpOut, 0, 5));
                     }
-                    fclose($fpIn);
-                    gzclose($fpOut);
-                    unlink($tmpSql);
-                    
-                    return [
-                        'success' => true,
-                        'file_path' => $fullPathGz,
-                        'filename' => $filenameGz,
-                        'method' => 'mysqldump'
-                    ];
+                    error_log("Backup: " . $errorMsg . " - Falling back to PHP method");
                 }
             }
         }

@@ -709,22 +709,23 @@ if (!function_exists('triggerDailyBackupDelivery')) {
             if ($sendResult === false) {
                 $errorMessage = 'فشل إرسال النسخة الاحتياطية إلى Telegram';
                 dailyBackupSaveStatus(array_merge($statusData, [
-                    'status' => 'failed',
+                    'status' => 'completed', // الحالة completed لأن النسخة الاحتياطية تم إنشاؤها بنجاح
                     'error' => $errorMessage,
                     'file_path' => $backupRelativePath ?? $backupFilePath,
                 ]));
                 
-                // تحديث حالة النسخة الاحتياطية في جدول backups إلى failed
+                // لا نحدث حالة النسخة الاحتياطية إلى failed لأن النسخة الاحتياطية نفسها تم إنشاؤها بنجاح
+                // فقط نضيف رسالة الخطأ في error_message
                 if ($backupId) {
                     try {
                         $db->execute(
-                            "UPDATE backups SET status = 'failed', error_message = ? WHERE id = ?",
+                            "UPDATE backups SET status = 'success', error_message = ? WHERE id = ?",
                             [$errorMessage, $backupId]
                         );
                         $backupStatusUpdated = true;
-                        error_log('Daily Backup: Updated backup status to failed for backup ID: ' . $backupId);
+                        error_log('Daily Backup: Backup created successfully but Telegram send failed for backup ID: ' . $backupId);
                     } catch (Throwable $updateError) {
-                        error_log('Daily Backup: failed updating backup status to failed - ' . $updateError->getMessage());
+                        error_log('Daily Backup: failed updating backup status - ' . $updateError->getMessage());
                     }
                 }
                 
