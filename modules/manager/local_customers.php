@@ -1370,16 +1370,119 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
 <link rel="stylesheet" href="<?php echo getRelativeUrl('assets/css/responsive-modals.css'); ?>">
 
 <script>
-// تعريفات مؤقتة بسيطة - سيتم استبدالها بالدوال الكاملة عند تحميل الصفحة
-if (typeof window.showImportLocalCustomersModal === 'undefined') {
-    window.showImportLocalCustomersModal = function() {};
-}
-if (typeof window.showCustomerExportModal === 'undefined') {
-    window.showCustomerExportModal = function(event) {};
-}
-if (typeof window.showAddLocalCustomerModal === 'undefined') {
-    window.showAddLocalCustomerModal = function() {};
-}
+// تعريفات مؤقتة - سيتم استبدالها بالدوال الكاملة عند تحميل الصفحة
+(function() {
+    'use strict';
+    
+    // دالة مساعدة للتحقق من الموبايل
+    function checkIsMobile() {
+        return window.innerWidth <= 768;
+    }
+    
+    // دالة مساعدة للتمرير
+    function doScrollToElement(element) {
+        if (!element) return;
+        setTimeout(function() {
+            const rect = element.getBoundingClientRect();
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            const elementTop = rect.top + scrollTop;
+            const offset = 80;
+            requestAnimationFrame(function() {
+                window.scrollTo({
+                    top: Math.max(0, elementTop - offset),
+                    behavior: 'smooth'
+                });
+            });
+        }, 200);
+    }
+    
+    // دالة مساعدة لإغلاق النماذج
+    function doCloseAllForms() {
+        const cards = ['importLocalCustomersCard', 'addLocalCustomerCard', 'customerExportCard'];
+        cards.forEach(function(cardId) {
+            const card = document.getElementById(cardId);
+            if (card && card.style.display !== 'none') {
+                card.style.display = 'none';
+            }
+        });
+        const modals = ['importLocalCustomersModal', 'addLocalCustomerModal', 'customerExportModal'];
+        modals.forEach(function(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal && typeof bootstrap !== 'undefined') {
+                const modalInstance = bootstrap.Modal.getInstance(modal);
+                if (modalInstance) modalInstance.hide();
+            }
+        });
+    }
+    
+    if (typeof window.showImportLocalCustomersModal === 'undefined') {
+        window.showImportLocalCustomersModal = function() {
+            doCloseAllForms();
+            if (checkIsMobile()) {
+                const card = document.getElementById('importLocalCustomersCard');
+                if (card) {
+                    card.style.display = 'block';
+                    setTimeout(function() {
+                        doScrollToElement(card);
+                    }, 50);
+                }
+            } else {
+                const modal = document.getElementById('importLocalCustomersModal');
+                if (modal && typeof bootstrap !== 'undefined') {
+                    const modalInstance = new bootstrap.Modal(modal);
+                    modalInstance.show();
+                }
+            }
+        };
+    }
+    
+    if (typeof window.showCustomerExportModal === 'undefined') {
+        window.showCustomerExportModal = function(event) {
+            doCloseAllForms();
+            const button = event ? (event.target.closest('button') || event.target) : null;
+            const section = button ? (button.getAttribute('data-section') || 'local') : 'local';
+            
+            if (checkIsMobile()) {
+                const card = document.getElementById('customerExportCard');
+                if (card) {
+                    card.setAttribute('data-section', section);
+                    card.style.display = 'block';
+                    setTimeout(function() {
+                        doScrollToElement(card);
+                    }, 50);
+                }
+            } else {
+                const modal = document.getElementById('customerExportModal');
+                if (modal && typeof bootstrap !== 'undefined') {
+                    modal.setAttribute('data-section', section);
+                    const modalInstance = new bootstrap.Modal(modal);
+                    modalInstance.show();
+                }
+            }
+        };
+    }
+    
+    if (typeof window.showAddLocalCustomerModal === 'undefined') {
+        window.showAddLocalCustomerModal = function() {
+            doCloseAllForms();
+            if (checkIsMobile()) {
+                const card = document.getElementById('addLocalCustomerCard');
+                if (card) {
+                    card.style.display = 'block';
+                    setTimeout(function() {
+                        doScrollToElement(card);
+                    }, 50);
+                }
+            } else {
+                const modal = document.getElementById('addLocalCustomerModal');
+                if (modal && typeof bootstrap !== 'undefined') {
+                    const modalInstance = new bootstrap.Modal(modal);
+                    modalInstance.show();
+                }
+            }
+        };
+    }
+})();
 </script>
 
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3">

@@ -131,7 +131,17 @@ if (isset($json['scope'])) {
 if (isset($json['shortcuts']) && is_array($json['shortcuts'])) {
     // الحصول على scope النهائي (بعد التحديث)
     $finalScope = isset($json['scope']) ? $json['scope'] : ($basePath ? $basePath . '/' : '/');
-    $finalStartUrl = isset($json['start_url']) ? $json['start_url'] : ($basePath ? $basePath . '/' : '/');
+    $finalStartUrl = isset($json['start_url']) ? trim($json['start_url']) : ($basePath ? $basePath . '/' : '/');
+    
+    // التأكد من أن start_url غير فارغ
+    if (empty($finalStartUrl)) {
+        $finalStartUrl = $basePath ? $basePath . '/' : '/';
+    }
+    
+    // التأكد من أن start_url ينتهي بـ / إذا لم يكن كذلك
+    if (substr($finalStartUrl, -1) !== '/') {
+        $finalStartUrl .= '/';
+    }
     
     $validShortcuts = [];
     foreach ($json['shortcuts'] as $shortcutIndex => $shortcut) {
@@ -234,9 +244,30 @@ if (isset($json['shortcuts']) && is_array($json['shortcuts'])) {
             $shortcut['url'] = $finalStartUrl;
         }
         
-        // التأكد النهائي من وجود url قبل الإضافة
-        if (isset($shortcut['url']) && !empty(trim($shortcut['url']))) {
+        // التأكد النهائي من وجود url صحيح قبل الإضافة
+        // تنظيف url مرة أخرى للتأكد
+        if (!isset($shortcut['url']) || $shortcut['url'] === null) {
+            $shortcut['url'] = $finalStartUrl;
+        }
+        
+        // تحويل url إلى string وتنظيفه
+        $shortcut['url'] = trim((string)$shortcut['url']);
+        
+        // إذا كان url فارغاً بعد التنظيف، استخدم start_url كبديل نهائي
+        if (empty($shortcut['url'])) {
+            $shortcut['url'] = $finalStartUrl;
+        }
+        
+        // التحقق النهائي: يجب أن يكون url موجوداً وغير فارغ
+        // التأكد من أن url هو string غير فارغ
+        $finalUrl = trim((string)$shortcut['url']);
+        if (!empty($finalUrl)) {
+            $shortcut['url'] = $finalUrl;
             $validShortcuts[] = $shortcut;
+        } else {
+            // إذا لم يكن هناك url صحيح بعد كل المحاولات، تخطى هذا shortcut
+            // لا نضيفه إلى القائمة لتجنب التحذيرات
+            continue;
         }
     }
     
