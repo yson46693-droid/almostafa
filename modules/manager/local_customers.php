@@ -3360,19 +3360,16 @@ document.addEventListener('DOMContentLoaded', function () {
     // معالج الحصول على الموقع عند إضافة عميل جديد
     var addCustomerModal = document.getElementById('addLocalCustomerModal');
     
-    // استخدام event delegation للتأكد من عمل الزر حتى لو كان المودال مخفيًا
-    function setupGetLocationHandler() {
-        var getLocationBtn = document.getElementById('getLocationBtn');
-        var addCustomerLatitudeInput = document.getElementById('addCustomerLatitude');
-        var addCustomerLongitudeInput = document.getElementById('addCustomerLongitude');
-
-        if (getLocationBtn && addCustomerLatitudeInput && addCustomerLongitudeInput) {
-            // إزالة أي معالج سابق لتجنب التكرار
-            var newBtn = getLocationBtn.cloneNode(true);
-            getLocationBtn.parentNode.replaceChild(newBtn, getLocationBtn);
-            getLocationBtn = newBtn;
-
-            getLocationBtn.addEventListener('click', function(e) {
+    // استخدام event delegation على المودال للتأكد من عمل الزر
+    if (addCustomerModal) {
+        // استخدام event delegation للتعامل مع النقرات داخل المودال
+        addCustomerModal.addEventListener('click', function(e) {
+            // التحقق من أن العنصر المنقور عليه هو الزر المطلوب أو داخل الزر
+            var clickedElement = e.target;
+            // البحث عن الزر الأقرب (button) ثم التحقق من ID
+            var button = clickedElement.closest('button');
+            
+            if (button && button.id === 'getLocationBtn') {
                 e.preventDefault();
                 e.stopPropagation();
                 
@@ -3381,10 +3378,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     return;
                 }
 
-                var button = this;
                 var originalText = button.innerHTML;
                 
-                // الحصول على العناصر مرة أخرى للتأكد من وجودها
+                // الحصول على العناصر
                 var latitudeInput = document.getElementById('addCustomerLatitude');
                 var longitudeInput = document.getElementById('addCustomerLongitude');
                 
@@ -3441,17 +3437,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 } else {
                     requestGeolocationForNewCustomer();
                 }
-            });
-        }
-    }
-    
-    // إعداد المعالج عند تحميل الصفحة
-    setupGetLocationHandler();
-    
-    // إعادة إعداد المعالج عند فتح المودال (للتأكد من عمله)
-    if (addCustomerModal) {
-        addCustomerModal.addEventListener('shown.bs.modal', function() {
-            setupGetLocationHandler();
+            }
         });
     }
 
