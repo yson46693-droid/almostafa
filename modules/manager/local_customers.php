@@ -1739,8 +1739,9 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                                         <?php if (in_array($currentRole, ['manager', 'developer', 'accountant', 'sales'], true)): ?>
                                         <button
                                             type="button"
-                                            class="btn btn-sm btn-outline-warning edit-local-customer-btn"
-                                            onclick="showEditLocalCustomerModal(this)"
+                                            class="btn btn-sm btn-outline-warning"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#editLocalCustomerModal"
                                             data-customer-id="<?php echo (int)$customer['id']; ?>"
                                             data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
                                             data-customer-phone="<?php echo htmlspecialchars($customer['phone'] ?? ''); ?>"
@@ -1754,7 +1755,8 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                                         <button
                                             type="button"
                                             class="btn btn-sm <?php echo $customerBalance > 0 ? 'btn-success' : 'btn-outline-secondary'; ?>"
-                                            onclick="showCollectPaymentModal(this)"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#collectPaymentModal"
                                             data-customer-id="<?php echo (int)$customer['id']; ?>"
                                             data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
                                             data-customer-balance="<?php echo $rawBalance; ?>"
@@ -1765,8 +1767,9 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                                         </button>
                                         <button
                                             type="button"
-                                            class="btn btn-sm btn-outline-info js-local-customer-purchase-history"
-                                            onclick="showLocalCustomerPurchaseHistoryModal(this)"
+                                            class="btn btn-sm btn-outline-info"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#localCustomerPurchaseHistoryModal"
                                             data-customer-id="<?php echo (int)$customer['id']; ?>"
                                             data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
                                             data-customer-phone="<?php echo htmlspecialchars($customer['phone'] ?? ''); ?>"
@@ -1777,8 +1780,9 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                                         <?php if ($currentRole === 'manager'): ?>
                                         <button
                                             type="button"
-                                            class="btn btn-sm btn-outline-danger delete-local-customer-btn"
-                                            onclick="showDeleteLocalCustomerModal(this)"
+                                            class="btn btn-sm btn-outline-danger"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#deleteLocalCustomerModal"
                                             data-customer-id="<?php echo (int)$customer['id']; ?>"
                                             data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
                                         >
@@ -1787,8 +1791,9 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                                         <?php endif; ?>
                                         <button
                                             type="button"
-                                            class="btn btn-sm btn-outline-warning js-local-customer-return-products"
-                                            onclick="showLocalCustomerPurchaseHistoryModal(this)"
+                                            class="btn btn-sm btn-outline-warning"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#localCustomerReturnModal"
                                             data-customer-id="<?php echo (int)$customer['id']; ?>"
                                             data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
                                             data-customer-phone="<?php echo htmlspecialchars($customer['phone'] ?? ''); ?>"
@@ -6425,6 +6430,120 @@ document.addEventListener('DOMContentLoaded', function() {
             document.body.style.touchAction = '';
         }
     }, 100);
+    
+    // ===== ملء بيانات Modals عند فتحها =====
+    
+    // Modal تعديل عميل
+    var editModal = document.getElementById('editLocalCustomerModal');
+    if (editModal) {
+        editModal.addEventListener('show.bs.modal', function(event) {
+            var button = event.relatedTarget;
+            if (!button) return;
+            
+            var customerId = button.getAttribute('data-customer-id');
+            var customerName = button.getAttribute('data-customer-name');
+            var customerPhone = button.getAttribute('data-customer-phone');
+            var customerAddress = button.getAttribute('data-customer-address');
+            var regionId = button.getAttribute('data-customer-region-id');
+            
+            var modal = this;
+            var idInput = modal.querySelector('input[name="customer_id"]');
+            var nameInput = modal.querySelector('input[name="name"]');
+            var addressInput = modal.querySelector('textarea[name="address"]');
+            var regionSelect = modal.querySelector('select[name="region_id"]');
+            
+            if (idInput) idInput.value = customerId || '';
+            if (nameInput) nameInput.value = customerName || '';
+            if (addressInput) addressInput.value = customerAddress || '';
+            if (regionSelect) regionSelect.value = regionId || '';
+        });
+    }
+    
+    // Modal تحصيل
+    var collectModal = document.getElementById('collectPaymentModal');
+    if (collectModal) {
+        collectModal.addEventListener('show.bs.modal', function(event) {
+            var button = event.relatedTarget;
+            if (!button) return;
+            
+            var customerId = button.getAttribute('data-customer-id');
+            var customerName = button.getAttribute('data-customer-name');
+            var balance = button.getAttribute('data-customer-balance');
+            var balanceFormatted = button.getAttribute('data-customer-balance-formatted');
+            
+            var modal = this;
+            var idInput = modal.querySelector('input[name="customer_id"]');
+            var nameEl = modal.querySelector('.collection-customer-name');
+            var debtEl = modal.querySelector('.collection-current-debt');
+            var amountInput = modal.querySelector('#collectionAmount');
+            
+            if (idInput) idInput.value = customerId || '';
+            if (nameEl) nameEl.textContent = customerName || '';
+            if (debtEl) debtEl.textContent = balanceFormatted || '0.00';
+            if (amountInput) {
+                var numBalance = parseFloat(balance) || 0;
+                amountInput.value = numBalance > 0 ? numBalance.toFixed(2) : '0.00';
+                amountInput.max = numBalance.toFixed(2);
+            }
+        });
+    }
+    
+    // Modal سجل المشتريات
+    var historyModal = document.getElementById('localCustomerPurchaseHistoryModal');
+    if (historyModal) {
+        historyModal.addEventListener('show.bs.modal', function(event) {
+            var button = event.relatedTarget;
+            if (!button) return;
+            
+            var customerId = button.getAttribute('data-customer-id');
+            var customerName = button.getAttribute('data-customer-name');
+            
+            var modal = this;
+            var nameEl = modal.querySelector('.purchase-history-customer-name');
+            if (nameEl) nameEl.textContent = customerName || '';
+            
+            // تحميل سجل المشتريات (يمكن إضافة AJAX هنا)
+            console.log('Loading purchase history for customer:', customerId);
+        });
+    }
+    
+    // Modal حذف
+    var deleteModal = document.getElementById('deleteLocalCustomerModal');
+    if (deleteModal) {
+        deleteModal.addEventListener('show.bs.modal', function(event) {
+            var button = event.relatedTarget;
+            if (!button) return;
+            
+            var customerId = button.getAttribute('data-customer-id');
+            var customerName = button.getAttribute('data-customer-name');
+            
+            var modal = this;
+            var idInput = modal.querySelector('input[name="customer_id"]');
+            var nameEl = modal.querySelector('.delete-local-customer-name');
+            
+            if (idInput) idInput.value = customerId || '';
+            if (nameEl) nameEl.textContent = customerName || '';
+        });
+    }
+    
+    // Modal مرتجعات
+    var returnModal = document.getElementById('localCustomerReturnModal');
+    if (returnModal) {
+        returnModal.addEventListener('show.bs.modal', function(event) {
+            var button = event.relatedTarget;
+            if (!button) return;
+            
+            var customerId = button.getAttribute('data-customer-id');
+            var customerName = button.getAttribute('data-customer-name');
+            
+            var modal = this;
+            var nameEl = modal.querySelector('#localReturnCustomerName');
+            if (nameEl) nameEl.textContent = customerName || '';
+            
+            console.log('Loading returns for customer:', customerId);
+        });
+    }
+    
 }); // End of DOMContentLoaded
 </script>
 <?php endif; ?>
