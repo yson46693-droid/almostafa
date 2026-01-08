@@ -3358,69 +3358,100 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // معالج الحصول على الموقع عند إضافة عميل جديد
-    var getLocationBtn = document.getElementById('getLocationBtn');
-    var addCustomerLatitudeInput = document.getElementById('addCustomerLatitude');
-    var addCustomerLongitudeInput = document.getElementById('addCustomerLongitude');
     var addCustomerModal = document.getElementById('addLocalCustomerModal');
+    
+    // استخدام event delegation للتأكد من عمل الزر حتى لو كان المودال مخفيًا
+    function setupGetLocationHandler() {
+        var getLocationBtn = document.getElementById('getLocationBtn');
+        var addCustomerLatitudeInput = document.getElementById('addCustomerLatitude');
+        var addCustomerLongitudeInput = document.getElementById('addCustomerLongitude');
 
-    if (getLocationBtn && addCustomerLatitudeInput && addCustomerLongitudeInput) {
-        getLocationBtn.addEventListener('click', function() {
-            if (!navigator.geolocation) {
-                showAlert('المتصفح لا يدعم تحديد الموقع الجغرافي.');
-                return;
-            }
+        if (getLocationBtn && addCustomerLatitudeInput && addCustomerLongitudeInput) {
+            // إزالة أي معالج سابق لتجنب التكرار
+            var newBtn = getLocationBtn.cloneNode(true);
+            getLocationBtn.parentNode.replaceChild(newBtn, getLocationBtn);
+            getLocationBtn = newBtn;
 
-            var button = this;
-            var originalText = button.innerHTML;
-            
-            // التحقق من الصلاحيات قبل الطلب
-            function requestGeolocationForNewCustomer() {
-                button.disabled = true;
-                button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جاري الحصول على الموقع...';
+            getLocationBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                if (!navigator.geolocation) {
+                    showAlert('المتصفح لا يدعم تحديد الموقع الجغرافي.');
+                    return;
+                }
 
-                navigator.geolocation.getCurrentPosition(
-                    function(position) {
-                        addCustomerLatitudeInput.value = position.coords.latitude.toFixed(8);
-                        addCustomerLongitudeInput.value = position.coords.longitude.toFixed(8);
-                        button.disabled = false;
-                        button.innerHTML = originalText;
-                        showAlert('تم الحصول على الموقع بنجاح!');
-                    },
-                    function(error) {
-                        button.disabled = false;
-                        button.innerHTML = originalText;
-                        var errorMessage = 'تعذر الحصول على الموقع.';
-                        if (error.code === 1) {
-                            errorMessage = 'تم رفض طلب الحصول على الموقع. يرجى السماح بالوصول إلى الموقع في إعدادات المتصفح.';
-                        } else if (error.code === 2) {
-                            errorMessage = 'تعذر تحديد الموقع. يرجى المحاولة مرة أخرى.';
-                        } else if (error.code === 3) {
-                            errorMessage = 'انتهت مهلة طلب الموقع. يرجى المحاولة مرة أخرى.';
+                var button = this;
+                var originalText = button.innerHTML;
+                
+                // الحصول على العناصر مرة أخرى للتأكد من وجودها
+                var latitudeInput = document.getElementById('addCustomerLatitude');
+                var longitudeInput = document.getElementById('addCustomerLongitude');
+                
+                if (!latitudeInput || !longitudeInput) {
+                    showAlert('تعذر العثور على حقول الموقع.');
+                    return;
+                }
+                
+                // التحقق من الصلاحيات قبل الطلب
+                function requestGeolocationForNewCustomer() {
+                    button.disabled = true;
+                    button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جاري الحصول على الموقع...';
+
+                    navigator.geolocation.getCurrentPosition(
+                        function(position) {
+                            latitudeInput.value = position.coords.latitude.toFixed(8);
+                            longitudeInput.value = position.coords.longitude.toFixed(8);
+                            button.disabled = false;
+                            button.innerHTML = originalText;
+                            showAlert('تم الحصول على الموقع بنجاح!');
+                        },
+                        function(error) {
+                            button.disabled = false;
+                            button.innerHTML = originalText;
+                            var errorMessage = 'تعذر الحصول على الموقع.';
+                            if (error.code === 1) {
+                                errorMessage = 'تم رفض طلب الحصول على الموقع. يرجى السماح بالوصول إلى الموقع في إعدادات المتصفح.';
+                            } else if (error.code === 2) {
+                                errorMessage = 'تعذر تحديد الموقع. يرجى المحاولة مرة أخرى.';
+                            } else if (error.code === 3) {
+                                errorMessage = 'انتهت مهلة طلب الموقع. يرجى المحاولة مرة أخرى.';
+                            }
+                            showAlert(errorMessage);
+                        },
+                        {
+                            enableHighAccuracy: true,
+                            timeout: 10000,
+                            maximumAge: 0
                         }
-                        showAlert(errorMessage);
-                    },
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 10000,
-                        maximumAge: 0
-                    }
-                );
-            }
-            
-            if (navigator.permissions && navigator.permissions.query) {
-                navigator.permissions.query({ name: 'geolocation' }).then(function(result) {
-                    if (result.state === 'denied') {
-                        showAlert('تم رفض إذن الموقع الجغرافي. يرجى السماح بالوصول في إعدادات المتصفح.');
-                        return;
-                    }
+                    );
+                }
+                
+                if (navigator.permissions && navigator.permissions.query) {
+                    navigator.permissions.query({ name: 'geolocation' }).then(function(result) {
+                        if (result.state === 'denied') {
+                            showAlert('تم رفض إذن الموقع الجغرافي. يرجى السماح بالوصول في إعدادات المتصفح.');
+                            return;
+                        }
+                        requestGeolocationForNewCustomer();
+                    }).catch(function() {
+                        // إذا فشل query، حاول مباشرة
+                        requestGeolocationForNewCustomer();
+                    });
+                } else {
                     requestGeolocationForNewCustomer();
-                }).catch(function() {
-                    // إذا فشل query، حاول مباشرة
-                    requestGeolocationForNewCustomer();
-                });
-            } else {
-                requestGeolocationForNewCustomer();
-            }
+                }
+            });
+        }
+    }
+    
+    // إعداد المعالج عند تحميل الصفحة
+    setupGetLocationHandler();
+    
+    // إعادة إعداد المعالج عند فتح المودال (للتأكد من عمله)
+    if (addCustomerModal) {
+        addCustomerModal.addEventListener('shown.bs.modal', function() {
+            setupGetLocationHandler();
         });
     }
 

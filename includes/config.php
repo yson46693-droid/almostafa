@@ -829,10 +829,10 @@ function applyPRGPattern(&$defaultError = null, &$defaultSuccess = null) {
 
 
 if (!defined('ENABLE_DAILY_LOW_STOCK_REPORT')) {
-    define('ENABLE_DAILY_LOW_STOCK_REPORT', true);
+    define('ENABLE_DAILY_LOW_STOCK_REPORT', false);
 }
 if (!defined('ENABLE_DAILY_PACKAGING_ALERT')) {
-    define('ENABLE_DAILY_PACKAGING_ALERT', true);
+    define('ENABLE_DAILY_PACKAGING_ALERT', false);
 }
 if (!defined('ENABLE_DAILY_CONSUMPTION_REPORT')) {
     define('ENABLE_DAILY_CONSUMPTION_REPORT', false);
