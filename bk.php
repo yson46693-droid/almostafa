@@ -37,8 +37,20 @@ if (!function_exists('createBackupUsingBkScript')) {
             }
             require_once __DIR__ . '/includes/config.php';
             
-            $dbHost = defined('DB_HOST') ? DB_HOST : 'sql110.infinityfree.com';
-            $dbPort = defined('DB_PORT') ? DB_PORT : '3306';
+            $dbHostRaw = defined('DB_HOST') ? DB_HOST : 'sql110.infinityfree.com';
+            $dbPortRaw = defined('DB_PORT') ? DB_PORT : '3306';
+            
+            // فصل المنفذ من اسم المضيف إذا كان موجوداً (localhost:3306 -> localhost)
+            $dbHost = $dbHostRaw;
+            $dbPort = $dbPortRaw;
+            if (strpos($dbHostRaw, ':') !== false) {
+                $parts = explode(':', $dbHostRaw, 2);
+                $dbHost = $parts[0];
+                if (isset($parts[1]) && is_numeric($parts[1])) {
+                    $dbPort = $parts[1];
+                }
+            }
+            
             $dbName = defined('DB_NAME') ? DB_NAME : 'if0_40278066_co_db';
             $dbUser = defined('DB_USER') ? DB_USER : 'if0_40278066';
             $dbPass = defined('DB_PASS') ? DB_PASS : 'Osama744';
@@ -703,8 +715,20 @@ if (php_sapi_name() === 'cli' || !function_exists('createDatabaseBackup')) {
         }
         require_once __DIR__ . '/includes/config.php';
         
-        $dbHost = defined('DB_HOST') ? DB_HOST : 'sql110.infinityfree.com';
-        $dbPort = defined('DB_PORT') ? DB_PORT : '3306';
+        $dbHostRaw = defined('DB_HOST') ? DB_HOST : 'sql110.infinityfree.com';
+        $dbPortRaw = defined('DB_PORT') ? DB_PORT : '3306';
+        
+        // فصل المنفذ من اسم المضيف إذا كان موجوداً (localhost:3306 -> localhost)
+        $dbHost = $dbHostRaw;
+        $dbPort = $dbPortRaw;
+        if (strpos($dbHostRaw, ':') !== false) {
+            $parts = explode(':', $dbHostRaw, 2);
+            $dbHost = $parts[0];
+            if (isset($parts[1]) && is_numeric($parts[1])) {
+                $dbPort = $parts[1];
+            }
+        }
+        
         $dbName = defined('DB_NAME') ? DB_NAME : 'if0_40278066_co_db';
         $dbUser = defined('DB_USER') ? DB_USER : 'if0_40278066';
         $dbPass = defined('DB_PASS') ? DB_PASS : 'Osama744';
