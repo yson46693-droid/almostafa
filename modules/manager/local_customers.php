@@ -6245,55 +6245,6 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
 </div>
 
 <script>
-// ===== دوال أساسية للنماذج =====
-
-// دالة للتحقق من الجهاز المحمول
-function isMobile() {
-    return window.innerWidth < 768;
-}
-
-// دالة للتمرير إلى عنصر معين
-function scrollToElement(element) {
-    if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-}
-
-// دالة إغلاق جميع النماذج والـ Cards
-function closeAllForms() {
-    // إغلاق جميع الـ Cards المفتوحة
-    const cards = [
-        'addLocalCustomerCard',
-        'editLocalCustomerCard',
-        'deleteLocalCustomerCard',
-        'collectPaymentCard',
-        'localCustomerPurchaseHistoryCard',
-        'localCustomerReturnCard',
-        'addRegionFromLocalCustomerCard',
-        'importLocalCustomersCard',
-        'customerExportCard',
-        'viewLocationCard'
-    ];
-    
-    cards.forEach(function(cardId) {
-        const card = document.getElementById(cardId);
-        if (card) {
-            card.style.display = 'none';
-            const form = card.querySelector('form');
-            if (form) form.reset();
-        }
-    });
-    
-    // إغلاق جميع الـ Modals المفتوحة
-    const openModals = document.querySelectorAll('.modal.show');
-    openModals.forEach(function(modal) {
-        const modalInstance = bootstrap.Modal.getInstance(modal);
-        if (modalInstance) {
-            modalInstance.hide();
-        }
-    });
-}
-
 // ===== دوال فتح النماذج =====
 
 function showAddRegionFromLocalCustomerModal() {
