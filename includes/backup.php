@@ -24,8 +24,8 @@ function createDatabaseBackup($backupType = 'daily', $userId = null) {
         }
 
         $db = db();
-        // إزالة الشرطة المائلة الأخيرة من المسار
-        $backupDir = rtrim(BASE_PATH . '/backups', '/\\');
+        // تحديد مجلد النسخ الاحتياطي
+        $backupDir = BASE_PATH . DIRECTORY_SEPARATOR . 'backups';
 
         if (!file_exists($backupDir)) {
             if (!@mkdir($backupDir, 0777, true)) {

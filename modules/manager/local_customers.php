@@ -2002,7 +2002,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                                     <?php endforeach; ?>
                                 </select>
                                 <?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
-                                <button type="button" class="btn btn-outline-primary" onclick="showAddRegionFromLocalCustomerModal()">
+                                <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addRegionFromLocalCustomerModal">
                                     <i class="bi bi-plus-circle"></i>
                                 </button>
                                 <?php endif; ?>
@@ -6561,6 +6561,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         return response.json();
                     })
                     .then(function(data) {
+                        if (!tableBody) {
+                            console.error('Table body element not found');
+                            return;
+                        }
+                        
                         if (data.success && data.purchase_history && data.purchase_history.length > 0) {
                             var html = '';
                             data.purchase_history.forEach(function(item) {
@@ -6585,7 +6590,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     })
                     .catch(function(error) {
                         console.error('Error loading purchase history:', error);
-                        tableBody.innerHTML = '<tr><td colspan="7" class="text-center text-danger"><i class="bi bi-exclamation-triangle me-2"></i>حدث خطأ أثناء تحميل سجل المشتريات</td></tr>';
+                        if (tableBody) {
+                            tableBody.innerHTML = '<tr><td colspan="7" class="text-center text-danger"><i class="bi bi-exclamation-triangle me-2"></i>حدث خطأ أثناء تحميل سجل المشتريات</td></tr>';
+                        }
                     });
             }
         });

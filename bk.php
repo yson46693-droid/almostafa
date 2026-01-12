@@ -64,7 +64,7 @@ if (!function_exists('createBackupUsingBkScript')) {
         
         // تحديد مجلد النسخ الاحتياطي
         if ($backupDir === null) {
-            $backupDir = defined('BASE_PATH') ? BASE_PATH . '/backups' : __DIR__ . '/backups';
+            $backupDir = defined('BASE_PATH') ? BASE_PATH . DIRECTORY_SEPARATOR . 'backups' : __DIR__ . DIRECTORY_SEPARATOR . 'backups';
         }
         
         // إنشاء مجلد النسخ الاحتياطي إن لم يكن موجودًا
@@ -742,7 +742,7 @@ if (php_sapi_name() === 'cli' || !function_exists('createDatabaseBackup')) {
     
     // إعدادات التصدير
     $exportStructureOnly = false;
-    $backupDir = defined('BASE_PATH') ? BASE_PATH . '/backups' : __DIR__ . '/backups';
+    $backupDir = defined('BASE_PATH') ? BASE_PATH . DIRECTORY_SEPARATOR . 'backups' : __DIR__ . DIRECTORY_SEPARATOR . 'backups';
     $useMysqldumpIfAvailable = true;
     
     // إنشاء مجلد النسخ الاحتياطي
