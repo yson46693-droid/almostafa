@@ -1768,8 +1768,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                                         <button
                                             type="button"
                                             class="btn btn-sm btn-outline-info"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#localCustomerPurchaseHistoryModal"
+                                            onclick="showLocalCustomerPurchaseHistoryModal(this)"
                                             data-customer-id="<?php echo (int)$customer['id']; ?>"
                                             data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
                                             data-customer-phone="<?php echo htmlspecialchars($customer['phone'] ?? ''); ?>"
@@ -2002,7 +2001,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                                     <?php endforeach; ?>
                                 </select>
                                 <?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
-                                <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addRegionFromLocalCustomerModal">
+                                <button type="button" class="btn btn-outline-primary" onclick="showAddRegionFromLocalCustomerModal()">
                                     <i class="bi bi-plus-circle"></i>
                                 </button>
                                 <?php endif; ?>
@@ -6251,49 +6250,6 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
     </div>
 </div>
 
-<!-- Modal سجل مشتريات العميل المحلي -->
-<div class="modal fade" id="localCustomerPurchaseHistoryModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="bi bi-clock-history me-2"></i>
-                    سجل مشتريات العميل: <span class="purchase-history-customer-name text-primary">-</span>
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
-            </div>
-            <div class="modal-body">
-                <div class="table-responsive">
-                    <table class="table table-hover table-striped align-middle">
-                        <thead class="table-primary">
-                            <tr>
-                                <th>رقم الفاتورة</th>
-                                <th>التاريخ</th>
-                                <th>المنتج</th>
-                                <th>الكمية</th>
-                                <th>سعر الوحدة</th>
-                                <th>الإجمالي</th>
-                                <th>رقم التشغيلة</th>
-                            </tr>
-                        </thead>
-                        <tbody id="purchaseHistoryTableBody">
-                            <tr>
-                                <td colspan="7" class="text-center text-muted">
-                                    <div class="spinner-border spinner-border-sm me-2"></div>
-                                    جاري التحميل...
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <script>
 // ===== دوال فتح النماذج =====
 
@@ -6531,72 +6487,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Modal سجل المشتريات
-    var historyModal = document.getElementById('localCustomerPurchaseHistoryModal');
-    if (historyModal) {
-        historyModal.addEventListener('show.bs.modal', function(event) {
-            var button = event.relatedTarget;
-            if (!button) return;
-            
-            var customerId = button.getAttribute('data-customer-id');
-            var customerName = button.getAttribute('data-customer-name');
-            
-            var modal = this;
-            var nameEl = modal.querySelector('.purchase-history-customer-name');
-            if (nameEl) nameEl.textContent = customerName || '';
-            
-            // عرض حالة التحميل
-            var tableBody = modal.querySelector('#purchaseHistoryTableBody');
-            if (tableBody) {
-                tableBody.innerHTML = '<tr><td colspan="7" class="text-center"><div class="spinner-border spinner-border-sm me-2"></div>جاري تحميل سجل المشتريات...</td></tr>';
-            }
-            
-            // جلب سجل المشتريات عبر AJAX
-            if (customerId) {
-                fetch('/api/customer_purchase_history.php?action=get_history&customer_id=' + customerId + '&type=local')
-                    .then(function(response) {
-                        if (!response.ok) {
-                            throw new Error('فشل تحميل البيانات');
-                        }
-                        return response.json();
-                    })
-                    .then(function(data) {
-                        if (!tableBody) {
-                            console.error('Table body element not found');
-                            return;
-                        }
-                        
-                        if (data.success && data.purchase_history && data.purchase_history.length > 0) {
-                            var html = '';
-                            data.purchase_history.forEach(function(item) {
-                                var batchNumbers = item.batch_numbers && item.batch_numbers.length > 0 
-                                    ? item.batch_numbers.join(', ') 
-                                    : '-';
-                                
-                                html += '<tr>';
-                                html += '<td>' + (item.invoice_number || '-') + '</td>';
-                                html += '<td>' + (item.invoice_date || '-') + '</td>';
-                                html += '<td>' + (item.product_name || 'غير معروف') + '</td>';
-                                html += '<td>' + item.quantity.toFixed(2) + ' ' + (item.unit || 'قطعة') + '</td>';
-                                html += '<td>' + item.unit_price.toFixed(2) + '</td>';
-                                html += '<td>' + item.total_price.toFixed(2) + '</td>';
-                                html += '<td>' + batchNumbers + '</td>';
-                                html += '</tr>';
-                            });
-                            tableBody.innerHTML = html;
-                        } else {
-                            tableBody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">لا توجد مشتريات مسجلة لهذا العميل</td></tr>';
-                        }
-                    })
-                    .catch(function(error) {
-                        console.error('Error loading purchase history:', error);
-                        if (tableBody) {
-                            tableBody.innerHTML = '<tr><td colspan="7" class="text-center text-danger"><i class="bi bi-exclamation-triangle me-2"></i>حدث خطأ أثناء تحميل سجل المشتريات</td></tr>';
-                        }
-                    });
-            }
-        });
-    }
     
     // Modal حذف
     var deleteModal = document.getElementById('deleteLocalCustomerModal');
