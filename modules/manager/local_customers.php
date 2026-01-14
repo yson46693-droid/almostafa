@@ -6353,9 +6353,17 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
 <script>
 // ===== دوال فتح النماذج =====
 
+// التأكد من وجود دالة isMobile
+if (typeof isMobile !== 'function') {
+    function isMobile() {
+        return window.innerWidth <= 768;
+    }
+}
+
 function showAddRegionFromLocalCustomerModal() {
     // لا نغلق النافذة الرئيسية لأن الزر موجود بداخلها
-    if (isMobile()) {
+    const isMobileDevice = typeof isMobile === 'function' ? isMobile() : window.innerWidth <= 768;
+    if (isMobileDevice) {
         // إغلاق كارد المنطقة فقط إذا كان مفتوحاً
         const regionCard = document.getElementById('addRegionFromLocalCustomerCard');
         if (regionCard && regionCard.style.display !== 'none') {
@@ -6399,7 +6407,8 @@ function showDeleteLocalCustomerModal(button) {
     const customerId = button.getAttribute('data-customer-id') || '';
     const customerName = button.getAttribute('data-customer-name') || '-';
     
-    if (isMobile()) {
+    const isMobileDevice = typeof isMobile === 'function' ? isMobile() : window.innerWidth <= 768;
+    if (isMobileDevice) {
         const card = document.getElementById('deleteLocalCustomerCard');
         if (card) {
             document.getElementById('deleteLocalCustomerCardId').value = customerId;
