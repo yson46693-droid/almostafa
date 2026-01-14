@@ -3093,50 +3093,57 @@ window.showLocalCustomerPurchaseHistoryModal = function(button) {
             return;
         }
         
-        const nameElement = document.getElementById('localPurchaseHistoryCustomerName');
-        const phoneElement = document.getElementById('localPurchaseHistoryCustomerPhone');
-        const addressElement = document.getElementById('localPurchaseHistoryCustomerAddress');
-        const loadingElement = document.getElementById('localPurchaseHistoryLoading');
-        const contentElement = document.getElementById('localPurchaseHistoryTable');
-        const errorElement = document.getElementById('localPurchaseHistoryError');
-        
-        if (!nameElement || !phoneElement || !addressElement || !loadingElement || !contentElement || !errorElement) {
-            console.error('Required elements not found in modal:', {
-                nameElement: !!nameElement,
-                phoneElement: !!phoneElement,
-                addressElement: !!addressElement,
-                loadingElement: !!loadingElement,
-                contentElement: !!contentElement,
-                errorElement: !!errorElement
-            });
-            alert('خطأ: بعض عناصر الواجهة غير موجودة');
-            return;
-        }
-        
-        // تحديث معلومات العميل
-        nameElement.textContent = customerName || '-';
-        phoneElement.textContent = customerPhone || '-';
-        addressElement.textContent = customerAddress || '-';
-        
-        // إظهار loading وإخفاء المحتوى
-        loadingElement.classList.remove('d-none');
-        contentElement.classList.add('d-none');
-        errorElement.classList.add('d-none');
-        errorElement.innerHTML = '';
-        
-        // إخفاء الأزرار مؤقتاً
-        const printBtn = document.getElementById('printLocalCustomerStatementBtn');
-        const returnBtn = document.getElementById('localCustomerReturnBtn');
-        if (printBtn) printBtn.style.display = 'none';
-        if (returnBtn) returnBtn.style.display = 'none';
-        
         // إعادة تعيين العناصر المحددة
         if (typeof localSelectedItemsForReturn !== 'undefined') {
             localSelectedItemsForReturn = [];
         }
         
-        const modalInstance = new bootstrap.Modal(modal);
-        modalInstance.show();
+        // الحصول على modal instance أو إنشاء واحد جديد
+        let modalInstance = bootstrap.Modal.getInstance(modal);
+        if (!modalInstance) {
+            modalInstance = new bootstrap.Modal(modal);
+        }
+        
+        // دالة لتحديث العناصر بعد فتح الـ modal
+        const updateModalElements = function() {
+            const nameElement = document.getElementById('localPurchaseHistoryCustomerName');
+            const phoneElement = document.getElementById('localPurchaseHistoryCustomerPhone');
+            const addressElement = document.getElementById('localPurchaseHistoryCustomerAddress');
+            const loadingElement = document.getElementById('localPurchaseHistoryLoading');
+            const contentElement = document.getElementById('localPurchaseHistoryTable');
+            const errorElement = document.getElementById('localPurchaseHistoryError');
+            
+            if (!nameElement || !phoneElement || !addressElement || !loadingElement || !contentElement || !errorElement) {
+                console.error('Required elements not found in modal:', {
+                    nameElement: !!nameElement,
+                    phoneElement: !!phoneElement,
+                    addressElement: !!addressElement,
+                    loadingElement: !!loadingElement,
+                    contentElement: !!contentElement,
+                    errorElement: !!errorElement
+                });
+                return false;
+            }
+            
+            // تحديث معلومات العميل
+            nameElement.textContent = customerName || '-';
+            phoneElement.textContent = customerPhone || '-';
+            addressElement.textContent = customerAddress || '-';
+            
+            // إظهار loading وإخفاء المحتوى
+            loadingElement.classList.remove('d-none');
+            contentElement.classList.add('d-none');
+            errorElement.classList.add('d-none');
+            errorElement.innerHTML = '';
+            
+            // إخفاء الأزرار مؤقتاً
+            const printBtn = document.getElementById('printLocalCustomerStatementBtn');
+            const returnBtn = document.getElementById('localCustomerReturnBtn');
+            if (printBtn) printBtn.style.display = 'none';
+            if (returnBtn) returnBtn.style.display = 'none';
+            
+            return true;
+        };
         
         // دالة تحميل البيانات
         const triggerLoad = function() {
@@ -3145,6 +3152,8 @@ window.showLocalCustomerPurchaseHistoryModal = function(button) {
                 loadLocalCustomerPurchaseHistory();
             } else {
                 console.error('loadLocalCustomerPurchaseHistory function not found');
+                const errorElement = document.getElementById('localPurchaseHistoryError');
+                const loadingElement = document.getElementById('localPurchaseHistoryLoading');
                 if (errorElement) {
                     errorElement.innerHTML = '<div class="alert alert-danger mb-0"><strong>خطأ:</strong> دالة تحميل البيانات غير موجودة</div>';
                     errorElement.classList.remove('d-none');
@@ -3153,11 +3162,31 @@ window.showLocalCustomerPurchaseHistoryModal = function(button) {
             }
         };
         
-        // تحميل البيانات فوراً ثم كنسخة احتياطية عند shown لضمان التنفيذ
-        triggerLoad();
+        // فتح الـ modal
+        modalInstance.show();
+        
+        // تحديث العناصر بعد فتح الـ modal مباشرة
+        setTimeout(function() {
+            if (updateModalElements()) {
+                triggerLoad();
+            } else {
+                console.warn('Modal elements not ready, will retry on shown event');
+            }
+        }, 100);
+        
+        // تحديث العناصر عند فتح الـ modal بالكامل
         modal.addEventListener('shown.bs.modal', function loadData() {
             modal.removeEventListener('shown.bs.modal', loadData);
-            triggerLoad();
+            if (updateModalElements()) {
+                triggerLoad();
+            } else {
+                console.error('Failed to update modal elements after shown event');
+                const errorElement = document.getElementById('localPurchaseHistoryError');
+                if (errorElement) {
+                    errorElement.innerHTML = '<div class="alert alert-danger mb-0"><strong>خطأ:</strong> فشل في تحميل عناصر الواجهة</div>';
+                    errorElement.classList.remove('d-none');
+                }
+            }
         }, { once: true });
     }
 };
@@ -4589,14 +4618,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         messageDiv.classList.remove('d-none');
                     }
                     
-                    // إغلاق card بعد ثانيتين
+                    // إعادة تحميل الصفحة بعد 1.5 ثانية
                     setTimeout(function() {
-                        if (addRegionFromLocalCustomerCard) {
-                            addRegionFromLocalCustomerCard.style.display = 'none';
-                        }
-                        // مسح الحقول
-                        if (regionNameInput) regionNameInput.value = '';
-                        if (messageDiv) messageDiv.classList.add('d-none');
+                        location.reload();
                     }, 1500);
                 } else {
                     if (messageDiv) {
@@ -4604,6 +4628,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         messageDiv.textContent = (data && data.message) ? data.message : 'حدث خطأ أثناء إضافة المنطقة';
                         messageDiv.classList.remove('d-none');
                     }
+                    
+                    // إعادة تحميل الصفحة بعد 2 ثانية في حالة الفشل
+                    setTimeout(function() {
+                        location.reload();
+                    }, 2000);
                 }
             })
             .catch(function(error) {
@@ -4615,6 +4644,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     messageDiv.textContent = 'حدث خطأ أثناء الاتصال بالخادم: ' + error.message;
                     messageDiv.classList.remove('d-none');
                 }
+                
+                // إعادة تحميل الصفحة بعد 2 ثانية في حالة الخطأ
+                setTimeout(function() {
+                    location.reload();
+                }, 2000);
             });
         });
     } else {
