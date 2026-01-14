@@ -4490,15 +4490,26 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // معالج تعديل العميل المحلي - تم نقله إلى دالة showEditLocalCustomerModal
-    
-    // معالج إضافة منطقة جديدة - card واحد لجميع الأجهزة
+
+// معالج إضافة منطقة جديدة - card واحد لجميع الأجهزة
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Setting up add region form handler...');
     var addRegionFromLocalCustomerCardForm = document.getElementById('addRegionFromLocalCustomerCardForm');
     var addRegionFromLocalCustomerCard = document.getElementById('addRegionFromLocalCustomerCard');
     var addLocalCustomerRegionSelect = document.getElementById('addLocalCustomerRegionId');
     var editLocalCustomerRegionSelect = document.getElementById('editLocalCustomerRegionId');
     
+    console.log('Form elements:', {
+        form: !!addRegionFromLocalCustomerCardForm,
+        card: !!addRegionFromLocalCustomerCard,
+        addSelect: !!addLocalCustomerRegionSelect,
+        editSelect: !!editLocalCustomerRegionSelect
+    });
+    
     if (addRegionFromLocalCustomerCardForm && addRegionFromLocalCustomerCard) {
+        console.log('Add region form handler attached successfully');
         addRegionFromLocalCustomerCardForm.addEventListener('submit', function(e) {
+            console.log('Add region form submitted!');
             e.preventDefault();
             e.stopPropagation();
             
@@ -4605,6 +4616,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     messageDiv.classList.remove('d-none');
                 }
             });
+        });
+    } else {
+        console.warn('Add region form or card not found:', {
+            form: !!addRegionFromLocalCustomerCardForm,
+            card: !!addRegionFromLocalCustomerCard
         });
     }
     
