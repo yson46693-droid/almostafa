@@ -295,7 +295,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && trim($_P
     header('Cache-Control: no-cache, must-revalidate');
     
     $userRole = strtolower($currentUser['role'] ?? '');
-    if ($userRole !== 'manager') {
+    if (!in_array($userRole, ['manager', 'developer', 'accountant'], true)) {
         echo json_encode([
             'success' => false,
             'message' => 'غير مصرح لك بإضافة مناطق'
@@ -4413,21 +4413,34 @@ document.addEventListener('DOMContentLoaded', function() {
             formData.append('action', 'add_region_ajax');
             formData.append('name', regionName);
             
+            console.log('Sending AJAX request to add region:', regionName);
             fetch(window.location.href, {
                 method: 'POST',
-                body: formData
+                body: formData,
+                credentials: 'same-origin'
             })
             .then(function(response) {
+                console.log('Response status:', response.status);
                 if (!response.ok) {
                     throw new Error('Network response was not ok: ' + response.status);
                 }
-                return response.json();
+                return response.text().then(function(text) {
+                    console.log('Response text:', text);
+                    try {
+                        return JSON.parse(text);
+                    } catch (e) {
+                        console.error('Failed to parse JSON:', text);
+                        throw new Error('Invalid JSON response: ' + text.substring(0, 100));
+                    }
+                });
             })
             .then(function(data) {
+                console.log('Response data:', data);
                 if (submitBtn) submitBtn.disabled = false;
                 if (spinner) spinner.classList.add('d-none');
                 
                 if (data && data.success) {
+                    console.log('Region added successfully:', data.region);
                     // إضافة المنطقة الجديدة إلى select
                     var newOption = document.createElement('option');
                     newOption.value = data.region.id;
