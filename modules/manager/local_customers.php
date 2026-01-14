@@ -1496,13 +1496,9 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
             
             if (!customerId) return;
             
-            // تعيين المتغيرات العامة إذا كانت موجودة
-            if (typeof window.currentLocalCustomerId !== 'undefined') {
-                window.currentLocalCustomerId = parseInt(customerId, 10);
-            }
-            if (typeof window.currentLocalCustomerName !== 'undefined') {
-                window.currentLocalCustomerName = customerName;
-            }
+            // تعيين المتغيرات العامة دائماً (تُستخدم لاحقاً عند توفر دوال التحميل)
+            window.currentLocalCustomerId = parseInt(customerId, 10);
+            window.currentLocalCustomerName = customerName;
             
             if (checkIsMobile()) {
                 const card = document.getElementById('localCustomerPurchaseHistoryCard');
@@ -1520,12 +1516,23 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                         doScrollToElement(card);
                     }, 50);
                     
-                    // محاولة تحميل البيانات إذا كانت الدالة متاحة
-                    setTimeout(function() {
+                    // محاولة تحميل البيانات إذا كانت الدالة متاحة + إعادة المحاولة عدة مرات
+                    const tryLoad = function() {
                         if (typeof window.loadLocalCustomerPurchaseHistory === 'function') {
                             window.loadLocalCustomerPurchaseHistory();
+                            return true;
                         }
-                    }, 100);
+                        return false;
+                    };
+                    if (!tryLoad()) {
+                        let attempts = 0;
+                        const timer = setInterval(function() {
+                            attempts++;
+                            if (tryLoad() || attempts >= 10) {
+                                clearInterval(timer);
+                            }
+                        }, 300);
+                    }
                 }
             } else {
                 const modal = document.getElementById('localCustomerPurchaseHistoryModal');
@@ -1541,16 +1548,26 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                     const modalInstance = new bootstrap.Modal(modal);
                     modalInstance.show();
                     
-                    // محاولة تحميل البيانات إذا كانت الدالة متاحة
-                    if (typeof window.loadLocalCustomerPurchaseHistory === 'function') {
-                        window.loadLocalCustomerPurchaseHistory();
-                    } else {
+                    // محاولة تحميل البيانات إذا كانت الدالة متاحة + إعادة المحاولة عدة مرات
+                    const tryLoad = function() {
+                        if (typeof window.loadLocalCustomerPurchaseHistory === 'function') {
+                            window.loadLocalCustomerPurchaseHistory();
+                            return true;
+                        }
+                        return false;
+                    };
+                    if (!tryLoad()) {
                         modal.addEventListener('shown.bs.modal', function loadData() {
                             modal.removeEventListener('shown.bs.modal', loadData);
-                            if (typeof window.loadLocalCustomerPurchaseHistory === 'function') {
-                                window.loadLocalCustomerPurchaseHistory();
-                            }
+                            tryLoad();
                         }, { once: true });
+                        let attempts = 0;
+                        const timer = setInterval(function() {
+                            attempts++;
+                            if (tryLoad() || attempts >= 10) {
+                                clearInterval(timer);
+                            }
+                        }, 300);
                     }
                 }
             }
@@ -4094,6 +4111,11 @@ function submitLocalCustomerReturn() {
 
 // دالة تحميل سجل المشتريات للعميل المحلي
 function loadLocalCustomerPurchaseHistory() {
+    // fallback: لو الـ ID اتخزن مؤقتاً على window قبل تهيئة المتغيرات هنا
+    if (!currentLocalCustomerId && typeof window.currentLocalCustomerId !== 'undefined') {
+        currentLocalCustomerId = window.currentLocalCustomerId;
+    }
+    
     if (!currentLocalCustomerId) {
         return;
     }
