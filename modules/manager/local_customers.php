@@ -1482,6 +1482,76 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
             }
         };
     }
+    
+    // تعريف مؤقت لدالة سجل مشتريات العميل المحلي
+    if (typeof window.showLocalCustomerPurchaseHistoryModal === 'undefined') {
+        window.showLocalCustomerPurchaseHistoryModal = function(button) {
+            if (!button) return;
+            doCloseAllForms();
+            
+            const customerId = button.getAttribute('data-customer-id');
+            const customerName = button.getAttribute('data-customer-name');
+            const customerPhone = button.getAttribute('data-customer-phone') || '-';
+            const customerAddress = button.getAttribute('data-customer-address') || '-';
+            
+            if (!customerId) return;
+            
+            // تعيين المتغيرات العامة إذا كانت موجودة
+            if (typeof window.currentLocalCustomerId !== 'undefined') {
+                window.currentLocalCustomerId = parseInt(customerId, 10);
+            }
+            if (typeof window.currentLocalCustomerName !== 'undefined') {
+                window.currentLocalCustomerName = customerName;
+            }
+            
+            if (checkIsMobile()) {
+                const card = document.getElementById('localCustomerPurchaseHistoryCard');
+                if (card) {
+                    const nameElement = card.querySelector('#localPurchaseHistoryCardCustomerName');
+                    const phoneElement = card.querySelector('#localPurchaseHistoryCardCustomerPhone');
+                    const addressElement = card.querySelector('#localPurchaseHistoryCardCustomerAddress');
+                    
+                    if (nameElement) nameElement.textContent = customerName || '-';
+                    if (phoneElement) phoneElement.textContent = customerPhone || '-';
+                    if (addressElement) addressElement.textContent = customerAddress || '-';
+                    
+                    card.style.display = 'block';
+                    setTimeout(function() {
+                        doScrollToElement(card);
+                    }, 50);
+                    
+                    // محاولة تحميل البيانات إذا كانت الدالة متاحة
+                    setTimeout(function() {
+                        if (typeof window.loadLocalCustomerPurchaseHistory === 'function') {
+                            window.loadLocalCustomerPurchaseHistory();
+                        }
+                    }, 100);
+                }
+            } else {
+                const modal = document.getElementById('localCustomerPurchaseHistoryModal');
+                if (modal && typeof bootstrap !== 'undefined') {
+                    const nameElement = document.getElementById('localPurchaseHistoryCustomerName');
+                    const phoneElement = document.getElementById('localPurchaseHistoryCustomerPhone');
+                    const addressElement = document.getElementById('localPurchaseHistoryCustomerAddress');
+                    
+                    if (nameElement) nameElement.textContent = customerName || '-';
+                    if (phoneElement) phoneElement.textContent = customerPhone || '-';
+                    if (addressElement) addressElement.textContent = customerAddress || '-';
+                    
+                    const modalInstance = new bootstrap.Modal(modal);
+                    modalInstance.show();
+                    
+                    // محاولة تحميل البيانات إذا كانت الدالة متاحة
+                    modal.addEventListener('shown.bs.modal', function loadData() {
+                        modal.removeEventListener('shown.bs.modal', loadData);
+                        if (typeof window.loadLocalCustomerPurchaseHistory === 'function') {
+                            window.loadLocalCustomerPurchaseHistory();
+                        }
+                    }, { once: true });
+                }
+            }
+        };
+    }
 })();
 </script>
 
