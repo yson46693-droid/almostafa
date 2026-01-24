@@ -48,6 +48,48 @@ try {
     error_log('Error creating local_customer_phones table in import_local_customers API: ' . $e->getMessage());
 }
 
+// التأكد من وجود جدول المناطق وحقل region_id في local_customers
+try {
+    // إنشاء جدول regions إذا لم يكن موجوداً
+    $regionsTable = $db->queryOne("SHOW TABLES LIKE 'regions'");
+    if (empty($regionsTable)) {
+        $createRegionsTableSql = "
+            CREATE TABLE IF NOT EXISTS `regions` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `name` varchar(100) NOT NULL,
+                `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `name` (`name`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='جدول المناطق'
+        ";
+        try {
+            $db->execute($createRegionsTableSql);
+            error_log('Table regions created successfully in import_local_customers API');
+        } catch (Exception $e) {
+            error_log('Error creating regions table in import_local_customers API: ' . $e->getMessage());
+        }
+    }
+    
+    // إضافة حقل region_id إلى جدول local_customers إذا لم يكن موجوداً
+    $regionIdColumn = $db->queryOne("SHOW COLUMNS FROM local_customers LIKE 'region_id'");
+    if (empty($regionIdColumn)) {
+        try {
+            $db->execute("ALTER TABLE `local_customers` ADD COLUMN `region_id` int(11) DEFAULT NULL AFTER `address`, ADD KEY `region_id` (`region_id`)");
+            // محاولة إضافة المفتاح الأجنبي إذا لم يكن موجوداً
+            $fkCheck = $db->queryOne("SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'local_customers' AND CONSTRAINT_NAME = 'local_customers_ibfk_region'");
+            if (empty($fkCheck)) {
+                $db->execute("ALTER TABLE `local_customers` ADD CONSTRAINT `local_customers_ibfk_region` FOREIGN KEY (`region_id`) REFERENCES `regions` (`id`) ON DELETE SET NULL");
+            }
+            error_log('Column region_id added to local_customers in import_local_customers API');
+        } catch (Exception $e) {
+            error_log('Error adding region_id column to local_customers in import_local_customers API: ' . $e->getMessage());
+        }
+    }
+} catch (Exception $e) {
+    error_log('Error ensuring regions table/column in import_local_customers API: ' . $e->getMessage());
+}
+
 // التحقق من نوع الطلب
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
@@ -366,9 +408,39 @@ try {
             // البحث عن region_id إذا كان اسم المنطقة موجوداً
             $regionId = null;
             if ($hasRegionIdColumn && $regionName && $regionName !== '') {
-                $region = $db->queryOne("SELECT id FROM regions WHERE name = ?", [$regionName]);
-                if ($region) {
-                    $regionId = $region['id'];
+                $normalizedRegionName = trim($regionName);
+                if ($normalizedRegionName !== '') {
+                    static $regionsCache = [];
+                    
+                    if (isset($regionsCache[$normalizedRegionName])) {
+                        $regionId = $regionsCache[$normalizedRegionName];
+                    } else {
+                        // محاولة العثور على المنطقة أولاً
+                        $region = $db->queryOne("SELECT id FROM regions WHERE name = ?", [$normalizedRegionName]);
+                        
+                        if ($region) {
+                            $regionId = (int)$region['id'];
+                            $regionsCache[$normalizedRegionName] = $regionId;
+                        } else {
+                            // إذا لم توجد، نقوم بإنشائها ثم نستخدمها
+                            try {
+                                $db->execute(
+                                    "INSERT INTO regions (name) VALUES (?)",
+                                    [$normalizedRegionName]
+                                );
+                                $regionId = (int)$db->getLastInsertId();
+                                $regionsCache[$normalizedRegionName] = $regionId;
+                            } catch (Exception $regionInsertError) {
+                                // في حالة خطأ (مثلاً تكرار الاسم)، نحاول جلبها مرة أخرى
+                                error_log('Error inserting region in import_local_customers API: ' . $regionInsertError->getMessage());
+                                $region = $db->queryOne("SELECT id FROM regions WHERE name = ?", [$normalizedRegionName]);
+                                if ($region) {
+                                    $regionId = (int)$region['id'];
+                                    $regionsCache[$normalizedRegionName] = $regionId;
+                                }
+                            }
+                        }
+                    }
                 }
             }
             
