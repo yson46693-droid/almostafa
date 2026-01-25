@@ -193,58 +193,58 @@ usort($allDebtors, function($a, $b) {
         
         body {
             font-family: Arial, sans-serif;
-            font-size: 10px;
-            padding: 7px;
+            font-size: 11px;
+            padding: 10px;
             background: white;
         }
         
         .header {
             text-align: center;
-            margin-bottom: 5px;
-            padding-bottom: 3px;
-            border-bottom: 1px solid #000;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 2px solid #000;
         }
         
         .header h1 {
-            font-size: 14px;
+            font-size: 18px;
             font-weight: bold;
-            margin-bottom: 2px;
+            margin-bottom: 5px;
         }
         
         .header .date {
-            font-size: 8px;
+            font-size: 11px;
             color: #666;
         }
         
         table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 7px;
-            margin-top: 3px;
+            font-size: 9px;
+            margin-top: 5px;
         }
         
         table th {
             background-color: #f0f0f0;
             border: 1px solid #000;
-            padding: 2px 3px;
+            padding: 4px 5px;
             text-align: center;
             font-weight: bold;
-            font-size: 7px;
+            font-size: 9px;
         }
         
         table td {
             border: 1px solid #000;
-            padding: 1px 2px;
+            padding: 3px 4px;
             text-align: right;
-            font-size: 6.5px;
-            line-height: 1.2;
+            font-size: 8.5px;
+            line-height: 1.3;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
         
         table tr {
-            height: 6px;
+            height: 8px;
         }
         
         .id-col {
@@ -277,21 +277,65 @@ usort($allDebtors, function($a, $b) {
         }
         
         @media print {
+            @page {
+                size: A4;
+                margin: 1cm 0.8cm;
+            }
+            
             body {
                 padding: 0;
+                font-size: 10px;
             }
             
             .no-print {
                 display: none;
             }
             
+            .header {
+                margin-bottom: 8px;
+                padding-bottom: 4px;
+            }
+            
+            .header h1 {
+                font-size: 16px;
+            }
+            
+            .header .date {
+                font-size: 10px;
+            }
+            
             table {
                 page-break-inside: auto;
+                font-size: 8.5px;
+            }
+            
+            thead {
+                display: table-header-group;
+            }
+            
+            tfoot {
+                display: table-footer-group;
             }
             
             tr {
                 page-break-inside: avoid;
                 page-break-after: auto;
+            }
+            
+            /* تكرار رأس الجدول في كل صفحة */
+            thead tr {
+                page-break-after: avoid;
+                page-break-inside: avoid;
+            }
+            
+            /* منع تقسيم الصف على صفحتين */
+            tbody tr {
+                page-break-inside: avoid;
+            }
+            
+            /* إضافة مسافة أعلى كل صفحة جديدة */
+            tbody tr:first-child {
+                page-break-before: auto;
             }
         }
         
@@ -339,17 +383,17 @@ usort($allDebtors, function($a, $b) {
         <tbody>
             <?php if (empty($allDebtors)): ?>
                 <tr>
-                    <td colspan="6" style="text-align: center; padding: 15px; font-size: 9px;">لا توجد عملاء مدينين</td>
+                    <td colspan="6" style="text-align: center; padding: 15px; font-size: 11px;">لا توجد عملاء مدينين</td>
                 </tr>
             <?php else: ?>
                 <?php foreach ($allDebtors as $customer): ?>
                     <tr>
-                        <td class="id-col" style="font-size: 6.5px;"><?php echo htmlspecialchars((string)$customer['id']); ?></td>
-                        <td class="name-col" style="font-size: 6.5px;"><?php echo htmlspecialchars($customer['name']); ?></td>
-                        <td class="phone-col" style="font-size: 6.5px;"><?php echo htmlspecialchars($customer['phone']); ?></td>
-                        <td class="balance-col" style="font-size: 6.5px; font-weight: bold;"><?php echo number_format($customer['balance'], 2); ?> ج.م</td>
-                        <td class="address-col" style="font-size: 6.5px;"><?php echo htmlspecialchars($customer['address']); ?></td>
-                        <td class="region-col" style="font-size: 6.5px;"><?php echo htmlspecialchars($customer['region_name']); ?></td>
+                        <td class="id-col"><?php echo htmlspecialchars((string)$customer['id']); ?></td>
+                        <td class="name-col"><?php echo htmlspecialchars($customer['name']); ?></td>
+                        <td class="phone-col"><?php echo htmlspecialchars($customer['phone']); ?></td>
+                        <td class="balance-col" style="font-weight: bold;"><?php echo number_format($customer['balance'], 2); ?> ج.م</td>
+                        <td class="address-col"><?php echo htmlspecialchars($customer['address']); ?></td>
+                        <td class="region-col"><?php echo htmlspecialchars($customer['region_name']); ?></td>
                     </tr>
                 <?php endforeach; ?>
             <?php endif; ?>
