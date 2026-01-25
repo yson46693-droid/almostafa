@@ -450,8 +450,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $isAccountant = $userRole === 'accountant';
         
         // السماح للمحاسب والمدير بتسجيل السداد
-        {
-            $supplierId = intval($_POST['supplier_id'] ?? 0);
+        $supplierId = intval($_POST['supplier_id'] ?? 0);
             $amount = cleanFinancialValue($_POST['amount'] ?? 0);
             $notes = trim($_POST['notes'] ?? '');
             
@@ -580,7 +579,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
             }
-        }
     } elseif ($action === 'delete') {
         // منع المحاسب من حذف الموردين
         if (strtolower($currentUser['role'] ?? '') === 'accountant') {

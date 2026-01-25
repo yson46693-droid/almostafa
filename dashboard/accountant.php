@@ -2311,6 +2311,8 @@ if ($isAjaxNavigation) {
                 $modulePath = __DIR__ . '/../modules/accountant/suppliers.php';
                 if (file_exists($modulePath)) {
                     include $modulePath;
+                } else {
+                    echo '<div class="alert alert-warning">صفحة الموردين غير متاحة حالياً</div>';
                 }
                 ?>
                 
