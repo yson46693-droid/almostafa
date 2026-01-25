@@ -7041,6 +7041,59 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // ===== البحث الفوري في صفحة العملاء المحليين =====
+    var customerSearchInput = document.getElementById('customerSearch');
+    var searchForm = customerSearchInput ? customerSearchInput.closest('form') : null;
+    var searchTimeout = null;
+    
+    if (customerSearchInput && searchForm) {
+        // البحث الفوري عند الكتابة
+        customerSearchInput.addEventListener('input', function() {
+            // إلغاء البحث السابق إذا كان المستخدم لا يزال يكتب
+            if (searchTimeout) {
+                clearTimeout(searchTimeout);
+            }
+            
+            // الانتظار 400ms بعد توقف المستخدم عن الكتابة
+            searchTimeout = setTimeout(function() {
+                // إرسال النموذج تلقائياً
+                searchForm.submit();
+            }, 400);
+        });
+        
+        // البحث الفوري عند تغيير الفلاتر
+        var debtStatusFilter = document.getElementById('debtStatusFilter');
+        var regionFilter = document.getElementById('regionFilter');
+        
+        if (debtStatusFilter) {
+            debtStatusFilter.addEventListener('change', function() {
+                if (searchTimeout) {
+                    clearTimeout(searchTimeout);
+                }
+                searchTimeout = setTimeout(function() {
+                    searchForm.submit();
+                }, 300);
+            });
+        }
+        
+        if (regionFilter) {
+            regionFilter.addEventListener('change', function() {
+                if (searchTimeout) {
+                    clearTimeout(searchTimeout);
+                }
+                searchTimeout = setTimeout(function() {
+                    searchForm.submit();
+                }, 300);
+            });
+        }
+        
+        // إزالة زر البحث من العرض (اختياري - يمكن إخفاؤه أو إبقاؤه)
+        // var searchButton = searchForm.querySelector('button[type="submit"]');
+        // if (searchButton) {
+        //     searchButton.style.display = 'none';
+        // }
+    }
+    
 }); // End of DOMContentLoaded
 </script>
 <?php endif; ?>
