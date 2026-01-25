@@ -1704,6 +1704,9 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
         <button type="button" class="btn btn-info" onclick="showCustomerExportModal(event)" data-section="local">
             <i class="bi bi-download me-2"></i> شيت عملاء 
         </button>
+        <button type="button" class="btn btn-danger" onclick="printDebtorCustomers()">
+            <i class="bi bi-people me-2"></i>العملاء المدينين
+        </button>
         <?php endif; ?>
         <button class="btn btn-primary" onclick="showAddLocalCustomerModal()">
             <i class="bi bi-person-plus me-2"></i>إضافة عميل جديد
