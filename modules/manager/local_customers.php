@@ -1871,7 +1871,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                                         </button>
                                         <button
                                             type="button"
-                                            class="btn btn-sm btn-outline-info"
+                                            class="btn btn-sm btn-outline-info local-customer-purchase-history-btn"
                                             onclick="showLocalCustomerPurchaseHistoryModal(this)"
                                             data-customer-id="<?php echo (int)$customer['id']; ?>"
                                             data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
@@ -1893,7 +1893,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                                         <?php endif; ?>
                                         <button
                                             type="button"
-                                            class="btn btn-sm btn-outline-warning"
+                                            class="btn btn-sm btn-outline-warning local-customer-return-btn"
                                             onclick="showLocalCustomerReturnModal(this)"
                                             data-customer-id="<?php echo (int)$customer['id']; ?>"
                                             data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
@@ -3025,29 +3025,24 @@ window.showLocalCustomerPurchaseHistoryModal = function(button) {
         const contentElement = card.querySelector('#localPurchaseHistoryCardTable');
         const errorElement = card.querySelector('#localPurchaseHistoryCardError');
         
-        if (!nameElement || !phoneElement || !addressElement || !loadingElement || !contentElement || !errorElement) {
-            console.error('Required elements not found in card:', {
-                nameElement: !!nameElement,
-                phoneElement: !!phoneElement,
-                addressElement: !!addressElement,
-                loadingElement: !!loadingElement,
-                contentElement: !!contentElement,
-                errorElement: !!errorElement
-            });
-            alert('خطأ: بعض عناصر الواجهة غير موجودة');
-            return;
-        }
-        
-        // تحديث معلومات العميل
-        nameElement.textContent = customerName || '-';
-        phoneElement.textContent = customerPhone || '-';
-        addressElement.textContent = customerAddress || '-';
+        // تحديث معلومات العميل (اختياري إن وُجد العنصر)
+        if (nameElement) nameElement.textContent = customerName || '-';
+        if (phoneElement) phoneElement.textContent = customerPhone || '-';
+        if (addressElement) addressElement.textContent = customerAddress || '-';
         
         // إظهار loading وإخفاء المحتوى
-        loadingElement.classList.remove('d-none');
-        contentElement.classList.add('d-none');
-        errorElement.classList.add('d-none');
-        errorElement.innerHTML = '';
+        if (loadingElement) {
+            loadingElement.classList.remove('d-none');
+            loadingElement.style.display = '';
+        }
+        if (contentElement) {
+            contentElement.classList.add('d-none');
+            contentElement.style.display = 'none';
+        }
+        if (errorElement) {
+            errorElement.classList.add('d-none');
+            errorElement.innerHTML = '';
+        }
         
         // إخفاء الأزرار مؤقتاً
         const printBtn = card.querySelector('#printLocalCustomerStatementCardBtn');
@@ -3060,18 +3055,17 @@ window.showLocalCustomerPurchaseHistoryModal = function(button) {
             localSelectedItemsForReturn = [];
         }
         
-        card.style.display = 'block';
+        card.style.setProperty('display', 'block', 'important');
+        card.offsetHeight;
         setTimeout(function() {
             scrollToElement(card);
-        }, 50);
+        }, 80);
         
         // تحميل البيانات بعد إظهار الـ card أو مباشرة كنسخة احتياطية
         const triggerLoad = function() {
             if (typeof loadLocalCustomerPurchaseHistory === 'function') {
-                console.log('Triggering loadLocalCustomerPurchaseHistory for customer ID:', customerIdNum);
                 loadLocalCustomerPurchaseHistory();
             } else {
-                console.error('loadLocalCustomerPurchaseHistory function not found');
                 if (errorElement) {
                     errorElement.innerHTML = '<div class="alert alert-danger mb-0"><strong>خطأ:</strong> دالة تحميل البيانات غير موجودة</div>';
                     errorElement.classList.remove('d-none');
@@ -3079,7 +3073,7 @@ window.showLocalCustomerPurchaseHistoryModal = function(button) {
                 if (loadingElement) loadingElement.classList.add('d-none');
             }
         };
-        setTimeout(triggerLoad, 50);
+        setTimeout(triggerLoad, 100);
         triggerLoad();
     } else {
         // على الكمبيوتر: استخدام Modal
@@ -3311,6 +3305,33 @@ function closeViewLocationCard() {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
+    // تفويض النقر/اللمس لأزرار سجل ومرتجع على الموبايل (داخل جدول قابل للتمرير)
+    var tableWrapper = document.querySelector('.dashboard-table-wrapper');
+    if (tableWrapper && typeof isMobile === 'function') {
+        function handleActionClick(e) {
+            if (!isMobile()) return;
+            var btn = e.target.closest('.local-customer-purchase-history-btn');
+            if (btn) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof showLocalCustomerPurchaseHistoryModal === 'function') {
+                    showLocalCustomerPurchaseHistoryModal(btn);
+                }
+                return;
+            }
+            btn = e.target.closest('.local-customer-return-btn');
+            if (btn) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof showLocalCustomerReturnModal === 'function') {
+                    showLocalCustomerReturnModal(btn);
+                }
+            }
+        }
+        tableWrapper.addEventListener('click', handleActionClick, true);
+        tableWrapper.addEventListener('touchend', handleActionClick, true);
+    }
+
     // معالج نموذج التحصيل
     var collectionModal = document.getElementById('collectPaymentModal');
     if (collectionModal) {
@@ -5708,8 +5729,18 @@ window.CUSTOMER_EXPORT_CONFIG = {
     #editLocalCustomerCard,
     #customerExportCard,
     #viewLocationCard,
-    #importLocalCustomersCard {
+    #importLocalCustomersCard,
+    #localCustomerPurchaseHistoryCard,
+    #deleteLocalCustomerCard {
         display: none !important;
+    }
+}
+
+/* إظهار بطاقة سجل المشتريات على الموبايل عند الفتح (لا تخفيها) */
+@media (max-width: 768px) {
+    #localCustomerPurchaseHistoryCard[style*="display: block"],
+    #localCustomerPurchaseHistoryCard[style*="display:block"] {
+        display: block !important;
     }
 }
 

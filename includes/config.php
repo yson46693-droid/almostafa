@@ -576,7 +576,7 @@ function cleanFinancialValue($value, $allowNegative = false) {
     if ($allowNegative) {
         // إذا كان مسموحاً بالقيم السالبة (للرصيد الدائن)، فقط التحقق من الحد الأقصى
         // القيم المقبولة: من -1000000 إلى 1000000
-        if ($value > 1000000 || $value < -1000000) {
+        if ($value > 100000000 || $value < -1000000) {
             return 0;
         }
     } else {
