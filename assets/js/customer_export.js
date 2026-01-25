@@ -408,6 +408,13 @@
                 selectAllCustomers(false);
             });
         }
+        
+        const selectAllAndGenerateBtn = document.getElementById('selectAllCustomersAndGenerate');
+        if (selectAllAndGenerateBtn) {
+            selectAllAndGenerateBtn.addEventListener('click', function() {
+                selectAllCustomersAndGenerate();
+            });
+        }
     }
     
     /**
@@ -441,6 +448,13 @@
         if (deselectAllBtn) {
             deselectAllBtn.addEventListener('click', function() {
                 selectAllCustomers(false);
+            });
+        }
+        
+        const selectAllAndGenerateBtn = exportCard.querySelector('#selectAllCustomersAndGenerate');
+        if (selectAllAndGenerateBtn) {
+            selectAllAndGenerateBtn.addEventListener('click', function() {
+                selectAllCustomersAndGenerate();
             });
         }
         
@@ -1213,6 +1227,202 @@
         }
         
         updateSelectedCustomers();
+    }
+    
+    /**
+     * تحديد جميع العملاء المدينين وإنشاء ملف Excel تلقائياً
+     */
+    async function selectAllCustomersAndGenerate() {
+        const selectAllAndGenerateBtn = document.getElementById('selectAllCustomersAndGenerate') || 
+                                         document.getElementById('selectAllCustomersAndGenerateCard');
+        
+        if (!selectAllAndGenerateBtn) {
+            return;
+        }
+        
+        // تعطيل الزر وإظهار loading
+        const originalText = selectAllAndGenerateBtn.innerHTML;
+        selectAllAndGenerateBtn.disabled = true;
+        selectAllAndGenerateBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جاري التحميل...';
+        
+        try {
+            // تحديد القسم الحالي
+            const exportModal = document.getElementById('customerExportModal');
+            const exportCard = document.getElementById('customerExportCard');
+            const container = exportModal || exportCard;
+            
+            if (!container) {
+                throw new Error('لم يتم العثور على نموذج التصدير');
+            }
+            
+            currentSection = container.getAttribute('data-section') || 'company';
+            
+            // جلب معرف المندوب (فقط إذا كان قسم عملاء المندوبين)
+            const repSelect = document.getElementById('exportRepSelect');
+            const repId = (currentSection === 'delegates' && repSelect) ? parseInt(repSelect.value, 10) : null;
+            
+            if (currentSection === 'delegates' && !repId) {
+                throw new Error('يرجى اختيار المندوب أولاً');
+            }
+            
+            // جلب جميع العملاء المدينين بدون pagination
+            let allCustomers = [];
+            
+            if (currentSection === 'local') {
+                // جلب جميع العملاء المحليين
+                allCustomers = await fetchAllLocalCustomers();
+            } else if (currentSection === 'company') {
+                // جلب جميع عملاء الشركة
+                allCustomers = await fetchAllCompanyCustomers();
+            } else if (currentSection === 'delegates' && repId) {
+                // جلب جميع عملاء المندوب
+                allCustomers = await fetchAllRepCustomers(repId);
+            } else {
+                throw new Error('قسم غير معروف');
+            }
+            
+            if (allCustomers.length === 0) {
+                alert('لا توجد عملاء مدينين متاحة للتصدير');
+                return;
+            }
+            
+            // تحديد جميع العملاء
+            selectedCustomers = allCustomers.map(function(customer) {
+                return parseInt(customer.id, 10);
+            });
+            
+            // تحديث collectionAmounts (يمكن إضافة مبالغ اختيارية لاحقاً)
+            collectionAmounts = {};
+            
+            // تحديث واجهة المستخدم
+            updateSelectedCustomers();
+            
+            // تحديث حالة الأزرار
+            selectAllAndGenerateBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جاري التوليد...';
+            
+            // إنشاء ملف Excel تلقائياً
+            await handleGenerateExcel();
+            
+        } catch (error) {
+            console.error('Error in selectAllCustomersAndGenerate:', error);
+            alert('حدث خطأ: ' + error.message);
+        } finally {
+            // إعادة تعيين الزر
+            if (selectAllAndGenerateBtn) {
+                selectAllAndGenerateBtn.disabled = false;
+                selectAllAndGenerateBtn.innerHTML = originalText;
+            }
+        }
+    }
+    
+    /**
+     * جلب جميع العملاء المحليين المدينين
+     */
+    async function fetchAllLocalCustomers() {
+        const allCustomers = [];
+        let page = 1;
+        let hasMore = true;
+        
+        while (hasMore) {
+            try {
+                const response = await fetch(getApiPath('get_local_customers_for_export.php') + '?page=' + page + '&all=1', {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (!result.success) {
+                    throw new Error(result.message || 'فشل في جلب العملاء المحليين');
+                }
+                
+                if (result.customers && result.customers.length > 0) {
+                    allCustomers.push(...result.customers);
+                }
+                
+                hasMore = result.has_more && result.customers && result.customers.length > 0;
+                page++;
+                
+            } catch (error) {
+                console.error('Error fetching local customers:', error);
+                throw error;
+            }
+        }
+        
+        return allCustomers;
+    }
+    
+    /**
+     * جلب جميع عملاء الشركة المدينين
+     */
+    async function fetchAllCompanyCustomers() {
+        try {
+            const response = await fetch(getApiPath('get_company_customers_for_export.php') + '?all=1', {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (!result.success) {
+                throw new Error(result.message || 'فشل في جلب عملاء الشركة');
+            }
+            
+            // فلترة العملاء المدينين فقط
+            return (result.customers || []).filter(function(customer) {
+                return customer.balance && parseFloat(customer.balance) > 0;
+            });
+            
+        } catch (error) {
+            console.error('Error fetching company customers:', error);
+            throw error;
+        }
+    }
+    
+    /**
+     * جلب جميع عملاء المندوب المدينين
+     */
+    async function fetchAllRepCustomers(repId) {
+        const allCustomers = [];
+        let page = 1;
+        let hasMore = true;
+        
+        while (hasMore) {
+            try {
+                const response = await fetch(getApiPath('get_rep_customers_for_export.php') + '?rep_id=' + repId + '&page=' + page + '&all=1', {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (!result.success) {
+                    throw new Error(result.message || 'فشل في جلب عملاء المندوب');
+                }
+                
+                if (result.customers && result.customers.length > 0) {
+                    allCustomers.push(...result.customers);
+                }
+                
+                hasMore = result.has_more && result.customers && result.customers.length > 0;
+                page++;
+                
+            } catch (error) {
+                console.error('Error fetching rep customers:', error);
+                throw error;
+            }
+        }
+        
+        return allCustomers;
     }
     
     /**

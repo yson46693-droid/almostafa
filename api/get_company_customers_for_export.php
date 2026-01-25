@@ -83,13 +83,14 @@ try {
     
     $db = db();
     
-    // جلب عملاء الشركة (الذين ليس لهم مندوب نشط)
+    // جلب عملاء الشركة المدينين فقط (الذين ليس لهم مندوب نشط)
     // عملاء الشركة: rep_id IS NULL AND created_by NOT IN (مناديب المبيعات النشطون)
     $customers = $db->query(
         "SELECT c.*, r.name as region_name
          FROM customers c
          LEFT JOIN regions r ON c.region_id = r.id
          WHERE c.status = 'active'
+           AND c.balance > 0
            AND (c.rep_id IS NULL OR c.rep_id = 0)
            AND (
                c.created_by IS NULL 

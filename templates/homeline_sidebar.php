@@ -792,6 +792,45 @@ if (empty($menuItems)) {
         </button>
     </div>
     
+    <!-- Sidebar Search -->
+    <div class="sidebar-search-wrapper px-3 mb-3">
+        <div class="input-group input-group-sm">
+            <span class="input-group-text bg-transparent border-end-0 text-muted">
+                <i class="bi bi-search"></i>
+            </span>
+            <input type="text" class="form-control border-start-0 bg-transparent text-white sidebar-search-input shadow-none" 
+                   id="sidebarSearchInput" 
+                   placeholder="بحث سريع..." 
+                   autocomplete="off"
+                   style="border-color: rgba(255,255,255,0.1); color: inherit;">
+        </div>
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchInput = document.getElementById('sidebarSearchInput');
+            if (searchInput) {
+                searchInput.addEventListener('input', function() {
+                    const filter = this.value.toLowerCase().trim();
+                    const navItems = document.querySelectorAll('.homeline-sidebar .nav-item');
+                    
+                    navItems.forEach(function(item) {
+                        const link = item.querySelector('.nav-link');
+                        if (link) {
+                            const text = link.textContent.toLowerCase();
+                            // البحث في النص والنص الفرعي (إذا وجد)
+                            if (text.includes(filter)) {
+                                item.style.display = '';
+                                // تمييز النص المطابق (اختياري - بسيط حالياً)
+                            } else {
+                                item.style.display = 'none';
+                            }
+                        }
+                    });
+                });
+            }
+        });
+        </script>
+    </div>
+
     <nav class="sidebar-nav">
         <ul class="nav">
             <?php

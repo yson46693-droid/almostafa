@@ -152,7 +152,7 @@ try {
         'page' => $page,
         'per_page' => $perPage,
         'total_pages' => $totalPages,
-        'has_more' => $page < $totalPages
+        'has_more' => $page < $totalPages && count($result) === $perPage
     ]);
     
 } catch (Exception $e) {

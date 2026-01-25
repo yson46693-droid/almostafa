@@ -5024,6 +5024,9 @@ try {
                             <button type="button" class="btn btn-outline-secondary" id="deselectAllCustomers">
                                 <i class="bi bi-square me-1"></i>إلغاء التحديد
                             </button>
+                            <button type="button" class="btn btn-outline-success" id="selectAllCustomersAndGenerate">
+                                <i class="bi bi-check-all me-1"></i>كل العملاء
+                            </button>
                         </div>
                     </div>
                     <div id="exportCustomersList" class="table-responsive">
@@ -5086,6 +5089,9 @@ try {
                     </button>
                     <button type="button" class="btn btn-outline-secondary" id="deselectAllCustomersCard">
                         <i class="bi bi-square me-1"></i>إلغاء التحديد
+                    </button>
+                    <button type="button" class="btn btn-outline-success" id="selectAllCustomersAndGenerateCard">
+                        <i class="bi bi-check-all me-1"></i>كل العملاء
                     </button>
                 </div>
             </div>
