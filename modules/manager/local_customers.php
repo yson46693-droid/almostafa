@@ -5473,17 +5473,19 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="mb-3" id="customersSection" style="display: none;">
             <div class="d-flex flex-column justify-content-between align-items-center mb-2 gap-2">
                 <h6 class="mb-0 w-100">حدد العملاء المراد تصديرهم:</h6>
-                <div class="btn-group btn-group-sm w-100">
-                    <button type="button" class="btn btn-outline-primary" id="selectAllCustomers">
-                        <i class="bi bi-check-square me-1"></i>تحديد الكل
-                    </button>
-                    <button type="button" class="btn btn-outline-secondary" id="deselectAllCustomers">
-                        <i class="bi bi-square me-1"></i>إلغاء التحديد
-                    </button>
-                    <button type="button" class="btn btn-outline-success" id="selectAllCustomersAndGenerate">
-                        <i class="bi bi-check-all me-1"></i>كل العملاء
-                    </button>
-                    <button type="button" class="btn btn-outline-danger" id="printDebtorCustomersBtn" onclick="window.open('<?php echo getRelativeUrl('print_debtor_customers.php'); ?>', '_blank');">
+                <div class="d-flex gap-2 flex-wrap w-100">
+                    <div class="btn-group btn-group-sm flex-fill">
+                        <button type="button" class="btn btn-outline-primary" id="selectAllCustomers">
+                            <i class="bi bi-check-square me-1"></i>تحديد الكل
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="deselectAllCustomers">
+                            <i class="bi bi-square me-1"></i>إلغاء التحديد
+                        </button>
+                        <button type="button" class="btn btn-outline-success" id="selectAllCustomersAndGenerate">
+                            <i class="bi bi-check-all me-1"></i>كل العملاء
+                        </button>
+                    </div>
+                    <button type="button" class="btn btn-outline-danger btn-sm" id="printDebtorCustomersBtn" onclick="printDebtorCustomers()">
                         <i class="bi bi-people me-1"></i>العملاء المدينين
                     </button>
                 </div>
@@ -5759,6 +5761,13 @@ window.CUSTOMER_EXPORT_CONFIG = {
     basePath: '<?php echo getBasePath(); ?>',
     apiBasePath: '<?php echo getRelativeUrl("api"); ?>'
 };
+
+// دالة لطباعة العملاء المدينين
+function printDebtorCustomers() {
+    const basePath = window.CUSTOMER_EXPORT_CONFIG?.basePath || '';
+    const printUrl = (basePath ? basePath + '/' : '/') + 'print_debtor_customers.php';
+    window.open(printUrl, '_blank');
+}
 </script>
 <script src="<?php echo ASSETS_URL; ?>js/customer_export.js?v=<?php echo time(); ?>" defer></script>
 <?php endif; ?>
