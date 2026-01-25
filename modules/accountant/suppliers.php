@@ -451,14 +451,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         // السماح للمحاسب والمدير بتسجيل السداد
         $supplierId = intval($_POST['supplier_id'] ?? 0);
-            $amount = cleanFinancialValue($_POST['amount'] ?? 0);
-            $notes = trim($_POST['notes'] ?? '');
-            
-            if ($supplierId <= 0) {
-                $error = 'المورد غير محدد.';
-            } elseif ($amount <= 0) {
-                $error = 'يجب إدخال مبلغ صالح.';
-            } else {
+        $amount = cleanFinancialValue($_POST['amount'] ?? 0);
+        $notes = trim($_POST['notes'] ?? '');
+        
+        if ($supplierId <= 0) {
+            $error = 'المورد غير محدد.';
+        } elseif ($amount <= 0) {
+            $error = 'يجب إدخال مبلغ صالح.';
+        } else {
             $supplier = $db->queryOne("SELECT id, name, balance FROM suppliers WHERE id = ?", [$supplierId]);
             if (!$supplier) {
                 $error = 'لم يتم العثور على المورد.';
@@ -579,6 +579,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
             }
+        }
     } elseif ($action === 'delete') {
         // منع المحاسب من حذف الموردين
         if (strtolower($currentUser['role'] ?? '') === 'accountant') {
