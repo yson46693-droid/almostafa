@@ -193,58 +193,58 @@ usort($allDebtors, function($a, $b) {
         
         body {
             font-family: Arial, sans-serif;
-            font-size: 6px;
-            padding: 3px;
+            font-size: 10px;
+            padding: 7px;
             background: white;
         }
         
         .header {
             text-align: center;
-            margin-bottom: 3px;
-            padding-bottom: 2px;
+            margin-bottom: 5px;
+            padding-bottom: 3px;
             border-bottom: 1px solid #000;
         }
         
         .header h1 {
-            font-size: 10px;
+            font-size: 14px;
             font-weight: bold;
-            margin-bottom: 1px;
+            margin-bottom: 2px;
         }
         
         .header .date {
-            font-size: 6px;
+            font-size: 8px;
             color: #666;
         }
         
         table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 5px;
-            margin-top: 2px;
+            font-size: 7px;
+            margin-top: 3px;
         }
         
         table th {
             background-color: #f0f0f0;
             border: 1px solid #000;
-            padding: 1px 2px;
+            padding: 2px 3px;
             text-align: center;
             font-weight: bold;
-            font-size: 5px;
+            font-size: 7px;
         }
         
         table td {
             border: 1px solid #000;
-            padding: 0.5px 1px;
+            padding: 1px 2px;
             text-align: right;
-            font-size: 4.5px;
-            line-height: 1.1;
+            font-size: 6.5px;
+            line-height: 1.2;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
         
         table tr {
-            height: 4px;
+            height: 6px;
         }
         
         .id-col {
@@ -339,17 +339,17 @@ usort($allDebtors, function($a, $b) {
         <tbody>
             <?php if (empty($allDebtors)): ?>
                 <tr>
-                    <td colspan="6" style="text-align: center; padding: 10px;">لا توجد عملاء مدينين</td>
+                    <td colspan="6" style="text-align: center; padding: 15px; font-size: 9px;">لا توجد عملاء مدينين</td>
                 </tr>
             <?php else: ?>
                 <?php foreach ($allDebtors as $customer): ?>
                     <tr>
-                        <td class="id-col"><?php echo htmlspecialchars((string)$customer['id']); ?></td>
-                        <td class="name-col"><?php echo htmlspecialchars($customer['name']); ?></td>
-                        <td class="phone-col"><?php echo htmlspecialchars($customer['phone']); ?></td>
-                        <td class="balance-col"><?php echo number_format($customer['balance'], 2); ?> ج.م</td>
-                        <td class="address-col"><?php echo htmlspecialchars($customer['address']); ?></td>
-                        <td class="region-col"><?php echo htmlspecialchars($customer['region_name']); ?></td>
+                        <td class="id-col" style="font-size: 6.5px;"><?php echo htmlspecialchars((string)$customer['id']); ?></td>
+                        <td class="name-col" style="font-size: 6.5px;"><?php echo htmlspecialchars($customer['name']); ?></td>
+                        <td class="phone-col" style="font-size: 6.5px;"><?php echo htmlspecialchars($customer['phone']); ?></td>
+                        <td class="balance-col" style="font-size: 6.5px; font-weight: bold;"><?php echo number_format($customer['balance'], 2); ?> ج.م</td>
+                        <td class="address-col" style="font-size: 6.5px;"><?php echo htmlspecialchars($customer['address']); ?></td>
+                        <td class="region-col" style="font-size: 6.5px;"><?php echo htmlspecialchars($customer['region_name']); ?></td>
                     </tr>
                 <?php endforeach; ?>
             <?php endif; ?>
