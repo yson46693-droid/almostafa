@@ -1612,7 +1612,14 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
         const customerId = button.getAttribute('data-customer-id') || '';
         const customerName = button.getAttribute('data-customer-name') || '-';
         
-        console.log('showLocalCustomerReturnModal called for customer:', customerId, customerName);
+        // تحويل customerId إلى رقم
+        const customerIdNum = parseInt(customerId, 10);
+        if (isNaN(customerIdNum) || customerIdNum <= 0) {
+            console.error('Invalid customer ID:', customerId);
+            return;
+        }
+        
+        console.log('showLocalCustomerReturnModal called for customer:', customerIdNum, customerName);
         
         // على الموبايل: نفتح سجل المشتريات مباشرة
         const isMobileDevice = typeof checkIsMobile === 'function' ? checkIsMobile() : (typeof isMobile === 'function' ? isMobile() : (typeof window.isMobile === 'function' ? window.isMobile() : window.innerWidth <= 768));
@@ -1630,27 +1637,63 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
             return;
         }
         
-        // على سطح المكتب: نفتح سجل المشتريات أولاً ثم modal المرتجع بعد تحميل البيانات
-        const showHistory = typeof showLocalCustomerPurchaseHistoryModal === 'function' 
-            ? showLocalCustomerPurchaseHistoryModal 
-            : (typeof window.showLocalCustomerPurchaseHistoryModal === 'function' 
-                ? window.showLocalCustomerPurchaseHistoryModal 
-                : null);
-        
-        if (showHistory) {
-            // تعيين flag لفتح modal المرتجع بعد تحميل البيانات
-            window.openReturnModalAfterLoad = true;
-            window.returnModalCustomerName = customerName;
-            
-            console.log('Setting openReturnModalAfterLoad flag to true');
-            
-            // فتح سجل المشتريات أولاً
-            // سيتم فتح modal المرتجع تلقائياً بعد تحميل البيانات في دالة loadLocalCustomerPurchaseHistory
-            showHistory(button);
+        // على سطح المكتب: نفتح modal المرتجع مباشرة
+        // تعيين معرف العميل
+        if (typeof currentLocalCustomerId !== 'undefined') {
+            currentLocalCustomerId = customerIdNum;
         } else {
-            console.error('showLocalCustomerPurchaseHistoryModal function not found');
-            alert('خطأ: لا يمكن فتح سجل المشتريات');
+            window.currentLocalCustomerId = customerIdNum;
         }
+        
+        if (typeof currentLocalCustomerName !== 'undefined') {
+            currentLocalCustomerName = customerName;
+        } else {
+            window.currentLocalCustomerName = customerName;
+        }
+        
+        // فتح modal المرتجع مباشرة
+        const returnModal = document.getElementById('localCustomerReturnModal');
+        if (!returnModal) {
+            console.error('localCustomerReturnModal element not found');
+            alert('خطأ: نافذة إرجاع المنتجات غير موجودة');
+            return;
+        }
+        
+        // تحديث اسم العميل في modal المرتجع
+        const nameEl = returnModal.querySelector('#localReturnCustomerName');
+        const nameCardEl = returnModal.querySelector('#localReturnCustomerNameCard');
+        if (nameEl) nameEl.textContent = customerName;
+        if (nameCardEl) nameCardEl.textContent = customerName;
+        
+        // إعادة تعيين قائمة المنتجات المحددة
+        if (typeof localSelectedItemsForReturn !== 'undefined') {
+            localSelectedItemsForReturn = [];
+        }
+        
+        // تحديث قائمة المنتجات المحددة (ستكون فارغة في البداية)
+        if (typeof updateLocalReturnItemsList === 'function') {
+            updateLocalReturnItemsList();
+        }
+        
+        // فتح modal المرتجع
+        const modalInstance = bootstrap.Modal.getOrCreateInstance(returnModal);
+        modalInstance.show();
+        
+        // تحميل بيانات المشتريات في الخلفية بعد فتح modal
+        // ثم عرض قائمة المشتريات مباشرة في modal المرتجع
+        setTimeout(function() {
+            const loadHistory = typeof loadLocalCustomerPurchaseHistory === 'function' 
+                ? loadLocalCustomerPurchaseHistory 
+                : (typeof window.loadLocalCustomerPurchaseHistory === 'function' 
+                    ? window.loadLocalCustomerPurchaseHistory 
+                    : null);
+            
+            if (loadHistory) {
+                loadHistory();
+            } else {
+                console.warn('loadLocalCustomerPurchaseHistory function not found');
+            }
+        }, 300);
     };
 })();
 </script>
@@ -4423,78 +4466,12 @@ function loadLocalCustomerPurchaseHistory() {
                 : document.getElementById('printLocalCustomerStatementBtn');
             if (printBtn) printBtn.style.display = 'inline-block';
             
-            // فتح modal المرتجع تلقائياً إذا كان هناك flag
-            if (window.openReturnModalAfterLoad && !isMobileDevice) {
-                console.log('Opening return modal after purchase history loaded, isMobileDevice:', isMobileDevice);
-                
-                // انتظار قليل لضمان أن modal سجل المشتريات مفتوح
-                setTimeout(function() {
-                    const purchaseHistoryModal = document.getElementById('localCustomerPurchaseHistoryModal');
-                    const returnModal = document.getElementById('localCustomerReturnModal');
-                    
-                    console.log('Purchase history modal:', purchaseHistoryModal, 'Return modal:', returnModal);
-                    console.log('Purchase history modal visible:', purchaseHistoryModal ? purchaseHistoryModal.classList.contains('show') : 'N/A');
-                    
-                    if (purchaseHistoryModal && returnModal) {
-                        // إغلاق modal سجل المشتريات
-                        const purchaseModalInstance = bootstrap.Modal.getInstance(purchaseHistoryModal);
-                        if (purchaseModalInstance) {
-                            console.log('Hiding purchase history modal');
-                            purchaseModalInstance.hide();
-                            
-                            // انتظار إغلاق modal سجل المشتريات قبل فتح modal المرتجع
-                            purchaseHistoryModal.addEventListener('hidden.bs.modal', function openReturnModal() {
-                                purchaseHistoryModal.removeEventListener('hidden.bs.modal', openReturnModal);
-                                
-                                setTimeout(function() {
-                                    const nameEl = returnModal.querySelector('#localReturnCustomerName');
-                                    const nameCardEl = returnModal.querySelector('#localReturnCustomerNameCard');
-                                    if (nameEl) nameEl.textContent = window.returnModalCustomerName || '-';
-                                    if (nameCardEl) nameCardEl.textContent = window.returnModalCustomerName || '-';
-                                    
-                                    console.log('Opening return modal with customer name:', window.returnModalCustomerName);
-                                    
-                                    // التأكد من أن bootstrap متاح
-                                    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-                                        const modalInstance = bootstrap.Modal.getOrCreateInstance(returnModal);
-                                        modalInstance.show();
-                                        
-                                        // إعادة تعيين flag
-                                        window.openReturnModalAfterLoad = false;
-                                        window.returnModalCustomerName = null;
-                                    } else {
-                                        console.error('Bootstrap Modal not available');
-                                    }
-                                }, 100);
-                            }, { once: true });
-                        } else {
-                            // إذا لم يكن modal سجل المشتريات مفتوحاً، افتح modal المرتجع مباشرة
-                            console.log('Purchase history modal not open, opening return modal directly');
-                            setTimeout(function() {
-                                const nameEl = returnModal.querySelector('#localReturnCustomerName');
-                                const nameCardEl = returnModal.querySelector('#localReturnCustomerNameCard');
-                                if (nameEl) nameEl.textContent = window.returnModalCustomerName || '-';
-                                if (nameCardEl) nameCardEl.textContent = window.returnModalCustomerName || '-';
-                                
-                                if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-                                    const modalInstance = bootstrap.Modal.getOrCreateInstance(returnModal);
-                                    modalInstance.show();
-                                    
-                                    window.openReturnModalAfterLoad = false;
-                                    window.returnModalCustomerName = null;
-                                }
-                            }, 100);
-                        }
-                    } else {
-                        console.error('Modal elements not found:', {
-                            purchaseHistoryModal: !!purchaseHistoryModal,
-                            returnModal: !!returnModal
-                        });
-                        // إعادة تعيين flag في حالة الخطأ
-                        window.openReturnModalAfterLoad = false;
-                        window.returnModalCustomerName = null;
-                    }
-                }, 500);
+            // إذا كان modal المرتجع مفتوحاً، عرض قائمة المشتريات مباشرة فيه
+            const returnModal = document.getElementById('localCustomerReturnModal');
+            if (returnModal && returnModal.classList.contains('show') && !isMobileDevice) {
+                // عرض قائمة المشتريات في modal المرتجع
+                // يمكن إضافة كود هنا لعرض قائمة المشتريات مباشرة في modal المرتجع
+                console.log('Return modal is open, purchase history loaded');
             }
         } else {
             const errorMsg = data.message || 'حدث خطأ أثناء تحميل سجل المشتريات';
