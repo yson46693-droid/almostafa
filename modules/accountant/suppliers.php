@@ -449,10 +449,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $userRole = strtolower($currentUser['role'] ?? '');
         $isAccountant = $userRole === 'accountant';
         
-        // السماح للمحاسب بإضافة رصيد فقط، وليس تسجيل سداد
-        if ($isAccountant && $action === 'record_payment') {
-            $error = 'غير مصرح لك بتسجيل سداد للموردين. يرجى التواصل مع المدير.';
-        } else {
+        // السماح للمحاسب والمدير بتسجيل السداد
+        {
             $supplierId = intval($_POST['supplier_id'] ?? 0);
             $amount = cleanFinancialValue($_POST['amount'] ?? 0);
             $notes = trim($_POST['notes'] ?? '');
@@ -581,7 +579,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $error = 'حدث خطأ أثناء تحديث رصيد المورد. يرجى المحاولة مرة أخرى.';
                     }
                 }
-            }
             }
         }
     } elseif ($action === 'delete') {
@@ -762,8 +759,7 @@ if (isset($_GET['edit'])) {
                                             <i class="bi bi-plus-circle"></i>
                                             <span class="d-none d-lg-inline">إضافة رصيد</span>
                                         </button>
-                                        <?php if (strtolower($currentUser['role'] ?? '') !== 'accountant'): ?>
-                                        <!-- زر تسجيل سداد - متاح للمدير فقط -->
+                                        <!-- زر تسجيل سداد - متاح للمحاسب والمدير -->
                                         <button type="button"
                                                 class="btn btn-warning mb-1"
                                                 onclick="showSupplierPaymentModal(this)"
@@ -773,7 +769,6 @@ if (isset($_GET['edit'])) {
                                             <i class="bi bi-cash-coin"></i>
                                             <span class="d-none d-lg-inline">تسجيل سداد</span>
                                         </button>
-                                        <?php endif; ?>
                                         <button type="button"
                                                 class="btn btn-info text-white mb-1"
                                                 data-bs-toggle="collapse"
