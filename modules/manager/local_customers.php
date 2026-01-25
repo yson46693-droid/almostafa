@@ -2729,6 +2729,9 @@ function closeAllForms() {
     });
 }
 
+// تعيين الدالة على window لضمان إمكانية استدعائها من أي مكان
+window.closeAllForms = closeAllForms;
+
 // دالة فتح نموذج استيراد العملاء المحليين
 window.showImportLocalCustomersModal = function() {
     closeAllForms();
@@ -6736,12 +6739,23 @@ function showLocalCustomerReturnModal(button) {
     const customerId = button.getAttribute('data-customer-id') || '';
     const customerName = button.getAttribute('data-customer-name') || '-';
     
-    // على الموبايل والكمبيوتر: نفتح سجل المشتريات أولاً
-    // لأن modal المرتجع يحتاج إلى بيانات المشتريات المحملة
+    console.log('showLocalCustomerReturnModal called for customer:', customerId, customerName);
+    
+    // على الموبايل: نفتح سجل المشتريات مباشرة
+    if (isMobile()) {
+        if (typeof showLocalCustomerPurchaseHistoryModal === 'function') {
+            showLocalCustomerPurchaseHistoryModal(button);
+        }
+        return;
+    }
+    
+    // على سطح المكتب: نفتح سجل المشتريات أولاً ثم modal المرتجع بعد تحميل البيانات
     if (typeof showLocalCustomerPurchaseHistoryModal === 'function') {
         // تعيين flag لفتح modal المرتجع بعد تحميل البيانات
         window.openReturnModalAfterLoad = true;
         window.returnModalCustomerName = customerName;
+        
+        console.log('Setting openReturnModalAfterLoad flag to true');
         
         // فتح سجل المشتريات أولاً
         // سيتم فتح modal المرتجع تلقائياً بعد تحميل البيانات في دالة loadLocalCustomerPurchaseHistory
@@ -6751,6 +6765,9 @@ function showLocalCustomerReturnModal(button) {
         alert('خطأ: لا يمكن فتح سجل المشتريات');
     }
 }
+
+// تعيين الدالة على window لضمان إمكانية استدعائها من onclick
+window.showLocalCustomerReturnModal = showLocalCustomerReturnModal;
 
 // ===== دوال إغلاق Cards =====
 
