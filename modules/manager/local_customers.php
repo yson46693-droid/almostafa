@@ -1173,18 +1173,24 @@ if ($debtStatus === 'debtor') {
 }
 
 if ($search) {
-    $sql .= " AND (c.name LIKE ? OR c.phone LIKE ? OR c.address LIKE ? OR r.name LIKE ?)";
-    $countSql .= " AND (name LIKE ? OR phone LIKE ? OR address LIKE ? OR region_id IN (SELECT id FROM regions WHERE name LIKE ?))";
-    $statsSql .= " AND (name LIKE ? OR phone LIKE ? OR address LIKE ? OR region_id IN (SELECT id FROM regions WHERE name LIKE ?))";
+    $sql .= " AND (c.name LIKE ? OR c.phone LIKE ? OR c.address LIKE ? OR r.name LIKE ? OR c.id LIKE ?)";
+    $countSql .= " AND (name LIKE ? OR phone LIKE ? OR address LIKE ? OR region_id IN (SELECT id FROM regions WHERE name LIKE ?) OR id LIKE ?)";
+    $statsSql .= " AND (name LIKE ? OR phone LIKE ? OR address LIKE ? OR region_id IN (SELECT id FROM regions WHERE name LIKE ?) OR id LIKE ?)";
     $searchParam = '%' . $search . '%';
+    // params for $sql
     $params[] = $searchParam;
     $params[] = $searchParam;
     $params[] = $searchParam;
     $params[] = $searchParam;
+    $params[] = $searchParam;
+    // params for $countSql
     $countParams[] = $searchParam;
     $countParams[] = $searchParam;
     $countParams[] = $searchParam;
     $countParams[] = $searchParam;
+    $countParams[] = $searchParam;
+    // params for $statsSql
+    $statsParams[] = $searchParam;
     $statsParams[] = $searchParam;
     $statsParams[] = $searchParam;
     $statsParams[] = $searchParam;
@@ -1794,7 +1800,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                         id="customerSearch"
                         name="search"
                         value="<?php echo htmlspecialchars($search); ?>"
-                        placeholder="بحث سريع بالاسم أو الهاتف"
+                        placeholder="بحث سريع بالاسم، الهاتف أو كود العميل"
                         autocomplete="off"
                     >
                 </div>
