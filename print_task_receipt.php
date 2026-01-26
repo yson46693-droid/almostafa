@@ -111,9 +111,11 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
         }
         
         body {
-            font-family: 'Tajawal', Arial, sans-serif;
+            font-family: 'Tajawal', 'Arial', 'Helvetica', sans-serif;
             background-color: #f5f5f5;
             padding: 20px;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
         
         .receipt-container {
@@ -126,89 +128,105 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
         
         .receipt-header {
             text-align: center;
-            border-bottom: 2px solid #000;
-            padding-bottom: 10px;
-            margin-bottom: 15px;
+            border-bottom: 3px solid #000;
+            padding-bottom: 12px;
+            margin-bottom: 18px;
         }
         
         .receipt-header h1 {
-            font-size: 18px;
+            font-size: 20px;
             font-weight: 700;
-            margin-bottom: 5px;
+            margin-bottom: 6px;
             color: #000;
+            letter-spacing: 0.5px;
+            line-height: 1.4;
         }
         
         .receipt-header .company-name {
-            font-size: 16px;
-            font-weight: 600;
-            margin-bottom: 3px;
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 4px;
+            color: #000;
+            letter-spacing: 0.3px;
         }
         
         .receipt-header .receipt-type {
-            font-size: 14px;
-            color: #666;
-            margin-top: 5px;
+            font-size: 15px;
+            color: #333;
+            margin-top: 6px;
+            font-weight: 500;
         }
         
         .task-number {
             text-align: center;
-            font-size: 16px;
+            font-size: 18px;
             font-weight: 700;
-            margin: 15px 0;
-            padding: 8px;
+            margin: 18px 0;
+            padding: 10px;
             background-color: #f0f0f0;
-            border: 1px solid #ddd;
+            border: 2px solid #000;
+            letter-spacing: 0.5px;
+            line-height: 1.5;
         }
         
         .info-table {
             width: 100%;
             border-collapse: collapse;
-            margin: 10px 0;
-            font-size: 12px;
+            margin: 12px 0;
+            font-size: 14px;
+            line-height: 1.6;
         }
         
         .info-table tr {
-            border-bottom: 1px solid #eee;
+            border-bottom: 1px solid #ddd;
         }
         
         .info-table td {
-            padding: 6px 4px;
+            padding: 8px 5px;
             vertical-align: top;
+            line-height: 1.6;
         }
         
         .info-table td:first-child {
-            font-weight: 600;
+            font-weight: 700;
             width: 35%;
-            color: #333;
+            color: #000;
+            font-size: 14px;
         }
         
         .info-table td:last-child {
             text-align: right;
             color: #000;
+            font-weight: 500;
+            font-size: 14px;
         }
         
         .section-title {
-            font-size: 14px;
+            font-size: 16px;
             font-weight: 700;
-            margin: 15px 0 8px 0;
-            padding-bottom: 5px;
-            border-bottom: 1px solid #000;
+            margin: 18px 0 10px 0;
+            padding-bottom: 6px;
+            border-bottom: 2px solid #000;
+            color: #000;
+            letter-spacing: 0.3px;
         }
         
         .task-details {
-            margin: 10px 0;
+            margin: 12px 0;
         }
         
         .detail-item {
-            margin: 8px 0;
-            font-size: 12px;
+            margin: 10px 0;
+            font-size: 14px;
+            line-height: 1.6;
         }
         
         .detail-label {
-            font-weight: 600;
+            font-weight: 700;
             display: inline-block;
             width: 35%;
-            color: #333;
+            color: #000;
+            font-size: 14px;
         }
         
         .detail-value {
@@ -216,20 +234,24 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
             width: 64%;
             text-align: right;
             color: #000;
+            font-weight: 500;
+            font-size: 14px;
         }
         
         .footer {
             margin-top: 20px;
-            padding-top: 10px;
-            border-top: 1px solid #ddd;
+            padding-top: 12px;
+            border-top: 2px solid #ddd;
             text-align: center;
-            font-size: 10px;
-            color: #666;
+            font-size: 12px;
+            color: #333;
+            font-weight: 500;
+            line-height: 1.6;
         }
         
         .divider {
-            border-top: 1px dashed #ccc;
-            margin: 10px 0;
+            border-top: 2px dashed #999;
+            margin: 12px 0;
         }
         
         .no-print {
@@ -294,7 +316,10 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
         
         <div class="section-title">معلومات المهمة</div>
         <table class="info-table">
-            
+            <tr>
+                <td>العنوان:</td>
+                <td style="font-weight: 600;"><?php echo htmlspecialchars($taskTitle); ?></td>
+            </tr>
             <?php if (!empty($productName)): ?>
             <tr>
                 <td>المنتج:</td>
@@ -308,12 +333,16 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
             </tr>
             <?php endif; ?>
             <tr>
+                <td>الحالة:</td>
+                <td style="font-weight: 600;"><?php echo htmlspecialchars($statusLabel); ?></td>
+            </tr>
+            <tr>
                 <td>نوع المهمة:</td>
                 <td><?php echo $taskType === 'production' ? 'مهمة إنتاج' : 'مهمة عامة'; ?></td>
             </tr>
             <tr>
                 <td>الأولوية:</td>
-                <td><?php echo htmlspecialchars($priorityLabel); ?></td>
+                <td style="font-weight: 600;"><?php echo htmlspecialchars($priorityLabel); ?></td>
             </tr>
         </table>
         
@@ -322,17 +351,21 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
         <div class="section-title">تفاصيل إضافية</div>
         <table class="info-table">
             <tr>
+                <td>المخصص إلى:</td>
+                <td style="font-weight: 600;"><?php echo htmlspecialchars($assignedTo); ?></td>
+            </tr>
+            <tr>
                 <td>أنشأها:</td>
-                <td><?php echo htmlspecialchars($createdBy); ?></td>
+                <td style="font-weight: 600;"><?php echo htmlspecialchars($createdBy); ?></td>
             </tr>
             <tr>
                 <td>تاريخ الإنشاء:</td>
-                <td><?php echo date('Y-m-d', strtotime($createdAt)) . ' | ' . date('h:i A', strtotime($createdAt)); ?></td>
+                <td style="font-weight: 600;"><?php echo date('Y-m-d', strtotime($createdAt)) . ' | ' . date('h:i A', strtotime($createdAt)); ?></td>
             </tr>
             <?php if ($dueDate): ?>
             <tr>
                 <td>تاريخ الاستحقاق:</td>
-                <td><?php echo date('Y-m-d', strtotime($dueDate)); ?></td>
+                <td style="font-weight: 600;"><?php echo date('Y-m-d', strtotime($dueDate)); ?></td>
             </tr>
             <?php endif; ?>
         </table>
@@ -340,7 +373,7 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
         <div class="divider"></div>
         <div class="section-title">ملاحظات</div>
         <div class="task-details">
-            <div style="font-size: 12px; line-height: 1.6; padding: 5px 0;">
+            <div style="font-size: 14px; line-height: 1.8; padding: 8px 0; font-weight: 500; color: #000;">
                 <?php 
                 // إزالة معلومات العمال من الملاحظات للعرض
                 $displayNotes = preg_replace('/\[ASSIGNED_WORKERS_IDS\]:\s*[0-9,]+/', '', $notes);
@@ -350,19 +383,17 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
                 if (!empty($displayNotes)) {
                     echo nl2br(htmlspecialchars($displayNotes)); 
                 } else {
-                    echo '<span style="color: #999;">لا توجد ملاحظات</span>';
+                    echo '<span style="color: #666; font-weight: 500;">لا توجد ملاحظات</span>';
                 }
                 ?>
             </div>
         </div>
         <?php endif; ?>
         
-        <div class="divider"></div>
-        
         <div class="footer">
-            <p>شكراً لكم</p>
-            <p>تم إنشاء هذا الإيصال تلقائياً</p>
-            <p><?php echo date('Y/m/d H:i:s'); ?></p>
+            <p style="margin: 5px 0; font-weight: 600;">شكراً لكم</p>
+            <p style="margin: 5px 0;">تم إنشاء هذا الإيصال تلقائياً</p>
+            <p style="margin: 5px 0;"><?php echo date('Y/m/d H:i:s'); ?></p>
         </div>
     </div>
     
