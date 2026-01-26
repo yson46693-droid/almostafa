@@ -40,7 +40,7 @@ if (!$task) {
 }
 
 $companyName = COMPANY_NAME;
-$taskNumber = 'TASK-' . $taskId;
+$taskNumber = $taskId;
 $taskTitle = $task['title'] ?? 'مهمة إنتاج';
 $productName = $task['product_name'] ?? $task['product_name_from_db'] ?? '';
 $quantity = isset($task['quantity']) && $task['quantity'] !== null ? (float) $task['quantity'] : 0;
@@ -286,7 +286,6 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
         <div class="receipt-header">
             <h1>إيصال مهمة إنتاج</h1>
             <div class="company-name"><?php echo htmlspecialchars($companyName); ?></div>
-            <div class="receipt-type">نظام إدارة الإنتاج</div>
         </div>
         
         <div class="task-number">
@@ -295,10 +294,7 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
         
         <div class="section-title">معلومات المهمة</div>
         <table class="info-table">
-            <tr>
-                <td>العنوان:</td>
-                <td><?php echo htmlspecialchars($taskTitle); ?></td>
-            </tr>
+            
             <?php if (!empty($productName)): ?>
             <tr>
                 <td>المنتج:</td>
@@ -308,16 +304,12 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
             <?php if ($quantity > 0): ?>
             <tr>
                 <td>الكمية:</td>
-                <td><?php echo number_format($quantity, 2); ?> قطعة</td>
+                <td><?php echo number_format((int)$quantity); ?> قطعة</td>
             </tr>
             <?php endif; ?>
             <tr>
                 <td>نوع المهمة:</td>
                 <td><?php echo $taskType === 'production' ? 'مهمة إنتاج' : 'مهمة عامة'; ?></td>
-            </tr>
-            <tr>
-                <td>الحالة:</td>
-                <td><?php echo htmlspecialchars($statusLabel); ?></td>
             </tr>
             <tr>
                 <td>الأولوية:</td>
@@ -330,16 +322,12 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
         <div class="section-title">تفاصيل إضافية</div>
         <table class="info-table">
             <tr>
-                <td>المخصص إلى:</td>
-                <td><?php echo htmlspecialchars($assignedTo); ?></td>
-            </tr>
-            <tr>
                 <td>أنشأها:</td>
                 <td><?php echo htmlspecialchars($createdBy); ?></td>
             </tr>
             <tr>
                 <td>تاريخ الإنشاء:</td>
-                <td><?php echo date('Y-m-d H:i', strtotime($createdAt)); ?></td>
+                <td><?php echo date('Y-m-d', strtotime($createdAt)) . ' | ' . date('h:i A', strtotime($createdAt)); ?></td>
             </tr>
             <?php if ($dueDate): ?>
             <tr>
@@ -348,17 +336,6 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
             </tr>
             <?php endif; ?>
         </table>
-        
-        <?php if (!empty($description)): ?>
-        <div class="divider"></div>
-        <div class="section-title">الوصف</div>
-        <div class="task-details">
-            <div style="font-size: 12px; line-height: 1.6; padding: 5px 0;">
-                <?php echo nl2br(htmlspecialchars($description)); ?>
-            </div>
-        </div>
-        <?php endif; ?>
-        
         <?php if (!empty($notes)): ?>
         <div class="divider"></div>
         <div class="section-title">ملاحظات</div>
