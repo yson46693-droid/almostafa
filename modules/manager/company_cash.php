@@ -575,304 +575,272 @@ $typeColorMap = [
 ];
 ?>
 
-<!-- صافي الرصيد المعتمد - بطاقة منفصلة -->
-<div class="mt-4">
-    <div class="card shadow-sm">
-        <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-graph-up-arrow me-2 text-primary"></i>صافي الرصيد المعتمد</span>
-            <span class="badge bg-primary text-white">محدّث</span>
-        </div>
-        <div class="card-body">
-            <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
-                <div>
-                    <span class="text-muted text-uppercase small">صافي الرصيد المعتمد</span>
-                    <div class="display-6 fw-bold mt-1"><?php echo formatCurrency($netApprovedBalance); ?></div>
-                </div>
-                <div class="text-end">
-                    <div class="badge bg-success text-white fw-semibold px-3 py-2">
-                        <?php echo formatCurrency($approvedIncome); ?> إيرادات
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- تسجيل مصروف سريع - بطاقة منفصلة -->
-<div class="mt-4">
-    <div class="card shadow-sm">
-            <div class="card-header bg-light fw-bold">
-                <i class="bi bi-pencil-square me-2 text-success"></i>تسجيل مصروف سريع
+<div class="row g-3 mt-4">
+    <div class="col-12 col-xxl-7">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-graph-up-arrow me-2 text-primary"></i>ملخص الخزنة</span>
+                <span class="badge bg-primary text-white">محدّث</span>
             </div>
             <div class="card-body">
-                <form method="POST" class="row g-3">
-                    <input type="hidden" name="action" value="add_quick_expense">
-                    <div class="col-12">
-                        <label for="quickExpenseAmount" class="form-label">قيمة المصروف <span class="text-danger">*</span></label>
-                        <div class="input-group">
-                            <span class="input-group-text">ج.م</span>
-                            <input type="number" step="0.01" min="0.01" class="form-control" id="quickExpenseAmount" name="amount" required value="<?php echo htmlspecialchars($financialFormData['amount'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+                    <div>
+                        <span class="text-muted text-uppercase small">صافي الرصيد المعتمد</span>
+                        <div class="display-6 fw-bold mt-1"><?php echo formatCurrency($netApprovedBalance); ?></div>
+                    </div>
+                    <div class="text-end">
+                        <div class="badge bg-success text-white fw-semibold px-3 py-2">
+                            <?php echo formatCurrency($approvedIncome); ?> إيرادات
                         </div>
                     </div>
-                    <div class="col-12">
-                        <label for="quickExpenseReference" class="form-label">رقم مرجعي</label>
-                        <?php
-                        $generatedRef = 'REF-' . mt_rand(100000, 999999);?>
-                        <input type="text" class="form-control" id="quickExpenseReference" name="reference_number" value="<?php echo $generatedRef; ?>" readonly style="background:#f5f5f5; cursor:not-allowed;">
+                </div>
+                <div class="row g-3 mt-3">
+                    <div class="col-12 col-md-4">
+                        <div class="border rounded-3 p-3 h-100">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="text-muted small">إيرادات معتمدة</span>
+                                <i class="bi bi-arrow-up-right-circle text-success"></i>
+                            </div>
+                            <div class="h5 text-success mt-2"><?php echo formatCurrency($approvedIncome); ?></div>
+                            <div class="progress mt-3" style="height: 6px;">
+                                <div class="progress-bar bg-success" role="progressbar" style="width: <?php echo max(0, min(100, $incomeShare)); ?>%;"></div>
+                            </div>
+                            <small class="text-muted d-block mt-2"><?php echo max(0, min(100, $incomeShare)); ?>% من إجمالي الحركة</small>
+                        </div>
                     </div>
-                    <div class="col-12">
-                        <label for="quickExpenseDescription" class="form-label">وصف المصروف <span class="text-danger">*</span></label>
-                        <textarea class="form-control" id="quickExpenseDescription" name="description" rows="3" required placeholder="أدخل تفاصيل المصروف..."><?php echo htmlspecialchars($financialFormData['description'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea>
+                    <div class="col-12 col-md-4">
+                        <div class="border rounded-3 p-3 h-100">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="text-muted small">مصروفات معتمدة</span>
+                                <i class="bi bi-arrow-down-right-circle text-danger"></i>
+                            </div>
+                            <div class="h5 text-danger mt-2"><?php echo formatCurrency($approvedExpense); ?></div>
+                            <div class="progress mt-3" style="height: 6px;">
+                                <div class="progress-bar bg-danger" role="progressbar" style="width: <?php echo max(0, min(100, $expenseShare)); ?>%;"></div>
+                            </div>
+                            <small class="text-muted d-block mt-2"><?php echo max(0, min(100, $expenseShare)); ?>% من إجمالي الحركة</small>
+                        </div>
                     </div>
-                    <?php
-                    // إخفاء خيار الاعتماد للمدير والمحاسب (كلاهما يعتمد تلقائياً)
-                    $userRole = strtolower($currentUser['role'] ?? '');
-                    $isManager = ($userRole === 'manager');
-                    $isAccountant = ($userRole === 'accountant');
+                    <div class="col-12 col-md-4">
+                        <div class="border rounded-3 p-3 h-100">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="text-muted small">مدفوعات الموردين</span>
+                                <i class="bi bi-credit-card-2-back text-warning"></i>
+                            </div>
+                            <div class="h5 text-warning mt-2"><?php echo formatCurrency($approvedPayment); ?></div>
+                            <div class="progress mt-3" style="height: 6px;">
+                                <div class="progress-bar bg-warning" role="progressbar" style="width: <?php echo max(0, min(100, $paymentShare)); ?>%;"></div>
+                            </div>
+                            <small class="text-muted d-block mt-2"><?php echo max(0, min(100, $paymentShare)); ?>% من إجمالي الحركة</small>
+                        </div>
+                    </div>
                     
-                    if (!$isManager && !$isAccountant): // عرض الخيار فقط للمستخدمين الآخرين
-                    ?>
-                    <div class="col-12">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="quickExpenseApproved" name="mark_as_approved" value="1" <?php echo isset($financialFormData['mark_as_approved']) && $financialFormData['mark_as_approved'] === '1' ? 'checked' : ''; ?>>
-                            <label class="form-check-label" for="quickExpenseApproved">
-                                اعتماد المعاملة فوراً (يُستخدم عند تسجيل مصروف مؤكد)
-                            </label>
+                    <div class="col-12 col-md-4">
+                        <div class="border rounded-3 p-3 h-100">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="text-muted small">تسويات المرتبات</span>
+                                <i class="bi bi-currency-exchange text-info"></i>
+                            </div>
+                            <div class="h5 text-info mt-2"><?php echo formatCurrency($totalSalaryAdjustments); ?></div>
+                            <div class="progress mt-3" style="height: 6px;">
+                                <div class="progress-bar bg-info" role="progressbar" style="width: <?php echo max(0, min(100, $adjustmentsShare)); ?>%;"></div>
+                            </div>
+                            <small class="text-muted d-block mt-2"><?php echo max(0, min(100, $adjustmentsShare)); ?>% من إجمالي الحركة</small>
                         </div>
-                        <small class="text-muted d-block mt-1">إذا تُرك غير محدد فسيتم إرسال المصروف للموافقة لاحقاً.</small>
                     </div>
-                    <?php endif; ?>
-                    <div class="col-12 d-flex justify-content-end gap-2">
-                        <button type="reset" class="btn btn-outline-secondary">تفريغ الحقول</button>
-                        <button type="submit" class="btn btn-success">
-                            <i class="bi bi-send me-1"></i>حفظ المصروف
-                        </button>
+                    <div class="col-12 col-md-4">
+                        <div class="border rounded-3 p-3 h-100">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="text-muted small">تسويات أرصدة العملاء</span>
+                                <i class="bi bi-wallet2 text-secondary"></i>
+                            </div>
+                            <div class="h5 text-secondary mt-2"><?php echo formatCurrency($totalCustomerCreditSettlements); ?></div>
+                            <div class="progress mt-3" style="height: 6px;">
+                                <div class="progress-bar bg-secondary" role="progressbar" style="width: <?php echo max(0, min(100, $customerSettlementsShare)); ?>%;"></div>
+                            </div>
+                            <small class="text-muted d-block mt-2"><?php echo max(0, min(100, $customerSettlementsShare)); ?>% من إجمالي الحركة</small>
+                        </div>
                     </div>
-                </form>
+                </div>
+               
             </div>
+        </div>
     </div>
-</div>
-
-<!-- تحصيل من مندوب - بطاقة منفصلة -->
-<div class="mt-4">
-    <div class="card shadow-sm">
-            <div class="card-header bg-light fw-bold">
-                <i class="bi bi-cash-coin me-2 text-primary"></i>تحصيل من مندوب
-            </div>
-            <div class="card-body">
-                <form method="POST" id="collectFromRepCardForm" class="row g-3">
-                    <input type="hidden" name="action" value="collect_from_sales_rep">
-                    <div class="col-12">
-                        <label for="collectFromRepCardSalesRepSelect" class="form-label">اختر المندوب <span class="text-danger">*</span></label>
-                        <select class="form-select" id="collectFromRepCardSalesRepSelect" name="sales_rep_id" required>
-                            <option value="">-- اختر المندوب --</option>
+    <div class="col-12 col-xxl-5">
+        <div class="row g-3">
+            <!-- تسجيل مصروف سريع -->
+            <div class="col-12 col-lg-12 col-xxl-12">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-light fw-bold">
+                        <i class="bi bi-pencil-square me-2 text-success"></i>تسجيل مصروف سريع
+                    </div>
+                    <div class="card-body">
+                        <form method="POST" class="row g-3">
+                            <input type="hidden" name="action" value="add_quick_expense">
+                            <div class="col-12">
+                                <label for="quickExpenseAmount" class="form-label">قيمة المصروف <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <span class="input-group-text">ج.م</span>
+                                    <input type="number" step="0.01" min="0.01" class="form-control" id="quickExpenseAmount" name="amount" required value="<?php echo htmlspecialchars($financialFormData['amount'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <label for="quickExpenseReference" class="form-label">رقم مرجعي</label>
+                                <?php
+                                $generatedRef = 'REF-' . mt_rand(100000, 999999);?>
+                                <input type="text" class="form-control" id="quickExpenseReference" name="reference_number" value="<?php echo $generatedRef; ?>" readonly style="background:#f5f5f5; cursor:not-allowed;">
+                            </div>
+                            <div class="col-12">
+                                <label for="quickExpenseDescription" class="form-label">وصف المصروف <span class="text-danger">*</span></label>
+                                <textarea class="form-control" id="quickExpenseDescription" name="description" rows="3" required placeholder="أدخل تفاصيل المصروف..."><?php echo htmlspecialchars($financialFormData['description'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea>
+                            </div>
                             <?php
-                            $salesReps = $db->query("
-                                SELECT id, username, full_name 
-                                FROM users 
-                                WHERE role = 'sales' AND status = 'active'
-                                ORDER BY full_name ASC, username ASC
-                            ") ?: [];
-                            foreach ($salesReps as $rep):
+                            // إخفاء خيار الاعتماد للمدير والمحاسب (كلاهما يعتمد تلقائياً)
+                            $userRole = strtolower($currentUser['role'] ?? '');
+                            $isManager = ($userRole === 'manager');
+                            $isAccountant = ($userRole === 'accountant');
+                            
+                            if (!$isManager && !$isAccountant): // عرض الخيار فقط للمستخدمين الآخرين
                             ?>
-                                <option value="<?php echo $rep['id']; ?>">
-                                    <?php echo htmlspecialchars($rep['full_name'] ?? $rep['username'], ENT_QUOTES, 'UTF-8'); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
+                            <div class="col-12">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="quickExpenseApproved" name="mark_as_approved" value="1" <?php echo isset($financialFormData['mark_as_approved']) && $financialFormData['mark_as_approved'] === '1' ? 'checked' : ''; ?>>
+                                    <label class="form-check-label" for="quickExpenseApproved">
+                                        اعتماد المعاملة فوراً (يُستخدم عند تسجيل مصروف مؤكد)
+                                    </label>
+                                </div>
+                                <small class="text-muted d-block mt-1">إذا تُرك غير محدد فسيتم إرسال المصروف للموافقة لاحقاً.</small>
+                            </div>
+                            <?php endif; ?>
+                            <div class="col-12 d-flex justify-content-end gap-2">
+                                <button type="reset" class="btn btn-outline-secondary">تفريغ الحقول</button>
+                                <button type="submit" class="btn btn-success">
+                                    <i class="bi bi-send me-1"></i>حفظ المصروف
+                                </button>
+                            </div>
+                        </form>
                     </div>
-                    
-                    <div class="col-12">
-                        <label for="collectFromRepCardRepBalanceAmount" class="form-label">رصيد المندوب</label>
-                        <div class="input-group">
-                            <span class="input-group-text">ج.م</span>
-                            <input type="text" class="form-control" id="collectFromRepCardRepBalanceAmount" readonly value="-- اختر مندوب أولاً --" style="background:#f5f5f5; cursor:not-allowed; font-weight: bold;">
-                        </div>
-                    </div>
-                    
-                    <div class="col-12">
-                        <label for="collectFromRepCardAmount" class="form-label">مبلغ التحصيل <span class="text-danger">*</span></label>
-                        <div class="input-group">
-                            <span class="input-group-text">ج.م</span>
-                            <input type="number" step="0.01" min="0.01" class="form-control" id="collectFromRepCardAmount" name="amount" required placeholder="أدخل المبلغ">
-                        </div>
-                        <small class="text-muted d-block mt-1">يجب أن يكون المبلغ أقل من أو يساوي رصيد المندوب</small>
-                    </div>
-                    
-                    <div class="col-12 d-flex justify-content-end gap-2">
-                        <button type="reset" class="btn btn-outline-secondary">تفريغ الحقول</button>
-                        <button type="submit" class="btn btn-primary" id="collectFromRepCardSubmitBtn">
-                            <i class="bi bi-check-circle me-1"></i>تحصيل
-                        </button>
-                    </div>
-                </form>
-            </div>
-    </div>
-</div>
-
-<!-- إنشاء تقرير تفصيلي - بطاقة منفصلة -->
-<div class="mt-4">
-    <div class="card shadow-sm">
-            <div class="card-header bg-light fw-bold">
-                <i class="bi bi-file-earmark-text me-2 text-success"></i>إنشاء تقرير تفصيلي
-            </div>
-            <div class="card-body">
-                <form method="GET" id="generateReportCardForm" onsubmit="return handleReportCardSubmit(event)" class="row g-3">
-                    <div class="col-12">
-                        <div class="alert alert-info mb-0">
-                            <i class="bi bi-info-circle me-2"></i>
-                            <small><strong>ملاحظة:</strong> سيتم إنشاء تقرير تفصيلي لجميع حركات خزنة الشركة في الفترة المحددة.</small>
-                        </div>
-                    </div>
-                    <div class="col-12">
-                        <label for="generateReportCardDateFrom" class="form-label">
-                            <i class="bi bi-calendar-event me-1"></i>من تاريخ <span class="text-danger">*</span>
-                        </label>
-                        <input type="date" 
-                               class="form-control" 
-                               id="generateReportCardDateFrom" 
-                               name="date_from" 
-                               required
-                               value="<?php echo date('Y-m-01'); ?>">
-                    </div>
-                    <div class="col-12">
-                        <label for="generateReportCardDateTo" class="form-label">
-                            <i class="bi bi-calendar-event me-1"></i>إلى تاريخ <span class="text-danger">*</span>
-                        </label>
-                        <input type="date" 
-                               class="form-control" 
-                               id="generateReportCardDateTo" 
-                               name="date_to" 
-                               required
-                               value="<?php echo date('Y-m-d'); ?>">
-                    </div>
-                    <div class="col-12">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="generateReportCardIncludePending" name="include_pending" value="1">
-                            <label class="form-check-label" for="generateReportCardIncludePending">
-                                تضمين المعاملات المعلقة
-                            </label>
-                        </div>
-                    </div>
-                    <div class="col-12">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="generateReportCardGroupByType" name="group_by_type" value="1" checked>
-                            <label class="form-check-label" for="generateReportCardGroupByType">
-                                تجميع الحركات حسب النوع
-                            </label>
-                        </div>
-                    </div>
-                    <div class="col-12 d-flex justify-content-end gap-2">
-                        <button type="submit" class="btn btn-success">
-                            <i class="bi bi-file-earmark-pdf me-1"></i>إنشاء التقرير
-                        </button>
-                    </div>
-                </form>
-            </div>
-    </div>
-</div>
-
-<!-- إيرادات معتمدة - بطاقة منفصلة -->
-<div class="mt-4">
-    <div class="card shadow-sm">
-        <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-arrow-up-right-circle text-success me-2"></i>إيرادات معتمدة</span>
-        </div>
-        <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <div>
-                    <div class="h4 text-success fw-bold"><?php echo formatCurrency($approvedIncome); ?></div>
                 </div>
-                <i class="bi bi-arrow-up-right-circle text-success" style="font-size: 2rem;"></i>
             </div>
-            <div class="progress" style="height: 8px;">
-                <div class="progress-bar bg-success" role="progressbar" style="width: <?php echo max(0, min(100, $incomeShare)); ?>%;"></div>
-            </div>
-            <small class="text-muted d-block mt-2"><?php echo max(0, min(100, $incomeShare)); ?>% من إجمالي الحركة</small>
-        </div>
-    </div>
-</div>
-
-<!-- مصروفات معتمدة - بطاقة منفصلة -->
-<div class="mt-4">
-    <div class="card shadow-sm">
-        <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-arrow-down-right-circle text-danger me-2"></i>مصروفات معتمدة</span>
-        </div>
-        <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <div>
-                    <div class="h4 text-danger fw-bold"><?php echo formatCurrency($approvedExpense); ?></div>
+            
+            <!-- تحصيل من مندوب -->
+            <div class="col-12 col-lg-12 col-xxl-12">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-light fw-bold">
+                        <i class="bi bi-cash-coin me-2 text-primary"></i>تحصيل من مندوب
+                    </div>
+                    <div class="card-body">
+                        <form method="POST" id="collectFromRepCardForm" class="row g-3">
+                            <input type="hidden" name="action" value="collect_from_sales_rep">
+                            <div class="col-12">
+                                <label for="collectFromRepCardSalesRepSelect" class="form-label">اختر المندوب <span class="text-danger">*</span></label>
+                                <select class="form-select" id="collectFromRepCardSalesRepSelect" name="sales_rep_id" required>
+                                    <option value="">-- اختر المندوب --</option>
+                                    <?php
+                                    $salesReps = $db->query("
+                                        SELECT id, username, full_name 
+                                        FROM users 
+                                        WHERE role = 'sales' AND status = 'active'
+                                        ORDER BY full_name ASC, username ASC
+                                    ") ?: [];
+                                    foreach ($salesReps as $rep):
+                                    ?>
+                                        <option value="<?php echo $rep['id']; ?>">
+                                            <?php echo htmlspecialchars($rep['full_name'] ?? $rep['username'], ENT_QUOTES, 'UTF-8'); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            
+                            <div class="col-12">
+                                <label for="collectFromRepCardRepBalanceAmount" class="form-label">رصيد المندوب</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">ج.م</span>
+                                    <input type="text" class="form-control" id="collectFromRepCardRepBalanceAmount" readonly value="-- اختر مندوب أولاً --" style="background:#f5f5f5; cursor:not-allowed; font-weight: bold;">
+                                </div>
+                            </div>
+                            
+                            <div class="col-12">
+                                <label for="collectFromRepCardAmount" class="form-label">مبلغ التحصيل <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <span class="input-group-text">ج.م</span>
+                                    <input type="number" step="0.01" min="0.01" class="form-control" id="collectFromRepCardAmount" name="amount" required placeholder="أدخل المبلغ">
+                                </div>
+                                <small class="text-muted d-block mt-1">يجب أن يكون المبلغ أقل من أو يساوي رصيد المندوب</small>
+                            </div>
+                            
+                            <div class="col-12 d-flex justify-content-end gap-2">
+                                <button type="reset" class="btn btn-outline-secondary">تفريغ الحقول</button>
+                                <button type="submit" class="btn btn-primary" id="collectFromRepCardSubmitBtn">
+                                    <i class="bi bi-check-circle me-1"></i>تحصيل
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
-                <i class="bi bi-arrow-down-right-circle text-danger" style="font-size: 2rem;"></i>
             </div>
-            <div class="progress" style="height: 8px;">
-                <div class="progress-bar bg-danger" role="progressbar" style="width: <?php echo max(0, min(100, $expenseShare)); ?>%;"></div>
-            </div>
-            <small class="text-muted d-block mt-2"><?php echo max(0, min(100, $expenseShare)); ?>% من إجمالي الحركة</small>
-        </div>
-    </div>
-</div>
-
-<!-- مدفوعات الموردين - بطاقة منفصلة -->
-<div class="mt-4">
-    <div class="card shadow-sm">
-        <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-credit-card-2-back text-warning me-2"></i>مدفوعات الموردين</span>
-        </div>
-        <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <div>
-                    <div class="h4 text-warning fw-bold"><?php echo formatCurrency($approvedPayment); ?></div>
+            
+            <!-- إنشاء تقرير تفصيلي -->
+            <div class="col-12 col-lg-12 col-xxl-12">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-light fw-bold">
+                        <i class="bi bi-file-earmark-text me-2 text-success"></i>إنشاء تقرير تفصيلي
+                    </div>
+                    <div class="card-body">
+                        <form method="GET" id="generateReportCardForm" onsubmit="return handleReportCardSubmit(event)" class="row g-3">
+                            <div class="col-12">
+                                <div class="alert alert-info mb-0">
+                                    <i class="bi bi-info-circle me-2"></i>
+                                    <small><strong>ملاحظة:</strong> سيتم إنشاء تقرير تفصيلي لجميع حركات خزنة الشركة في الفترة المحددة.</small>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <label for="generateReportCardDateFrom" class="form-label">
+                                    <i class="bi bi-calendar-event me-1"></i>من تاريخ <span class="text-danger">*</span>
+                                </label>
+                                <input type="date" 
+                                       class="form-control" 
+                                       id="generateReportCardDateFrom" 
+                                       name="date_from" 
+                                       required
+                                       value="<?php echo date('Y-m-01'); ?>">
+                            </div>
+                            <div class="col-12">
+                                <label for="generateReportCardDateTo" class="form-label">
+                                    <i class="bi bi-calendar-event me-1"></i>إلى تاريخ <span class="text-danger">*</span>
+                                </label>
+                                <input type="date" 
+                                       class="form-control" 
+                                       id="generateReportCardDateTo" 
+                                       name="date_to" 
+                                       required
+                                       value="<?php echo date('Y-m-d'); ?>">
+                            </div>
+                            <div class="col-12">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="generateReportCardIncludePending" name="include_pending" value="1">
+                                    <label class="form-check-label" for="generateReportCardIncludePending">
+                                        تضمين المعاملات المعلقة
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="generateReportCardGroupByType" name="group_by_type" value="1" checked>
+                                    <label class="form-check-label" for="generateReportCardGroupByType">
+                                        تجميع الحركات حسب النوع
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-12 d-flex justify-content-end gap-2">
+                                <button type="submit" class="btn btn-success">
+                                    <i class="bi bi-file-earmark-pdf me-1"></i>إنشاء التقرير
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
-                <i class="bi bi-credit-card-2-back text-warning" style="font-size: 2rem;"></i>
             </div>
-            <div class="progress" style="height: 8px;">
-                <div class="progress-bar bg-warning" role="progressbar" style="width: <?php echo max(0, min(100, $paymentShare)); ?>%;"></div>
-            </div>
-            <small class="text-muted d-block mt-2"><?php echo max(0, min(100, $paymentShare)); ?>% من إجمالي الحركة</small>
-        </div>
-    </div>
-</div>
-
-<!-- تسويات المرتبات - بطاقة منفصلة -->
-<div class="mt-4">
-    <div class="card shadow-sm">
-        <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-currency-exchange text-info me-2"></i>تسويات المرتبات</span>
-        </div>
-        <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <div>
-                    <div class="h4 text-info fw-bold"><?php echo formatCurrency($totalSalaryAdjustments); ?></div>
-                </div>
-                <i class="bi bi-currency-exchange text-info" style="font-size: 2rem;"></i>
-            </div>
-            <div class="progress" style="height: 8px;">
-                <div class="progress-bar bg-info" role="progressbar" style="width: <?php echo max(0, min(100, $adjustmentsShare)); ?>%;"></div>
-            </div>
-            <small class="text-muted d-block mt-2"><?php echo max(0, min(100, $adjustmentsShare)); ?>% من إجمالي الحركة</small>
-        </div>
-    </div>
-</div>
-
-<!-- تسويات أرصدة العملاء - بطاقة منفصلة -->
-<div class="mt-4">
-    <div class="card shadow-sm">
-        <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-wallet2 text-secondary me-2"></i>تسويات أرصدة العملاء</span>
-        </div>
-        <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <div>
-                    <div class="h4 text-secondary fw-bold"><?php echo formatCurrency($totalCustomerCreditSettlements); ?></div>
-                </div>
-                <i class="bi bi-wallet2 text-secondary" style="font-size: 2rem;"></i>
-            </div>
-            <div class="progress" style="height: 8px;">
-                <div class="progress-bar bg-secondary" role="progressbar" style="width: <?php echo max(0, min(100, $customerSettlementsShare)); ?>%;"></div>
-            </div>
-            <small class="text-muted d-block mt-2"><?php echo max(0, min(100, $customerSettlementsShare)); ?>% من إجمالي الحركة</small>
         </div>
     </div>
 </div>
@@ -1185,8 +1153,8 @@ $typeColorMap = [
                         <th>الرقم المرجعي</th>
                         <th>الحالة</th>
                         <th>أنشأه</th>
-                        <th>اعتمده</th>
                         <th>إجراءات</th>
+                        <th>اعتمده</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -1226,7 +1194,6 @@ $typeColorMap = [
                                     </span>
                                 </td>
                                 <td><?php echo htmlspecialchars($trans['created_by_name'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></td>
-                                <td><?php echo htmlspecialchars($trans['approved_by_name'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td>
                                     <?php 
                                     // عرض زر الطباعة فقط للحركات من نوع إيراد (income) من accountant_transactions
@@ -1250,6 +1217,7 @@ $typeColorMap = [
                                         <span class="text-muted small">-</span>
                                     <?php endif; ?>
                                 </td>
+                                <td><?php echo htmlspecialchars($trans['approved_by_name'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></td>
                             </tr>
                         <?php endforeach; ?>
                     <?php endif; ?>
@@ -1594,68 +1562,3 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <!-- تم حذف المودالات - Cards أصبحت ثابتة دائماً ظاهرة -->
 
-<style>
-/* ضمان أن جميع البطاقات تظهر عمودياً - كل بطاقة في صف منفصل على سطح المكتب */
-@media (min-width: 769px) {
-    /* فرض أن كل div.mt-4 يأخذ العرض الكامل ويظهر في صف منفصل */
-    div.mt-4 {
-        display: block !important;
-        width: 100% !important;
-        max-width: 100% !important;
-        flex: none !important;
-        float: none !important;
-        clear: both !important;
-        margin-left: 0 !important;
-        margin-right: 0 !important;
-        grid-column: 1 / -1 !important;
-        grid-row: auto !important;
-    }
-    
-    /* ضمان أن البطاقات الداخلية تأخذ العرض الكامل */
-    div.mt-4 > .card,
-    div.mt-4 .card,
-    div.mt-4 > .card.shadow-sm {
-        display: block !important;
-        width: 100% !important;
-        max-width: 100% !important;
-        margin-left: 0 !important;
-        margin-right: 0 !important;
-        float: none !important;
-        clear: both !important;
-        box-sizing: border-box !important;
-    }
-    
-    /* منع أي container يجعل البطاقات في grid أو flex */
-    .container-fluid > div.mt-4,
-    .container > div.mt-4,
-    .row > div.mt-4,
-    [class*="col-"] > div.mt-4,
-    .cards-grid > div.mt-4 {
-        width: 100% !important;
-        max-width: 100% !important;
-        flex: 0 0 100% !important;
-        display: block !important;
-        clear: both !important;
-    }
-    
-    /* إزالة أي grid layout من أي parent container */
-    body .dashboard-main > div.mt-4,
-    body .dashboard-main .page-header ~ div.mt-4,
-    body .dashboard-main .alert ~ div.mt-4 {
-        display: block !important;
-        width: 100% !important;
-        clear: both !important;
-    }
-    
-    /* منع أي flexbox يجعل البطاقات بجوار بعضها - استخدام selector مباشر */
-    .row .mt-4,
-    .d-flex .mt-4,
-    .flex .mt-4 {
-        display: block !important;
-        width: 100% !important;
-        clear: both !important;
-    }
-}
-
-/* Cards ظاهرة دائماً على جميع الأجهزة */
-</style>
