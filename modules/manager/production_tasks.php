@@ -1149,7 +1149,7 @@ try {
                                     <td><?php echo htmlspecialchars($task['created_at']); ?></td>
                                     <td>
                                         <div class="btn-group btn-group-sm" role="group">
-                                            <?php if ($isAccountant || $isManager): ?>
+                                            <?php if ($isAccountant || $isManager || $isAdmin || $isProduction || $isDeveloper): ?>
                                                 <a href="<?php echo getRelativeUrl('print_task_receipt.php?id=' . (int) $task['id']); ?>" target="_blank" class="btn btn-outline-primary" title="طباعة إيصال المهمة">
                                                     <i class="bi bi-printer"></i>
                                                 </a>
