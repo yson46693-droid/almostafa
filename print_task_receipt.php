@@ -316,10 +316,6 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
         
         <div class="section-title">معلومات المهمة</div>
         <table class="info-table">
-            <tr>
-                <td>العنوان:</td>
-                <td style="font-weight: 600;"><?php echo htmlspecialchars($taskTitle); ?></td>
-            </tr>
             <?php if (!empty($productName)): ?>
             <tr>
                 <td>المنتج:</td>
@@ -329,17 +325,9 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
             <?php if ($quantity > 0): ?>
             <tr>
                 <td>الكمية:</td>
-                <td><?php echo number_format((int)$quantity); ?> قطعة</td>
+                <td><?php echo number_format((int)$quantity); ?> - قطعة</td>
             </tr>
             <?php endif; ?>
-            <tr>
-                <td>الحالة:</td>
-                <td style="font-weight: 600;"><?php echo htmlspecialchars($statusLabel); ?></td>
-            </tr>
-            <tr>
-                <td>نوع المهمة:</td>
-                <td><?php echo $taskType === 'production' ? 'مهمة إنتاج' : 'مهمة عامة'; ?></td>
-            </tr>
             <tr>
                 <td>الأولوية:</td>
                 <td style="font-weight: 600;"><?php echo htmlspecialchars($priorityLabel); ?></td>
@@ -350,10 +338,7 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
         
         <div class="section-title">تفاصيل إضافية</div>
         <table class="info-table">
-            <tr>
-                <td>المخصص إلى:</td>
-                <td style="font-weight: 600;"><?php echo htmlspecialchars($assignedTo); ?></td>
-            </tr>
+          
             <tr>
                 <td>أنشأها:</td>
                 <td style="font-weight: 600;"><?php echo htmlspecialchars($createdBy); ?></td>
