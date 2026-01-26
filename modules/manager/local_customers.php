@@ -3425,6 +3425,26 @@ function closeViewLocationCard() {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
+    // ===== تنظيف فوري للـ backdrop و body عند تحميل الصفحة - إصلاح مشكلة عدم التفاعل على الموبايل =====
+    // التحقق من عدم وجود نماذج مفتوحة
+    const openModals = document.querySelectorAll('.modal.show, .modal.showing');
+    if (openModals.length === 0) {
+        // إزالة جميع backdrops فوراً
+        const backdrops = document.querySelectorAll('.modal-backdrop');
+        backdrops.forEach(function(backdrop) {
+            backdrop.remove();
+        });
+        
+        // تنظيف body
+        document.body.classList.remove('modal-open');
+        document.body.style.overflow = '';
+        document.body.style.paddingRight = '';
+        document.body.style.pointerEvents = '';
+        document.body.style.touchAction = '';
+        document.body.style.position = '';
+        document.body.style.height = '';
+    }
+    
     // تفويض النقر/اللمس لأزرار سجل ومرتجع على الموبايل (داخل جدول قابل للتمرير)
     var tableWrapper = document.querySelector('.dashboard-table-wrapper');
     if (tableWrapper && typeof isMobile === 'function') {
@@ -6700,6 +6720,95 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
     }
 }
 
+/* ===== إصلاح مشكلة عدم القدرة على الضغط على العناصر على الموبايل ===== */
+/* ضمان أن الصفحة قابلة للتفاعل عندما لا توجد نماذج مفتوحة */
+@media (max-width: 768px) {
+    /* ضمان أن body قابل للتفاعل عندما لا توجد نماذج مفتوحة */
+    body:not(.modal-open) {
+        pointer-events: auto !important;
+        touch-action: manipulation !important;
+        overflow: auto !important;
+    }
+    
+    /* إخفاء backdrop عندما لا توجد نماذج مفتوحة */
+    body:not(.modal-open) .modal-backdrop {
+        display: none !important;
+        pointer-events: none !important;
+        z-index: -1 !important;
+        opacity: 0 !important;
+    }
+    
+    /* ضمان أن جميع العناصر القابلة للتفاعل تعمل على الموبايل */
+    body:not(.modal-open) .btn,
+    body:not(.modal-open) button,
+    body:not(.modal-open) input,
+    body:not(.modal-open) select,
+    body:not(.modal-open) textarea,
+    body:not(.modal-open) a,
+    body:not(.modal-open) .card,
+    body:not(.modal-open) .table,
+    body:not(.modal-open) .table tbody tr,
+    body:not(.modal-open) .table td,
+    body:not(.modal-open) .table th {
+        pointer-events: auto !important;
+        touch-action: manipulation !important;
+        -webkit-tap-highlight-color: rgba(0, 123, 255, 0.2) !important;
+    }
+    
+    /* ضمان أن الجدول قابل للتفاعل */
+    body:not(.modal-open) .dashboard-table-wrapper {
+        pointer-events: auto !important;
+        touch-action: pan-y !important;
+    }
+    
+    body:not(.modal-open) .dashboard-table tbody tr {
+        pointer-events: auto !important;
+        touch-action: manipulation !important;
+    }
+    
+    /* ضمان أن الكروت قابلة للتفاعل */
+    body:not(.modal-open) .card {
+        pointer-events: auto !important;
+        touch-action: manipulation !important;
+    }
+    
+    /* ضمان أن حقل البحث قابل للتفاعل */
+    body:not(.modal-open) #customerSearch,
+    body:not(.modal-open) .customers-search-card {
+        pointer-events: auto !important;
+        touch-action: manipulation !important;
+    }
+    
+    /* ضمان أن الأزرار قابلة للتفاعل */
+    body:not(.modal-open) .btn-primary,
+    body:not(.modal-open) .btn-success,
+    body:not(.modal-open) .btn-info,
+    body:not(.modal-open) .btn-danger,
+    body:not(.modal-open) .btn-secondary {
+        pointer-events: auto !important;
+        touch-action: manipulation !important;
+        cursor: pointer !important;
+        -webkit-tap-highlight-color: rgba(0, 123, 255, 0.3) !important;
+    }
+}
+
+/* إزالة أي backdrop عالق على جميع الشاشات */
+body:not(.modal-open) .modal-backdrop {
+    display: none !important;
+    pointer-events: none !important;
+    z-index: -1 !important;
+    opacity: 0 !important;
+}
+
+/* ضمان أن المحتوى الرئيسي قابل للتفاعل دائماً */
+body:not(.modal-open) .container,
+body:not(.modal-open) .container-fluid,
+body:not(.modal-open) main,
+body:not(.modal-open) .content-wrapper {
+    pointer-events: auto !important;
+    touch-action: manipulation !important;
+}
+
 </style>
 
 <!-- Modal حذف العميل المحلي -->
@@ -6997,20 +7106,56 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
         
-        // تنظيف إضافي عند تحميل الصفحة
+        // تنظيف إضافي عند تحميل الصفحة - إصلاح مشكلة عدم التفاعل على الموبايل
         setTimeout(function() {
-            const backdrops = document.querySelectorAll('.modal-backdrop');
-            if (backdrops.length > 0) {
+            // التحقق من عدم وجود نماذج مفتوحة
+            const openModals = document.querySelectorAll('.modal.show, .modal.showing');
+            
+            if (openModals.length === 0) {
+                // إزالة جميع backdrops
+                const backdrops = document.querySelectorAll('.modal-backdrop');
                 backdrops.forEach(function(backdrop) {
                     backdrop.remove();
                 });
+                
+                // تنظيف body
                 document.body.classList.remove('modal-open');
                 document.body.style.overflow = '';
                 document.body.style.paddingRight = '';
                 document.body.style.pointerEvents = '';
                 document.body.style.touchAction = '';
+                document.body.style.position = '';
+                document.body.style.height = '';
+                
+                // ضمان أن جميع العناصر القابلة للتفاعل تعمل
+                const interactiveElements = document.querySelectorAll('.btn, button, input, select, textarea, a, .card, .table tbody tr');
+                interactiveElements.forEach(function(el) {
+                    el.style.pointerEvents = '';
+                    el.style.touchAction = '';
+                });
             }
         }, 100);
+        
+        // تنظيف إضافي بعد تحميل الصفحة بالكامل
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                const openModals = document.querySelectorAll('.modal.show, .modal.showing');
+                if (openModals.length === 0) {
+                    // إزالة جميع backdrops
+                    const backdrops = document.querySelectorAll('.modal-backdrop');
+                    backdrops.forEach(function(backdrop) {
+                        backdrop.remove();
+                    });
+                    
+                    // تنظيف body
+                    document.body.classList.remove('modal-open');
+                    document.body.style.overflow = '';
+                    document.body.style.paddingRight = '';
+                    document.body.style.pointerEvents = '';
+                    document.body.style.touchAction = '';
+                }
+            }, 200);
+        });
     }, initModalsDelay);
     
     // ===== ملء بيانات Modals عند فتحها =====
