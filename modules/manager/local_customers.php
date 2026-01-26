@@ -6638,6 +6638,16 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
         -moz-appearance: none !important;
         appearance: none !important;
         cursor: text !important;
+        /* ضمان أن الكتابة تعمل */
+        -webkit-user-select: text !important;
+        -moz-user-select: text !important;
+        -ms-user-select: text !important;
+        user-select: text !important;
+        /* منع أي تأثيرات قد تمنع الكتابة */
+        -webkit-touch-callout: default !important;
+        -webkit-user-modify: read-write-plaintext-only !important;
+        /* ضمان أن الحقل قابل للتركيز */
+        -webkit-focus-ring-color: rgba(0, 123, 255, 0.5) !important;
     }
     
     /* ضمان أن input-group-text لا يمنع النقر */
@@ -6664,16 +6674,29 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
     
     /* إزالة أي تأثيرات قد تمنع اللمس */
     .customers-search-card #customerSearch:focus,
-    .customers-search-card #customerSearch:active {
+    .customers-search-card #customerSearch:active,
+    .customers-search-card #customerSearch:focus-visible {
         outline: 2px solid rgba(0, 123, 255, 0.5) !important;
         outline-offset: 2px !important;
         -webkit-tap-highlight-color: rgba(0, 123, 255, 0.3) !important;
         z-index: 11 !important;
+        /* ضمان أن الكتابة تعمل عند التركيز */
+        -webkit-user-select: text !important;
+        user-select: text !important;
     }
     
     /* إصلاح خاص للتأكد من أن الحقل قابل للنقر */
     .customers-search-card .form-control {
         pointer-events: auto !important;
+    }
+    
+    /* منع أي overlay أو عنصر آخر من تغطية حقل البحث */
+    .customers-search-card * {
+        pointer-events: auto;
+    }
+    
+    .customers-search-card .input-group-text {
+        pointer-events: none;
     }
 }
 
@@ -6871,113 +6894,124 @@ function closeDeleteLocalCustomerCard() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    var deleteModal = document.getElementById('deleteLocalCustomerModal');
-    if (deleteModal) {
-        deleteModal.addEventListener('show.bs.modal', function(event) {
-            var button = event.relatedTarget;
-            if (!button) {
-                return;
-            }
-            var customerId = button.getAttribute('data-customer-id') || '';
-            var customerName = button.getAttribute('data-customer-name') || '-';
-            var modal = this;
-            
-            var idInput = modal.querySelector('input[name="customer_id"]');
-            var nameEl = modal.querySelector('.delete-local-customer-name');
-            
-            if (idInput) {
-                idInput.value = customerId;
-            } else {
-                console.error('Customer ID input not found in delete modal');
-            }
-            
-            if (nameEl) {
-                nameEl.textContent = customerName;
-            } else {
-                console.error('Customer name element (.delete-local-customer-name) not found in delete modal');
-            }
-        });
-    }
+    // تحسين الأداء على الجوال: تأخير الكود غير الضروري
+    var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    var initDelay = isMobile ? 100 : 0; // تأخير 100ms على الجوال لتجنب التجمد
+    
+    setTimeout(function() {
+        var deleteModal = document.getElementById('deleteLocalCustomerModal');
+        if (deleteModal) {
+            deleteModal.addEventListener('show.bs.modal', function(event) {
+                var button = event.relatedTarget;
+                if (!button) {
+                    return;
+                }
+                var customerId = button.getAttribute('data-customer-id') || '';
+                var customerName = button.getAttribute('data-customer-name') || '-';
+                var modal = this;
+                
+                var idInput = modal.querySelector('input[name="customer_id"]');
+                var nameEl = modal.querySelector('.delete-local-customer-name');
+                
+                if (idInput) {
+                    idInput.value = customerId;
+                } else {
+                    console.error('Customer ID input not found in delete modal');
+                }
+                
+                if (nameEl) {
+                    nameEl.textContent = customerName;
+                } else {
+                    console.error('Customer name element (.delete-local-customer-name) not found in delete modal');
+                }
+            });
+        }
+    }, initDelay);
     
     // ===== إصلاح مشكلة freeze بعد إغلاق النماذج - تنظيف backdrop و body =====
-    // قائمة بجميع النماذج في الصفحة
-    const modals = [
-        'collectPaymentModal',
-        'addLocalCustomerModal',
-        'localCustomerPurchaseHistoryModal',
-        'localCustomerReturnModal',
-        'viewLocationModal',
-        'editLocalCustomerModal',
-        'customerExportModal',
-        'importLocalCustomersModal',
-        'deleteLocalCustomerModal'
-    ];
+    // تأخير الكود الثقيل على الجوال لتجنب التجمد
+    var initModalsDelay = isMobile ? 200 : 50;
     
-    // دالة تنظيف backdrop و body
-    function cleanupAfterModalClose() {
-        // الانتظار قليلاً للتأكد من اكتمال animation
+    setTimeout(function() {
+        // قائمة بجميع النماذج في الصفحة
+        const modals = [
+            'collectPaymentModal',
+            'addLocalCustomerModal',
+            'localCustomerPurchaseHistoryModal',
+            'localCustomerReturnModal',
+            'viewLocationModal',
+            'editLocalCustomerModal',
+            'customerExportModal',
+            'importLocalCustomersModal',
+            'deleteLocalCustomerModal'
+        ];
+        
+        // دالة تنظيف backdrop و body
+        function cleanupAfterModalClose() {
+            // الانتظار قليلاً للتأكد من اكتمال animation
+            setTimeout(function() {
+                // التحقق من عدم وجود نماذج مفتوحة أخرى
+                const openModals = document.querySelectorAll('.modal.show, .modal.showing');
+                
+                if (openModals.length === 0) {
+                    // إزالة جميع backdrops
+                    const backdrops = document.querySelectorAll('.modal-backdrop');
+                    backdrops.forEach(function(backdrop) {
+                        backdrop.remove();
+                    });
+                    
+                    // تنظيف body
+                    document.body.classList.remove('modal-open');
+                    document.body.style.overflow = '';
+                    document.body.style.paddingRight = '';
+                    
+                    // إزالة أي pointer-events أو touch-action styles يدوية
+                    document.body.style.pointerEvents = '';
+                    document.body.style.touchAction = '';
+                    
+                    // إزالة أي styles أخرى قد تمنع التفاعل
+                    document.body.style.position = '';
+                    document.body.style.height = '';
+                }
+            }, 300);
+        }
+        
+        // إضافة event listeners لجميع النماذج
+        modals.forEach(function(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                // عند بدء الإغلاق
+                modal.addEventListener('hide.bs.modal', function() {
+                    // إزالة backdrop فوراً
+                    const backdrops = document.querySelectorAll('.modal-backdrop');
+                    backdrops.forEach(function(backdrop) {
+                        backdrop.style.transition = 'opacity 0.15s linear';
+                        backdrop.style.opacity = '0';
+                    });
+                });
+                
+                // بعد الإغلاق الكامل
+                modal.addEventListener('hidden.bs.modal', function() {
+                    cleanupAfterModalClose();
+                });
+            }
+        });
+        
+        // تنظيف إضافي عند تحميل الصفحة
         setTimeout(function() {
-            // التحقق من عدم وجود نماذج مفتوحة أخرى
-            const openModals = document.querySelectorAll('.modal.show, .modal.showing');
-            
-            if (openModals.length === 0) {
-                // إزالة جميع backdrops
-                const backdrops = document.querySelectorAll('.modal-backdrop');
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            if (backdrops.length > 0) {
                 backdrops.forEach(function(backdrop) {
                     backdrop.remove();
                 });
-                
-                // تنظيف body
                 document.body.classList.remove('modal-open');
                 document.body.style.overflow = '';
                 document.body.style.paddingRight = '';
-                
-                // إزالة أي pointer-events أو touch-action styles يدوية
                 document.body.style.pointerEvents = '';
                 document.body.style.touchAction = '';
-                
-                // إزالة أي styles أخرى قد تمنع التفاعل
-                document.body.style.position = '';
-                document.body.style.height = '';
             }
-        }, 300);
-    }
-    
-    // إضافة event listeners لجميع النماذج
-    modals.forEach(function(modalId) {
-        const modal = document.getElementById(modalId);
-        if (modal) {
-            // عند بدء الإغلاق
-            modal.addEventListener('hide.bs.modal', function() {
-                // إزالة backdrop فوراً
-                const backdrops = document.querySelectorAll('.modal-backdrop');
-                backdrops.forEach(function(backdrop) {
-                    backdrop.style.transition = 'opacity 0.15s linear';
-                    backdrop.style.opacity = '0';
-                });
-            });
-            
-            // بعد الإغلاق الكامل
-            modal.addEventListener('hidden.bs.modal', function() {
-                cleanupAfterModalClose();
-            });
-        }
-    });
-    
-    // تنظيف إضافي عند تحميل الصفحة
-    setTimeout(function() {
-        const backdrops = document.querySelectorAll('.modal-backdrop');
-        if (backdrops.length > 0) {
-            backdrops.forEach(function(backdrop) {
-                backdrop.remove();
-            });
-            document.body.classList.remove('modal-open');
-            document.body.style.overflow = '';
-            document.body.style.paddingRight = '';
-            document.body.style.pointerEvents = '';
-            document.body.style.touchAction = '';
-        }
-    }, 100);
+        }, 100);
+    }, initModalsDelay);
     
     // ===== ملء بيانات Modals عند فتحها =====
     
@@ -7349,25 +7383,36 @@ document.addEventListener('DOMContentLoaded', function() {
         return div.innerHTML;
     }
     
-    // إعداد البحث الفوري
+    // إعداد البحث الفوري - مع تأخير للجوال لتجنب التجمد
     if (customerSearchInput && searchForm) {
         // إصلاح خاص للجوال: ضمان أن الحقل قابل للنقر والتركيز
-        if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+        var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        if (isMobile) {
             // إزالة أي منع للحدث على الجوال
             customerSearchInput.style.pointerEvents = 'auto';
             customerSearchInput.style.touchAction = 'manipulation';
+            customerSearchInput.style.userSelect = 'text';
+            customerSearchInput.style.webkitUserSelect = 'text';
             
-            // إضافة event listener للـ touchstart لضمان الاستجابة
+            // إضافة event listener للـ touchstart لضمان الاستجابة (بدون stopPropagation)
             customerSearchInput.addEventListener('touchstart', function(e) {
-                e.stopPropagation();
-                this.focus();
+                // لا نستخدم stopPropagation حتى لا نمنع الكتابة
+                if (document.activeElement !== this) {
+                    setTimeout(function() {
+                        customerSearchInput.focus();
+                    }, 0);
+                }
             }, { passive: true });
             
-            // إضافة event listener للـ click كبديل
+            // إضافة event listener للـ click كبديل (بدون stopPropagation)
             customerSearchInput.addEventListener('click', function(e) {
-                e.stopPropagation();
-                this.focus();
-            });
+                // لا نستخدم stopPropagation حتى لا نمنع الكتابة
+                if (document.activeElement !== this) {
+                    setTimeout(function() {
+                        customerSearchInput.focus();
+                    }, 0);
+                }
+            }, { passive: true });
         }
         
         // منع الإرسال الافتراضي للنموذج
@@ -7377,15 +7422,25 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         
         // البحث الفوري عند الكتابة
-        customerSearchInput.addEventListener('input', function() {
-            if (searchTimeout) {
-                clearTimeout(searchTimeout);
+        customerSearchInput.addEventListener('input', function(e) {
+            // التأكد من أن القيمة موجودة
+            if (this.value !== undefined && this.value !== null) {
+                if (searchTimeout) {
+                    clearTimeout(searchTimeout);
+                }
+                
+                searchTimeout = setTimeout(function() {
+                    fetchCustomers(1);
+                }, 400);
             }
-            
-            searchTimeout = setTimeout(function() {
-                fetchCustomers(1);
-            }, 400);
         });
+        
+        // إضافة event listener للـ keydown للتأكد من أن الكتابة تعمل
+        customerSearchInput.addEventListener('keydown', function(e) {
+            // السماح بجميع المفاتيح
+            return true;
+        });
+    }
         
         // البحث الفوري عند تغيير الفلاتر
         var debtStatusFilter = document.getElementById('debtStatusFilter');
