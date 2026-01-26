@@ -8026,7 +8026,7 @@ document.addEventListener('DOMContentLoaded', function() {
             fetchCustomers(1);
         });
         
-        // البحث الفوري عند الكتابة
+        // البحث الفوري عند الكتابة - فوري تماماً بدون تأخير
         customerSearchInput.addEventListener('input', function(e) {
             // التأكد من أن القيمة موجودة
             if (this.value !== undefined && this.value !== null) {
@@ -8034,9 +8034,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     clearTimeout(searchTimeout);
                 }
                 
+                // استخدام timeout قصير جداً (30ms) لجعل البحث فورياً تماماً
+                // هذا يضمن البحث الفوري مع تجنب الطلبات الزائدة أثناء الكتابة السريعة
                 searchTimeout = setTimeout(function() {
                     fetchCustomers(1);
-                }, 400);
+                    searchTimeout = null;
+                }, 30);
             }
         });
         
@@ -8056,9 +8059,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (searchTimeout) {
                     clearTimeout(searchTimeout);
                 }
+                // استخدام timeout قصير جداً (30ms) لجعل البحث فورياً
                 searchTimeout = setTimeout(function() {
                     fetchCustomers(1);
-                }, 300);
+                    searchTimeout = null;
+                }, 30);
             });
         }
         
@@ -8067,9 +8072,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (searchTimeout) {
                     clearTimeout(searchTimeout);
                 }
+                // استخدام timeout قصير جداً (30ms) لجعل البحث فورياً
                 searchTimeout = setTimeout(function() {
                     fetchCustomers(1);
-                }, 300);
+                    searchTimeout = null;
+                }, 30);
             });
         }
     }
