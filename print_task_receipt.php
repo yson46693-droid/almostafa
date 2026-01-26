@@ -152,7 +152,7 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
         body {
             font-family: 'Tajawal', 'Arial', 'Helvetica', sans-serif;
             background-color: #f5f5f5;
-            padding: 20px;
+            padding: 10px;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
         }
@@ -160,7 +160,7 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
         .receipt-container {
             max-width: 80mm;
             margin: 0 auto;
-            padding: 10px;
+            padding: 5px;
             background: white;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }
@@ -169,7 +169,7 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
             text-align: center;
             border-bottom: 3px solid #000;
             padding-bottom: 12px;
-            margin-bottom: 18px;
+            margin-bottom: 10px;
         }
         
         .receipt-header h1 {
@@ -448,10 +448,6 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
                 <td>الأولوية:</td>
                 <td style="font-weight: 600;"><?php echo htmlspecialchars($priorityLabel); ?></td>
             </tr>
-            <tr>
-                <td>الحالة:</td>
-                <td style="font-weight: 600;"><?php echo htmlspecialchars($statusLabel); ?></td>
-            </tr>
         </table>
         
         <div class="divider"></div>
@@ -460,7 +456,7 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
         <table class="info-table">
           
             <tr>
-                <td>أنشأها بواسطة:</td>
+                <td>منشئ الطلب:</td>
                 <td style="font-weight: 600;"><?php echo htmlspecialchars($createdBy); ?></td>
             </tr>
             <tr>
@@ -481,8 +477,13 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
                 <?php 
                 // إزالة معلومات العمال من الملاحظات للعرض
                 $displayNotes = preg_replace('/\[ASSIGNED_WORKERS_IDS\]:\s*[0-9,]+/', '', $notes);
+                // إزالة JSON المنتجات
+                $displayNotes = preg_replace('/\[PRODUCTS_JSON\]:[^\n]*/', '', $displayNotes);
+                // إزالة معلومات المنتج النصية القديمة
                 $displayNotes = preg_replace('/المنتج:\s*[^\n]+/', '', $displayNotes);
                 $displayNotes = preg_replace('/الكمية:\s*[0-9.]+/', '', $displayNotes);
+                // إزالة الأسطر الفارغة المتعددة
+                $displayNotes = preg_replace('/\n\s*\n\s*\n+/', "\n\n", $displayNotes);
                 $displayNotes = trim($displayNotes);
                 if (!empty($displayNotes)) {
                     echo nl2br(htmlspecialchars($displayNotes)); 
