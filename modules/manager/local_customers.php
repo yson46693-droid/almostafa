@@ -1726,52 +1726,67 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
     </div>
 </div>
 
+<style>
+@media (max-width: 767.98px) {
+    .summary-card-value {
+        font-size: 0.85rem !important;
+    }
+    .summary-card-label {
+        font-size: 0.7rem !important;
+    }
+}
+</style>
+
 <div class="row g-3 mb-4">
-    <div class="col-12 col-md-6 col-xl-3">
+    <div class="col-6 col-md-6 col-xl-3">
         <div class="card shadow-sm border-0 h-100">
             <div class="card-body d-flex align-items-center justify-content-between">
                 <div>
-                    <div class="text-muted small fw-semibold">عدد العملاء المحليين</div>
-                    <div class="fs-4 fw-bold mb-0"><?php echo number_format((int)$summaryTotalCustomers); ?></div>
+                    <div class="text-muted small fw-semibold summary-card-label">عدد العملاء المحليين</div>
+                    <div class="fs-4 fw-bold mb-0 summary-card-value"><?php echo number_format((int)$summaryTotalCustomers); ?></div>
                 </div>
-                <span class="text-primary display-6"><i class="bi bi-people-fill"></i></span>
+                <span class="text-primary display-6 d-md-block d-none"><i class="bi bi-people-fill"></i></span>
+                <span class="text-primary fs-4 d-md-none"><i class="bi bi-people-fill"></i></span>
             </div>
         </div>
     </div>
-    <div class="col-12 col-md-6 col-xl-3">
+    <div class="col-6 col-md-6 col-xl-3">
         <div class="card shadow-sm border-0 h-100">
             <div class="card-body d-flex align-items-center justify-content-between">
                 <div>
-                    <div class="text-muted small fw-semibold">العملاء المدينون</div>
-                    <div class="fs-4 fw-bold mb-0"><?php echo number_format((int)$summaryDebtorCount); ?></div>
+                    <div class="text-muted small fw-semibold summary-card-label">العملاء المدينون</div>
+                    <div class="fs-4 fw-bold mb-0 summary-card-value"><?php echo number_format((int)$summaryDebtorCount); ?></div>
                 </div>
-                <span class="text-danger display-6"><i class="bi bi-exclamation-circle-fill"></i></span>
+                <span class="text-danger display-6 d-md-block d-none"><i class="bi bi-exclamation-circle-fill"></i></span>
+                <span class="text-danger fs-4 d-md-none"><i class="bi bi-exclamation-circle-fill"></i></span>
             </div>
         </div>
     </div>
-    <div class="col-12 col-md-6 col-xl-3">
+    <div class="col-6 col-md-6 col-xl-3">
         <div class="card shadow-sm border-0 h-100">
             <div class="card-body d-flex align-items-center justify-content-between">
                 <div>
-                    <div class="text-muted small fw-semibold">إجمالي الديون</div>
-                    <div class="fs-5 fw-bold mb-0"><?php 
+                    <div class="text-muted small fw-semibold summary-card-label">إجمالي الديون</div>
+                    <div class="fs-5 fw-bold mb-0 summary-card-value"><?php 
                         // استخدام number_format مباشرة لتجنب مشكلة cleanFinancialValue التي تقيد القيمة بـ 1000000
                         $formattedDebt = number_format((float)$summaryTotalDebt, 2, '.', ',') . ' ' . getCurrencySymbol();
                         echo $formattedDebt;
                     ?></div>
                 </div>
-                <span class="text-warning display-6"><i class="bi bi-cash-stack"></i></span>
+                <span class="text-warning display-6 d-md-block d-none"><i class="bi bi-cash-stack"></i></span>
+                <span class="text-warning fs-4 d-md-none"><i class="bi bi-cash-stack"></i></span>
             </div>
         </div>
     </div>
-    <div class="col-12 col-md-6 col-xl-3">
+    <div class="col-6 col-md-6 col-xl-3">
         <div class="card shadow-sm border-0 h-100">
             <div class="card-body d-flex align-items-center justify-content-between">
                 <div>
-                    <div class="text-muted small fw-semibold">إجمالي التحصيلات</div>
-                    <div class="fs-5 fw-bold mb-0"><?php echo formatCurrency($totalCollectionsAmount); ?></div>
+                    <div class="text-muted small fw-semibold summary-card-label">إجمالي التحصيلات</div>
+                    <div class="fs-5 fw-bold mb-0 summary-card-value"><?php echo formatCurrency($totalCollectionsAmount); ?></div>
                 </div>
-                <span class="text-success display-6"><i class="bi bi-cash-coin"></i></span>
+                <span class="text-success display-6 d-md-block d-none"><i class="bi bi-cash-coin"></i></span>
+                <span class="text-success fs-4 d-md-none"><i class="bi bi-cash-coin"></i></span>
             </div>
         </div>
     </div>
