@@ -121,7 +121,7 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
         .receipt-container {
             max-width: 80mm;
             margin: 0 auto;
-            padding: 15px;
+            padding: 10px;
             background: white;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }
@@ -136,7 +136,7 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
         .receipt-header h1 {
             font-size: 20px;
             font-weight: 700;
-            margin-bottom: 6px;
+            margin-bottom: 4px;
             color: #000;
             letter-spacing: 0.5px;
             line-height: 1.4;
@@ -256,7 +256,7 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
         
         .no-print {
             text-align: center;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
         }
         
         .no-print button {
@@ -306,15 +306,15 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
         </div>
         
         <div class="receipt-header">
-            <h1>إيصال مهمة إنتاج</h1>
+            <h1>إيصال اوردر إنتاج</h1>
             <div class="company-name"><?php echo htmlspecialchars($companyName); ?></div>
         </div>
         
         <div class="task-number">
-            رقم المهمة: <?php echo htmlspecialchars($taskNumber); ?>
+            رقم الاوردر: <?php echo htmlspecialchars($taskNumber); ?>
         </div>
         
-        <div class="section-title">معلومات المهمة</div>
+        <div class="section-title">تفاصيل الاوردر</div>
         <table class="info-table">
             <?php if (!empty($productName)): ?>
             <tr>
@@ -340,11 +340,11 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
         <table class="info-table">
           
             <tr>
-                <td>أنشأها:</td>
+                <td>أنشأها بواسطة:</td>
                 <td style="font-weight: 600;"><?php echo htmlspecialchars($createdBy); ?></td>
             </tr>
             <tr>
-                <td>تاريخ الإنشاء:</td>
+                <td>تاريخ الطلب:</td>
                 <td style="font-weight: 600;"><?php echo date('Y-m-d', strtotime($createdAt)) . ' | ' . date('h:i A', strtotime($createdAt)); ?></td>
             </tr>
             <?php if ($dueDate): ?>
