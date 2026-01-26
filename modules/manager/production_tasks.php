@@ -1094,18 +1094,18 @@ try {
                             <label class="form-label">تاريخ الاستحقاق</label>
                             <input type="date" class="form-control" name="due_date" value="">
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-3">
                             <label class="form-label">اختر العمال المستهدفين</label>
-                            <select class="form-select" name="assigned_to[]" multiple required size="6">
+                            <select class="form-select form-select-sm" name="assigned_to[]" multiple required size="3">
                                 <?php foreach ($productionUsers as $worker): ?>
                                     <option value="<?php echo (int)$worker['id']; ?>"><?php echo htmlspecialchars($worker['full_name']); ?></option>
                                 <?php endforeach; ?>
                             </select>
-                            <div class="form-text">يمكن تحديد أكثر من عامل باستخدام زر CTRL أو SHIFT.</div>
+                            <div class="form-text small">يمكن تحديد أكثر من عامل باستخدام زر CTRL أو SHIFT.</div>
                         </div>
-                        <div class="col-12">
+                        <div class="col-md-9">
                             <label class="form-label">وصف وتفاصيل و ملاحظات الاوردر</label>
-                            <textarea class="form-control" name="details" rows="4" placeholder="أدخل التفاصيل والتعليمات اللازمة للعمال."></textarea>
+                            <input type="text" class="form-control" name="details" placeholder="أدخل التفاصيل والتعليمات اللازمة للعمال.">
                         </div>
                         <div class="col-12" id="productsSection">
                             <label class="form-label fw-bold">المنتجات والكميات</label>
