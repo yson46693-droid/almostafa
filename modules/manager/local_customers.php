@@ -595,11 +595,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'collect_debt') {
         $customerId = isset($_POST['customer_id']) ? (int)$_POST['customer_id'] : 0;
         $amount = isset($_POST['amount']) ? cleanFinancialValue($_POST['amount']) : 0;
+        $collectionType = isset($_POST['collection_type']) ? trim($_POST['collection_type']) : 'direct'; // direct أو management
 
         if ($customerId <= 0) {
             $error = 'معرف العميل غير صالح.';
         } elseif ($amount <= 0) {
             $error = 'يجب إدخال مبلغ تحصيل أكبر من صفر.';
+        } elseif (!in_array($collectionType, ['direct', 'management'])) {
+            $error = 'نوع التحصيل غير صالح.';
         } else {
             $transactionStarted = false;
 
@@ -746,7 +749,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         
                         // إعداد الوصف
                         $customerName = $customer['name'] ?? 'عميل محلي';
-                        $description = 'تحصيل من عميل محلي: ' . $customerName;
+                        if ($collectionType === 'management') {
+                            $description = 'تحصيل للإدارة من عميل محلي: ' . $customerName;
+                        } else {
+                            $description = 'تحصيل من عميل محلي: ' . $customerName;
+                        }
                         
                         // إعداد رقم مرجعي
                         $referenceNumber = $collectionNumber ?? ('LOC-CUST-' . $customerId . '-' . date('YmdHis'));
@@ -7728,6 +7735,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var searchTimeout = null;
     var currentPage = 1;
     var isLoading = false;
+    var currentFetchController = null; // لإلغاء الطلبات السابقة
     
     // دالة لتنسيق العملة (نسخة JavaScript من formatCurrency)
     function formatCurrency(amount) {
@@ -7737,7 +7745,15 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // دالة لجلب العملاء عبر AJAX
     function fetchCustomers(page) {
-        if (isLoading) return;
+        // إلغاء أي طلب سابق قيد التنفيذ للبحث الفوري
+        if (currentFetchController) {
+            currentFetchController.abort();
+            currentFetchController = null;
+        }
+        
+        if (isLoading) {
+            isLoading = false;
+        }
         
         isLoading = true;
         var searchValue = customerSearchInput ? customerSearchInput.value.trim() : '';
@@ -7761,7 +7777,11 @@ document.addEventListener('DOMContentLoaded', function() {
             params.append('region_id', regionId);
         }
         
-        fetch(apiUrl + '?' + params.toString())
+        // إنشاء AbortController لإلغاء الطلبات السابقة
+        currentFetchController = new AbortController();
+        var fetchSignal = currentFetchController.signal;
+        
+        fetch(apiUrl + '?' + params.toString(), { signal: fetchSignal })
             .then(function(response) {
                 if (!response.ok) {
                     throw new Error('Network response was not ok');
@@ -7778,11 +7798,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             })
             .catch(function(error) {
+                // تجاهل أخطاء الإلغاء (AbortError)
+                if (error.name === 'AbortError') {
+                    return;
+                }
                 console.error('Fetch error:', error);
                 showError('حدث خطأ أثناء الاتصال بالسيرفر');
             })
             .finally(function() {
                 isLoading = false;
+                currentFetchController = null;
                 if (loadingEl) loadingEl.style.display = 'none';
                 if (tableWrapper) tableWrapper.style.opacity = '1';
             });
@@ -8011,13 +8036,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     this.value = '';
                 }
             }, false);
-            
-            customerSearchInput.addEventListener('input', function(e) {
-                // التأكد من أن القيمة موجودة
-                if (this.value === undefined || this.value === null) {
-                    this.value = '';
-                }
-            }, false);
         }
         
         // منع الإرسال الافتراضي للنموذج
@@ -8026,20 +8044,37 @@ document.addEventListener('DOMContentLoaded', function() {
             fetchCustomers(1);
         });
         
-        // البحث الفوري عند الكتابة - فوري تماماً بدون تأخير
+        // البحث الفوري عند الكتابة - فوري تماماً بدون أي تأخير
         customerSearchInput.addEventListener('input', function(e) {
             // التأكد من أن القيمة موجودة
-            if (this.value !== undefined && this.value !== null) {
-                if (searchTimeout) {
-                    clearTimeout(searchTimeout);
+            var searchValue = this.value;
+            if (searchValue === undefined || searchValue === null) {
+                this.value = '';
+                searchValue = '';
+            }
+            
+            // إلغاء أي طلب سابق قيد الانتظار
+            if (searchTimeout) {
+                clearTimeout(searchTimeout);
+                if (window.cancelAnimationFrame) {
+                    cancelAnimationFrame(searchTimeout);
                 }
-                
-                // استخدام timeout قصير جداً (30ms) لجعل البحث فورياً تماماً
-                // هذا يضمن البحث الفوري مع تجنب الطلبات الزائدة أثناء الكتابة السريعة
+                searchTimeout = null;
+            }
+            
+            // البحث الفوري تماماً بدون أي تأخير - استخدام requestAnimationFrame
+            // هذا يضمن البحث الفوري مع تجنب الطلبات الزائدة أثناء الكتابة السريعة
+            if (window.requestAnimationFrame) {
+                searchTimeout = requestAnimationFrame(function() {
+                    fetchCustomers(1);
+                    searchTimeout = null;
+                });
+            } else {
+                // Fallback للمتصفحات القديمة - استخدام timeout 0 للبحث الفوري
                 searchTimeout = setTimeout(function() {
                     fetchCustomers(1);
                     searchTimeout = null;
-                }, 30);
+                }, 0);
             }
         });
         
@@ -8049,36 +8084,55 @@ document.addEventListener('DOMContentLoaded', function() {
             return true;
         });
     }
-        
-        // البحث الفوري عند تغيير الفلاتر
-        var debtStatusFilter = document.getElementById('debtStatusFilter');
-        var regionFilter = document.getElementById('regionFilter');
-        
-        if (debtStatusFilter) {
-            debtStatusFilter.addEventListener('change', function() {
-                if (searchTimeout) {
-                    clearTimeout(searchTimeout);
+    
+    // البحث الفوري عند تغيير الفلاتر
+    var debtStatusFilter = document.getElementById('debtStatusFilter');
+    var regionFilter = document.getElementById('regionFilter');
+    
+    if (debtStatusFilter) {
+        debtStatusFilter.addEventListener('change', function() {
+            if (searchTimeout) {
+                clearTimeout(searchTimeout);
+                if (window.cancelAnimationFrame) {
+                    cancelAnimationFrame(searchTimeout);
                 }
-                // استخدام timeout قصير جداً (30ms) لجعل البحث فورياً
+            }
+            // البحث الفوري بدون تأخير
+            if (window.requestAnimationFrame) {
+                searchTimeout = requestAnimationFrame(function() {
+                    fetchCustomers(1);
+                    searchTimeout = null;
+                });
+            } else {
                 searchTimeout = setTimeout(function() {
                     fetchCustomers(1);
                     searchTimeout = null;
-                }, 30);
-            });
-        }
-        
-        if (regionFilter) {
-            regionFilter.addEventListener('change', function() {
-                if (searchTimeout) {
-                    clearTimeout(searchTimeout);
+                }, 0);
+            }
+        });
+    }
+    
+    if (regionFilter) {
+        regionFilter.addEventListener('change', function() {
+            if (searchTimeout) {
+                clearTimeout(searchTimeout);
+                if (window.cancelAnimationFrame) {
+                    cancelAnimationFrame(searchTimeout);
                 }
-                // استخدام timeout قصير جداً (30ms) لجعل البحث فورياً
+            }
+            // البحث الفوري بدون تأخير
+            if (window.requestAnimationFrame) {
+                searchTimeout = requestAnimationFrame(function() {
+                    fetchCustomers(1);
+                    searchTimeout = null;
+                });
+            } else {
                 searchTimeout = setTimeout(function() {
                     fetchCustomers(1);
                     searchTimeout = null;
-                }, 30);
-            });
-        }
+                }, 0);
+            }
+        });
     }
     
     // ===== مراقبة تغييرات الـ sidebar وإزالة overlay عند إغلاقه - حل جذري =====

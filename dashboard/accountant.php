@@ -1247,19 +1247,33 @@ if ($isAjaxNavigation) {
                 $totalCustomerCreditSettlements = (float) ($customerSettlementsResult['total_settlements'] ?? 0);
             }
             
+            // حساب إجمالي توريدات الإدارة
+            $totalManagementSupplies = 0.0;
+            if (!empty($accountantTableExists)) {
+                $managementSuppliesResult = $db->queryOne(
+                    "SELECT COALESCE(SUM(amount), 0) as total_supplies
+                     FROM accountant_transactions
+                     WHERE transaction_type = 'income' 
+                     AND status = 'approved'
+                     AND description LIKE '%تحصيل للإدارة%'"
+                );
+                $totalManagementSupplies = (float) ($managementSuppliesResult['total_supplies'] ?? 0);
+            }
+            
             $netApprovedBalance = 
                 ($treasurySummary['approved_income'] ?? 0) 
                 - ($treasurySummary['approved_expense'] ?? 0)
                 - ($treasurySummary['approved_payment'] ?? 0)
                 - $totalSalaries
                 - $totalSalaryAdjustments
-                - $totalCustomerCreditSettlements;
+                - $totalCustomerCreditSettlements
+                - $totalManagementSupplies;
             
             $approvedIncome = (float) ($treasurySummary['approved_income'] ?? 0);
             $approvedExpense = (float) ($treasurySummary['approved_expense'] ?? 0);
             $approvedPayment = (float) ($treasurySummary['approved_payment'] ?? 0);
             
-            $movementTotal = $approvedIncome + $approvedExpense + $approvedPayment + $totalSalaries + $totalSalaryAdjustments + $totalCustomerCreditSettlements;
+            $movementTotal = $approvedIncome + $approvedExpense + $approvedPayment + $totalSalaries + $totalSalaryAdjustments + $totalCustomerCreditSettlements + $totalManagementSupplies;
             $shareDenominator = $movementTotal > 0 ? $movementTotal : 1;
             $incomeShare = $shareDenominator > 0 ? round(($approvedIncome / $shareDenominator) * 100) : 0;
             $expenseShare = $shareDenominator > 0 ? round(($approvedExpense / $shareDenominator) * 100) : 0;
@@ -1267,6 +1281,7 @@ if ($isAjaxNavigation) {
             $salariesShare = $shareDenominator > 0 ? round(($totalSalaries / $shareDenominator) * 100) : 0;
             $adjustmentsShare = $shareDenominator > 0 ? round(($totalSalaryAdjustments / $shareDenominator) * 100) : 0;
             $customerSettlementsShare = $shareDenominator > 0 ? round(($totalCustomerCreditSettlements / $shareDenominator) * 100) : 0;
+            $managementSuppliesShare = $shareDenominator > 0 ? round(($totalManagementSupplies / $shareDenominator) * 100) : 0;
             $pendingCount = intval($pendingStats['total_pending'] ?? 0);
             $pendingAmount = (float) ($pendingStats['pending_amount'] ?? 0);
             $pendingPreview = array_slice($pendingTransactions, 0, 3);
@@ -1370,6 +1385,19 @@ if ($isAjaxNavigation) {
                                             <div class="progress-bar bg-secondary" role="progressbar" style="width: <?php echo max(0, min(100, $customerSettlementsShare)); ?>%;"></div>
                                         </div>
                                         <small class="text-muted d-block mt-2"><?php echo max(0, min(100, $customerSettlementsShare)); ?>% من إجمالي الحركة</small>
+                                    </div>
+                                </div>
+                                <div class="col-12 col-md-4">
+                                    <div class="border rounded-3 p-3 h-100">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <span class="text-muted small">توريدات للإدارة</span>
+                                            <i class="bi bi-building text-dark"></i>
+                                        </div>
+                                        <div class="h5 text-dark mt-2"><?php echo formatCurrency($totalManagementSupplies); ?></div>
+                                        <div class="progress mt-3" style="height: 6px;">
+                                            <div class="progress-bar bg-dark" role="progressbar" style="width: <?php echo max(0, min(100, $managementSuppliesShare)); ?>%;"></div>
+                                        </div>
+                                        <small class="text-muted d-block mt-2"><?php echo max(0, min(100, $managementSuppliesShare)); ?>% من إجمالي الحركة</small>
                                     </div>
                                 </div>
                             </div>
