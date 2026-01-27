@@ -392,7 +392,7 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($customerId <= 0) {
                 $validationErrors[] = 'يجب اختيار عميل من القائمة.';
             } else {
-                $customer = $db->queryOne("SELECT id, name, balance, credit_limit, created_by FROM customers WHERE id = ?", [$customerId]);
+                $customer = $db->queryOne("SELECT id, name, phone, address, balance, credit_limit, created_by FROM customers WHERE id = ?", [$customerId]);
                 if (!$customer) {
                     $validationErrors[] = 'العميل المحدد غير موجود.';
                 } elseif (($currentUser['role'] ?? '') === 'sales' && isset($customer['created_by']) && (int) $customer['created_by'] !== (int) $currentUser['id']) {
@@ -2089,10 +2089,46 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 // تسجيل نجاح commit للمساعدة في التشخيص
                 error_log(sprintf('Transaction committed successfully for invoiceId=%d, invoiceNumber=%s', $invoiceId, $invoiceNumber ?? 'N/A'));
 
-                $success = 'تم إتمام عملية البيع بنجاح. رقم الفاتورة: ' . htmlspecialchars($invoiceNumber);
-                if ($createdCustomerId) {
-                    $success .= ' - تم إنشاء العميل الجديد.';
+                // بناء رسالة النجاح مع بيانات العميل
+                $customerName = $customer ? htmlspecialchars($customer['name'] ?? '') : '';
+                $customerPhone = $customer ? htmlspecialchars($customer['phone'] ?? '') : '';
+                $customerAddress = $customer ? htmlspecialchars($customer['address'] ?? '') : '';
+                
+                // إذا كان عميل جديد، جلب بياناته من قاعدة البيانات
+                if ($createdCustomerId && !$customer) {
+                    $newCustomer = $db->queryOne("SELECT name, phone, address FROM customers WHERE id = ?", [$createdCustomerId]);
+                    if ($newCustomer) {
+                        $customerName = htmlspecialchars($newCustomer['name'] ?? '');
+                        $customerPhone = htmlspecialchars($newCustomer['phone'] ?? '');
+                        $customerAddress = htmlspecialchars($newCustomer['address'] ?? '');
+                    }
                 }
+                
+                $success = '<div class="sale-success-message">';
+                $success .= '<h5 class="mb-3"><i class="bi bi-check-circle-fill text-success me-2"></i>تم إتمام عملية البيع بنجاح</h5>';
+                $success .= '<div class="sale-success-details">';
+                $success .= '<div class="row g-3">';
+                $success .= '<div class="col-md-6"><strong>رقم الفاتورة:</strong> ' . htmlspecialchars($invoiceNumber) . '</div>';
+                if ($customerName) {
+                    $success .= '<div class="col-md-6"><strong>اسم العميل:</strong> ' . $customerName . '</div>';
+                }
+                if ($customerPhone) {
+                    $success .= '<div class="col-md-6"><strong>رقم الهاتف:</strong> ' . $customerPhone . '</div>';
+                }
+                if ($customerAddress) {
+                    $success .= '<div class="col-md-6"><strong>العنوان:</strong> ' . $customerAddress . '</div>';
+                }
+                $success .= '<div class="col-md-6"><strong>المبلغ الإجمالي:</strong> ' . formatCurrency($netTotal) . '</div>';
+                $success .= '<div class="col-md-6"><strong>المبلغ المدفوع:</strong> ' . formatCurrency($effectivePaidAmount) . '</div>';
+                if ($dueAmount > 0) {
+                    $success .= '<div class="col-md-6"><strong>المبلغ المتبقي:</strong> ' . formatCurrency($dueAmount) . '</div>';
+                }
+                if ($createdCustomerId) {
+                    $success .= '<div class="col-12"><span class="badge bg-info">تم إنشاء العميل الجديد</span></div>';
+                }
+                $success .= '</div>';
+                $success .= '</div>';
+                $success .= '</div>';
 
                 // إعادة تحميل المخزون والإحصائيات
                 $vehicleInventory = getVehicleInventory($vehicle['id']);
@@ -2246,15 +2282,14 @@ if (!$error) {
 <?php endif; ?>
 
 <?php if ($success): ?>
-    <div class="alert alert-success alert-dismissible fade show" id="successAlert" role="alert">
-        <i class="bi bi-check-circle-fill me-2"></i>
-        <?php echo htmlspecialchars($success); ?>
+    <div class="alert alert-success alert-dismissible fade show" id="successAlert" data-auto-refresh="true" role="alert">
+        <?php echo $success; ?>
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
 <?php endif; ?>
 
 <?php if (!empty($posInvoiceLinks['absolute_report_url'])): ?>
-<!-- Modal عرض الفاتورة بعد البيع -->
+<!-- Modal عرض الفاتورة بعد البيع - لا يتم فتحه تلقائياً -->
 <div class="modal fade" id="posInvoiceModal" tabindex="-1" aria-labelledby="posInvoiceModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog modal-fullscreen">
         <div class="modal-content">
@@ -2294,6 +2329,43 @@ if (!$error) {
     </div>
 <?php elseif ($vehicle): ?>
     <style>
+        .sale-success-message {
+            padding: 0;
+        }
+        
+        .sale-success-message h5 {
+            color: #0f5132;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+        
+        .sale-success-details {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 0.5rem;
+        }
+        
+        .sale-success-details .row {
+            margin-bottom: 0;
+        }
+        
+        .sale-success-details strong {
+            color: #495057;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+        
+        .sale-success-details .col-md-6 {
+            margin-bottom: 0.75rem;
+            font-size: 0.95rem;
+        }
+        
+        .sale-success-details .badge {
+            font-size: 0.9rem;
+            padding: 0.5rem 1rem;
+        }
+        
         .pos-wrapper {
             display: flex;
             flex-direction: column;
@@ -4531,60 +4603,16 @@ if (!$error) {
         }
     };
     
-    // الانتظار حتى يتم تحميل DOM بالكامل
+    // تم تعطيل فتح المودال تلقائياً - سيتم عرض رسالة النجاح فقط
     function initInvoiceModal() {
-        const invoiceModal = document.getElementById('posInvoiceModal');
+        // لا نفتح المودال تلقائياً بعد إتمام عملية البيع
+        // سيتم عرض رسالة النجاح مع بيانات العميل بدلاً من ذلك
         
-        if (invoiceModal && invoiceUrl) {
-            // الانتظار حتى يتم تحميل Bootstrap
-            if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-                // فتح Modal تلقائياً
-                try {
-                    const modal = new bootstrap.Modal(invoiceModal, {
-                        backdrop: 'static',
-                        keyboard: false
-                    });
-                    
-                    // طباعة الفاتورة تلقائياً عند فتح الـ modal
-                    invoiceModal.addEventListener('shown.bs.modal', function() {
-                        // تأخير بسيط للتأكد من تحميل المحتوى
-                        setTimeout(function() {
-                            if (typeof window.printInvoice === 'function') {
-                                console.log('[POS Invoice] Auto-printing invoice...');
-                                window.printInvoice();
-                            }
-                        }, 1000);
-                    }, { once: true });
-                    
-                    modal.show();
-                    
-                    console.log('[POS Invoice] Modal opened successfully');
-                    
-                    // عند إغلاق Modal، تنظيف URL لمنع refresh
-                    invoiceModal.addEventListener('hidden.bs.modal', function() {
-                        const currentUrl = new URL(window.location.href);
-                        currentUrl.searchParams.delete('success');
-                        currentUrl.searchParams.delete('error');
-                        window.history.replaceState({}, '', currentUrl.toString());
-                    });
-                } catch (error) {
-                    console.error('[POS Invoice] Error opening modal:', error);
-                    // محاولة مرة أخرى بعد قليل
-                    setTimeout(initInvoiceModal, 200);
-                }
-            } else {
-                // إذا لم يكن Bootstrap جاهزاً، ننتظر قليلاً ثم نحاول مرة أخرى
-                console.log('[POS Invoice] Waiting for Bootstrap...');
-                setTimeout(initInvoiceModal, 100);
-            }
-        }
-        
-        // منع refresh تلقائي عند وجود فاتورة
+        // منع refresh تلقائي عند وجود رسالة نجاح أو خطأ
         const successAlert = document.getElementById('successAlert');
         const errorAlert = document.getElementById('errorAlert');
         
-        // فقط إذا لم تكن هناك فاتورة، نفعل auto-refresh
-        if (!invoiceModal && (successAlert || errorAlert)) {
+        if (successAlert || errorAlert) {
             const alertElement = successAlert || errorAlert;
             if (alertElement && alertElement.dataset.autoRefresh === 'true') {
                 setTimeout(function() {
@@ -4592,7 +4620,7 @@ if (!$error) {
                     currentUrl.searchParams.delete('success');
                     currentUrl.searchParams.delete('error');
                     window.location.href = currentUrl.toString();
-                }, 3000);
+                }, 5000); // زيادة الوقت إلى 5 ثوانٍ لإعطاء المستخدم وقتاً لقراءة الرسالة
             }
         }
     }
