@@ -4,11 +4,20 @@ const PRECACHE_VERSION = 'v1';
 const PRECACHE_NAME = `customers-pwa-precache-${PRECACHE_VERSION}`;
 const RUNTIME_CACHE_NAME = 'customers-pwa-runtime';
 
+// تحديد base path من موقع service worker
+const getPwaBase = () => {
+  const swPath = self.location.pathname;
+  // استخراج المسار حتى مجلد cus
+  const swDir = swPath.substring(0, swPath.lastIndexOf('/'));
+  return swDir || '/cus';
+};
+
+const PWA_BASE = getPwaBase();
+
 const PRECACHE_ASSETS = [
-  './',
-  './index.php',
-  './manifest.php',
-  './cus.png'
+  PWA_BASE + '/index.php',
+  PWA_BASE + '/manifest.php',
+  PWA_BASE + '/cus.png'
 ];
 
 const CDN_ASSETS = [
@@ -22,7 +31,17 @@ const CDN_ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(PRECACHE_NAME).then((cache) =>
-      Promise.allSettled(PRECACHE_ASSETS.map((asset) => cache.add(asset)))
+      Promise.allSettled(PRECACHE_ASSETS.map((asset) => {
+        try {
+          return cache.add(asset).catch(err => {
+            console.warn('Failed to cache asset:', asset, err);
+            return null;
+          });
+        } catch (err) {
+          console.warn('Error caching asset:', asset, err);
+          return null;
+        }
+      }))
     )
   );
   self.skipWaiting();
@@ -67,12 +86,22 @@ self.addEventListener('fetch', (event) => {
   }
 
   // معالجة الموارد المسبقة التخزين
-  if (
-    PRECACHE_ASSETS.includes(url.href) ||
-    PRECACHE_ASSETS.includes(url.pathname.startsWith('/') ? `.${url.pathname}` : url.pathname)
-  ) {
+  const isPrecacheAsset = PRECACHE_ASSETS.some(asset => {
+    const assetPath = asset.startsWith('/') ? asset : '/' + asset;
+    return url.pathname === asset || url.pathname === assetPath || url.href.includes(asset);
+  });
+  
+  if (isPrecacheAsset) {
     event.respondWith(
-      caches.match(request).then((cached) => cached || fetch(request))
+      caches.match(request).then((cached) => {
+        if (cached) {
+          return cached;
+        }
+        return fetch(request).catch(() => {
+          // إذا فشل التحميل، حاول البحث في الكاش بمسارات مختلفة
+          return caches.match(request.url) || caches.match(url.pathname);
+        });
+      })
     );
     return;
   }
@@ -107,7 +136,7 @@ self.addEventListener('fetch', (event) => {
               cache.put(request, response.clone());
             }
             return response;
-          });
+          }).catch(() => cached);
           return cached || networkFetch;
         })
       )
@@ -130,7 +159,12 @@ self.addEventListener('fetch', (event) => {
               }
               return response;
             })
-            .catch(() => caches.match('./cus.png'));
+            .catch(() => {
+              // محاولة العثور على أي صورة في الكاش كبديل
+              return caches.match(PWA_BASE + '/cus.png') || 
+                     caches.match('/cus/cus.png') ||
+                     caches.match('cus.png');
+            });
         })
       )
     );
@@ -150,7 +184,12 @@ self.addEventListener('fetch', (event) => {
           }
           return networkResponse;
         })
-        .catch(() => caches.match(request).then((cached) => cached || caches.match('./index.php')))
+        .catch(() => {
+          return caches.match(request)
+            .then((cached) => cached || caches.match(PWA_BASE + '/index.php'))
+            .then((cached) => cached || caches.match('/cus/index.php'))
+            .then((cached) => cached || caches.match('index.php'));
+        })
     );
     return;
   }

@@ -89,6 +89,8 @@ ob_start();
         body {
             font-family: 'Cairo', sans-serif;
             background-color: #f8f9fa;
+            margin: 0;
+            padding: 0;
         }
         .pwa-header {
             background: linear-gradient(135deg, #f1c40f 0%, #f39c12 100%);
@@ -96,6 +98,9 @@ ob_start();
             padding: 1rem;
             text-align: center;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
         }
         .pwa-header h1 {
             margin: 0;
@@ -108,12 +113,18 @@ ob_start();
             padding: 0.75rem;
             text-align: center;
             display: none;
+            position: sticky;
+            top: 0;
+            z-index: 999;
         }
         .pwa-install-prompt.show {
             display: block;
         }
         .pwa-install-prompt button {
             margin: 0.25rem;
+        }
+        main {
+            min-height: calc(100vh - 200px);
         }
     </style>
 </head>
@@ -227,12 +238,37 @@ ob_start();
         // تسجيل Service Worker
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('service-worker.js')
+                // استخدام مسار نسبي من موقع الصفحة الحالية
+                const swPath = new URL('service-worker.js', window.location.href).href;
+                navigator.serviceWorker.register(swPath, {
+                    scope: './'
+                })
                     .then((registration) => {
-                        console.log('Service Worker registered:', registration);
+                        console.log('Service Worker registered successfully:', registration.scope);
+                        // التحقق من التحديثات
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            if (newWorker) {
+                                newWorker.addEventListener('statechange', () => {
+                                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                        console.log('New service worker available. Reload to update.');
+                                    }
+                                });
+                            }
+                        });
                     })
                     .catch((error) => {
                         console.error('Service Worker registration failed:', error);
+                        // لا نعرض رسالة خطأ للمستخدم إلا في وضع التطوير
+                        if (window.location.hostname === 'localhost' || 
+                            window.location.hostname === '127.0.0.1' ||
+                            window.location.hostname.includes('egsystem.top')) {
+                            console.warn('Service Worker error details:', {
+                                message: error.message,
+                                stack: error.stack,
+                                swPath: swPath
+                            });
+                        }
                     });
             });
         }
