@@ -4,9 +4,6 @@
  * منفصلة تماماً عن عملاء المندوبين
  */
 
-if (!defined('ACCESS_ALLOWED')) {
-    die('Direct access not allowed');
-}
 
 // ملاحظة: Headers يتم إرسالها من dashboard/accountant.php أو dashboard/manager.php
 // لا حاجة لإرسالها هنا لتجنب مشاكل headers already sent
