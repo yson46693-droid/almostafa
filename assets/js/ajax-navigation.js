@@ -442,17 +442,29 @@
                 const loadFlags = {
                     'main.js': '__mainJsLoaded',
                     'notifications.js': '__notificationsJsLoaded',
-                    'pwa-install.js': '__pwaInstallJsLoaded'
+                    'pwa-install.js': '__pwaInstallJsLoaded',
+                    'attendance_notifications.js': 'AttendanceNotificationManager'
                 };
                 
-                if (loadFlags[scriptName] && window[loadFlags[scriptName]]) {
-                    // الـ script تم تحميله مسبقاً - تخطي إعادة التحميل
-                    console.log('Script already loaded (flag check), skipping:', scriptSrc);
-                    // إزالة script القديم من DOM فقط
-                    if (oldScript.parentNode) {
-                        oldScript.parentNode.removeChild(oldScript);
+                // التحقق من flags التحميل
+                if (loadFlags[scriptName]) {
+                    if (scriptName === 'attendance_notifications.js') {
+                        // للـ attendance_notifications.js، نتحقق من وجود الـ class
+                        if (typeof window[loadFlags[scriptName]] !== 'undefined') {
+                            console.log('Script already loaded (class check), skipping:', scriptSrc);
+                            if (oldScript.parentNode) {
+                                oldScript.parentNode.removeChild(oldScript);
+                            }
+                            return;
+                        }
+                    } else if (window[loadFlags[scriptName]]) {
+                        // للـ scripts الأخرى، نتحقق من flag التحميل
+                        console.log('Script already loaded (flag check), skipping:', scriptSrc);
+                        if (oldScript.parentNode) {
+                            oldScript.parentNode.removeChild(oldScript);
+                        }
+                        return;
                     }
-                    return;
                 }
                 
                 const newScript = document.createElement('script');

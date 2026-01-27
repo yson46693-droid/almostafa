@@ -3,7 +3,10 @@
  * Attendance Notifications System
  */
 
-class AttendanceNotificationManager {
+// منع إعادة تعريف الـ class إذا كان موجوداً بالفعل
+if (typeof AttendanceNotificationManager === 'undefined' && 
+    (typeof window === 'undefined' || typeof window.AttendanceNotificationManager === 'undefined')) {
+    class AttendanceNotificationManager {
     constructor() {
         this.notificationPermission = null;
         this.reminderTimeout = null;
@@ -652,22 +655,60 @@ class AttendanceNotificationManager {
     }
 }
 
-// تهيئة النظام عند تحميل الصفحة
-let attendanceNotificationManager = null;
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() {
-        attendanceNotificationManager = new AttendanceNotificationManager();
-        attendanceNotificationManager.init();
-    });
-} else {
-    attendanceNotificationManager = new AttendanceNotificationManager();
-    attendanceNotificationManager.init();
+// إغلاق الـ if statement لمنع إعادة التعريف
 }
 
-// تصدير للاستخدام العام
+// تهيئة النظام عند تحميل الصفحة - فقط إذا لم يتم تهيئته مسبقاً
+if (typeof window.attendanceNotificationManager === 'undefined' || window.attendanceNotificationManager === null) {
+    let attendanceNotificationManager = null;
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+            const ManagerClass = typeof AttendanceNotificationManager !== 'undefined' 
+                ? AttendanceNotificationManager 
+                : (typeof window !== 'undefined' ? window.AttendanceNotificationManager : null);
+            if (ManagerClass) {
+                attendanceNotificationManager = new ManagerClass();
+                attendanceNotificationManager.init();
+                // حفظ في window للوصول العام
+                if (typeof window !== 'undefined') {
+                    window.attendanceNotificationManager = attendanceNotificationManager;
+                }
+            }
+        });
+    } else {
+        const ManagerClass = typeof AttendanceNotificationManager !== 'undefined' 
+            ? AttendanceNotificationManager 
+            : (typeof window !== 'undefined' ? window.AttendanceNotificationManager : null);
+        if (ManagerClass) {
+            attendanceNotificationManager = new ManagerClass();
+            attendanceNotificationManager.init();
+            // حفظ في window للوصول العام
+            if (typeof window !== 'undefined') {
+                window.attendanceNotificationManager = attendanceNotificationManager;
+            }
+        }
+    }
+} else {
+    // إذا كان النظام مهيأ بالفعل، فقط أعد تهيئته إذا لزم الأمر
+    if (window.attendanceNotificationManager && typeof window.attendanceNotificationManager.init === 'function') {
+        // إعادة تهيئة فقط إذا كانت الصفحة الحالية هي صفحة الحضور
+        if (window.location.pathname.includes('attendance.php') || document.body.getAttribute('data-user-role') !== 'manager') {
+            try {
+                window.attendanceNotificationManager.init();
+            } catch (e) {
+                console.warn('Error reinitializing attendance notifications:', e);
+            }
+        }
+    }
+}
+
+// تصدير للاستخدام العام - فقط إذا تم تعريف الـ class
 if (typeof window !== 'undefined') {
-    window.AttendanceNotificationManager = AttendanceNotificationManager;
-    window.attendanceNotificationManager = attendanceNotificationManager;
+    // التأكد من أن AttendanceNotificationManager متاح في النطاق الحالي
+    if (typeof AttendanceNotificationManager !== 'undefined') {
+        window.AttendanceNotificationManager = AttendanceNotificationManager;
+    }
+    // إذا كان موجوداً في window بالفعل، لا نفعل شيء - هذا يمنع إعادة التعريف
 }
 
