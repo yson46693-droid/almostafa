@@ -921,7 +921,7 @@
             const regionName = escapeHtml((customer.region_name || '').trim() || '-');
             const balance = customer.balance_formatted || '0.00 ج.م';
             
-            // التحقق من أن العميل محدد مسبقاً
+            // التحقق من أن العميل محدد مسبقاً (من صفحات سابقة أو الحالية)
             const isChecked = selectedCustomers.indexOf(customerId) !== -1;
             const checkedAttr = isChecked ? ' checked' : '';
             
@@ -990,6 +990,9 @@
             html += '</ul>';
             html += '<div class="text-center text-muted small mt-2">';
             html += 'عرض ' + validCustomers.length + ' من ' + paginationOptions.total + ' عميل (صفحة ' + paginationOptions.currentPage + ' من ' + paginationOptions.totalPages + ')';
+            if (selectedCustomers.length > 0) {
+                html += ' | <strong class="text-primary">محدد: ' + selectedCustomers.length + ' عميل</strong>';
+            }
             html += '</div>';
             html += '</nav>';
         }
@@ -1008,6 +1011,8 @@
             pageLinks.forEach(function(link) {
                 link.addEventListener('click', function(e) {
                     e.preventDefault();
+                    // حفظ التحديدات الحالية قبل تغيير الصفحة
+                    updateSelectedCustomers();
                     const page = parseInt(this.getAttribute('data-page'), 10);
                     if (page > 0 && page <= paginationOptions.totalPages) {
                         paginationOptions.onPageChange(page);
@@ -1024,6 +1029,12 @@
         // ربط أحداث checkbox
         const checkboxes = customersList.querySelectorAll('.customer-export-checkbox');
         checkboxes.forEach(function(checkbox) {
+            // التأكد من تطبيق التحديدات المحفوظة عند تحميل الصفحة
+            const customerId = parseInt(checkbox.value, 10);
+            if (selectedCustomers.indexOf(customerId) !== -1) {
+                checkbox.checked = true;
+            }
+            
             checkbox.addEventListener('change', function() {
                 updateSelectedCustomers();
             });
@@ -1032,6 +1043,28 @@
         // ربط حدث select all
         const selectAllCheckbox = document.getElementById('exportSelectAllCheckbox');
         if (selectAllCheckbox) {
+            // تحديث حالة select all بناءً على التحديدات الحالية
+            const currentPageCustomerIds = Array.from(checkboxes).map(function(cb) {
+                return parseInt(cb.value, 10);
+            });
+            const allCurrentPageSelected = currentPageCustomerIds.length > 0 && currentPageCustomerIds.every(function(id) {
+                return selectedCustomers.indexOf(id) !== -1;
+            });
+            const someCurrentPageSelected = currentPageCustomerIds.some(function(id) {
+                return selectedCustomers.indexOf(id) !== -1;
+            });
+            
+            if (allCurrentPageSelected) {
+                selectAllCheckbox.checked = true;
+                selectAllCheckbox.indeterminate = false;
+            } else if (someCurrentPageSelected) {
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.indeterminate = true;
+            } else {
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.indeterminate = false;
+            }
+            
             selectAllCheckbox.addEventListener('change', function() {
                 const checked = this.checked;
                 checkboxes.forEach(function(cb) {
@@ -1198,17 +1231,61 @@
     
     /**
      * تحديث قائمة العملاء المحددين
+     * يحفظ التحديدات من جميع الصفحات
      */
     function updateSelectedCustomers() {
-        const checkboxes = document.querySelectorAll('.customer-export-checkbox:checked');
-        selectedCustomers = Array.from(checkboxes).map(function(cb) {
+        // جمع التحديدات من الصفحة الحالية
+        const checkboxes = document.querySelectorAll('.customer-export-checkbox');
+        const currentPageSelected = new Set();
+        
+        checkboxes.forEach(function(cb) {
+            if (cb.checked) {
+                const customerId = parseInt(cb.value, 10);
+                if (customerId > 0) {
+                    currentPageSelected.add(customerId);
+                }
+            }
+        });
+        
+        // إضافة التحديدات الجديدة من الصفحة الحالية
+        currentPageSelected.forEach(function(id) {
+            if (selectedCustomers.indexOf(id) === -1) {
+                selectedCustomers.push(id);
+            }
+        });
+        
+        // إزالة التحديدات التي تم إلغاؤها من الصفحة الحالية
+        const currentPageCustomerIds = Array.from(checkboxes).map(function(cb) {
             return parseInt(cb.value, 10);
+        });
+        
+        selectedCustomers = selectedCustomers.filter(function(id) {
+            // إذا كان العميل موجوداً في الصفحة الحالية ولم يكن محدداً، أزل التحديد
+            const isInCurrentPage = currentPageCustomerIds.indexOf(id) !== -1;
+            if (isInCurrentPage) {
+                return currentPageSelected.has(id);
+            }
+            // إذا لم يكن في الصفحة الحالية، احتفظ بالتحديد (من صفحات أخرى)
+            return true;
         });
         
         // تحديث حالة زر التوليد
         updateGenerateButtons(function(btn) {
             btn.disabled = selectedCustomers.length === 0;
         });
+        
+        // تحديث عداد العملاء المحددين إذا كان موجوداً
+        updateSelectedCount();
+    }
+    
+    /**
+     * تحديث عداد العملاء المحددين
+     */
+    function updateSelectedCount() {
+        const countElement = document.getElementById('selectedCustomersCount');
+        if (countElement) {
+            countElement.textContent = selectedCustomers.length;
+        }
     }
     
     /**
