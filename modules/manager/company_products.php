@@ -1027,6 +1027,91 @@ foreach ($factoryProducts as $product) {
         </div>
     <?php endif; ?>
 
+    <!-- شريط البحث والفلترة المتقدم -->
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="bi bi-search me-2"></i>بحث متقدم وفلترة</h5>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <!-- البحث النصي -->
+                <div class="col-md-12">
+                    <label class="form-label"><i class="bi bi-search me-1"></i>البحث</label>
+                    <input type="text" 
+                           class="form-control" 
+                           id="productSearchInput" 
+                           placeholder="ابحث عن منتج، رقم تشغيلة، فئة..." 
+                           autocomplete="off">
+                </div>
+                
+                <!-- نوع المنتج -->
+                <div class="col-md-3">
+                    <label class="form-label"><i class="bi bi-tags me-1"></i>نوع المنتج</label>
+                    <select class="form-select" id="productTypeFilter">
+                        <option value="all">الكل</option>
+                        <option value="factory">منتجات المصنع</option>
+                        <option value="external">المنتجات الخارجية</option>
+                    </select>
+                </div>
+                
+                <!-- الفئة -->
+                <div class="col-md-3">
+                    <label class="form-label"><i class="bi bi-folder me-1"></i>الفئة</label>
+                    <input type="text" 
+                           class="form-control" 
+                           id="categoryFilter" 
+                           placeholder="ابحث بالفئة..." 
+                           autocomplete="off">
+                </div>
+                
+                <!-- سعر الوحدة -->
+                <div class="col-md-3">
+                    <label class="form-label"><i class="bi bi-currency-dollar me-1"></i>سعر الوحدة</label>
+                    <div class="input-group">
+                        <input type="number" 
+                               class="form-control" 
+                               id="minPriceFilter" 
+                               placeholder="من" 
+                               step="0.01" 
+                               min="0">
+                        <input type="number" 
+                               class="form-control" 
+                               id="maxPriceFilter" 
+                               placeholder="إلى" 
+                               step="0.01" 
+                               min="0">
+                    </div>
+                </div>
+                
+                <!-- الكمية -->
+                <div class="col-md-3">
+                    <label class="form-label"><i class="bi bi-box me-1"></i>الكمية</label>
+                    <div class="input-group">
+                        <input type="number" 
+                               class="form-control" 
+                               id="minQuantityFilter" 
+                               placeholder="من" 
+                               step="0.01" 
+                               min="0">
+                        <input type="number" 
+                               class="form-control" 
+                               id="maxQuantityFilter" 
+                               placeholder="إلى" 
+                               step="0.01" 
+                               min="0">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- زر إعادة تعيين الفلاتر -->
+            <div class="mt-3 d-flex justify-content-end">
+                <button type="button" class="btn btn-outline-secondary" id="resetFiltersBtn">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>إعادة تعيين
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- قسم منتجات المصنع -->
     <div class="card company-card mb-4">
         <div class="section-header">
@@ -1193,6 +1278,7 @@ foreach ($factoryProducts as $product) {
             <!-- تحميل مكتبة JsBarcode -->
             <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
 
+            <div id="factoryProductsContainer">
             <?php if (empty($factoryProducts)): ?>
                 <div style="padding: 25px;">
                     <div class="alert alert-info mb-0">
@@ -1201,7 +1287,7 @@ foreach ($factoryProducts as $product) {
                     </div>
                 </div>
             <?php else: ?>
-                <div class="products-grid">
+                <div class="products-grid" id="factoryProductsGrid">
                     <?php foreach ($factoryProducts as $product): ?>
                         <?php
                             $batchNumber = $product['batch_number'] ?? '';
@@ -1274,6 +1360,7 @@ foreach ($factoryProducts as $product) {
                         </div>
                     <?php endforeach; ?>
                 </div>
+            </div>
                 
                 <!-- توليد الباركودات -->
                 <script>
@@ -1342,29 +1429,30 @@ foreach ($factoryProducts as $product) {
     </div>
 
     <!-- قسم المنتجات الخارجية -->
-    <div class="card company-card">
+    <div class="card company-card" id="externalProductsSection">
         <div class="section-header">
             <h5>
                 <i class="bi bi-cart4"></i>
                 المنتجات الخارجية
             </h5>
             <div class="d-flex gap-2 align-items-center">
-                <span class="badge"><?php echo $totalExternalProducts; ?> منتج</span>
+                <span class="badge" id="externalProductsCount"><?php echo $totalExternalProducts; ?> منتج</span>
                 <button type="button" class="btn btn-success-custom btn-sm" onclick="showAddExternalProductModal()">
                     <i class="bi bi-plus-circle me-1"></i>إضافة منتج خارجي
                 </button>
             </div>
         </div>
         <div class="card-body">
-            <?php if (!empty($externalProducts)): ?>
+            <div id="externalProductsStats" style="<?php echo empty($externalProducts) ? 'display:none;' : ''; ?>">
                 <div class="total-value-box">
                     <div class="d-flex justify-content-between align-items-center">
                         <span class="fw-bold">القيمة الإجمالية للمنتجات الخارجية:</span>
-                        <span class="text-success fw-bold"><?php echo formatCurrency($totalExternalValue); ?></span>
+                        <span class="text-success fw-bold" id="externalTotalValue"><?php echo formatCurrency($totalExternalValue); ?></span>
                     </div>
                 </div>
-            <?php endif; ?>
+            </div>
             
+            <div id="externalProductsContainer">
             <?php if (empty($externalProducts)): ?>
                 <div style="padding: 25px;">
                     <div class="alert alert-info mb-0">
@@ -1373,7 +1461,7 @@ foreach ($factoryProducts as $product) {
                     </div>
                 </div>
             <?php else: ?>
-                <div class="products-grid">
+                <div class="products-grid" id="externalProductsGrid">
                     <?php foreach ($externalProducts as $product): ?>
                         <?php
                             $productName = htmlspecialchars($product['name'] ?? 'غير محدد');
@@ -1419,6 +1507,7 @@ foreach ($factoryProducts as $product) {
                     <?php endforeach; ?>
                 </div>
             <?php endif; ?>
+            </div>
         </div>
     </div>
 </div>
@@ -2908,6 +2997,387 @@ function initEditExternalButtons() {
                 window.history.replaceState({}, '', url);
             }
         }
+    }
+})();
+
+// ===== البحث والفلترة الديناميكية =====
+(function() {
+    let searchTimeout = null;
+    const API_URL = '<?php echo getRelativeUrl("api/search_company_products.php"); ?>';
+    
+    // عناصر البحث والفلترة
+    const searchInput = document.getElementById('productSearchInput');
+    const productTypeFilter = document.getElementById('productTypeFilter');
+    const categoryFilter = document.getElementById('categoryFilter');
+    const minPriceFilter = document.getElementById('minPriceFilter');
+    const maxPriceFilter = document.getElementById('maxPriceFilter');
+    const minQuantityFilter = document.getElementById('minQuantityFilter');
+    const maxQuantityFilter = document.getElementById('maxQuantityFilter');
+    const resetFiltersBtn = document.getElementById('resetFiltersBtn');
+    
+    // عناصر العرض
+    const factoryProductsGrid = document.getElementById('factoryProductsGrid');
+    const externalProductsGrid = document.getElementById('externalProductsGrid');
+    const factoryProductsContainer = document.getElementById('factoryProductsContainer');
+    const externalProductsContainer = document.getElementById('externalProductsContainer');
+    const factoryProductsCount = document.getElementById('factoryProductsCount');
+    const externalProductsCount = document.getElementById('externalProductsCount');
+    const factoryTotalValue = document.getElementById('factoryTotalValue');
+    const externalTotalValue = document.getElementById('externalTotalValue');
+    const factoryProductsStats = document.getElementById('factoryProductsStats');
+    const externalProductsStats = document.getElementById('externalProductsStats');
+    
+    // دالة جلب البيانات من API
+    async function fetchProducts() {
+        const params = new URLSearchParams();
+        
+        if (searchInput && searchInput.value.trim()) {
+            params.append('search', searchInput.value.trim());
+        }
+        
+        if (productTypeFilter && productTypeFilter.value !== 'all') {
+            params.append('product_type', productTypeFilter.value);
+        }
+        
+        if (categoryFilter && categoryFilter.value.trim()) {
+            params.append('category', categoryFilter.value.trim());
+        }
+        
+        if (minPriceFilter && minPriceFilter.value) {
+            params.append('min_price', minPriceFilter.value);
+        }
+        
+        if (maxPriceFilter && maxPriceFilter.value) {
+            params.append('max_price', maxPriceFilter.value);
+        }
+        
+        if (minQuantityFilter && minQuantityFilter.value) {
+            params.append('min_quantity', minQuantityFilter.value);
+        }
+        
+        if (maxQuantityFilter && maxQuantityFilter.value) {
+            params.append('max_quantity', maxQuantityFilter.value);
+        }
+        
+        try {
+            const response = await fetch(API_URL + '?' + params.toString());
+            const data = await response.json();
+            
+            if (data.success) {
+                updateFactoryProducts(data.factory_products || []);
+                updateExternalProducts(data.external_products || []);
+                updateStatistics(data.statistics || {});
+            } else {
+                console.error('Error fetching products:', data.message);
+            }
+        } catch (error) {
+            console.error('Error fetching products:', error);
+        }
+    }
+    
+    // تحديث منتجات المصنع
+    function updateFactoryProducts(products) {
+        if (!factoryProductsContainer) return;
+        
+        if (products.length === 0) {
+            factoryProductsContainer.innerHTML = `
+                <div style="padding: 25px;">
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-info-circle me-2"></i>
+                        لا توجد منتجات مصنع تطابق البحث
+                    </div>
+                </div>
+            `;
+            return;
+        }
+        
+        const productsHTML = products.map(product => {
+            const batchNumber = product.batch_number || '';
+            const productName = product.product_name || 'غير محدد';
+            const category = product.product_category || '—';
+            const productionDate = product.production_date ? formatDate(product.production_date) : '—';
+            const quantity = parseFloat(product.available_quantity || 0).toFixed(2);
+            const unitPrice = parseFloat(product.unit_price || 0);
+            const totalPrice = parseFloat(product.total_price || 0);
+            
+            const batchDisplay = batchNumber && batchNumber !== '—' 
+                ? `<a href="#" class="product-batch-id">${escapeHtml(batchNumber)}</a>`
+                : `<span class="product-batch-id">—</span>`;
+            
+            const barcodeHTML = batchNumber && batchNumber !== '—'
+                ? `
+                    <div class="product-barcode-box">
+                        <div class="product-barcode-container" data-batch="${escapeHtml(batchNumber)}">
+                            <svg class="barcode-svg" style="width: 100%; height: 50px;"></svg>
+                        </div>
+                        <div class="product-barcode-id">${escapeHtml(batchNumber)}</div>
+                    </div>
+                `
+                : `
+                    <div class="product-barcode-box">
+                        <div class="product-barcode-id" style="color: #999;">لا يوجد باركود</div>
+                    </div>
+                `;
+            
+            const actionsHTML = batchNumber && batchNumber !== '—'
+                ? `
+                    <div class="product-actions" style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
+                        <button type="button" 
+                                class="btn-view js-batch-details" 
+                                style="border: none; cursor: pointer; flex: 1; min-width: calc(50% - 5px); background: #0c2c80; color: white; padding: 10px 16px; border-radius: 10px; font-weight: bold; font-size: 13px;"
+                                data-batch="${escapeHtml(batchNumber)}"
+                                data-product="${escapeHtml(productName)}"
+                                data-view-url="<?php echo getRelativeUrl('production.php?page=batch_numbers&batch_number='); ?>${encodeURIComponent(batchNumber)}">
+                            <i class="bi bi-eye me-1"></i>عرض التفاصيل
+                        </button>
+                        <button type="button" 
+                                class="btn-view js-print-barcode" 
+                                style="border: none; cursor: pointer; flex: 1; min-width: calc(50% - 5px); background: #28a745; color: white; padding: 10px 16px; border-radius: 10px; font-weight: bold; font-size: 13px;"
+                                data-batch="${escapeHtml(batchNumber)}"
+                                data-product="${escapeHtml(productName)}"
+                                data-quantity="${escapeHtml(quantity)}">
+                            <i class="bi bi-printer me-1"></i>طباعة الباركود
+                        </button>
+                    </div>
+                `
+                : `
+                    <span class="btn-view" style="opacity: 0.5; cursor: not-allowed; display: inline-block; margin-top: 15px; background: #0c2c80; color: white; padding: 10px 16px; border-radius: 10px; font-weight: bold; font-size: 13px;">
+                        <i class="bi bi-eye me-1"></i>عرض التفاصيل
+                    </span>
+                `;
+            
+            return `
+                <div class="product-card">
+                    <div class="product-status">
+                        <i class="bi bi-building me-1"></i>مصنع
+                    </div>
+                    <div class="product-name">${escapeHtml(productName)}</div>
+                    ${batchDisplay}
+                    ${barcodeHTML}
+                    <div class="product-detail-row"><span>الفئة:</span> <span>${escapeHtml(category)}</span></div>
+                    <div class="product-detail-row"><span>تاريخ الإنتاج:</span> <span>${escapeHtml(productionDate)}</span></div>
+                    <div class="product-detail-row"><span>الكمية:</span> <span><strong>${quantity}</strong></span></div>
+                    <div class="product-detail-row"><span>سعر الوحدة:</span> <span>${formatCurrency(unitPrice)}</span></div>
+                    <div class="product-detail-row"><span>إجمالي القيمة:</span> <span><strong class="text-success">${formatCurrency(totalPrice)}</strong></span></div>
+                    ${actionsHTML}
+                </div>
+            `;
+        }).join('');
+        
+        factoryProductsContainer.innerHTML = `<div class="products-grid" id="factoryProductsGrid">${productsHTML}</div>`;
+        
+        // توليد الباركودات
+        generateBarcodes();
+        
+        // إعادة إرفاق event listeners
+        attachBatchDetailsListeners();
+    }
+    
+    // تحديث المنتجات الخارجية
+    function updateExternalProducts(products) {
+        if (!externalProductsContainer) return;
+        
+        if (products.length === 0) {
+            externalProductsContainer.innerHTML = `
+                <div style="padding: 25px;">
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-info-circle me-2"></i>
+                        لا توجد منتجات خارجية تطابق البحث
+                    </div>
+                </div>
+            `;
+            return;
+        }
+        
+        const productsHTML = products.map(product => {
+            const productName = product.name || 'غير محدد';
+            const quantity = parseFloat(product.quantity || 0).toFixed(2);
+            const unit = product.unit || 'قطعة';
+            const unitPrice = parseFloat(product.unit_price || 0);
+            const totalValue = parseFloat(product.total_value || 0);
+            
+            const canEditExternal = <?php echo json_encode($currentUser['role'] !== 'accountant'); ?>;
+            const actionsHTML = canEditExternal
+                ? `
+                    <div class="product-actions" style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
+                        <button type="button" 
+                                class="btn btn-outline-primary js-edit-external" 
+                                style="flex: 1; min-width: calc(50% - 5px); border-radius: 10px; padding: 10px 16px; font-weight: bold; font-size: 13px;"
+                                data-id="${product.id}"
+                                data-name="${escapeHtml(productName)}"
+                                data-quantity="${product.quantity}"
+                                data-unit="${escapeHtml(unit)}"
+                                data-price="${product.unit_price}">
+                            <i class="bi bi-pencil me-1"></i>تعديل
+                        </button>
+                        <button type="button" 
+                                class="btn btn-outline-danger js-delete-external" 
+                                style="flex: 1; min-width: calc(50% - 5px); border-radius: 10px; padding: 10px 16px; font-weight: bold; font-size: 13px;"
+                                data-id="${product.id}"
+                                data-name="${escapeHtml(productName)}">
+                            <i class="bi bi-trash me-1"></i>حذف
+                        </button>
+                    </div>
+                `
+                : '';
+            
+            return `
+                <div class="product-card">
+                    <div class="product-status" style="background: #10b981;">
+                        <i class="bi bi-cart4 me-1"></i>خارجي
+                    </div>
+                    <div class="product-name">${escapeHtml(productName)}</div>
+                    <div style="color: #94a3b8; font-size: 13px; margin-bottom: 10px;">منتج خارجي</div>
+                    <div class="product-detail-row"><span>الكمية:</span> <span><strong>${quantity} ${escapeHtml(unit)}</strong></span></div>
+                    <div class="product-detail-row"><span>سعر الوحدة:</span> <span>${formatCurrency(unitPrice)}</span></div>
+                    <div class="product-detail-row"><span>الإجمالي:</span> <span><strong class="text-success">${formatCurrency(totalValue)}</strong></span></div>
+                    ${actionsHTML}
+                </div>
+            `;
+        }).join('');
+        
+        externalProductsContainer.innerHTML = `<div class="products-grid" id="externalProductsGrid">${productsHTML}</div>`;
+        
+        // إعادة إرفاق event listeners
+        initEditExternalButtons();
+    }
+    
+    // تحديث الإحصائيات
+    function updateStatistics(stats) {
+        if (factoryProductsCount) {
+            factoryProductsCount.textContent = (stats.total_factory_products || 0) + ' منتج';
+        }
+        
+        if (externalProductsCount) {
+            externalProductsCount.textContent = (stats.total_external_products || 0) + ' منتج';
+        }
+        
+        if (factoryTotalValue) {
+            factoryTotalValue.textContent = formatCurrency(stats.total_factory_value || 0);
+        }
+        
+        if (externalTotalValue) {
+            externalTotalValue.textContent = formatCurrency(stats.total_external_value || 0);
+        }
+        
+        if (factoryProductsStats) {
+            factoryProductsStats.style.display = (stats.total_factory_products || 0) > 0 ? '' : 'none';
+        }
+        
+        if (externalProductsStats) {
+            externalProductsStats.style.display = (stats.total_external_products || 0) > 0 ? '' : 'none';
+        }
+    }
+    
+    // دالة توليد الباركودات
+    function generateBarcodes() {
+        if (typeof JsBarcode === 'undefined') {
+            setTimeout(generateBarcodes, 100);
+            return;
+        }
+        
+        const containers = document.querySelectorAll('.product-barcode-container[data-batch]');
+        containers.forEach(function(container) {
+            const batchNumber = container.getAttribute('data-batch');
+            const svg = container.querySelector('svg.barcode-svg');
+            
+            if (svg && batchNumber && batchNumber.trim() !== '') {
+                try {
+                    svg.innerHTML = '';
+                    JsBarcode(svg, batchNumber, {
+                        format: "CODE128",
+                        width: 2,
+                        height: 50,
+                        displayValue: false,
+                        margin: 5,
+                        background: "#ffffff",
+                        lineColor: "#000000"
+                    });
+                } catch (error) {
+                    console.error('Error generating barcode:', error);
+                    svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" font-size="12" fill="#666" font-family="Arial">' + batchNumber + '</text>';
+                }
+            }
+        });
+    }
+    
+    // دوال مساعدة
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    function formatCurrency(amount) {
+        if (typeof amount === 'string') {
+            amount = parseFloat(amount) || 0;
+        }
+        if (!Number.isFinite(amount)) {
+            amount = 0;
+        }
+        // استخدام نفس تنسيق PHP: number_format($amount, 2, '.', ',') . ' ' . $currencySymbol
+        const formatted = amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        return formatted + ' <?php echo addslashes(getCurrencySymbol()); ?>';
+    }
+    
+    function formatDate(dateString) {
+        if (!dateString) return '—';
+        const date = new Date(dateString);
+        return date.toLocaleDateString('ar-EG', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+    }
+    
+    // دالة البحث مع تأخير (debounce)
+    function performSearch() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            fetchProducts();
+        }, 300); // تأخير 300ms بعد توقف الكتابة
+    }
+    
+    // إرفاق event listeners
+    if (searchInput) {
+        searchInput.addEventListener('input', performSearch);
+    }
+    
+    if (productTypeFilter) {
+        productTypeFilter.addEventListener('change', performSearch);
+    }
+    
+    if (categoryFilter) {
+        categoryFilter.addEventListener('input', performSearch);
+    }
+    
+    if (minPriceFilter) {
+        minPriceFilter.addEventListener('input', performSearch);
+    }
+    
+    if (maxPriceFilter) {
+        maxPriceFilter.addEventListener('input', performSearch);
+    }
+    
+    if (minQuantityFilter) {
+        minQuantityFilter.addEventListener('input', performSearch);
+    }
+    
+    if (maxQuantityFilter) {
+        maxQuantityFilter.addEventListener('input', performSearch);
+    }
+    
+    if (resetFiltersBtn) {
+        resetFiltersBtn.addEventListener('click', function() {
+            if (searchInput) searchInput.value = '';
+            if (productTypeFilter) productTypeFilter.value = 'all';
+            if (categoryFilter) categoryFilter.value = '';
+            if (minPriceFilter) minPriceFilter.value = '';
+            if (maxPriceFilter) maxPriceFilter.value = '';
+            if (minQuantityFilter) minQuantityFilter.value = '';
+            if (maxQuantityFilter) maxQuantityFilter.value = '';
+            performSearch();
+        });
     }
 })();
 </script>
