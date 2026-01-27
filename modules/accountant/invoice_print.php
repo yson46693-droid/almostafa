@@ -107,7 +107,7 @@ $companyName      = COMPANY_NAME;
 $companySubtitle  = 'نظام إدارة المبيعات';
 $companyAddress   = $invoiceData['company_address'] ?? 'نطاق التوزيع :  الاسكندريه - شحن لجميع انحاء الجمهوريه';
 $companyPhone     = $invoiceData['company_phone']   ?? '01003533905';
-$companyEmail     = $invoiceData['company_email']   ?? 'صفحة فيسبوك  : عسل نحل المصطفي';
+$companyEmail     = $invoiceData['company_email']   ?? '';
 $companyTaxNumber = $invoiceData['company_tax_number'] ?? '';
 
 $issueDate = formatDate($invoiceData['date']);
@@ -187,10 +187,6 @@ if (!empty($notes) && trim($notes) !== '') {
 }
 
 $currencyLabel   = CURRENCY . ' ' . CURRENCY_SYMBOL;
-
-// باركود فيسبوك - يمكن تعديل الرابط حسب صفحة الشركة على فيسبوك
-$facebookPageUrl = 'https://www.facebook.com/share/1AHxSmFhEp/'; // يرجى تعديل هذا الرابط
-$qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=' . urlencode($facebookPageUrl);
 
 $statusLabelsMap = [
     'draft'     => 'مسودة',
@@ -274,8 +270,12 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
                 <div class="info-title">بيانات الشركة</div>
                 <div class="info-item"><?php echo htmlspecialchars($companyAddress); ?></div>
                 <div class="info-item"><?php echo htmlspecialchars($companyPhone); ?></div>
-                <div class="info-item"><?php echo htmlspecialchars($companyEmail); ?></div>
-                <div class="info-item"><?php echo htmlspecialchars($companyTaxNumber); ?></div>
+                <?php if (!empty($companyEmail)): ?>
+                    <div class="info-item"><?php echo htmlspecialchars($companyEmail); ?></div>
+                <?php endif; ?>
+                <?php if (!empty($companyTaxNumber)): ?>
+                    <div class="info-item"><?php echo htmlspecialchars($companyTaxNumber); ?></div>
+                <?php endif; ?>
             </div>
             <div class="info-card">
                 <div class="info-title">بيانات العميل</div>
@@ -501,13 +501,6 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
                     </div>
                 </div>
             <?php endif; ?>
-            <div class="summary-card qr-card">
-                <div class="summary-title">تابعنا على فيسبوك</div>
-                <div class="qr-wrapper">
-                    <img src="<?php echo htmlspecialchars($qrUrl); ?>" alt="Facebook QR Code">
-                </div>
-                <div class="qr-note">امسح الرمز لمتابعة صفحتنا على فيسبوك</div>
-            </div>
         </section>
 
         <footer class="invoice-footer">
@@ -815,10 +808,6 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
     gap: 12px;
 }
 
-.summary-card.qr-card {
-    align-items: center;
-    text-align: center;
-}
 
 .summary-title {
     font-size: 15px;
@@ -850,25 +839,6 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
 
 .text-success { color: #16a34a !important; }
 .text-danger { color: #dc2626 !important; }
-
-.qr-wrapper {
-    background: #fff;
-    padding: 12px;
-    border-radius: 16px;
-    border: 1px solid rgba(15, 76, 129, 0.15);
-    box-shadow: inset 0 2px 12px rgba(15, 23, 42, 0.05);
-}
-
-.qr-wrapper img {
-    width: 150px;
-    height: 150px;
-    display: block;
-}
-
-.qr-note {
-    font-size: 12px;
-    color: #64748b;
-}
 
 .notes-card .notes-content {
     font-size: 13px;
@@ -1139,18 +1109,6 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
         font-size: 14px !important;
     }
 
-    .qr-wrapper {
-        padding: 10px !important;
-    }
-
-    .qr-wrapper img {
-        width: 120px !important;
-        height: 120px !important;
-    }
-
-    .qr-note {
-        font-size: 11px !important;
-    }
 
     .invoice-footer {
         padding-top: 16px !important;
@@ -1167,8 +1125,8 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
 
 @media print {
     @page {
-        size: A4;
-        margin: 1cm;
+        size: 80mm auto;
+        margin: 5mm;
     }
 
     body {
@@ -1179,17 +1137,19 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
 
     .invoice-wrapper {
         width: 100% !important;
-        max-width: 100% !important;
-        margin: 0 !important;
+        max-width: 80mm !important;
+        margin: 0 auto !important;
         padding: 0 !important;
     }
 
     .invoice-card {
         box-shadow: none !important;
         border: none !important;
-        padding: 20px !important;
+        padding: 8px !important;
         border-radius: 0 !important;
         page-break-inside: avoid !important;
+        width: 100% !important;
+        max-width: 100% !important;
     }
 
     .invoice-card::before {
@@ -1198,10 +1158,101 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
 
     .invoice-header {
         page-break-inside: avoid !important;
+        flex-direction: column !important;
+        gap: 8px !important;
+        margin-bottom: 12px !important;
+    }
+
+    .brand-block {
+        flex-direction: row !important;
+        gap: 8px !important;
+    }
+
+    .logo-placeholder {
+        width: 40px !important;
+        height: 40px !important;
+        font-size: 20px !important;
+    }
+
+    .company-name {
+        font-size: 16px !important;
+    }
+
+    .company-subtitle {
+        font-size: 10px !important;
+    }
+
+    .invoice-meta {
+        width: 100% !important;
+    }
+
+    .invoice-title {
+        font-size: 14px !important;
+    }
+
+    .invoice-number {
+        font-size: 10px !important;
+    }
+
+    .invoice-number span {
+        font-size: 14px !important;
+    }
+
+    .invoice-meta-grid {
+        grid-template-columns: 1fr !important;
+        gap: 4px !important;
+    }
+
+    .meta-item {
+        padding: 6px 8px !important;
+    }
+
+    .meta-item span {
+        font-size: 9px !important;
+    }
+
+    .meta-item strong {
+        font-size: 11px !important;
+    }
+
+    .info-grid {
+        grid-template-columns: 1fr !important;
+        gap: 8px !important;
+        margin-bottom: 12px !important;
+    }
+
+    .info-card {
+        padding: 8px !important;
+    }
+
+    .info-title {
+        font-size: 11px !important;
+        margin-bottom: 6px !important;
+    }
+
+    .info-item {
+        font-size: 10px !important;
+        margin-bottom: 4px !important;
     }
 
     .items-table {
         page-break-inside: auto !important;
+        margin-bottom: 12px !important;
+    }
+
+    .items-table table {
+        font-size: 9px !important;
+        width: 100% !important;
+    }
+
+    .items-table th {
+        padding: 6px 4px !important;
+        font-size: 9px !important;
+    }
+
+    .items-table td {
+        padding: 6px 4px !important;
+        font-size: 9px !important;
     }
 
     .items-table tbody tr {
@@ -1211,6 +1262,53 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
 
     .summary-grid {
         page-break-inside: avoid !important;
+        grid-template-columns: 1fr !important;
+        gap: 8px !important;
+        margin: 12px 0 !important;
+    }
+
+    .summary-card {
+        padding: 8px !important;
+        min-height: auto !important;
+    }
+
+    .summary-title {
+        font-size: 11px !important;
+    }
+
+    .summary-row {
+        font-size: 10px !important;
+        gap: 8px !important;
+    }
+
+    .summary-row strong {
+        font-size: 11px !important;
+    }
+
+    .invoice-footer {
+        padding-top: 8px !important;
+    }
+
+    .invoice-footer .thanks {
+        font-size: 11px !important;
+    }
+
+    .invoice-footer .terms {
+        font-size: 9px !important;
+    }
+
+    .invoice-footer .invoice-notes {
+        margin-top: 8px !important;
+        padding-top: 8px !important;
+    }
+
+    .invoice-footer .invoice-notes .notes-label {
+        font-size: 10px !important;
+    }
+
+    .invoice-footer .invoice-notes .notes-text {
+        font-size: 9px !important;
+        padding: 6px 8px !important;
     }
 
     .btn, .no-print, .card-header, .sidebar, .navbar {

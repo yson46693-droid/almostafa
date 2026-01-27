@@ -166,8 +166,17 @@
                 const isClickInsideSidebar = sidebar && sidebar.contains(e.target);
                 const isClickOnToggle = mobileMenuToggle && mobileMenuToggle.contains(e.target);
                 
+                // التحقق من أن النقر ليس على رابط تنقل في الشريط الجانبي
+                const clickedLink = e.target.closest('.homeline-sidebar .nav-link, .sidebar .nav-link');
+                const isClickOnSidebarLink = clickedLink && clickedLink.href && 
+                    clickedLink.href !== '#' && 
+                    !clickedLink.href.startsWith('javascript:') &&
+                    !clickedLink.href.startsWith('mailto:') &&
+                    !clickedLink.href.startsWith('tel:');
+                
                 // Check if click is on overlay (before pseudo-element area)
-                if (!isClickInsideSidebar && !isClickOnToggle && dashboardWrapper.classList.contains('sidebar-open')) {
+                // لا نغلق الشريط الجانبي إذا كان النقر على رابط تنقل
+                if (!isClickInsideSidebar && !isClickOnToggle && !isClickOnSidebarLink && dashboardWrapper.classList.contains('sidebar-open')) {
                     dashboardWrapper.classList.remove('sidebar-open');
                     document.body.classList.remove('sidebar-open');
                 }

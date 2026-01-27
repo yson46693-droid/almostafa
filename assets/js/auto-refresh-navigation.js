@@ -253,6 +253,16 @@
             return;
         }
         
+        // على الهاتف، إغلاق الشريط الجانبي قبل الانتقال
+        const isMobile = window.innerWidth <= 768;
+        if (isMobile) {
+            const dashboardWrapper = document.querySelector('.dashboard-wrapper');
+            if (dashboardWrapper && dashboardWrapper.classList.contains('sidebar-open')) {
+                dashboardWrapper.classList.remove('sidebar-open');
+                document.body.classList.remove('sidebar-open');
+            }
+        }
+        
         // كشف نوع الاتصال
         const isMobileData = detectConnectionType();
         
