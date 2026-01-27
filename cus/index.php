@@ -471,7 +471,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && trim($_P
                 }
                 echo '<script>window.location.href = "' . htmlspecialchars($redirectUrl, ENT_QUOTES, 'UTF-8') . '";</script>';
                 exit;
-        exit;
     }
     
     $customerId = isset($_POST['customer_id']) ? (int)$_POST['customer_id'] : 0;
@@ -486,7 +485,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && trim($_P
                 }
                 echo '<script>window.location.href = "' . htmlspecialchars($redirectUrl, ENT_QUOTES, 'UTF-8') . '";</script>';
                 exit;
-        exit;
     }
     
     try {
@@ -502,7 +500,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && trim($_P
                 }
                 echo '<script>window.location.href = "' . htmlspecialchars($redirectUrl, ENT_QUOTES, 'UTF-8') . '";</script>';
                 exit;
-            exit;
         }
         
         $customerName = $customer['name'] ?? 'غير معروف';
@@ -592,7 +589,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && trim($_P
                 }
                 echo '<script>window.location.href = "' . htmlspecialchars($redirectUrl, ENT_QUOTES, 'UTF-8') . '";</script>';
                 exit;
-    exit;
 }
 
 $error = '';
@@ -7556,6 +7552,7 @@ body:not(.modal-open):not(.sidebar-open) .dashboard-main {
         </form>
     </div>
 </div>
+<?php endif; ?>
 
 <script>
 // ===== دوال فتح النماذج =====
