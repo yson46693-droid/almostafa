@@ -37,9 +37,13 @@ if (!isLoggedIn()) {
         @ob_end_clean();
     }
     
-    // الحصول على رابط تسجيل الدخول - استخدام المسار المطلق من الجذر
+    // الحصول على رابط تسجيل الدخول - استخدام المسار النسبي من موقع cus
     $basePath = getBasePath();
-    $loginUrl = rtrim($basePath, '/') . '/index.php';
+    // إزالة /cus من basePath للحصول على المسار الأساسي
+    $basePath = str_replace('/cus', '', $basePath);
+    $basePath = rtrim($basePath, '/');
+    
+    $loginUrl = $basePath . '/index.php';
     
     // تنظيف URL من أي معاملات
     $loginUrl = preg_replace('/[?&](_nocache|_refresh|_cache_bust|_t|_r|_auto_refresh)=\d+/', '', $loginUrl);
@@ -50,7 +54,7 @@ if (!isLoggedIn()) {
         $loginUrl = '/' . $loginUrl;
     }
     
-    // إزالة أي بروتوكول أو hostname
+    // إزالة أي بروتوكول أو hostname من URL
     $loginUrl = preg_replace('/^https?:\/\/[^\/]+(:[0-9]+)?/', '', $loginUrl);
     $loginUrl = preg_replace('/^\/\//', '/', $loginUrl);
     
@@ -76,8 +80,11 @@ if (!$currentUser || !is_array($currentUser) || empty($currentUser)) {
         @ob_end_clean();
     }
     
+    // الحصول على رابط تسجيل الدخول
     $basePath = getBasePath();
-    $loginUrl = rtrim($basePath, '/') . '/index.php';
+    $basePath = str_replace('/cus', '', $basePath);
+    $basePath = rtrim($basePath, '/');
+    $loginUrl = $basePath . '/index.php';
     $loginUrl = preg_replace('/^https?:\/\/[^\/]+(:[0-9]+)?/', '', $loginUrl);
     $loginUrl = preg_replace('/^\/\//', '/', $loginUrl);
     if (strpos($loginUrl, '/') !== 0) {
@@ -103,8 +110,11 @@ if (!in_array($userRole, $allowedRoles, true)) {
         @ob_end_clean();
     }
     
+    // الحصول على رابط تسجيل الدخول
     $basePath = getBasePath();
-    $loginUrl = rtrim($basePath, '/') . '/index.php';
+    $basePath = str_replace('/cus', '', $basePath);
+    $basePath = rtrim($basePath, '/');
+    $loginUrl = $basePath . '/index.php';
     $loginUrl = preg_replace('/^https?:\/\/[^\/]+(:[0-9]+)?/', '', $loginUrl);
     $loginUrl = preg_replace('/^\/\//', '/', $loginUrl);
     if (strpos($loginUrl, '/') !== 0) {
