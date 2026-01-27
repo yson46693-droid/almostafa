@@ -253,7 +253,7 @@
             return;
         }
         
-        // على الهاتف، إغلاق الشريط الجانبي قبل الانتقال
+        // على الهاتف، إغلاق الشريط الجانبي فوراً قبل أي شيء آخر
         const isMobile = window.innerWidth <= 768;
         if (isMobile) {
             const dashboardWrapper = document.querySelector('.dashboard-wrapper');
@@ -263,6 +263,11 @@
             }
         }
         
+        // منع التنقل الافتراضي وإيقاف انتشار الحدث لمنع ajax-navigation و sidebar.js من اعتراضه
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        
         // كشف نوع الاتصال
         const isMobileData = detectConnectionType();
         
@@ -271,18 +276,11 @@
             // محاولة استخدام AJAX navigation
             if (tryAjaxNavigation(targetUrl)) {
                 // نجح AJAX navigation - لا حاجة لإعادة التحميل الكاملة
-                event.preventDefault();
-                event.stopPropagation();
                 return;
             }
         }
         
         // عند استخدام WiFi أو فشل AJAX navigation، استخدام الطريقة القديمة
-        // منع التنقل الافتراضي وإيقاف انتشار الحدث لمنع ajax-navigation من اعتراضه
-        event.preventDefault();
-        event.stopPropagation();
-        event.stopImmediatePropagation();
-        
         // تعيين علامة في sessionStorage للإشارة إلى أننا ننتقل من الشريط الجانبي
         sessionStorage.setItem('sidebar_navigation', 'true');
         sessionStorage.setItem('sidebar_navigation_url', targetUrl);

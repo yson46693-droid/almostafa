@@ -163,20 +163,31 @@
         document.addEventListener('click', function(e) {
             if (window.innerWidth <= 768) {
                 const sidebar = document.querySelector('.homeline-sidebar');
-                const isClickInsideSidebar = sidebar && sidebar.contains(e.target);
+                if (!sidebar || !dashboardWrapper.classList.contains('sidebar-open')) {
+                    return;
+                }
+                
+                const isClickInsideSidebar = sidebar.contains(e.target);
                 const isClickOnToggle = mobileMenuToggle && mobileMenuToggle.contains(e.target);
                 
                 // التحقق من أن النقر ليس على رابط تنقل في الشريط الجانبي
-                const clickedLink = e.target.closest('.homeline-sidebar .nav-link, .sidebar .nav-link');
+                const clickedLink = e.target.closest('.homeline-sidebar .nav-link, .sidebar .nav-link, .homeline-sidebar a, .sidebar a');
                 const isClickOnSidebarLink = clickedLink && clickedLink.href && 
                     clickedLink.href !== '#' && 
                     !clickedLink.href.startsWith('javascript:') &&
                     !clickedLink.href.startsWith('mailto:') &&
-                    !clickedLink.href.startsWith('tel:');
+                    !clickedLink.href.startsWith('tel:') &&
+                    clickedLink.tagName.toLowerCase() === 'a';
+                
+                // إذا كان النقر على رابط تنقل داخل الشريط الجانبي، لا نغلق الشريط الجانبي
+                // (سيتم إغلاقه في auto-refresh-navigation.js قبل الانتقال)
+                if (isClickOnSidebarLink) {
+                    return;
+                }
                 
                 // Check if click is on overlay (before pseudo-element area)
-                // لا نغلق الشريط الجانبي إذا كان النقر على رابط تنقل
-                if (!isClickInsideSidebar && !isClickOnToggle && !isClickOnSidebarLink && dashboardWrapper.classList.contains('sidebar-open')) {
+                // إغلاق الشريط الجانبي فقط إذا كان النقر خارج الشريط الجانبي وليس على زر التبديل
+                if (!isClickInsideSidebar && !isClickOnToggle) {
                     dashboardWrapper.classList.remove('sidebar-open');
                     document.body.classList.remove('sidebar-open');
                 }
