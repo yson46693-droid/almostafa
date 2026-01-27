@@ -7,7 +7,28 @@
 (function() {
     'use strict';
 
-    // إعدادات
+    // كشف نوع الاتصال لتحسين الأداء على بيانات الهاتف
+    function detectConnectionType() {
+        if ('connection' in navigator) {
+            const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+            if (conn) {
+                const effectiveType = conn.effectiveType || 'unknown';
+                const type = conn.type || 'unknown';
+                const saveData = conn.saveData || false;
+                
+                if (saveData || type === 'cellular' || effectiveType === '2g' || effectiveType === 'slow-2g') {
+                    return { isMobileData: true, effectiveType, saveData };
+                }
+            }
+        }
+        const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        return { isMobileData: isMobileDevice, effectiveType: 'unknown', saveData: false };
+    }
+    
+    const connectionInfo = detectConnectionType();
+    const isMobileData = connectionInfo.isMobileData;
+
+    // إعدادات - محسّنة حسب نوع الاتصال
     const CONFIG = {
         // العناصر التي يجب تحديثها
         contentSelector: 'main',
@@ -15,11 +36,12 @@
         linkSelector: '.sidebar-nav a, .topbar a[href*="dashboard"], a[href*="?page="]',
         // استثناءات - روابط لا يجب اعتراضها
         excludeSelectors: 'a[target="_blank"], a[download], a[data-ajax="false"], a[href^="#"], a[href^="javascript:"]',
-        // Timeout للطلبات
-        requestTimeout: 30000,
+        // Timeout للطلبات - محسّن حسب نوع الاتصال
+        // WiFi: 30 ثانية | بيانات الهاتف: 20 ثانية (أسرع للكشف عن الأخطاء)
+        requestTimeout: isMobileData ? 20000 : 30000,
         // Cache للصفحات المحملة
         cacheEnabled: true,
-        cacheMaxSize: 10,
+        cacheMaxSize: isMobileData ? 15 : 10, // زيادة حجم cache على الهاتف لتسريع التنقل
         // Loading indicator
         showLoading: true
     };
@@ -30,7 +52,8 @@
     let isLoading = false;
     let loadingIndicator = null;
     let loadingTimeoutId = null;
-    const LOADING_DELAY = 300; // تأخير 300ms قبل إظهار loading dialog
+    // تقليل تأخير loading indicator على بيانات الهاتف لتسريع الاستجابة
+    const LOADING_DELAY = isMobileData ? 150 : 300; // 150ms للهاتف، 300ms للWiFi
 
     /**
      * إنشاء Loading Indicator

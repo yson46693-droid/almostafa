@@ -190,6 +190,43 @@
     }
     
     /**
+     * كشف نوع الاتصال
+     */
+    function detectConnectionType() {
+        if ('connection' in navigator) {
+            const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+            if (conn) {
+                const effectiveType = conn.effectiveType || 'unknown';
+                const type = conn.type || 'unknown';
+                const saveData = conn.saveData || false;
+                
+                if (saveData || type === 'cellular' || effectiveType === '2g' || effectiveType === 'slow-2g') {
+                    return true; // بيانات هاتف
+                }
+            }
+        }
+        const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        return isMobileDevice;
+    }
+    
+    /**
+     * محاولة استخدام AJAX navigation إذا كان متاحاً
+     */
+    function tryAjaxNavigation(url) {
+        // التحقق من وجود AjaxNavigation API من ajax-navigation.js
+        if (window.AjaxNavigation && typeof window.AjaxNavigation.load === 'function') {
+            try {
+                window.AjaxNavigation.load(url);
+                return true;
+            } catch (e) {
+                console.warn('AJAX navigation failed, falling back to full reload:', e);
+                return false;
+            }
+        }
+        return false;
+    }
+    
+    /**
      * معالجة النقر على روابط الشريط الجانبي
      */
     function handleSidebarLinkClick(event) {
@@ -197,11 +234,6 @@
         
         // التحقق من أن الرابط موجود وأنه رابط تنقل
         if (!link || !link.href) return;
-        
-        // منع التنقل الافتراضي وإيقاف انتشار الحدث لمنع ajax-navigation من اعتراضه
-        event.preventDefault();
-        event.stopPropagation();
-        event.stopImmediatePropagation();
         
         // الحصول على URL الهدف
         const targetUrl = link.href;
@@ -215,6 +247,26 @@
             refreshPage();
             return;
         }
+        
+        // كشف نوع الاتصال
+        const isMobileData = detectConnectionType();
+        
+        // عند استخدام بيانات الهاتف، استخدام AJAX navigation لتسريع التنقل
+        if (isMobileData) {
+            // محاولة استخدام AJAX navigation
+            if (tryAjaxNavigation(targetUrl)) {
+                // نجح AJAX navigation - لا حاجة لإعادة التحميل الكاملة
+                event.preventDefault();
+                event.stopPropagation();
+                return;
+            }
+        }
+        
+        // عند استخدام WiFi أو فشل AJAX navigation، استخدام الطريقة القديمة
+        // منع التنقل الافتراضي وإيقاف انتشار الحدث لمنع ajax-navigation من اعتراضه
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
         
         // تعيين علامة في sessionStorage للإشارة إلى أننا ننتقل من الشريط الجانبي
         sessionStorage.setItem('sidebar_navigation', 'true');
