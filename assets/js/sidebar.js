@@ -171,17 +171,26 @@
                 const isClickOnToggle = mobileMenuToggle && mobileMenuToggle.contains(e.target);
                 
                 // التحقق من أن النقر ليس على رابط تنقل في الشريط الجانبي
+                // استخدام closest للبحث عن الرابط حتى لو كان النقر على عنصر داخلي
                 const clickedLink = e.target.closest('.homeline-sidebar .nav-link, .sidebar .nav-link, .homeline-sidebar a, .sidebar a');
-                const isClickOnSidebarLink = clickedLink && clickedLink.href && 
+                
+                // التحقق من وجود علامة data-navigating (تم إضافتها من auto-refresh-navigation.js)
+                const isNavigating = clickedLink && clickedLink.hasAttribute('data-navigating');
+                
+                const isClickOnSidebarLink = clickedLink && 
+                    clickedLink.tagName && 
+                    clickedLink.tagName.toLowerCase() === 'a' &&
+                    clickedLink.href && 
                     clickedLink.href !== '#' && 
                     !clickedLink.href.startsWith('javascript:') &&
                     !clickedLink.href.startsWith('mailto:') &&
                     !clickedLink.href.startsWith('tel:') &&
-                    clickedLink.tagName.toLowerCase() === 'a';
+                    // التحقق من أن الرابط ليس مجرد anchor فارغ
+                    clickedLink.href !== window.location.href.split('#')[0] + '#';
                 
-                // إذا كان النقر على رابط تنقل داخل الشريط الجانبي، لا نغلق الشريط الجانبي
+                // إذا كان النقر على رابط تنقل داخل الشريط الجانبي أو كان هناك علامة navigating، لا نغلق الشريط الجانبي
                 // (سيتم إغلاقه في auto-refresh-navigation.js قبل الانتقال)
-                if (isClickOnSidebarLink) {
+                if (isClickOnSidebarLink || isNavigating) {
                     return;
                 }
                 

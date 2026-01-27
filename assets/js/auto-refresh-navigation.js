@@ -302,7 +302,10 @@
             return;
         }
         
-        // على الهاتف، إغلاق الشريط الجانبي فوراً قبل أي شيء آخر
+        // إضافة علامة خاصة على الرابط لمنع sidebar.js من إغلاق الشريط الجانبي
+        link.setAttribute('data-navigating', 'true');
+        
+        // على الهاتف، إغلاق الشريط الجانبي فوراً قبل منع الانتشار
         const isMobile = window.innerWidth <= 768;
         if (isMobile) {
             const dashboardWrapper = document.querySelector('.dashboard-wrapper');
@@ -313,9 +316,15 @@
         }
         
         // منع التنقل الافتراضي وإيقاف انتشار الحدث لمنع ajax-navigation و sidebar.js من اعتراضه
+        // يجب منع الانتشار بعد إغلاق الشريط الجانبي
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation();
+        
+        // إزالة العلامة بعد قليل
+        setTimeout(() => {
+            link.removeAttribute('data-navigating');
+        }, 1000);
         
         // كشف نوع الاتصال
         const isMobileData = detectConnectionType();
