@@ -198,7 +198,7 @@ if (!function_exists('enforceTasksRetentionLimit')) {
             if (empty($ids)) {
                 return true;
             }
-
+ 
             $idValues = array_map(static function ($row) {
                 return (int) $row['id'];
             }, $ids);
