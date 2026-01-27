@@ -3396,6 +3396,88 @@ if (ob_get_level() > 0) {
         };
     })();
     </script>
+    
+    <!-- PWA Performance: Preloading للصفحات الشائعة -->
+    <?php if (isLoggedIn() && isset($currentUser['role'])): ?>
+    <script>
+    (function() {
+        'use strict';
+        
+        // كشف نوع الاتصال
+        function detectConnectionType() {
+            if ('connection' in navigator) {
+                const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+                if (conn) {
+                    const effectiveType = conn.effectiveType || 'unknown';
+                    const saveData = conn.saveData || false;
+                    
+                    // لا نستخدم preloading على اتصالات بطيئة أو saveData
+                    if (saveData || effectiveType === '2g' || effectiveType === 'slow-2g') {
+                        return false;
+                    }
+                }
+            }
+            return true; // السماح بالـ preloading افتراضياً
+        }
+        
+        const canPreload = detectConnectionType();
+        
+        if (!canPreload) {
+            return; // لا نستخدم preloading على اتصالات بطيئة
+        }
+        
+        // تحديد الصفحات الشائعة حسب دور المستخدم
+        const role = '<?php echo htmlspecialchars($currentUser['role'] ?? '', ENT_QUOTES, 'UTF-8'); ?>';
+        const baseUrl = '<?php echo getDashboardUrl($currentUser['role'] ?? ''); ?>';
+        
+        let commonPages = [];
+        
+        switch(role) {
+            case 'manager':
+                commonPages = [
+                    baseUrl + 'manager.php',
+                    baseUrl + 'manager.php?page=chat',
+                    baseUrl + 'manager.php?page=product_templates'
+                ];
+                break;
+            case 'sales':
+                commonPages = [
+                    baseUrl + 'sales.php',
+                    baseUrl + 'sales.php?page=customers',
+                    baseUrl + 'sales.php?page=customer_orders'
+                ];
+                break;
+            case 'production':
+                commonPages = [
+                    baseUrl + 'production.php',
+                    baseUrl + 'production.php?page=tasks',
+                    baseUrl + 'production.php?page=chat'
+                ];
+                break;
+            case 'accountant':
+                commonPages = [
+                    baseUrl + 'accountant.php',
+                    baseUrl + 'accountant.php?page=reports'
+                ];
+                break;
+        }
+        
+        // Preload الصفحات الشائعة بعد تحميل الصفحة الحالية
+        setTimeout(() => {
+            commonPages.forEach((pageUrl, index) => {
+                // تأخير متدرج لتجنب إرهاق الشبكة
+                setTimeout(() => {
+                    const link = document.createElement('link');
+                    link.rel = 'prefetch';
+                    link.href = pageUrl;
+                    link.as = 'document';
+                    document.head.appendChild(link);
+                }, index * 200); // تأخير 200ms بين كل صفحة
+            });
+        }, 2000); // انتظار 2 ثانية بعد تحميل الصفحة الحالية
+    })();
+    </script>
+    <?php endif; ?>
 </head>
 <body class="dashboard-body<?php echo isset($pageBodyClass) ? ' ' . htmlspecialchars($pageBodyClass) : ''; ?>"
       data-user-role="<?php echo htmlspecialchars(isset($currentUser['role']) ? $currentUser['role'] : ''); ?>"

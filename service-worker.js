@@ -44,9 +44,10 @@ const CRITICAL_ASSETS = [
   'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/fonts/bootstrap-icons.woff2'
 ];
 
-// Network timeout (15 seconds for PHP pages, 10 seconds for static assets) - تم تقليل timeout لتحسين الأداء
-const NETWORK_TIMEOUT = 15000;
-const STATIC_NETWORK_TIMEOUT = 10000;
+// Network timeout - محسّن لـ PWA
+// تقليل timeout للصفحات PHP لتسريع الاستجابة في PWA
+const NETWORK_TIMEOUT = 8000; // 8 ثواني للصفحات PHP (كان 15 ثانية)
+const STATIC_NETWORK_TIMEOUT = 5000; // 5 ثواني للموارد الثابتة (كان 10 ثواني)
 
 // ============================================
 // Helper Functions
@@ -174,8 +175,40 @@ async function cacheFirst(request, cacheName) {
 
 /**
  * Network First strategy - try network, then cache, then offline
+ * محسّن لـ PWA: محاولة cache أولاً لأول فتح PWA لتسريع الاستجابة
  */
 async function networkFirst(request, cacheName, isNavigation = false) {
+  // لأول فتح PWA، محاولة استخدام cache أولاً لتسريع الاستجابة
+  // ثم تحديث cache في الخلفية
+  if (isNavigation && 'caches' in self) {
+    try {
+      const cache = await caches.open(cacheName);
+      const cached = await cache.match(request);
+      
+      if (cached) {
+        // استخدام cache فوراً، وتحديثه في الخلفية
+        fetchWithTimeout(request).then(async (networkResponse) => {
+          if (networkResponse.status === 200 && networkResponse.ok) {
+            try {
+              const cache = await caches.open(cacheName);
+              const responseClone = networkResponse.clone();
+              await cache.put(request, responseClone);
+            } catch (cacheError) {
+              // Silently fail cache update
+            }
+          }
+        }).catch(() => {
+          // Silently fail background update
+        });
+        
+        return cached;
+      }
+    } catch (cacheError) {
+      // Silently fail cache lookup - continue to network
+    }
+  }
+  
+  // Network first strategy
   try {
     const response = await fetchWithTimeout(request);
     
@@ -427,7 +460,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   // ============================================
-  // Handle PHP Pages - Network Only (No Caching)
+  // Handle PHP Pages - Network First with Cache Fallback (محسّن لـ PWA)
   // ============================================
   if (url.pathname.endsWith('.php')) {
     // استثناء AJAX navigation requests - دع المتصفح يتعامل معها مباشرة
@@ -441,7 +474,10 @@ self.addEventListener('fetch', (event) => {
     }
     
     const isNavigation = request.mode === 'navigate';
-    event.respondWith(networkOnly(request, isNavigation));
+    
+    // استخدام Network First مع Cache Fallback لتحسين الأداء في PWA
+    // هذا يسمح بتحميل سريع من cache عند أول فتح PWA
+    event.respondWith(networkFirst(request, STATIC_CACHE_NAME, isNavigation));
     return;
   }
 

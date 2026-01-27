@@ -1031,26 +1031,63 @@
 
         let timeoutId = null;
         try {
-            // إضافة timeout فعلي باستخدام AbortController
-            const controller = new AbortController();
-            timeoutId = setTimeout(() => controller.abort(), CONFIG.requestTimeout);
+            // محاولة استخدام Service Worker cache أولاً (لتحسين الأداء في PWA)
+            let response = null;
+            if ('caches' in window && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
+                try {
+                    const cache = await caches.open('albarakah-static-v2.0.0');
+                    const cachedResponse = await cache.match(url);
+                    if (cachedResponse) {
+                        // استخدام cache إذا كان متاحاً، لكن نتحقق من التحديثات في الخلفية
+                        response = cachedResponse;
+                        
+                        // تحديث cache في الخلفية
+                        fetch(url, {
+                            method: 'GET',
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'Accept': 'text/html'
+                            },
+                            cache: 'no-cache'
+                        }).then(async (networkResponse) => {
+                            if (networkResponse.ok) {
+                                const cache = await caches.open('albarakah-static-v2.0.0');
+                                await cache.put(url, networkResponse.clone());
+                            }
+                        }).catch(() => {
+                            // تجاهل أخطاء التحديث في الخلفية
+                        });
+                    }
+                } catch (cacheError) {
+                    // إذا فشل cache، نستخدم network
+                }
+            }
+            
+            // إذا لم يكن هناك cache، نستخدم network
+            if (!response) {
+                // إضافة timeout فعلي باستخدام AbortController
+                const controller = new AbortController();
+                timeoutId = setTimeout(() => controller.abort(), CONFIG.requestTimeout);
 
-            const response = await fetch(url, {
-                method: 'GET',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Accept': 'text/html'
-                },
-                cache: 'default',
-                signal: controller.signal,
-                redirect: 'follow'
-            });
+                response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'text/html'
+                    },
+                    cache: 'default',
+                    signal: controller.signal,
+                    redirect: 'follow'
+                });
+            }
 
-            clearTimeout(timeoutId);
-            timeoutId = null;
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+                timeoutId = null;
+            }
 
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+            if (!response || !response.ok) {
+                throw new Error(`HTTP error! status: ${response ? response.status : 'unknown'}`);
             }
 
             // التحقق من حدوث redirect إلى صفحة تسجيل الدخول

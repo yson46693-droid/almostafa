@@ -54,8 +54,38 @@
 2. `modules/production/tasks.php`: Auto-refresh في صفحات المهام
 3. `assets/js/ajax-navigation.js`: تحسين AJAX navigation على بيانات الهاتف
 4. `assets/js/auto-refresh-navigation.js`: استخدام AJAX navigation على بيانات الهاتف بدلاً من إعادة التحميل الكاملة
+5. `service-worker.js`: تحسين Service Worker لاستخدام cache للصفحات PHP
+6. `templates/homeline_sidebar.php`: إضافة prefetching للروابط في الشريط الجانبي
+7. `templates/header.php`: إضافة preloading للصفحات الشائعة
+
+## تحسينات PWA (Progressive Web App)
+
+### 1. تحسين Service Worker
+- **Network First مع Cache Fallback**: استخدام cache للصفحات PHP لتسريع أول فتح PWA
+- **Timeout محسّن**: تقليل timeout من 15 ثانية إلى 8 ثواني للصفحات PHP
+- **Cache أولاً لأول فتح**: محاولة استخدام cache أولاً لأول فتح PWA، ثم تحديثه في الخلفية
+
+### 2. Prefetching للروابط
+- **Prefetching تلقائي**: عند hover أو touch على روابط الشريط الجانبي
+- **Prefetching ذكي**: لا يتم prefetching على اتصالات بطيئة (2G) أو saveData mode
+- **Prefetching للصفحات المجاورة**: prefetch الصفحات المجاورة للصفحة النشطة
+
+### 3. Preloading للصفحات الشائعة
+- **Preloading حسب الدور**: تحميل مسبق للصفحات الشائعة حسب دور المستخدم
+- **Preloading متدرج**: تأخير متدرج بين الصفحات لتجنب إرهاق الشبكة
+- **Preloading ذكي**: لا يتم preloading على اتصالات بطيئة
+
+### 4. تحسين AJAX Navigation
+- **استخدام Service Worker Cache**: محاولة استخدام cache من Service Worker أولاً
+- **تحديث Cache في الخلفية**: تحديث cache بعد استخدامه لتحديث البيانات
+
+## النتائج المتوقعة
+- **تسريع أول فتح PWA**: تقليل وقت التحميل من دقيقة كاملة إلى أقل من 5 ثواني
+- **تسريع التنقل**: تقليل وقت التنقل بين الصفحات من دقيقة إلى أقل من ثانية واحدة
+- **تحسين تجربة المستخدم**: استجابة فورية عند النقر على الروابط
 
 ## ملاحظات
 - النظام يكتشف تلقائياً نوع الاتصال عند تحميل الصفحة
 - عند تغيير نوع الاتصال (من WiFi إلى بيانات الهاتف أو العكس)، يتم تطبيق الإعدادات تلقائياً
 - جميع الوظائف الأساسية تعمل بشكل طبيعي بدون أي تعطيل
+- Prefetching و Preloading يعملان فقط على اتصالات سريعة (3G+)

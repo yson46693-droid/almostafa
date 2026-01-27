@@ -854,4 +854,103 @@ if (empty($menuItems)) {
     </nav>
 </aside>
 
+<!-- PWA Performance: Prefetching للروابط في الشريط الجانبي -->
+<script>
+(function() {
+    'use strict';
+    
+    // كشف نوع الاتصال
+    function detectConnectionType() {
+        if ('connection' in navigator) {
+            const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+            if (conn) {
+                const effectiveType = conn.effectiveType || 'unknown';
+                const saveData = conn.saveData || false;
+                
+                // لا نستخدم prefetching على اتصالات بطيئة أو saveData
+                if (saveData || effectiveType === '2g' || effectiveType === 'slow-2g') {
+                    return false;
+                }
+            }
+        }
+        return true; // السماح بالـ prefetching افتراضياً
+    }
+    
+    const canPrefetch = detectConnectionType();
+    
+    if (!canPrefetch) {
+        return; // لا نستخدم prefetching على اتصالات بطيئة
+    }
+    
+    // Prefetching للروابط في الشريط الجانبي
+    function setupPrefetching() {
+        const sidebarLinks = document.querySelectorAll('.homeline-sidebar .nav-link[href]');
+        const prefetchedUrls = new Set();
+        
+        sidebarLinks.forEach(link => {
+            const href = link.getAttribute('href');
+            if (!href || href === '#' || href.startsWith('javascript:') || href.startsWith('mailto:') || href.startsWith('tel:')) {
+                return;
+            }
+            
+            // Prefetch عند hover (للكمبيوتر) أو touchstart (للهاتف)
+            const prefetchUrl = () => {
+                if (prefetchedUrls.has(href)) {
+                    return; // تم prefetch مسبقاً
+                }
+                
+                // استخدام link prefetch
+                const linkElement = document.createElement('link');
+                linkElement.rel = 'prefetch';
+                linkElement.href = href;
+                linkElement.as = 'document';
+                document.head.appendChild(linkElement);
+                
+                prefetchedUrls.add(href);
+            };
+            
+            // Prefetch عند hover (للكمبيوتر)
+            link.addEventListener('mouseenter', prefetchUrl, { once: true, passive: true });
+            
+            // Prefetch عند touchstart (للهاتف) - بعد تأخير بسيط
+            link.addEventListener('touchstart', () => {
+                setTimeout(prefetchUrl, 100); // تأخير 100ms لتجنب prefetching غير ضروري
+            }, { once: true, passive: true });
+        });
+    }
+    
+    // تهيئة prefetching بعد تحميل DOM
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', setupPrefetching);
+    } else {
+        setupPrefetching();
+    }
+    
+    // Prefetch للصفحة النشطة الحالية (إذا كانت موجودة في cache)
+    const currentActiveLink = document.querySelector('.homeline-sidebar .nav-link.active');
+    if (currentActiveLink) {
+        const activeHref = currentActiveLink.getAttribute('href');
+        if (activeHref && activeHref !== '#') {
+            // Prefetch الصفحات المجاورة في القائمة
+            const allLinks = Array.from(document.querySelectorAll('.homeline-sidebar .nav-link[href]'));
+            const currentIndex = allLinks.indexOf(currentActiveLink);
+            
+            // Prefetch الصفحة التالية والسابقة
+            [currentIndex - 1, currentIndex + 1].forEach(index => {
+                if (index >= 0 && index < allLinks.length) {
+                    const link = allLinks[index];
+                    const href = link.getAttribute('href');
+                    if (href && href !== '#') {
+                        const linkElement = document.createElement('link');
+                        linkElement.rel = 'prefetch';
+                        linkElement.href = href;
+                        linkElement.as = 'document';
+                        document.head.appendChild(linkElement);
+                    }
+                }
+            });
+        }
+    }
+})();
+</script>
 
