@@ -401,7 +401,7 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 
 /* جدول المنتجات */
 .items-section-80mm {
-    padding: 1mm 0.5mm;
+    padding: 0.8mm 0.5mm;
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
@@ -557,7 +557,7 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 
 /* الملاحظات */
 .notes-section-80mm {
-    padding: 1mm 0.5mm;
+    padding: 0.8mm 0.5mm;
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
@@ -688,33 +688,49 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
     .items-section-80mm,
     .summary-section-80mm,
     .notes-section-80mm {
-        padding: 1mm 0.5mm !important;
+        padding: 0.8mm 0.5mm !important;
     }
 
     .items-table-80mm {
-        font-size: 7px !important;
+        font-size: 6px !important;
         width: 100% !important;
         max-width: 100% !important;
     }
 
     .items-table-80mm th,
     .items-table-80mm td {
-        font-size: 7px !important;
-        padding: 2px 1px !important;
+        font-size: 6px !important;
+        padding: 1px 0.5px !important;
         border: 1px solid #000 !important;
+        font-weight: 700 !important;
+        line-height: 1.1 !important;
     }
     
     .items-table-80mm .col-batch {
-        font-size: 6px !important;
+        font-size: 5px !important;
+        font-weight: 700 !important;
+    }
+    
+    .items-table-80mm .col-product {
+        font-weight: 800 !important;
+    }
+    
+    .items-table-80mm .col-qty,
+    .items-table-80mm .col-price {
+        font-weight: 800 !important;
+    }
+    
+    .items-table-80mm .col-total {
+        font-weight: 900 !important;
     }
 
     .items-table-80mm th {
         background: #f0f0f0 !important;
-        font-weight: 700 !important;
+        font-weight: 900 !important;
     }
 
     .items-table-80mm td {
-        font-weight: 500 !important;
+        font-weight: 700 !important;
     }
 
     .info-row,
