@@ -2011,10 +2011,10 @@ if (ob_get_level() === 0) {
     };
 })();
 
-// التأكد من أن showLocalCustomerReturnModal متاحة في النطاق العام
-if (typeof window.showLocalCustomerReturnModal === 'undefined') {
-    console.error('showLocalCustomerReturnModal غير معرّفة!');
-}
+// التأكد من أن جميع الدوال متاحة في النطاق العام بعد IIFE
+console.log('showLocalCustomerReturnModal متاحة:', typeof window.showLocalCustomerReturnModal);
+console.log('showAddLocalCustomerModal متاحة:', typeof window.showAddLocalCustomerModal);
+console.log('showImportLocalCustomersModal متاحة:', typeof window.showImportLocalCustomersModal);
 </script>
 
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3">
@@ -8484,7 +8484,16 @@ document.addEventListener('DOMContentLoaded', function() {
 window.addEventListener('load', function() {
     // التحقق من أن Bootstrap محمّل
     if (typeof bootstrap === 'undefined') {
-        console.error('Bootstrap JS لم يتم تحميله!');
+        console.error('Bootstrap JS لم يتم تحميله! يرجى التحقق من تحميل Bootstrap JS في <head>');
+        // محاولة إعادة تحميل Bootstrap
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js';
+        script.onload = function() {
+            console.log('Bootstrap JS تم تحميله بنجاح');
+        };
+        document.head.appendChild(script);
+    } else {
+        console.log('Bootstrap JS محمّل بنجاح');
     }
     
     // التحقق من أن جميع الدوال الأساسية متاحة
@@ -8504,6 +8513,8 @@ window.addEventListener('load', function() {
     requiredFunctions.forEach(function(funcName) {
         if (typeof window[funcName] !== 'function') {
             console.warn('الدالة ' + funcName + ' غير متاحة!');
+        } else {
+            console.log('الدالة ' + funcName + ' متاحة ✓');
         }
     });
 });
