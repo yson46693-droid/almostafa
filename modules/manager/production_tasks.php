@@ -662,6 +662,78 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = 'حدث خطأ أثناء إنشاء المهام. يرجى المحاولة مرة أخرى.';
             }
         }
+    } elseif ($action === 'update_task_status') {
+        $taskId = intval($_POST['task_id'] ?? 0);
+        $newStatus = trim($_POST['status'] ?? '');
+
+        if ($taskId <= 0) {
+            $error = 'معرف المهمة غير صحيح.';
+        } elseif (!in_array($newStatus, ['pending', 'received', 'in_progress', 'completed', 'cancelled'], true)) {
+            $error = 'حالة المهمة غير صحيحة.';
+        } else {
+            try {
+                $db->beginTransaction();
+
+                // السماح للمحاسب والمدير بتغيير حالة أي مهمة
+                $isAccountant = ($currentUser['role'] ?? '') === 'accountant';
+                $isManager = ($currentUser['role'] ?? '') === 'manager';
+                
+                if (!$isAccountant && !$isManager) {
+                    throw new Exception('غير مصرح لك بتغيير حالة المهام.');
+                }
+                
+                // التحقق من وجود المهمة
+                $task = $db->queryOne(
+                    "SELECT id, title, status FROM tasks WHERE id = ? LIMIT 1",
+                    [$taskId]
+                );
+
+                if (!$task) {
+                    throw new Exception('المهمة غير موجودة.');
+                }
+
+                // تحديث الحالة
+                $updateFields = ['status = ?'];
+                $updateValues = [$newStatus];
+                
+                // إضافة timestamps حسب الحالة
+                if ($newStatus === 'completed') {
+                    $updateFields[] = 'completed_at = NOW()';
+                } elseif ($newStatus === 'received') {
+                    $updateFields[] = 'received_at = NOW()';
+                } elseif ($newStatus === 'in_progress') {
+                    $updateFields[] = 'started_at = NOW()';
+                }
+                
+                $updateFields[] = 'updated_at = NOW()';
+                
+                $sql = "UPDATE tasks SET " . implode(', ', $updateFields) . " WHERE id = ?";
+                $updateValues[] = $taskId;
+                
+                $db->execute($sql, $updateValues);
+
+                logAudit(
+                    $currentUser['id'],
+                    'update_task_status',
+                    'tasks',
+                    $taskId,
+                    ['old_status' => $task['status']],
+                    ['new_status' => $newStatus, 'title' => $task['title']]
+                );
+
+                $db->commit();
+                
+                // استخدام preventDuplicateSubmission لإعادة التوجيه مع cache-busting
+                $successMessage = 'تم تحديث حالة المهمة بنجاح.';
+                // تحديد role بناءً على المستخدم الحالي
+                $userRole = ($currentUser['role'] ?? '') === 'accountant' ? 'accountant' : 'manager';
+                preventDuplicateSubmission($successMessage, ['page' => 'production_tasks'], null, $userRole);
+                exit; // منع تنفيذ باقي الكود بعد إعادة التوجيه
+            } catch (Exception $updateError) {
+                $db->rollBack();
+                $error = 'تعذر تحديث حالة المهمة: ' . $updateError->getMessage();
+            }
+        }
     } elseif ($action === 'cancel_task') {
         $taskId = intval($_POST['task_id'] ?? 0);
 
@@ -1292,6 +1364,12 @@ try {
                                                 </a>
                                             <?php endif; ?>
                                             
+                                            <?php if ($isAccountant || $isManager): ?>
+                                                <button type="button" class="btn btn-outline-info btn-sm" onclick="openChangeStatusModal(<?php echo (int)$task['id']; ?>, '<?php echo htmlspecialchars($task['status'], ENT_QUOTES, 'UTF-8'); ?>')" title="تغيير حالة الطلب">
+                                                    <i class="bi bi-gear me-1"></i>تغيير الحالة
+                                                </button>
+                                            <?php endif; ?>
+                                            
                                             <?php if ($task['status'] === 'completed'): ?>
                                                 <span class="text-muted small">لا يوجد إجراء</span>
                                             <?php else: ?>
@@ -1311,6 +1389,50 @@ try {
                     </tbody>
                 </table>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal تغيير حالة المهمة -->
+<div class="modal fade" id="changeStatusModal" tabindex="-1" aria-labelledby="changeStatusModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="changeStatusModalLabel">
+                    <i class="bi bi-gear me-2"></i>تغيير حالة الطلب
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <form method="POST" id="changeStatusForm">
+                <input type="hidden" name="action" value="update_task_status">
+                <input type="hidden" name="task_id" id="changeStatusTaskId">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">الحالة الحالية</label>
+                        <div id="currentStatusDisplay" class="alert alert-info mb-0"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="newStatus" class="form-label fw-bold">اختر الحالة الجديدة <span class="text-danger">*</span></label>
+                        <select class="form-select" name="status" id="newStatus" required>
+                            <option value="">-- اختر الحالة --</option>
+                            <option value="pending">معلقة</option>
+                            <option value="received">مستلمة</option>
+                            <option value="in_progress">قيد التنفيذ</option>
+                            <option value="completed">مكتملة</option>
+                            <option value="cancelled">ملغاة</option>
+                        </select>
+                        <div class="form-text">سيتم تحديث حالة الطلب فوراً بعد الحفظ.</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle me-1"></i>إلغاء
+                    </button>
+                    <button type="submit" class="btn btn-info">
+                        <i class="bi bi-check-circle me-1"></i>حفظ التغييرات
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -1530,6 +1652,46 @@ function updateQuantityStep(index) {
     }
     <?php endif; ?>
 })();
+
+// دالة لفتح modal تغيير الحالة
+function openChangeStatusModal(taskId, currentStatus) {
+    const modal = new bootstrap.Modal(document.getElementById('changeStatusModal'));
+    const taskIdInput = document.getElementById('changeStatusTaskId');
+    const currentStatusDisplay = document.getElementById('currentStatusDisplay');
+    const newStatusSelect = document.getElementById('newStatus');
+    
+    // تعيين معرف المهمة
+    taskIdInput.value = taskId;
+    
+    // عرض الحالة الحالية
+    const statusLabels = {
+        'pending': 'معلقة',
+        'received': 'مستلمة',
+        'in_progress': 'قيد التنفيذ',
+        'completed': 'مكتملة',
+        'cancelled': 'ملغاة'
+    };
+    
+    const statusClasses = {
+        'pending': 'warning',
+        'received': 'info',
+        'in_progress': 'primary',
+        'completed': 'success',
+        'cancelled': 'danger'
+    };
+    
+    const currentStatusLabel = statusLabels[currentStatus] || currentStatus;
+    const currentStatusClass = statusClasses[currentStatus] || 'secondary';
+    
+    currentStatusDisplay.className = 'alert alert-' + currentStatusClass + ' mb-0';
+    currentStatusDisplay.innerHTML = '<strong>الحالة الحالية:</strong> <span class="badge bg-' + currentStatusClass + '">' + currentStatusLabel + '</span>';
+    
+    // إعادة تعيين القائمة المنسدلة
+    newStatusSelect.value = '';
+    
+    // فتح الـ modal
+    modal.show();
+}
 
 // لا حاجة لإعادة التحميل التلقائي - preventDuplicateSubmission يتولى ذلك
 </script>
