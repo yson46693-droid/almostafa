@@ -671,6 +671,15 @@ function getTextAlign() {
  * @param string|null $errorMessage رسالة الخطأ (اختياري)
  */
 function preventDuplicateSubmission($successMessage = null, $redirectParams = [], $redirectUrl = null, $role = null, $errorMessage = null) {
+    // مسح الكاش بعد كل عملية تحديث لجلب البيانات المحدثة
+    if (class_exists('Cache')) {
+        try {
+            Cache::flush();
+        } catch (Exception $cacheError) {
+            error_log("Error flushing cache in preventDuplicateSubmission: " . $cacheError->getMessage());
+        }
+    }
+    
     // تم إزالة نظام الجلسات - إضافة الرسائل كـ query parameters
     if ($successMessage !== null && $successMessage !== '') {
         $redirectParams['success'] = urlencode($successMessage);

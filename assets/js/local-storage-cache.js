@@ -254,6 +254,113 @@
     }
 
     /**
+     * مسح جميع بيانات الكاش من localStorage
+     */
+    function clearAllLocalStorage() {
+        try {
+            const keys = Object.keys(localStorage);
+            let cleared = 0;
+
+            keys.forEach(key => {
+                if (key.startsWith(STORAGE_PREFIX)) {
+                    localStorage.removeItem(key);
+                    cleared++;
+                }
+            });
+
+            if (cleared > 0) {
+                console.log(`[Cache] Cleared ${cleared} entries from localStorage`);
+            }
+            return cleared;
+        } catch (error) {
+            console.warn('[Cache] Error clearing localStorage:', error);
+            return 0;
+        }
+    }
+
+    /**
+     * مسح جميع بيانات الكاش من IndexedDB
+     */
+    function clearAllIndexedDB() {
+        if (!db) return Promise.resolve(0);
+
+        return new Promise((resolve) => {
+            const transaction = db.transaction(['cache'], 'readwrite');
+            const store = transaction.objectStore('cache');
+            const request = store.clear();
+
+            request.onsuccess = () => {
+                console.log('[Cache] Cleared all entries from IndexedDB');
+                resolve(1);
+            };
+
+            request.onerror = () => {
+                console.warn('[Cache] Error clearing IndexedDB:', request.error);
+                resolve(0);
+            };
+        });
+    }
+
+    /**
+     * مسح جميع بيانات الكاش (localStorage و IndexedDB)
+     */
+    async function clearAllCache() {
+        const localStorageCleared = clearAllLocalStorage();
+        const indexedDBCleared = await clearAllIndexedDB();
+        
+        // مسح Service Worker cache أيضاً إذا كان متاحاً
+        if ('caches' in window) {
+            try {
+                const cacheNames = await caches.keys();
+                await Promise.all(
+                    cacheNames.map(cacheName => caches.delete(cacheName))
+                );
+                console.log('[Cache] Cleared Service Worker caches');
+            } catch (error) {
+                console.warn('[Cache] Error clearing Service Worker caches:', error);
+            }
+        }
+        
+        console.log('[Cache] All cache cleared');
+        return localStorageCleared + indexedDBCleared;
+    }
+
+    /**
+     * مسح كاش API محدد بناءً على URL
+     */
+    function clearApiCache(url) {
+        const key = 'api_' + btoa(url).replace(/[+/=]/g, '');
+        
+        // مسح من localStorage
+        try {
+            localStorage.removeItem(STORAGE_PREFIX + key);
+        } catch (error) {
+            console.warn('[Cache] Error clearing API cache from localStorage:', error);
+        }
+        
+        // مسح من IndexedDB
+        if (db) {
+            return new Promise((resolve) => {
+                const transaction = db.transaction(['cache'], 'readwrite');
+                const store = transaction.objectStore('cache');
+                const request = store.delete(key);
+
+                request.onsuccess = () => {
+                    console.log(`[Cache] Cleared API cache for: ${url}`);
+                    resolve(true);
+                };
+
+                request.onerror = () => {
+                    console.warn('[Cache] Error clearing API cache from IndexedDB:', request.error);
+                    resolve(false);
+                };
+            });
+        }
+        
+        return Promise.resolve(true);
+    }
+
+    /**
      * حفظ API response في الكاش
      */
     function cacheApiResponse(url, data, expiry = CACHE_EXPIRY) {
@@ -366,6 +473,10 @@
         getCachedApi: getCachedApiResponse,
         cachedFetch: cachedFetch,
         cleanup: cleanupLocalStorage,
+        clearAll: clearAllCache,
+        clearApiCache: clearApiCache,
+        clearLocalStorage: clearAllLocalStorage,
+        clearIndexedDB: clearAllIndexedDB,
         init: initIndexedDB
     };
 

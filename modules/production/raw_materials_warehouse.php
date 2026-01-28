@@ -15,6 +15,7 @@ require_once __DIR__ . '/../../includes/path_helper.php';
 require_once __DIR__ . '/../../includes/audit_log.php';
 require_once __DIR__ . '/../../includes/honey_varieties.php';
 require_once __DIR__ . '/../../includes/production_helper.php';
+require_once __DIR__ . '/../../includes/cache.php';
 
 if (!function_exists('buildRawMaterialsReportHtmlDocument')) {
     /**
@@ -10236,6 +10237,15 @@ document.addEventListener('DOMContentLoaded', function () {
                     throw new Error('استجابة غير صحيحة من الخادم. يرجى المحاولة مرة أخرى.');
                 }
                 
+                // مسح الكاش بعد كل طلب لجلب البيانات المحدثة
+                if (window.LocalStorageCache && typeof window.LocalStorageCache.clearAll === 'function') {
+                    try {
+                        await window.LocalStorageCache.clearAll();
+                    } catch (cacheError) {
+                        console.warn('Error clearing cache:', cacheError);
+                    }
+                }
+                
                 if (data.success) {
                     // Update button attributes with new report URLs
                     reportButton.setAttribute('data-viewer-url', data.viewer_url || '');
@@ -10319,6 +10329,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 submitButton.disabled = true;
                 submitButton.innerHTML = '<i class="bi bi-hourglass-split"></i> جاري المعالجة...';
                 
+                // مسح الكاش بعد كل طلب لجلب البيانات المحدثة
+                if (window.LocalStorageCache && typeof window.LocalStorageCache.clearAll === 'function') {
+                    window.LocalStorageCache.clearAll().catch(function(cacheError) {
+                        console.warn('Error clearing cache:', cacheError);
+                    });
+                }
+                
                 setTimeout(function() {
                     submitButton.disabled = false;
                     submitButton.innerHTML = submitButton.getAttribute('data-original-text') || 'إرسال';
@@ -10371,6 +10388,13 @@ observer.observe(document.body, {
     const alertElement = successAlert || errorAlert;
     
     if (alertElement && alertElement.dataset.autoRefresh === 'true') {
+        // مسح الكاش قبل إعادة التحميل لجلب البيانات المحدثة
+        if (window.LocalStorageCache && typeof window.LocalStorageCache.clearAll === 'function') {
+            window.LocalStorageCache.clearAll().catch(function(cacheError) {
+                console.warn('Error clearing cache:', cacheError);
+            });
+        }
+        
         // انتظار 3 ثوانٍ لإعطاء المستخدم وقتاً لرؤية الرسالة
         setTimeout(function() {
             // إعادة تحميل الصفحة بدون معاملات GET لمنع تكرار الطلبات
@@ -10378,6 +10402,8 @@ observer.observe(document.body, {
             // إزالة معاملات success و error من URL
             currentUrl.searchParams.delete('success');
             currentUrl.searchParams.delete('error');
+            // إضافة timestamp لمنع استخدام الكاش
+            currentUrl.searchParams.set('_nocache', Date.now());
             // إعادة تحميل الصفحة
             window.location.href = currentUrl.toString();
         }, 3000);
