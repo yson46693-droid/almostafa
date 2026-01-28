@@ -620,6 +620,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $normalizedCart = [];
         $subtotal = 0;
 
+        // السماح للمدير والمحاسب بالسعر = 0 والإجمالي = 0
+        $userRole = strtolower($currentUser['role'] ?? '');
+        $isManagerOrAccountant = in_array($userRole, ['manager', 'accountant', 'developer'], true);
+
         if (empty($validationErrors)) {
             foreach ($cartItems as $index => $row) {
                 $productId = isset($row['product_id']) ? (int) $row['product_id'] : 0;
@@ -646,7 +650,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 if ($unitPrice <= 0) {
                     $unitPrice = round((float) ($product['unit_price'] ?? 0), 2);
-                    if ($unitPrice <= 0) {
+                    if ($unitPrice <= 0 && !$isManagerOrAccountant) {
                         $validationErrors[] = 'لا يمكن تحديد سعر المنتج رقم ' . ($index + 1) . '.';
                         continue;
                     }
@@ -741,7 +745,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        if ($subtotal <= 0 && empty($validationErrors)) {
+        if ($subtotal <= 0 && empty($validationErrors) && !$isManagerOrAccountant) {
             $validationErrors[] = 'لا يمكن إتمام عملية بيع بمجموع صفري.';
         }
 
