@@ -7896,17 +7896,20 @@ document.addEventListener('DOMContentLoaded', function() {
     // ===== البحث المتقدم اللحظي - نتائج فورية فور التوقف عن الكتابة =====
     var currentRole = '<?php echo htmlspecialchars($currentRole); ?>';
     var customerSearchInput = document.getElementById('customerSearch');
-    var searchForm = document.getElementById('localCustomersSearchForm') || (customerSearchInput ? customerSearchInput.closest('form') : null);
-    var searchTimeout = null;
-    var currentPage = <?php echo $pageNum; ?>;
-    var isLoading = false;
-    var currentFetchController = null;
+    var searchForm = document.getElementById('localCustomersSearchForm');
+    var tableBody = document.getElementById('customersTableBody');
+    var paginationContainer = document.getElementById('customersPagination');
     var localSearchClearBtn = document.getElementById('localSearchClearBtn');
     var localSearchResetBtn = document.getElementById('localSearchResetBtn');
+    var filterStatus = document.getElementById('debtStatusFilter');
+    var filterRegion = document.getElementById('regionFilter');
     
-    // التأكد من وجود العناصر المطلوبة
-    if (!customerSearchInput || !searchForm) {
-        console.warn('Search elements not found in local_customers.php');
+    var searchTimeout = null;
+    var currentAbortController = null;
+    var currentPage = <?php echo $pageNum; ?>;
+    
+    if (!customerSearchInput || !tableBody) {
+        return;
     }
 
     function toggleLocalSearchClearBtn() {
@@ -7920,45 +7923,30 @@ document.addEventListener('DOMContentLoaded', function() {
         return formatted + ' ج.م';
     }
     
-    // دالة لجلب العملاء عبر AJAX
     function fetchCustomers(page) {
-        // إلغاء أي طلب سابق قيد التنفيذ للبحث الفوري
-        if (currentFetchController) {
-            currentFetchController.abort();
-            currentFetchController = null;
-        }
+        currentPage = page || 1;
+        var fp = getFilterParams();
         
-        if (isLoading) {
-            isLoading = false;
-        }
+        if (currentAbortController) currentAbortController.abort();
+        currentAbortController = new AbortController();
         
-        isLoading = true;
-        var searchValue = customerSearchInput ? customerSearchInput.value.trim() : '';
-        var debtStatus = document.getElementById('debtStatusFilter') ? document.getElementById('debtStatusFilter').value : 'all';
-        var regionId = document.getElementById('regionFilter') ? document.getElementById('regionFilter').value : '';
-        
-        // إظهار مؤشر التحميل
         var loadingEl = document.getElementById('customersTableLoading');
         var tableWrapper = document.querySelector('.table-responsive');
         if (loadingEl) loadingEl.style.display = 'block';
         if (tableWrapper) tableWrapper.style.opacity = '0.5';
         
-        // بناء URL مع المعاملات
         var apiUrl = '<?php echo getRelativeUrl("api/get_local_customers_search.php"); ?>';
-        var params = new URLSearchParams({
-            search: searchValue,
-            debt_status: debtStatus,
-            p: page || 1
-        });
-        if (regionId) {
-            params.append('region_id', regionId);
-        }
+        var params = new URLSearchParams();
+        params.append('p', currentPage);
+        if (fp.search) params.append('search', fp.search);
+        if (fp.debt_status && fp.debt_status !== 'all') params.append('debt_status', fp.debt_status);
+        if (fp.region_id) params.append('region_id', fp.region_id);
         
-        // إنشاء AbortController لإلغاء الطلبات السابقة
-        currentFetchController = new AbortController();
-        var fetchSignal = currentFetchController.signal;
-        
-        fetch(apiUrl + '?' + params.toString(), { signal: fetchSignal })
+        fetch(apiUrl + '?' + params.toString(), { 
+            method: 'GET',
+            credentials: 'include',
+            signal: currentAbortController.signal 
+        })
             .then(function(response) {
                 if (!response.ok) {
                     throw new Error('Network response was not ok');
@@ -7984,11 +7972,13 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .finally(function() {
                 isLoading = false;
-                currentFetchController = null;
+                currentAbortController = null;
                 if (loadingEl) loadingEl.style.display = 'none';
                 if (tableWrapper) tableWrapper.style.opacity = '1';
             });
     }
+    
+    window.fetchCustomers = fetchCustomers;
     
     // دالة لتحديث جدول العملاء
     function updateCustomersTable(customers, pagination) {
@@ -8153,193 +8143,88 @@ document.addEventListener('DOMContentLoaded', function() {
         return div.innerHTML;
     }
     
-    // إعداد البحث الفوري - مع تأخير للجوال لتجنب التجمد
-    if (!customerSearchInput || !searchForm) {
-        console.error('Search elements not found:', {
-            customerSearchInput: !!customerSearchInput,
-            searchForm: !!searchForm
-        });
-        // إعادة المحاولة بعد 100ms
-        setTimeout(function() {
-            customerSearchInput = document.getElementById('customerSearch');
-            searchForm = document.getElementById('localCustomersSearchForm') || (customerSearchInput ? customerSearchInput.closest('form') : null);
-            if (customerSearchInput && searchForm) {
-                initSearchHandlers();
-            }
-        }, 100);
-    } else {
-        initSearchHandlers();
+    function getFilterParams() {
+        var o = {};
+        o.search = (customerSearchInput && customerSearchInput.value.trim()) || '';
+        o.debt_status = (filterStatus && filterStatus.value) || 'all';
+        o.region_id = (filterRegion && filterRegion.value) || '';
+        return o;
     }
     
-    function initSearchHandlers() {
-        // التأكد من وجود العناصر
-        if (!customerSearchInput || !searchForm) {
-            console.error('initSearchHandlers: Elements not found');
-            return;
-        }
-        
-        // إصلاح خاص للجوال: ضمان أن الحقل قابل للنقر والتركيز والكتابة
-        var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        if (isMobile) {
-            // إزالة أي منع للحدث على الجوال
-            customerSearchInput.style.pointerEvents = 'auto';
-            customerSearchInput.style.touchAction = 'manipulation';
-            customerSearchInput.style.userSelect = 'text';
-            customerSearchInput.style.webkitUserSelect = 'text';
-            customerSearchInput.style.MozUserSelect = 'text';
-            customerSearchInput.setAttribute('readonly', false);
-            customerSearchInput.removeAttribute('readonly');
-            
-            // إضافة event listener للـ touchstart لضمان الاستجابة (بدون stopPropagation)
-            customerSearchInput.addEventListener('touchstart', function(e) {
-                // لا نستخدم stopPropagation حتى لا نمنع الكتابة
-                if (document.activeElement !== this) {
-                    // استخدام requestAnimationFrame لضمان التركيز بعد render
-                    requestAnimationFrame(function() {
-                        customerSearchInput.focus();
-                        // التأكد من أن الكيبورد يفتح
-                        customerSearchInput.click();
-                    });
-                }
-            }, { passive: true });
-            
-            // إضافة event listener للـ click كبديل (بدون stopPropagation)
-            customerSearchInput.addEventListener('click', function(e) {
-                // لا نستخدم stopPropagation حتى لا نمنع الكتابة
-                if (document.activeElement !== this) {
-                    requestAnimationFrame(function() {
-                        customerSearchInput.focus();
-                    });
-                }
-            }, { passive: true });
-            
-            // إضافة event listener للتأكد من أن الكتابة تعمل
-            customerSearchInput.addEventListener('focus', function() {
-                // التأكد من أن الحقل قابل للكتابة
-                this.removeAttribute('readonly');
-                this.removeAttribute('disabled');
-                // التأكد من أن الحقل في وضع الكتابة
-                if (this.setSelectionRange) {
-                    var len = this.value.length;
-                    this.setSelectionRange(len, len);
-                }
-            });
-            
-            // التأكد من أن الكتابة تعمل عند الكتابة
-            customerSearchInput.addEventListener('keydown', function(e) {
-                // السماح بجميع المفاتيح - لا نمنع أي شيء
-            }, false);
-            
-            customerSearchInput.addEventListener('keyup', function(e) {
-                // التأكد من أن القيمة موجودة
-                if (this.value === undefined || this.value === null) {
-                    this.value = '';
-                }
-            }, false);
-        }
-        
+    if (searchForm) {
         searchForm.addEventListener('submit', function(e) {
             e.preventDefault();
             fetchCustomers(1);
         });
-
-        if (localSearchClearBtn) {
-            localSearchClearBtn.addEventListener('click', function() {
-                if (customerSearchInput) {
-                    customerSearchInput.value = '';
-                    customerSearchInput.focus();
-                }
-                toggleLocalSearchClearBtn();
-                if (searchTimeout) { clearTimeout(searchTimeout); searchTimeout = null; }
-                if (currentFetchController) { currentFetchController.abort(); }
-                fetchCustomers(1);
-            });
-        }
-        if (localSearchResetBtn) {
-            localSearchResetBtn.addEventListener('click', function() {
-                if (customerSearchInput) customerSearchInput.value = '';
-                var df = document.getElementById('debtStatusFilter');
-                var rf = document.getElementById('regionFilter');
-                if (df) df.value = 'all';
-                if (rf) rf.value = '';
-                toggleLocalSearchClearBtn();
-                if (searchTimeout) { clearTimeout(searchTimeout); searchTimeout = null; }
-                if (currentFetchController) { currentFetchController.abort(); }
-                fetchCustomers(1);
-                var u = new URL(window.location.href);
-                u.searchParams.set('page', 'local_customers');
-                u.searchParams.delete('search');
-                u.searchParams.delete('p');
-                u.searchParams.delete('debt_status');
-                u.searchParams.delete('region_id');
-                window.history.replaceState({}, '', u.toString());
-            });
-        }
-
-        customerSearchInput.addEventListener('input', function() {
-            var v = this.value;
-            if (v === undefined || v === null) { this.value = ''; v = ''; }
-            toggleLocalSearchClearBtn();
-            // Debouncing: تأخير الطلب 300ms لتقليل عدد الطلبات
-            if (searchTimeout) { clearTimeout(searchTimeout); }
-            if (currentFetchController) { 
-                currentFetchController.abort(); 
-                currentFetchController = null;
-            }
-            searchTimeout = setTimeout(function() { 
-                if (typeof fetchCustomers === 'function') {
-                    fetchCustomers(1);
-                } else {
-                    console.error('fetchCustomers function not found');
-                }
-            }, 300);
-        });
-
-        customerSearchInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' || e.keyCode === 13) {
-                e.preventDefault();
-                if (searchTimeout) { clearTimeout(searchTimeout); searchTimeout = null; }
-                if (currentFetchController) { currentFetchController.abort(); }
-                fetchCustomers(1);
-            }
-        });
-
+    }
+    
+    customerSearchInput.addEventListener('input', function() {
+        var v = this.value;
+        if (v === undefined || v === null) { this.value = ''; v = ''; }
         toggleLocalSearchClearBtn();
-    }
+        if (searchTimeout) clearTimeout(searchTimeout);
+        if (currentAbortController) currentAbortController.abort();
+        searchTimeout = setTimeout(function() { fetchCustomers(1); }, 300);
+    });
     
-    // البحث الفوري عند تغيير الفلاتر
-    var debtStatusFilter = document.getElementById('debtStatusFilter');
-    var regionFilter = document.getElementById('regionFilter');
+    customerSearchInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.keyCode === 13) {
+            e.preventDefault();
+            if (searchTimeout) clearTimeout(searchTimeout);
+            if (currentAbortController) currentAbortController.abort();
+            fetchCustomers(1);
+        }
+    });
     
-    if (debtStatusFilter) {
-        debtStatusFilter.addEventListener('change', function() {
-            // إلغاء أي timeout قيد الانتظار
-            if (searchTimeout) {
-                clearTimeout(searchTimeout);
-                searchTimeout = null;
-            }
-            if (currentFetchController) {
-                currentFetchController.abort();
-            }
-            // البحث الفوري عند تغيير الفلتر
+    if (filterStatus) {
+        filterStatus.addEventListener('change', function() {
+            if (searchTimeout) clearTimeout(searchTimeout);
+            if (currentAbortController) currentAbortController.abort();
             fetchCustomers(1);
         });
     }
     
-    if (regionFilter) {
-        regionFilter.addEventListener('change', function() {
-            // إلغاء أي timeout قيد الانتظار
-            if (searchTimeout) {
-                clearTimeout(searchTimeout);
-                searchTimeout = null;
-            }
-            if (currentFetchController) {
-                currentFetchController.abort();
-            }
-            // البحث الفوري عند تغيير الفلتر
+    if (filterRegion) {
+        filterRegion.addEventListener('change', function() {
+            if (searchTimeout) clearTimeout(searchTimeout);
+            if (currentAbortController) currentAbortController.abort();
             fetchCustomers(1);
         });
     }
+    
+    if (localSearchClearBtn) {
+        localSearchClearBtn.addEventListener('click', function() {
+            if (customerSearchInput) {
+                customerSearchInput.value = '';
+                customerSearchInput.focus();
+            }
+            toggleLocalSearchClearBtn();
+            if (searchTimeout) clearTimeout(searchTimeout);
+            if (currentAbortController) currentAbortController.abort();
+            fetchCustomers(1);
+        });
+    }
+    
+    if (localSearchResetBtn) {
+        localSearchResetBtn.addEventListener('click', function() {
+            if (customerSearchInput) customerSearchInput.value = '';
+            if (filterStatus) filterStatus.value = 'all';
+            if (filterRegion) filterRegion.value = '';
+            toggleLocalSearchClearBtn();
+            if (searchTimeout) clearTimeout(searchTimeout);
+            if (currentAbortController) currentAbortController.abort();
+            fetchCustomers(1);
+            var u = new URL(window.location);
+            u.searchParams.set('page', 'local_customers');
+            u.searchParams.delete('search');
+            u.searchParams.delete('p');
+            u.searchParams.delete('debt_status');
+            u.searchParams.delete('region_id');
+            window.history.replaceState({}, '', u.toString());
+        });
+    }
+    
+    toggleLocalSearchClearBtn();
     
     // ===== مراقبة تغييرات الـ sidebar وإزالة overlay عند إغلاقه - حل جذري =====
     const dashboardWrapper = document.querySelector('.dashboard-wrapper');
