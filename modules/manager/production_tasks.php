@@ -232,6 +232,17 @@ try {
     error_log('Error checking/adding unit column: ' . $e->getMessage());
 }
 
+// التحقق من وجود عمود customer_name وإضافته إذا لم يكن موجوداً
+try {
+    $customerNameColumn = $db->queryOne("SHOW COLUMNS FROM tasks LIKE 'customer_name'");
+    if (empty($customerNameColumn)) {
+        $db->execute("ALTER TABLE tasks ADD COLUMN customer_name VARCHAR(255) NULL AFTER unit");
+        error_log('Added customer_name column to tasks table');
+    }
+} catch (Exception $e) {
+    error_log('Error checking/adding customer_name column: ' . $e->getMessage());
+}
+
 /**
  * تحميل بيانات المستخدمين
  */
@@ -263,6 +274,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $priority = $_POST['priority'] ?? 'normal';
         $priority = in_array($priority, $allowedPriorities, true) ? $priority : 'normal';
         $dueDate = $_POST['due_date'] ?? '';
+        $customerName = trim($_POST['customer_name'] ?? '');
         $assignees = $_POST['assigned_to'] ?? [];
         
         // الحصول على المنتجات المتعددة
@@ -596,6 +608,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $values[] = $unit;
                     $placeholders[] = '?';
                 }
+                
+                // حفظ اسم العميل
+                if (!empty($customerName)) {
+                    $columns[] = 'customer_name';
+                    $values[] = $customerName;
+                    $placeholders[] = '?';
+                }
 
                 $sql = "INSERT INTO tasks (" . implode(', ', $columns) . ") VALUES (" . implode(', ', $placeholders) . ")";
                 $result = $db->execute($sql, $values);
@@ -901,7 +920,7 @@ try {
             $placeholders = implode(',', array_fill(0, count($adminIds), '?'));
             $recentTasks = $db->query("
                 SELECT t.id, t.title, t.status, t.priority, t.due_date, t.created_at,
-                       t.quantity, t.unit, t.notes, t.product_id, u.full_name AS assigned_name, t.assigned_to,
+                       t.quantity, t.unit, t.customer_name, t.notes, t.product_id, u.full_name AS assigned_name, t.assigned_to,
                        uCreator.full_name AS creator_name, t.created_by
                 FROM tasks t
                 LEFT JOIN users u ON t.assigned_to = u.id
@@ -918,7 +937,7 @@ try {
         // للمستخدمين الآخرين، عرض المهام التي أنشأوها فقط
         $recentTasks = $db->query("
             SELECT t.id, t.title, t.status, t.priority, t.due_date, t.created_at,
-                   t.quantity, t.unit, t.notes, t.product_id, u.full_name AS assigned_name, t.assigned_to
+                   t.quantity, t.unit, t.customer_name, t.notes, t.product_id, u.full_name AS assigned_name, t.assigned_to
             FROM tasks t
             LEFT JOIN users u ON t.assigned_to = u.id
             WHERE t.created_by = ?
@@ -1210,7 +1229,11 @@ try {
                             </div>
                             <div class="form-text small">يمكن تحديد أكثر من عامل باستخدام زر CTRL أو SHIFT.</div>
                         </div>
-                        <div class="col-md-9">
+                        <div class="col-md-4">
+                            <label class="form-label">اسم العميل</label>
+                            <input type="text" class="form-control" name="customer_name" placeholder="أدخل اسم العميل">
+                        </div>
+                        <div class="col-md-5">
                             <label class="form-label">وصف وتفاصيل و ملاحظات الاوردر</label>
                             <textarea class="form-control" name="details" rows="3" placeholder="أدخل التفاصيل والتعليمات اللازمة للعمال."></textarea>
                         </div>

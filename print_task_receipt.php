@@ -45,6 +45,7 @@ $taskTitle = $task['title'] ?? 'مهمة إنتاج';
 $productName = $task['product_name'] ?? $task['product_name_from_db'] ?? '';
 $quantity = isset($task['quantity']) && $task['quantity'] !== null ? (float) $task['quantity'] : 0;
 $unit = !empty($task['unit']) ? $task['unit'] : 'قطعة'; // الوحدة من قاعدة البيانات
+$customerName = !empty($task['customer_name']) ? $task['customer_name'] : '';
 $description = $task['description'] ?? '';
 $notes = $task['notes'] ?? '';
 $priority = $task['priority'] ?? 'normal';
@@ -440,12 +441,6 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
                     </td>
                 </tr>
                 <?php endforeach; ?>
-                <?php if (count($products) > 1 && $totalQuantity > 0): ?>
-                <tr style="border-top: 2px solid #000; font-weight: 700;">
-                    <td style="text-align: left; padding-top: 10px;">الإجمالي:</td>
-                    <td style="text-align: center; padding-top: 10px;"><?php echo number_format($totalQuantity, 2) . ' ' . htmlspecialchars($displayUnit); ?></td>
-                </tr>
-                <?php endif; ?>
             </tbody>
         </table>
         <?php else: ?>
