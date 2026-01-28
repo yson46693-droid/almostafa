@@ -442,6 +442,15 @@ function getAbsoluteUrl($path) {
  * @param int|null $pageNum رقم الصفحة للباجينيشن
  */
 function redirectAfterPost($page, $filters = [], $excludeParams = ['id'], $role = 'manager', $pageNum = null) {
+    // مسح الكاش بعد كل عملية تحديث لجلب البيانات المحدثة
+    if (class_exists('Cache')) {
+        try {
+            Cache::flush();
+        } catch (Exception $cacheError) {
+            error_log("Error flushing cache in redirectAfterPost: " . $cacheError->getMessage());
+        }
+    }
+    
     // إزالة المعاملات المطلوب استثناؤها
     $redirectParams = array_merge(['page' => $page], $filters);
     

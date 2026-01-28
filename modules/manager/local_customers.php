@@ -19,6 +19,7 @@ if (!defined('LOCAL_CUSTOMERS_MODULE_BOOTSTRAPPED')) {
     require_once __DIR__ . '/../../includes/auth.php';
     require_once __DIR__ . '/../../includes/audit_log.php';
     require_once __DIR__ . '/../../includes/path_helper.php';
+    require_once __DIR__ . '/../../includes/cache.php';
 
     requireRole(['accountant', 'manager', 'developer']);
 }
@@ -4004,7 +4005,16 @@ document.addEventListener('DOMContentLoaded', function () {
                         setButtonLoading(button, false);
                         if (data.success) {
                             showAlert('تم حفظ الموقع بنجاح!');
-                            location.reload();
+                            // مسح الكاش قبل إعادة التحميل
+                            if (window.LocalStorageCache && typeof window.LocalStorageCache.clearAll === 'function') {
+                                window.LocalStorageCache.clearAll().then(function() {
+                                    location.reload();
+                                }).catch(function() {
+                                    location.reload();
+                                });
+                            } else {
+                                location.reload();
+                            }
                         } else {
                             showAlert(data.message || 'حدث خطأ أثناء حفظ الموقع.');
                         }
@@ -4275,10 +4285,19 @@ document.addEventListener('DOMContentLoaded', function () {
     const alertElement = successAlert || errorAlert;
     
     if (alertElement && alertElement.dataset.autoRefresh === 'true') {
+        // مسح الكاش قبل إعادة التحميل لجلب البيانات المحدثة
+        if (window.LocalStorageCache && typeof window.LocalStorageCache.clearAll === 'function') {
+            window.LocalStorageCache.clearAll().catch(function(cacheError) {
+                console.warn('Error clearing cache:', cacheError);
+            });
+        }
+        
         setTimeout(function() {
             const currentUrl = new URL(window.location.href);
             currentUrl.searchParams.delete('success');
             currentUrl.searchParams.delete('error');
+            // إضافة timestamp لمنع استخدام الكاش
+            currentUrl.searchParams.set('_nocache', Date.now());
             window.location.href = currentUrl.toString();
         }, 3000);
     }
@@ -4564,8 +4583,8 @@ function submitLocalCustomerReturn() {
                 if (modal) modal.hide();
             }
             
-            // إعادة تحميل الصفحة
-            window.location.reload();
+            // مسح الكاش وإعادة تحميل الصفحة
+            reloadWithCacheClear();
         } else {
             alert('حدث خطأ: ' + (data.message || 'خطأ غير معروف'));
             if (submitBtn) {
@@ -4736,8 +4755,8 @@ function submitLocalCustomerReturn() {
                 if (modal) modal.hide();
             }
             
-            // إعادة تحميل الصفحة
-            window.location.reload();
+            // مسح الكاش وإعادة تحميل الصفحة
+            reloadWithCacheClear();
         } else {
             alert('حدث خطأ: ' + (data.message || 'خطأ غير معروف'));
             if (submitBtn) {
@@ -5221,9 +5240,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         messageDiv.classList.remove('d-none');
                     }
                     
-                    // إعادة تحميل الصفحة بعد 1.5 ثانية
+                    // مسح الكاش وإعادة تحميل الصفحة بعد 1.5 ثانية
                     setTimeout(function() {
-                        location.reload();
+                        reloadWithCacheClear();
                     }, 1500);
                 } else {
                     if (messageDiv) {
@@ -5232,9 +5251,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         messageDiv.classList.remove('d-none');
                     }
                     
-                    // إعادة تحميل الصفحة بعد 2 ثانية في حالة الفشل
+                    // مسح الكاش وإعادة تحميل الصفحة بعد 2 ثانية في حالة الفشل
                     setTimeout(function() {
-                        location.reload();
+                        reloadWithCacheClear();
                     }, 2000);
                 }
             })
@@ -5248,9 +5267,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     messageDiv.classList.remove('d-none');
                 }
                 
-                // إعادة تحميل الصفحة بعد 2 ثانية في حالة الخطأ
+                // مسح الكاش وإعادة تحميل الصفحة بعد 2 ثانية في حالة الخطأ
                 setTimeout(function() {
-                    location.reload();
+                    reloadWithCacheClear();
                 }, 2000);
             });
         });
@@ -5351,9 +5370,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         resultsDiv.classList.remove('d-none');
                     }
                     
-                    // إعادة تحميل الصفحة بعد 2 ثانية
+                    // مسح الكاش وإعادة تحميل الصفحة بعد 2 ثانية
                     setTimeout(function() {
-                        location.reload();
+                        reloadWithCacheClear();
                     }, 2000);
                 } else {
                     if (statusDiv) {
@@ -5502,9 +5521,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                     if (resultsDiv) resultsDiv.classList.remove('d-none');
                     
-                    // إعادة تحميل الصفحة بعد 2 ثانية
+                    // مسح الكاش وإعادة تحميل الصفحة بعد 2 ثانية
                     setTimeout(function() {
-                        location.reload();
+                        reloadWithCacheClear();
                     }, 2000);
                 } else {
                     if (statusDiv) {

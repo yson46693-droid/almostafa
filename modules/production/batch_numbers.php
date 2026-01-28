@@ -654,3 +654,73 @@ function showBatchPrintModal(batchNumber, quantity) {
 })();
 </script>
 
+<style>
+/* تصغير عناصر نموذج إنشاء التشغيلة */
+#addBatchModal .modal-body {
+    font-size: 0.875rem;
+    padding: 0.75rem 1rem;
+}
+
+#addBatchModal .form-label {
+    font-size: 0.8rem !important;
+    font-weight: 500 !important;
+    margin-bottom: 0.25rem !important;
+}
+
+#addBatchModal .form-control,
+#addBatchModal .form-select {
+    font-size: 0.8rem !important;
+    padding: 0.35rem 0.5rem !important;
+    height: calc(1.5em + 0.7rem + 2px) !important;
+    line-height: 1.5;
+}
+
+#addBatchModal .form-control:focus,
+#addBatchModal .form-select:focus {
+    font-size: 0.8rem !important;
+}
+
+#addBatchModal .row {
+    margin-bottom: 0.5rem !important;
+}
+
+#addBatchModal .mb-3 {
+    margin-bottom: 0.75rem !important;
+}
+
+#addBatchModal small,
+#addBatchModal .text-muted {
+    font-size: 0.7rem !important;
+    margin-top: 0.25rem !important;
+}
+
+#addBatchModal textarea {
+    font-size: 0.8rem !important;
+    padding: 0.35rem 0.5rem !important;
+    min-height: calc(1.5em * 2 + 0.7rem + 2px) !important;
+}
+
+#addBatchModal select[multiple] {
+    font-size: 0.75rem !important;
+    padding: 0.25rem !important;
+}
+
+#addBatchModal .btn {
+    font-size: 0.8rem !important;
+    padding: 0.35rem 0.75rem !important;
+}
+
+#addBatchModal .modal-header {
+    padding: 0.5rem 1rem !important;
+}
+
+#addBatchModal .modal-header h5 {
+    font-size: 1rem !important;
+    margin-bottom: 0 !important;
+}
+
+#addBatchModal .modal-footer {
+    padding: 0.5rem 1rem !important;
+}
+</style>
+

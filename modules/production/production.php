@@ -11099,6 +11099,155 @@ body.modal-open .dashboard-main {
 body.modal-open .modal-backdrop {
     display: none !important;
 }
+
+/* تصغير عناصر نموذج إنشاء التشغيلة */
+#createFromTemplateModal .production-template-body {
+    font-size: 0.875rem;
+}
+
+#createFromTemplateModal .section-block {
+    margin-bottom: 0.75rem !important;
+    padding: 0.5rem;
+    border-radius: 0.375rem;
+    background-color: #f8f9fa;
+}
+
+#createFromTemplateModal .section-heading {
+    font-size: 0.9rem !important;
+    font-weight: 600 !important;
+    margin-bottom: 0.5rem !important;
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid #dee2e6;
+}
+
+#createFromTemplateModal .form-label {
+    font-size: 0.8rem !important;
+    font-weight: 500 !important;
+    margin-bottom: 0.25rem !important;
+}
+
+#createFromTemplateModal .form-control,
+#createFromTemplateModal .form-select {
+    font-size: 0.8rem !important;
+    padding: 0.35rem 0.5rem !important;
+    height: calc(1.5em + 0.7rem + 2px) !important;
+    line-height: 1.5;
+}
+
+#createFromTemplateModal .form-control:focus,
+#createFromTemplateModal .form-select:focus {
+    font-size: 0.8rem !important;
+}
+
+#createFromTemplateModal .row {
+    margin-bottom: 0.5rem !important;
+}
+
+#createFromTemplateModal .row.g-3 {
+    --bs-gutter-y: 0.5rem;
+    --bs-gutter-x: 0.5rem;
+}
+
+#createFromTemplateModal .mb-3 {
+    margin-bottom: 0.75rem !important;
+}
+
+#createFromTemplateModal small,
+#createFromTemplateModal .text-muted {
+    font-size: 0.7rem !important;
+    margin-top: 0.25rem !important;
+}
+
+#createFromTemplateModal .alert {
+    padding: 0.5rem 0.75rem !important;
+    font-size: 0.75rem !important;
+    margin-bottom: 0.5rem !important;
+}
+
+#createFromTemplateModal .alert ul {
+    margin-bottom: 0 !important;
+    padding-right: 1rem;
+}
+
+#createFromTemplateModal .alert li {
+    font-size: 0.7rem !important;
+    margin-bottom: 0.25rem;
+}
+
+#createFromTemplateModal .btn {
+    font-size: 0.8rem !important;
+    padding: 0.35rem 0.75rem !important;
+}
+
+#createFromTemplateModal .modal-header {
+    padding: 0.5rem 1rem !important;
+}
+
+#createFromTemplateModal .modal-header h5 {
+    font-size: 1rem !important;
+    margin-bottom: 0 !important;
+}
+
+#createFromTemplateModal .modal-footer {
+    padding: 0.5rem 1rem !important;
+}
+
+#createFromTemplateModal .modal-body {
+    padding: 0.75rem 1rem !important;
+}
+
+/* تصغير عناصر الموردين */
+#createFromTemplateModal #templateSuppliersContainer .row {
+    margin-bottom: 0.4rem !important;
+}
+
+#createFromTemplateModal #templateSuppliersContainer .col-md-6,
+#createFromTemplateModal #templateSuppliersContainer .col-md-4,
+#createFromTemplateModal #templateSuppliersContainer .col-md-12 {
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
+}
+
+#createFromTemplateModal #templateSuppliersHint {
+    font-size: 0.7rem !important;
+    margin-bottom: 0.5rem !important;
+}
+
+/* تصغير النموذج في batch_numbers.php أيضاً */
+#batchForm .form-label {
+    font-size: 0.8rem !important;
+    font-weight: 500 !important;
+    margin-bottom: 0.25rem !important;
+}
+
+#batchForm .form-control,
+#batchForm .form-select {
+    font-size: 0.8rem !important;
+    padding: 0.35rem 0.5rem !important;
+    height: calc(1.5em + 0.7rem + 2px) !important;
+}
+
+#batchForm .row {
+    margin-bottom: 0.5rem !important;
+}
+
+#batchForm .mb-3 {
+    margin-bottom: 0.75rem !important;
+}
+
+#batchForm small {
+    font-size: 0.7rem !important;
+}
+
+#batchForm textarea {
+    font-size: 0.8rem !important;
+    padding: 0.35rem 0.5rem !important;
+}
+
+#batchForm select[multiple] {
+    font-size: 0.75rem !important;
+    padding: 0.25rem !important;
+}
 </style>
 
 <script>
