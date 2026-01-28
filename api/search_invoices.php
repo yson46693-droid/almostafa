@@ -134,8 +134,8 @@ try {
                         </div>
                         <button type="button" 
                                 class="btn btn-success btn-sm" 
-                                title="مشاركة الفاتورة إلى الشات"
-                                onclick="shareInvoiceToChat(<?php echo $invoice['id']; ?>)">
+                                title="مشاركة الفاتورة خارج المتصفح"
+                                onclick="shareInvoiceExternal(<?php echo $invoice['id']; ?>)">
                             <i class="bi bi-share"></i> مشاركة
                         </button>
                     </div>

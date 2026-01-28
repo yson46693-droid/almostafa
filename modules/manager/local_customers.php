@@ -1809,55 +1809,61 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
     </div>
 <?php endif; ?>
 
-<!-- البحث -->
-<div class="card shadow-sm mb-4 customers-search-card">
-    <div class="card-body">
-        <form method="GET" action="" class="row g-2 g-md-3 align-items-end">
+<!-- شريط البحث المتقدم - نتائج لحظية فور التوقف عن الكتابة -->
+<div class="card shadow-sm mb-4 border-0 local-search-advanced" id="localCustomersSearchCard">
+    <div class="card-body p-3 p-md-4">
+        <form method="GET" action="" id="localCustomersSearchForm" class="local-search-form">
             <input type="hidden" name="page" value="local_customers">
-            <div class="col-12 col-md-6 col-lg-5">
-                <label for="customerSearch" class="visually-hidden">بحث عن العملاء</label>
-                <div class="input-group input-group-sm shadow-sm customers-search-input-group">
-                    <span class="input-group-text bg-light text-muted border-end-0">
-                        <i class="bi bi-search"></i>
-                    </span>
-                    <input
-                        type="text"
-                        class="form-control border-start-0"
-                        id="customerSearch"
-                        name="search"
-                        value="<?php echo htmlspecialchars($search); ?>"
-                        placeholder="بحث سريع بالاسم، الهاتف أو كود العميل"
-                        autocomplete="off"
-                    >
+            <div class="row g-3 align-items-end">
+                <div class="col-12">
+                    <label for="customerSearch" class="form-label small text-muted mb-1">بحث في جميع بيانات العميل</label>
+                    <div class="local-search-input-wrapper position-relative">
+                        <span class="local-search-icon">
+                            <i class="bi bi-search"></i>
+                        </span>
+                        <input
+                            type="text"
+                            class="form-control form-control-lg local-search-input"
+                            id="customerSearch"
+                            name="search"
+                            value="<?php echo htmlspecialchars($search); ?>"
+                            placeholder="ابحث في الاسم، الهاتف، العنوان، المنطقة، الرقم، من أضاف العميل..."
+                            autocomplete="off"
+                            aria-label="بحث عن العملاء المحليين"
+                        >
+                        <button type="button" class="btn btn-link local-search-clear" id="localSearchClearBtn" title="مسح البحث" style="display: none;">
+                            <i class="bi bi-x-circle-fill text-muted"></i>
+                        </button>
+                        <span class="local-search-hint small text-muted">اكتب أي حرف — النتائج تظهر فور التوقف عن الكتابة</span>
+                    </div>
                 </div>
-            </div>
-            <div class="col-6 col-md-3 col-lg-2">
-                <label for="debtStatusFilter" class="visually-hidden">تصفية حسب حالة الديون</label>
-                <select class="form-select form-select-sm shadow-sm" id="debtStatusFilter" name="debt_status">
-                    <option value="all" <?php echo $debtStatus === 'all' ? 'selected' : ''; ?>>الكل</option>
-                    <option value="debtor" <?php echo $debtStatus === 'debtor' ? 'selected' : ''; ?>>مدين</option>
-                    <option value="clear" <?php echo $debtStatus === 'clear' ? 'selected' : ''; ?>>غير مدين / لديه رصيد</option>
-                </select>
-            </div>
-            <div class="col-6 col-md-3 col-lg-2">
-                <label for="regionFilter" class="visually-hidden">تصفية حسب المنطقة</label>
-                <select class="form-select form-select-sm shadow-sm" id="regionFilter" name="region_id">
-                    <option value="">جميع المناطق</option>
-                    <?php
-                    $regions = $db->query("SELECT id, name FROM regions ORDER BY name ASC");
-                    foreach ($regions as $region):
-                    ?>
-                        <option value="<?php echo $region['id']; ?>" <?php echo $regionFilter === $region['id'] ? 'selected' : ''; ?>>
-                            <?php echo htmlspecialchars($region['name']); ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="col-6 col-md-3 col-lg-2 d-grid">
-                <button type="submit" class="btn btn-primary btn-sm">
-                    <i class="bi bi-search me-1"></i>
-                    <span>بحث</span>
-                </button>
+                <div class="col-12 col-md-auto d-flex flex-wrap gap-2 align-items-center">
+                    <div class="local-filter-group">
+                        <label for="debtStatusFilter" class="visually-hidden">تصفية حسب الديون</label>
+                        <select class="form-select form-select-sm local-filter-select" id="debtStatusFilter" name="debt_status">
+                            <option value="all" <?php echo $debtStatus === 'all' ? 'selected' : ''; ?>>الكل</option>
+                            <option value="debtor" <?php echo $debtStatus === 'debtor' ? 'selected' : ''; ?>>مدين</option>
+                            <option value="clear" <?php echo $debtStatus === 'clear' ? 'selected' : ''; ?>>غير مدين / رصيد</option>
+                        </select>
+                    </div>
+                    <div class="local-filter-group">
+                        <label for="regionFilter" class="visually-hidden">تصفية حسب المنطقة</label>
+                        <select class="form-select form-select-sm local-filter-select" id="regionFilter" name="region_id">
+                            <option value="">جميع المناطق</option>
+                            <?php
+                            $regions = $db->query("SELECT id, name FROM regions ORDER BY name ASC");
+                            foreach ($regions as $region):
+                            ?>
+                                <option value="<?php echo $region['id']; ?>" <?php echo $regionFilter === $region['id'] ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($region['name']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="localSearchResetBtn">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>مسح الفلاتر
+                    </button>
+                </div>
             </div>
         </form>
     </div>
@@ -7162,79 +7168,72 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
     pointer-events: none !important;
 }
 
-/* إصلاح مشكلة عدم القدرة على الضغط على حقل البحث على الهاتف */
+/* شريط البحث المتقدم - العملاء المحليين */
+.local-search-advanced {
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border-radius: 12px;
+}
+.local-search-input-wrapper {
+    max-width: 100%;
+}
+.local-search-icon {
+    position: absolute;
+    right: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    font-size: 1.15rem;
+    pointer-events: none;
+    z-index: 2;
+}
+.local-search-input {
+    padding-right: 3rem !important;
+    padding-left: 1rem !important;
+    border-radius: 10px !important;
+    border: 1px solid #e2e8f0 !important;
+    background: #fff !important;
+    transition: border-color 0.2s, box-shadow 0.2s !important;
+}
+.local-search-input:focus {
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15) !important;
+    outline: none !important;
+}
+.local-search-clear {
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 0.25rem;
+    text-decoration: none !important;
+    z-index: 3;
+}
+.local-search-clear:hover { opacity: 0.8; }
+.local-search-hint {
+    display: block;
+    margin-top: 0.35rem;
+    margin-right: 0.25rem;
+}
+.local-filter-group { min-width: 140px; }
+.local-filter-select { border-radius: 8px !important; }
+
 @media (max-width: 768px) {
-    /* ضمان أن حقل البحث قابل للنقر على الجوال */
-    .customers-search-card #customerSearch {
+    .local-search-advanced #customerSearch,
+    .local-search-advanced .local-search-input {
         touch-action: manipulation !important;
-        -webkit-tap-highlight-color: rgba(0, 123, 255, 0.2) !important;
+        -webkit-tap-highlight-color: rgba(59, 130, 246, 0.2) !important;
         pointer-events: auto !important;
-        z-index: 10 !important;
-        position: relative !important;
-        min-height: 44px !important; /* الحد الأدنى لحجم اللمس */
-        -webkit-appearance: none !important;
-        -moz-appearance: none !important;
-        appearance: none !important;
-        cursor: text !important;
-        /* ضمان أن الكتابة تعمل */
+        min-height: 48px !important;
         -webkit-user-select: text !important;
-        -moz-user-select: text !important;
-        -ms-user-select: text !important;
         user-select: text !important;
-        /* منع أي تأثيرات قد تمنع الكتابة */
-        -webkit-touch-callout: default !important;
-        -webkit-user-modify: read-write-plaintext-only !important;
-        /* ضمان أن الحقل قابل للتركيز */
-        -webkit-focus-ring-color: rgba(0, 123, 255, 0.5) !important;
     }
-    
-    /* ضمان أن input-group-text لا يمنع النقر */
-    .customers-search-input-group .input-group-text {
-        pointer-events: none !important;
-        z-index: 1 !important;
-        user-select: none !important;
-        -webkit-user-select: none !important;
-    }
-    
-    /* السماح للنقر على input-group بالكامل */
-    .customers-search-input-group {
-        touch-action: manipulation !important;
-        pointer-events: auto !important;
+    .local-search-advanced {
         position: relative;
         z-index: 1;
     }
-    
-    /* ضمان أن card البحث قابل للنقر */
-    .customers-search-card {
-        position: relative;
-        z-index: 1;
-    }
-    
-    /* إزالة أي تأثيرات قد تمنع اللمس */
-    .customers-search-card #customerSearch:focus,
-    .customers-search-card #customerSearch:active,
-    .customers-search-card #customerSearch:focus-visible {
-        outline: 2px solid rgba(0, 123, 255, 0.5) !important;
+    .local-search-advanced .local-search-input:focus {
+        outline: 2px solid rgba(59, 130, 246, 0.4) !important;
         outline-offset: 2px !important;
-        -webkit-tap-highlight-color: rgba(0, 123, 255, 0.3) !important;
-        z-index: 11 !important;
-        /* ضمان أن الكتابة تعمل عند التركيز */
-        -webkit-user-select: text !important;
-        user-select: text !important;
-    }
-    
-    /* إصلاح خاص للتأكد من أن الحقل قابل للنقر */
-    .customers-search-card .form-control {
-        pointer-events: auto !important;
-    }
-    
-    /* منع أي overlay أو عنصر آخر من تغطية حقل البحث */
-    .customers-search-card * {
-        pointer-events: auto;
-    }
-    
-    .customers-search-card .input-group-text {
-        pointer-events: none;
     }
 }
 

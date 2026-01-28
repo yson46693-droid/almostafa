@@ -378,8 +378,8 @@ if (isset($_GET['id'])) {
                                         </div>
                                         <button type="button" 
                                                 class="btn btn-success btn-sm" 
-                                                title="مشاركة الفاتورة إلى الشات"
-                                                onclick="shareInvoiceToChat(<?php echo $invoice['id']; ?>)">
+                                                title="مشاركة الفاتورة خارج المتصفح"
+                                                onclick="shareInvoiceExternal(<?php echo $invoice['id']; ?>)">
                                             <i class="bi bi-share"></i> مشاركة
                                         </button>
                                     </div>
@@ -808,7 +808,7 @@ function deleteInvoiceConfirm(invoiceId) {
     }
 })();
 
-async function shareInvoiceToChat(invoiceId) {
+async function shareInvoiceExternal(invoiceId) {
     if (!invoiceId || invoiceId <= 0) {
         alert('رقم الفاتورة غير صحيح');
         return;
@@ -818,32 +818,59 @@ async function shareInvoiceToChat(invoiceId) {
     const button = event.target.closest('button');
     const originalHtml = button.innerHTML;
     button.disabled = true;
-    button.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>جاري الإرسال...';
+    button.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>جاري التحميل...';
 
     try {
-        const response = await fetch('<?php echo getRelativeUrl("api/chat/share_invoice.php"); ?>', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            credentials: 'include',
-            body: JSON.stringify({
-                invoice_id: invoiceId
-            })
+        // الحصول على رابط الفاتورة
+        const response = await fetch('<?php echo getRelativeUrl("api/get_invoice_url.php"); ?>?id=' + invoiceId, {
+            method: 'GET',
+            credentials: 'include'
         });
 
         const data = await response.json();
 
         if (!response.ok || !data.success) {
-            throw new Error(data.error || 'تعذر مشاركة الفاتورة');
+            throw new Error(data.error || 'تعذر الحصول على رابط الفاتورة');
         }
 
-        alert('تم مشاركة الفاتورة بنجاح في الشات');
+        const invoiceUrl = data.url;
+        const invoiceTitle = data.title || 'فاتورة رقم: ' + (data.invoice_number || invoiceId);
+        const fullUrl = window.location.origin + invoiceUrl;
+
+        // فتح صفحة الطباعة أولاً
+        const printWindow = window.open(invoiceUrl, '_blank');
         
-        // فتح الشات إذا كان متاحاً
-        if (typeof window.openChat !== 'undefined') {
-            window.openChat();
-        }
+        // بعد فتح صفحة الطباعة، انتظر قليلاً ثم استخدم Web Share API
+        setTimeout(async () => {
+            try {
+                // محاولة استخدام Web Share API
+                if (navigator.share) {
+                    await navigator.share({
+                        title: invoiceTitle,
+                        text: invoiceTitle,
+                        url: fullUrl
+                    });
+                    alert('تم مشاركة الفاتورة بنجاح');
+                } else {
+                    // إذا لم يكن Web Share API متاحاً، نسخ الرابط
+                    await navigator.clipboard.writeText(fullUrl);
+                    alert('تم نسخ رابط الفاتورة إلى الحافظة\nيمكنك الآن مشاركته من أي تطبيق');
+                }
+            } catch (shareError) {
+                // إذا ألغى المستخدم المشاركة أو حدث خطأ
+                if (shareError.name !== 'AbortError') {
+                    // نسخ الرابط كبديل
+                    try {
+                        await navigator.clipboard.writeText(fullUrl);
+                        alert('تم نسخ رابط الفاتورة إلى الحافظة\nيمكنك الآن مشاركته من أي تطبيق');
+                    } catch (clipError) {
+                        // عرض الرابط في نافذة منبثقة
+                        prompt('انسخ هذا الرابط للمشاركة:', fullUrl);
+                    }
+                }
+            }
+        }, 1000);
+
     } catch (error) {
         console.error('Error sharing invoice:', error);
         alert(error.message || 'حدث خطأ أثناء مشاركة الفاتورة');
