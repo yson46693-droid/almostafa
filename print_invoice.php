@@ -63,7 +63,9 @@ $companyName = COMPANY_NAME;
             padding: <?php echo $printFormat === '80mm' ? '0' : '30px'; ?>;
             background: white;
             box-shadow: <?php echo $printFormat === '80mm' ? 'none' : '0 0 20px rgba(0,0,0,0.1)'; ?>;
-            width: 100%;
+            width: <?php echo $printFormat === '80mm' ? '80mm' : '100%'; ?>;
+            box-sizing: border-box;
+            overflow: hidden;
         }
         
         <?php if ($printFormat === '80mm'): ?>
@@ -127,8 +129,13 @@ $companyName = COMPANY_NAME;
             .invoice-container {
                 padding: 0 !important;
                 margin: 0 !important;
-                max-width: 100% !important;
-                width: 100% !important;
+                max-width: 80mm !important;
+                width: 80mm !important;
+            }
+            
+            body {
+                width: 80mm !important;
+                max-width: 80mm !important;
             }
             <?php endif; ?>
         }

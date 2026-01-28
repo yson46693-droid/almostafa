@@ -250,7 +250,8 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 .invoice-wrapper-80mm {
     width: 80mm;
     max-width: 80mm;
-    margin: 0 auto;
+    margin: 0;
+    padding: 0;
     overflow: hidden;
     box-sizing: border-box;
 }
@@ -274,9 +275,10 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 /* رأس الفاتورة */
 .invoice-header-80mm {
     text-align: center;
-    padding: 2mm 0.5mm 1.5mm 0.5mm;
+    padding: 1.5mm 0.5mm 1mm 0.5mm;
     border-bottom: 2px solid #000;
     width: 100%;
+    max-width: 100%;
     box-sizing: border-box;
     overflow: hidden;
     word-wrap: break-word;
@@ -310,8 +312,9 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 /* معلومات الفاتورة والعميل */
 .invoice-info-80mm,
 .customer-info-80mm {
-    padding: 1.5mm 0.5mm;
+    padding: 1mm 0.5mm;
     width: 100%;
+    max-width: 100%;
     box-sizing: border-box;
     overflow: hidden;
 }
@@ -396,8 +399,9 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 
 /* جدول المنتجات */
 .items-section-80mm {
-    padding: 1.5mm 0.5mm;
+    padding: 1mm 0.5mm;
     width: 100%;
+    max-width: 100%;
     box-sizing: border-box;
     overflow: hidden;
 }
@@ -481,8 +485,9 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 
 /* الملخص المالي */
 .summary-section-80mm {
-    padding: 1.5mm 0.5mm;
+    padding: 1mm 0.5mm;
     width: 100%;
+    max-width: 100%;
     box-sizing: border-box;
     overflow: hidden;
 }
@@ -544,8 +549,9 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 
 /* الملاحظات */
 .notes-section-80mm {
-    padding: 1.5mm 0.5mm;
+    padding: 1mm 0.5mm;
     width: 100%;
+    max-width: 100%;
     box-sizing: border-box;
     overflow: hidden;
 }
@@ -564,9 +570,10 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 /* تذييل الفاتورة */
 .invoice-footer-80mm {
     text-align: center;
-    padding: 1.5mm 0.5mm 1mm 0.5mm;
+    padding: 1mm 0.5mm;
     border-top: 1px solid #000;
     width: 100%;
+    max-width: 100%;
     box-sizing: border-box;
     overflow: hidden;
 }
@@ -609,11 +616,17 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
         max-width: 80mm !important;
         overflow: hidden !important;
     }
+    
+    body * {
+        max-width: 80mm !important;
+        box-sizing: border-box !important;
+    }
 
     .invoice-wrapper-80mm {
         width: 80mm !important;
         max-width: 80mm !important;
         margin: 0 !important;
+        padding: 0 !important;
         overflow: hidden !important;
     }
 
@@ -639,6 +652,13 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
         max-width: 100% !important;
         box-sizing: border-box !important;
         overflow: hidden !important;
+        padding-left: 0.5mm !important;
+        padding-right: 0.5mm !important;
+    }
+    
+    .items-table-80mm {
+        width: calc(100% - 1mm) !important;
+        max-width: calc(100% - 1mm) !important;
     }
 
     .invoice-header-80mm {
