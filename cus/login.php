@@ -22,10 +22,13 @@ define('ACCESS_ALLOWED', true);
 
 // تحميل ملفات النظام الأساسية مع معالجة الأخطاء
 try {
-    $configPath = __DIR__ . '/../../includes/config.php';
-    $dbPath = __DIR__ . '/../../includes/db.php';
-    $authPath = __DIR__ . '/../../includes/auth.php';
-    $pathHelperPath = __DIR__ . '/../../includes/path_helper.php';
+    // المسار الصحيح: من cus/ إلى includes/ هو ../includes/
+    // __DIR__ = /var/www/vhosts/egsystem.top/httpdocs/cus
+    // __DIR__ . '/../includes/config.php' = /var/www/vhosts/egsystem.top/httpdocs/includes/config.php
+    $configPath = __DIR__ . '/../includes/config.php';
+    $dbPath = __DIR__ . '/../includes/db.php';
+    $authPath = __DIR__ . '/../includes/auth.php';
+    $pathHelperPath = __DIR__ . '/../includes/path_helper.php';
     
     if (!file_exists($configPath)) {
         throw new Exception('ملف config.php غير موجود');

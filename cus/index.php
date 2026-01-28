@@ -15,10 +15,11 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 // تحميل ملفات النظام الأساسية للتحقق من تسجيل الدخول
-require_once __DIR__ . '/../../includes/config.php';
-require_once __DIR__ . '/../../includes/db.php';
-require_once __DIR__ . '/../../includes/auth.php';
-require_once __DIR__ . '/../../includes/path_helper.php';
+// المسار الصحيح: من cus/ إلى includes/ هو ../includes/
+require_once __DIR__ . '/../includes/config.php';
+require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/path_helper.php';
 
 // التحقق من تسجيل الدخول - إذا لم يكن مسجل دخول، توجهه إلى صفحة تسجيل الدخول
 if (!isLoggedIn()) {
@@ -57,7 +58,7 @@ if (!defined('LOCAL_CUSTOMERS_MODULE_BOOTSTRAPPED')) {
 }
 
 if (!defined('LOCAL_CUSTOMERS_PURCHASE_HISTORY_AJAX')) {
-    require_once __DIR__ . '/../../includes/table_styles.php';
+    require_once __DIR__ . '/../includes/table_styles.php';
 }
 
 // $currentUser تم تعريفه بالفعل في السطر 35
@@ -1078,7 +1079,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $regionId = isset($_POST['region_id']) && $_POST['region_id'] !== '' ? (int)$_POST['region_id'] : null;
                 
                 // توليد unique_code فريد للعميل
-                require_once __DIR__ . '/../../includes/customer_code_generator.php';
+                require_once __DIR__ . '/../includes/customer_code_generator.php';
                 ensureCustomerUniqueCodeColumn('local_customers');
                 $uniqueCode = generateUniqueCustomerCode('local_customers');
                 
