@@ -31,13 +31,21 @@ $page = isset($_GET['p']) ? max(1, intval($_GET['p'])) : 1;
 $perPage = 20;
 $offset = ($page - 1) * $perPage;
 
-// البحث والفلترة
+// البحث والفلترة المتقدمة
 $filters = [
-    'invoice_number' => trim($_GET['invoice_number'] ?? '')
+    'invoice_number' => trim($_GET['invoice_number'] ?? ''),
+    'date_from' => trim($_GET['date_from'] ?? ''),
+    'date_to' => trim($_GET['date_to'] ?? ''),
+    'date_exact' => trim($_GET['date_exact'] ?? ''),
+    'status' => trim($_GET['status'] ?? ''),
+    'customer_id' => isset($_GET['customer_id']) && $_GET['customer_id'] !== '' ? intval($_GET['customer_id']) : null,
 ];
-
+if (!empty($filters['date_exact'])) {
+    $filters['date_from'] = $filters['date_exact'];
+    $filters['date_to'] = $filters['date_exact'];
+}
 $filters = array_filter($filters, function($value) {
-    return $value !== '';
+    return $value !== '' && $value !== null;
 });
 
 try {

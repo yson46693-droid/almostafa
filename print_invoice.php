@@ -60,11 +60,19 @@ $companyName = COMPANY_NAME;
         .invoice-container {
             max-width: <?php echo $printFormat === '80mm' ? '80mm' : '800px'; ?>;
             margin: 0 auto;
-            padding: <?php echo $printFormat === '80mm' ? '5mm' : '30px'; ?>;
+            padding: <?php echo $printFormat === '80mm' ? '0' : '30px'; ?>;
             background: white;
-            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            box-shadow: <?php echo $printFormat === '80mm' ? 'none' : '0 0 20px rgba(0,0,0,0.1)'; ?>;
             width: 100%;
         }
+        
+        <?php if ($printFormat === '80mm'): ?>
+        .no-print {
+            max-width: 80mm;
+            margin: 0 auto 15px auto;
+            padding: 0 10px;
+        }
+        <?php endif; ?>
 
         @media (max-width: 768px) {
             body {
@@ -108,14 +116,42 @@ $companyName = COMPANY_NAME;
             }
             @page {
                 size: <?php echo $printFormat === '80mm' ? '80mm auto' : 'A4'; ?>;
-                margin: <?php echo $printFormat === '80mm' ? '5mm' : '1cm'; ?>;
+                margin: <?php echo $printFormat === '80mm' ? '0mm' : '1cm'; ?>;
             }
+            
+            <?php if ($printFormat === '80mm'): ?>
+            .invoice-container {
+                padding: 0 !important;
+                margin: 0 !important;
+                max-width: 100% !important;
+                width: 100% !important;
+            }
+            <?php endif; ?>
         }
     </style>
 </head>
 <body>
     <div class="container-fluid">
+        <?php if ($printFormat === '80mm'): ?>
+        <!-- الأزرار خارج الفاتورة للطباعة 80mm -->
+        <div class="row mb-3 no-print">
+            <div class="col-12 text-end">
+                <button class="btn btn-primary" onclick="window.print()">
+                    <i class="bi bi-printer me-2"></i>طباعة
+                </button>
+                <button class="btn btn-success" onclick="shareInvoiceToChat(<?php echo $invoiceId; ?>)">
+                    <i class="bi bi-share me-2"></i>مشاركة إلى الشات
+                </button>
+                <a href="<?php echo getRelativeUrl('dashboard/accountant.php?page=invoices'); ?>" class="btn btn-secondary">
+                    <i class="bi bi-arrow-left me-2"></i>رجوع
+                </a>
+            </div>
+        </div>
+        <?php endif; ?>
+        
         <div class="invoice-container">
+            <?php if ($printFormat !== '80mm'): ?>
+            <!-- الأزرار داخل الفاتورة للطباعة A4 -->
             <div class="row mb-4 no-print">
                 <div class="col-12 text-end">
                     <button class="btn btn-primary" onclick="window.print()">
@@ -129,6 +165,7 @@ $companyName = COMPANY_NAME;
                     </a>
                 </div>
             </div>
+            <?php endif; ?>
             
             <?php 
             require_once __DIR__ . '/includes/path_helper.php';

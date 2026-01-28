@@ -224,7 +224,7 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
         <?php endif; ?>
         <div class="summary-row due">
             <span class="label">المتبقي:</span>
-            <span class="value <?php echo $dueAmount > 0.01 ? 'text-danger' : 'text-success'; ?> remaining-amount">
+            <span class="value remaining-amount">
                 <?php echo formatCurrency($dueAmount); ?>
             </span>
         </div>
@@ -250,8 +250,8 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
     font-family: 'Tajawal', 'Arial', 'Helvetica', sans-serif;
     max-width: 80mm;
     width: 100%;
-    margin: 0 auto;
-    padding: 2mm;
+    margin: 0;
+    padding: 1mm;
     background: #ffffff;
     color: #000;
     font-size: 10px;
@@ -520,6 +520,7 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
     font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.5px;
+    color: #000 !important;
 }
 
 .text-success { color: #28a745; }
@@ -564,7 +565,8 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 @media print {
     @page {
         size: 80mm auto;
-        margin: 1mm;
+        margin: 0mm;
+        padding: 0mm;
     }
 
     * {
@@ -585,7 +587,7 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 
     .invoice-80mm {
         margin: 0 !important;
-        padding: 1mm !important;
+        padding: 0.5mm !important;
         box-shadow: none !important;
         width: 100% !important;
         max-width: 100% !important;
@@ -598,7 +600,15 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
     
     .invoice-header-80mm {
         margin-top: 0 !important;
-        padding-top: 2mm !important;
+        padding-top: 1mm !important;
+        margin-bottom: 4px !important;
+    }
+    
+    .summary-row.due .remaining-amount {
+        color: #000 !important;
+        font-size: 12px !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.5px !important;
     }
     
     .thanks {

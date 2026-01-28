@@ -22,18 +22,27 @@ $db = db();
 $error = '';
 $success = '';
 
-// Pagination
-$page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
+// Pagination (استخدام p لرقم الصفحة لأن page=invoices لمخطط Dashboard)
+$page = isset($_GET['p']) ? max(1, intval($_GET['p'])) : 1;
 $perPage = 20;
 $offset = ($page - 1) * $perPage;
 
-// البحث والفلترة
+// البحث والفلترة المتقدمة
 $filters = [
-    'invoice_number' => $_GET['invoice_number'] ?? ''
+    'invoice_number' => trim($_GET['invoice_number'] ?? ''),
+    'date_from' => trim($_GET['date_from'] ?? ''),
+    'date_to' => trim($_GET['date_to'] ?? ''),
+    'date_exact' => trim($_GET['date_exact'] ?? ''),
+    'status' => trim($_GET['status'] ?? ''),
+    'customer_id' => isset($_GET['customer_id']) && $_GET['customer_id'] !== '' ? intval($_GET['customer_id']) : null,
 ];
-
+// يوم محدد: استخدام نفس التاريخ للفترة
+if (!empty($filters['date_exact'])) {
+    $filters['date_from'] = $filters['date_exact'];
+    $filters['date_to'] = $filters['date_exact'];
+}
 $filters = array_filter($filters, function($value) {
-    return $value !== '';
+    return $value !== '' && $value !== null;
 });
 
 // معالجة العمليات
@@ -195,19 +204,75 @@ if (isset($_GET['id'])) {
     </div>
 <?php endif; ?>
 
-<!-- البحث -->
+<!-- البحث والفلترة المتقدمة -->
 <div class="card shadow-sm mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center py-2">
+        <span class="fw-bold"><i class="bi bi-funnel me-1"></i>بحث وفلترة الفواتير</span>
+        <a href="?page=invoices" class="btn btn-outline-secondary btn-sm">مسح الفلاتر</a>
+    </div>
     <div class="card-body">
-        <form method="GET" class="row g-3" id="searchForm">
+        <form method="GET" id="searchForm">
             <input type="hidden" name="page" value="invoices">
-            <div class="col-md-4">
-                <label class="form-label">البحث برقم الفاتورة</label>
-                <div class="input-group">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">البحث برقم الفاتورة</label>
                     <input type="text" class="form-control" name="invoice_number" id="invoiceSearchInput"
-                           value="<?php echo htmlspecialchars($filters['invoice_number'] ?? ''); ?>" 
+                           value="<?php echo htmlspecialchars($filters['invoice_number'] ?? ''); ?>"
                            placeholder="INV-..." autocomplete="off">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">الحالة</label>
+                    <select class="form-select" name="status" id="filterStatus">
+                        <option value="">جميع الحالات</option>
+                        <option value="draft" <?php echo ($filters['status'] ?? '') === 'draft' ? 'selected' : ''; ?>>مسودة</option>
+                        <option value="sent" <?php echo ($filters['status'] ?? '') === 'sent' ? 'selected' : ''; ?>>مرسلة</option>
+                        <option value="partial" <?php echo ($filters['status'] ?? '') === 'partial' ? 'selected' : ''; ?>>مدفوع جزئياً</option>
+                        <option value="paid" <?php echo ($filters['status'] ?? '') === 'paid' ? 'selected' : ''; ?>>مدفوعة</option>
+                        <option value="overdue" <?php echo ($filters['status'] ?? '') === 'overdue' ? 'selected' : ''; ?>>متأخرة</option>
+                        <option value="cancelled" <?php echo ($filters['status'] ?? '') === 'cancelled' ? 'selected' : ''; ?>>ملغاة</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">العميل</label>
+                    <select class="form-select" name="customer_id" id="filterCustomer">
+                        <option value="">جميع العملاء</option>
+                        <?php foreach ($customers as $c): ?>
+                            <option value="<?php echo (int)$c['id']; ?>" <?php echo (isset($filters['customer_id']) && (int)$filters['customer_id'] === (int)$c['id']) ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($c['name']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-12">
+                    <label class="form-label d-block">فلترة حسب التاريخ</label>
+                    <div class="btn-group btn-group-sm mb-2" role="group" id="dateFilterTypeGroup">
+                        <input type="radio" class="btn-check" name="date_filter_type" id="dateTypeAll" value="all" <?php echo empty($filters['date_exact'] ?? '') && empty($filters['date_from'] ?? '') ? 'checked' : ''; ?>>
+                        <label class="btn btn-outline-secondary" for="dateTypeAll">كل التواريخ</label>
+                        <input type="radio" class="btn-check" name="date_filter_type" id="dateTypeSingle" value="single" <?php echo !empty($filters['date_exact'] ?? '') ? 'checked' : ''; ?>>
+                        <label class="btn btn-outline-secondary" for="dateTypeSingle">يوم محدد</label>
+                        <input type="radio" class="btn-check" name="date_filter_type" id="dateTypeRange" value="range" <?php echo !empty($filters['date_from'] ?? '') && empty($filters['date_exact'] ?? '') ? 'checked' : ''; ?>>
+                        <label class="btn btn-outline-secondary" for="dateTypeRange">فترة محددة</label>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-auto" id="wrapDateExact" style="<?php echo empty($filters['date_exact'] ?? '') ? 'display:none' : ''; ?>">
+                            <input type="date" class="form-control form-control-sm" name="date_exact" id="filterDateExact"
+                                   value="<?php echo htmlspecialchars($filters['date_exact'] ?? ''); ?>">
+                        </div>
+                        <div class="col-auto" id="wrapDateRange" style="<?php echo (empty($filters['date_from'] ?? '') || !empty($filters['date_exact'] ?? '')) ? 'display:none' : ''; ?>">
+                            <input type="date" class="form-control form-control-sm d-inline-block" name="date_from" id="filterDateFrom"
+                                   value="<?php echo htmlspecialchars($filters['date_from'] ?? ''); ?>" placeholder="من">
+                            <span class="mx-1 align-middle">–</span>
+                            <input type="date" class="form-control form-control-sm d-inline-block" name="date_to" id="filterDateTo"
+                                   value="<?php echo htmlspecialchars($filters['date_to'] ?? ''); ?>" placeholder="إلى">
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12">
                     <button type="submit" class="btn btn-primary" id="searchButton">
                         <i class="bi bi-search"></i> بحث
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" id="btnClearFilters">
+                        <i class="bi bi-x-circle"></i> مسح الفلاتر
                     </button>
                 </div>
             </div>
@@ -788,13 +853,24 @@ async function shareInvoiceToChat(invoiceId) {
     }
 }
 
-// البحث الديناميكي في الفواتير
+// البحث الديناميكي والفلترة المتقدمة في الفواتير
 (function() {
     const searchInput = document.getElementById('invoiceSearchInput');
     const searchForm = document.getElementById('searchForm');
     const tableBody = document.getElementById('invoicesTableBody');
     const paginationContainer = document.getElementById('invoicesPagination');
     const totalCountSpan = document.getElementById('totalInvoicesCount');
+    const wrapDateExact = document.getElementById('wrapDateExact');
+    const wrapDateRange = document.getElementById('wrapDateRange');
+    const dateTypeAll = document.getElementById('dateTypeAll');
+    const dateTypeSingle = document.getElementById('dateTypeSingle');
+    const dateTypeRange = document.getElementById('dateTypeRange');
+    const filterDateExact = document.getElementById('filterDateExact');
+    const filterDateFrom = document.getElementById('filterDateFrom');
+    const filterDateTo = document.getElementById('filterDateTo');
+    const filterStatus = document.getElementById('filterStatus');
+    const filterCustomer = document.getElementById('filterCustomer');
+    const btnClearFilters = document.getElementById('btnClearFilters');
     
     let searchTimeout = null;
     let currentAbortController = null;
@@ -804,7 +880,44 @@ async function shareInvoiceToChat(invoiceId) {
         return;
     }
     
-    // منع الإرسال الافتراضي للنموذج
+    function toggleDateFilterUI() {
+        const single = dateTypeSingle && dateTypeSingle.checked;
+        const range = dateTypeRange && dateTypeRange.checked;
+        if (wrapDateExact) wrapDateExact.style.display = single ? '' : 'none';
+        if (wrapDateRange) wrapDateRange.style.display = range ? '' : 'none';
+        if (filterDateExact) filterDateExact.disabled = !single;
+        if (filterDateFrom) filterDateFrom.disabled = !range;
+        if (filterDateTo) filterDateTo.disabled = !range;
+    }
+    
+    [dateTypeAll, dateTypeSingle, dateTypeRange].filter(Boolean).forEach(function(r) {
+        r.addEventListener('change', toggleDateFilterUI);
+    });
+    toggleDateFilterUI();
+    
+    if (btnClearFilters) {
+        btnClearFilters.addEventListener('click', function() {
+            var base = (typeof window !== 'undefined' && window.location && window.location.pathname) ? window.location.pathname : '';
+            window.location.href = base + '?page=invoices';
+        });
+    }
+    
+    function getFilterParams() {
+        const o = {};
+        o.invoice_number = (searchInput && searchInput.value.trim()) || '';
+        o.status = (filterStatus && filterStatus.value) || '';
+        o.customer_id = (filterCustomer && filterCustomer.value) || '';
+        const single = dateTypeSingle && dateTypeSingle.checked;
+        const range = dateTypeRange && dateTypeRange.checked;
+        if (single && filterDateExact && filterDateExact.value) {
+            o.date_exact = filterDateExact.value;
+        } else if (range) {
+            if (filterDateFrom && filterDateFrom.value) o.date_from = filterDateFrom.value;
+            if (filterDateTo && filterDateTo.value) o.date_to = filterDateTo.value;
+        }
+        return o;
+    }
+    
     if (searchForm) {
         searchForm.addEventListener('submit', function(e) {
             e.preventDefault();
@@ -812,108 +925,68 @@ async function shareInvoiceToChat(invoiceId) {
         });
     }
     
-    // البحث الديناميكي عند الكتابة
     searchInput.addEventListener('input', function() {
-        const searchValue = this.value.trim();
-        
-        // إلغاء أي timeout سابق
-        if (searchTimeout) {
-            clearTimeout(searchTimeout);
-        }
-        
-        // إلغاء أي طلب AJAX سابق
-        if (currentAbortController) {
-            currentAbortController.abort();
-        }
-        
-        // البحث بعد 300ms من توقف المستخدم عن الكتابة (debounce)
-        searchTimeout = setTimeout(function() {
-            loadInvoices(1);
-        }, 300);
+        if (searchTimeout) clearTimeout(searchTimeout);
+        if (currentAbortController) currentAbortController.abort();
+        searchTimeout = setTimeout(function() { loadInvoices(1); }, 300);
     });
     
-    // البحث عند الضغط على Enter
     searchInput.addEventListener('keydown', function(e) {
         if (e.key === 'Enter' || e.keyCode === 13) {
             e.preventDefault();
-            if (searchTimeout) {
-                clearTimeout(searchTimeout);
-            }
+            if (searchTimeout) clearTimeout(searchTimeout);
             loadInvoices(1);
         }
     });
     
-    // دالة تحميل الفواتير
     function loadInvoices(page) {
-        const searchValue = searchInput.value.trim();
         currentPage = page;
+        const fp = getFilterParams();
         
-        // إلغاء أي طلب سابق
-        if (currentAbortController) {
-            currentAbortController.abort();
-        }
-        
-        // إنشاء AbortController جديد
+        if (currentAbortController) currentAbortController.abort();
         currentAbortController = new AbortController();
         
-        // إظهار مؤشر التحميل
         tableBody.innerHTML = '<tr><td colspan="8" class="text-center"><div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">جاري التحميل...</span></div></td></tr>';
         
-        // بناء URL للبحث
         const params = new URLSearchParams();
-        params.append('invoice_number', searchValue);
         params.append('p', page);
+        ['invoice_number', 'status', 'customer_id', 'date_exact', 'date_from', 'date_to'].forEach(function(k) {
+            if (fp[k]) params.append(k, fp[k]);
+        });
         
-        // إرسال طلب AJAX
         fetch('<?php echo getRelativeUrl("api/search_invoices.php"); ?>?' + params.toString(), {
             method: 'GET',
             credentials: 'include',
             signal: currentAbortController.signal
         })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
+        .then(function(response) {
+            if (!response.ok) throw new Error('Network response was not ok');
             return response.json();
         })
-        .then(data => {
+        .then(function(data) {
             if (data.success) {
-                // تحديث الجدول
                 tableBody.innerHTML = data.tableRows;
-                
-                // تحديث Pagination
-                if (paginationContainer) {
-                    paginationContainer.innerHTML = data.pagination;
-                }
-                
-                // تحديث العدد الإجمالي
-                if (totalCountSpan) {
-                    totalCountSpan.textContent = data.totalInvoices;
-                }
-                
-                // تحديث URL بدون إعادة تحميل الصفحة
+                if (paginationContainer) paginationContainer.innerHTML = data.pagination;
+                if (totalCountSpan) totalCountSpan.textContent = data.totalInvoices;
                 const url = new URL(window.location);
-                url.searchParams.set('invoice_number', searchValue);
+                url.searchParams.set('page', 'invoices');
                 url.searchParams.set('p', page);
+                Object.keys(fp).forEach(function(k) { if (fp[k]) url.searchParams.set(k, fp[k]); });
                 window.history.pushState({}, '', url);
             } else {
                 tableBody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">' + (data.message || 'حدث خطأ في البحث') + '</td></tr>';
             }
         })
-        .catch(error => {
-            if (error.name === 'AbortError') {
-                // تم إلغاء الطلب، لا حاجة لعرض رسالة خطأ
-                return;
-            }
+        .catch(function(error) {
+            if (error.name === 'AbortError') return;
             console.error('Error loading invoices:', error);
             tableBody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">حدث خطأ في تحميل البيانات</td></tr>';
         })
-        .finally(() => {
+        .finally(function() {
             currentAbortController = null;
         });
     }
     
-    // جعل دالة loadInvoices متاحة عالمياً للاستخدام من Pagination
     window.loadInvoices = loadInvoices;
 })();
 </script>
