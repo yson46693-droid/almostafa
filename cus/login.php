@@ -4,27 +4,103 @@
  * للمدير والمحاسب فقط
  */
 
+// تفعيل عرض الأخطاء للتشخيص (يمكن تعطيله لاحقاً)
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+error_reporting(E_ALL);
+
+// تفعيل تسجيل الأخطاء
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+error_reporting(E_ALL);
+
 // بدء الجلسة مع معالجة الأخطاء
 if (session_status() === PHP_SESSION_NONE) {
     @session_start();
 }
 define('ACCESS_ALLOWED', true);
 
-require_once __DIR__ . '/../../includes/config.php';
-require_once __DIR__ . '/../../includes/db.php';
-require_once __DIR__ . '/../../includes/auth.php';
-require_once __DIR__ . '/../../includes/path_helper.php';
+// تحميل ملفات النظام الأساسية مع معالجة الأخطاء
+try {
+    $configPath = __DIR__ . '/../../includes/config.php';
+    $dbPath = __DIR__ . '/../../includes/db.php';
+    $authPath = __DIR__ . '/../../includes/auth.php';
+    $pathHelperPath = __DIR__ . '/../../includes/path_helper.php';
+    
+    if (!file_exists($configPath)) {
+        throw new Exception('ملف config.php غير موجود');
+    }
+    require_once $configPath;
+    
+    if (!file_exists($dbPath)) {
+        throw new Exception('ملف db.php غير موجود');
+    }
+    require_once $dbPath;
+    
+    if (!file_exists($authPath)) {
+        throw new Exception('ملف auth.php غير موجود');
+    }
+    require_once $authPath;
+    
+    if (file_exists($pathHelperPath)) {
+        require_once $pathHelperPath;
+    }
+} catch (Throwable $e) {
+    error_log('Error loading required files in cus/login.php: ' . $e->getMessage());
+    error_log('Error file: ' . $e->getFile() . ' line: ' . $e->getLine());
+    error_log('Error trace: ' . $e->getTraceAsString());
+    
+    // عرض رسالة خطأ واضحة
+    $errorMessage = htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8');
+    $errorFile = htmlspecialchars($e->getFile(), ENT_QUOTES, 'UTF-8');
+    $errorLine = $e->getLine();
+    
+    die('<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>خطأ في تحميل الملفات</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f8f9fa; }
+        .error-box { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 600px; margin: 0 auto; }
+        h2 { color: #dc3545; }
+        .details { text-align: right; margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div class="error-box">
+        <h2>حدث خطأ في تحميل الملفات المطلوبة</h2>
+        <p>يرجى التحقق من إعدادات السيرفر أو الاتصال بالدعم الفني.</p>
+        <div class="details">
+            <strong>تفاصيل الخطأ:</strong><br>
+            ' . $errorMessage . '<br>
+            <small>الملف: ' . $errorFile . ' (السطر: ' . $errorLine . ')</small>
+        </div>
+    </div>
+</body>
+</html>');
+}
 
 $error = '';
 $success = '';
 
 // إذا كان المستخدم مسجل دخول بالفعل وله صلاحية، توجهه إلى index.php
-if (isLoggedIn()) {
-    $currentUser = getCurrentUser();
-    if ($currentUser && in_array(strtolower($currentUser['role']), ['manager', 'accountant', 'developer'])) {
-        header('Location: index.php');
-        exit;
+try {
+    if (function_exists('isLoggedIn') && isLoggedIn()) {
+        if (function_exists('getCurrentUser')) {
+            $currentUser = getCurrentUser();
+            if ($currentUser && in_array(strtolower($currentUser['role'] ?? ''), ['manager', 'accountant', 'developer'])) {
+                if (!headers_sent()) {
+                    header('Location: index.php');
+                    exit;
+                }
+            }
+        }
     }
+} catch (Throwable $e) {
+    error_log('Error checking login status in cus/login.php: ' . $e->getMessage());
+    // استمر في عرض صفحة تسجيل الدخول
 }
 
 // معالجة تسجيل الدخول
@@ -37,27 +113,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $error = 'يرجى إدخال اسم المستخدم وكلمة المرور';
     } else {
         try {
+            if (!function_exists('login')) {
+                throw new Exception('دالة login غير موجودة');
+            }
+            
             $result = login($username, $password, $rememberMe);
             
+            if (!is_array($result)) {
+                throw new Exception('دالة login لم ترجع نتيجة صحيحة');
+            }
+            
             if ($result['success']) {
-                $user = $result['user'];
+                $user = $result['user'] ?? null;
+                if (!$user) {
+                    throw new Exception('بيانات المستخدم غير موجودة');
+                }
+                
                 $userRole = strtolower($user['role'] ?? '');
                 
                 // التحقق من أن المستخدم هو مدير أو محاسب
                 if (!in_array($userRole, ['manager', 'accountant', 'developer'])) {
                     // تسجيل الخروج إذا لم يكن لديه الصلاحية
-                    session_destroy();
+                    if (function_exists('session_destroy')) {
+                        session_destroy();
+                    }
                     $error = 'غير مصرح لك بالدخول إلى هذه الصفحة. هذه الصفحة متاحة للمدير والمحاسب فقط.';
                 } else {
                     // تسجيل الدخول ناجح - إعادة التوجيه إلى index.php
-                    header('Location: index.php');
-                    exit;
+                    if (!headers_sent()) {
+                        header('Location: index.php');
+                        exit;
+                    } else {
+                        echo '<script>window.location.href = "index.php";</script>';
+                        exit;
+                    }
                 }
             } else {
                 $error = $result['message'] ?? 'فشل تسجيل الدخول';
             }
         } catch (Throwable $e) {
             error_log('Login error in cus/login.php: ' . $e->getMessage());
+            error_log('Login error file: ' . $e->getFile() . ' line: ' . $e->getLine());
+            error_log('Login error trace: ' . $e->getTraceAsString());
             $error = 'حدث خطأ أثناء تسجيل الدخول. يرجى المحاولة مرة أخرى.';
         }
     }
