@@ -283,10 +283,31 @@ if (isset($_GET['id'])) {
                                 </td>
                                 <td>
                                     <div class="btn-group" role="group">
-                                        <a href="<?php echo getRelativeUrl('print_invoice.php?id=' . $invoice['id'] . '&print=1'); ?>" 
-                                           class="btn btn-secondary btn-sm" target="_blank" title="طباعة">
-                                            <i class="bi bi-printer"></i> طباعة
-                                        </a>
+                                        <div class="btn-group" role="group">
+                                            <button type="button" 
+                                                    class="btn btn-secondary btn-sm dropdown-toggle" 
+                                                    data-bs-toggle="dropdown" 
+                                                    aria-expanded="false"
+                                                    title="طباعة">
+                                                <i class="bi bi-printer"></i> طباعة
+                                            </button>
+                                            <ul class="dropdown-menu">
+                                                <li>
+                                                    <a class="dropdown-item" 
+                                                       href="<?php echo getRelativeUrl('print_invoice.php?id=' . $invoice['id'] . '&print=1&format=a4'); ?>" 
+                                                       target="_blank">
+                                                        <i class="bi bi-file-earmark-pdf me-2"></i>طباعة A4
+                                                    </a>
+                                                </li>
+                                                <li>
+                                                    <a class="dropdown-item" 
+                                                       href="<?php echo getRelativeUrl('print_invoice.php?id=' . $invoice['id'] . '&print=1&format=80mm'); ?>" 
+                                                       target="_blank">
+                                                        <i class="bi bi-receipt me-2"></i>طباعة 80mm
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        </div>
                                         <button type="button" 
                                                 class="btn btn-success btn-sm" 
                                                 title="مشاركة الفاتورة إلى الشات"

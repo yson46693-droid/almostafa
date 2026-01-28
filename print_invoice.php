@@ -24,7 +24,13 @@ if (!$invoice) {
     die('الفاتورة غير موجودة');
 }
 
-// تمرير المتغيرات المطلوبة لـ invoice_print.php
+// تحديد نوع الطباعة (A4 أو 80mm)
+$printFormat = isset($_GET['format']) ? strtolower(trim($_GET['format'])) : 'a4';
+if (!in_array($printFormat, ['a4', '80mm'])) {
+    $printFormat = 'a4';
+}
+
+// تمرير المتغيرات المطلوبة
 $selectedInvoice = $invoice;
 $invoiceData = $invoice;
 
@@ -52,9 +58,9 @@ $companyName = COMPANY_NAME;
         }
 
         .invoice-container {
-            max-width: 800px;
+            max-width: <?php echo $printFormat === '80mm' ? '80mm' : '800px'; ?>;
             margin: 0 auto;
-            padding: 30px;
+            padding: <?php echo $printFormat === '80mm' ? '5mm' : '30px'; ?>;
             background: white;
             box-shadow: 0 0 20px rgba(0,0,0,0.1);
             width: 100%;
@@ -101,8 +107,8 @@ $companyName = COMPANY_NAME;
                 max-width: 100% !important;
             }
             @page {
-                size: A4;
-                margin: 1cm;
+                size: <?php echo $printFormat === '80mm' ? '80mm auto' : 'A4'; ?>;
+                margin: <?php echo $printFormat === '80mm' ? '5mm' : '1cm'; ?>;
             }
         }
     </style>
@@ -126,7 +132,19 @@ $companyName = COMPANY_NAME;
             
             <?php 
             require_once __DIR__ . '/includes/path_helper.php';
-            include __DIR__ . '/modules/accountant/invoice_print.php'; 
+            
+            // تعريف ACCESS_ALLOWED للسماح بالوصول إلى ملفات الطباعة
+            if (!defined('ACCESS_ALLOWED')) {
+                define('ACCESS_ALLOWED', true);
+            }
+            
+            // استخدام old-recipt.php للطباعة A4
+            if ($printFormat === 'a4') {
+                include __DIR__ . '/old-recipt.php';
+            } else {
+                // استخدام تصميم 80mm
+                include __DIR__ . '/print_invoice_80mm.php';
+            }
             ?>
         </div>
     </div>

@@ -43,18 +43,21 @@ try {
               UNIQUE KEY `name` (`name`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ");
-        
-        // إضافة الأصناف الافتراضية
-        $defaultCategories = ['صابون', 'زيت زيتون', 'كريمات', 'زيوت', 'اخري'];
-        foreach ($defaultCategories as $catName) {
-            try {
+    }
+    
+    // إضافة الأصناف الافتراضية إذا لم تكن موجودة
+    $defaultCategories = ['صابون', 'زيت زيتون', 'كريمات', 'زيوت', 'اخري'];
+    foreach ($defaultCategories as $catName) {
+        try {
+            $existing = $db->queryOne("SELECT id FROM product_categories WHERE name = ?", [$catName]);
+            if (empty($existing)) {
                 $db->execute(
                     "INSERT INTO product_categories (name, is_default) VALUES (?, 1)",
                     [$catName]
                 );
-            } catch (Exception $e) {
-                // الصنف موجود بالفعل
             }
+        } catch (Exception $e) {
+            error_log('Error inserting default category ' . $catName . ': ' . $e->getMessage());
         }
     }
 } catch (Exception $e) {
@@ -64,9 +67,44 @@ try {
 // الحصول على قائمة الأصناف
 $productCategories = [];
 try {
-    $productCategories = $db->query("SELECT id, name FROM product_categories ORDER BY is_default DESC, name ASC");
+    // التحقق من وجود الجدول أولاً
+    $categoriesTableExists = $db->queryOne("SHOW TABLES LIKE 'product_categories'");
+    if (!empty($categoriesTableExists)) {
+        $productCategories = $db->query("SELECT id, name FROM product_categories ORDER BY is_default DESC, name ASC");
+        
+        // إذا كانت القائمة فارغة، إضافة الأصناف الافتراضية
+        if (empty($productCategories)) {
+            $defaultCategories = ['صابون', 'زيت زيتون', 'كريمات', 'زيوت', 'اخري'];
+            foreach ($defaultCategories as $catName) {
+                try {
+                    $db->execute(
+                        "INSERT IGNORE INTO product_categories (name, is_default) VALUES (?, 1)",
+                        [$catName]
+                    );
+                } catch (Exception $e) {
+                    error_log('Error inserting category ' . $catName . ': ' . $e->getMessage());
+                }
+            }
+            // إعادة جلب القائمة
+            $productCategories = $db->query("SELECT id, name FROM product_categories ORDER BY is_default DESC, name ASC");
+        }
+    } else {
+        // الجدول غير موجود، استخدام قائمة افتراضية
+        error_log('product_categories table does not exist');
+    }
 } catch (Exception $e) {
     error_log('Error fetching product categories: ' . $e->getMessage());
+}
+
+// في حالة عدم وجود أصناف، استخدام قائمة افتراضية
+if (empty($productCategories)) {
+    $productCategories = [
+        ['id' => 1, 'name' => 'صابون'],
+        ['id' => 2, 'name' => 'زيت زيتون'],
+        ['id' => 3, 'name' => 'كريمات'],
+        ['id' => 4, 'name' => 'زيوت'],
+        ['id' => 5, 'name' => 'اخري']
+    ];
 }
 
 // الحصول على رسائل النجاح والخطأ من session (بعد redirect)
@@ -1220,9 +1258,17 @@ foreach ($factoryProducts as $product) {
                         <label class="form-label small mb-1"><i class="bi bi-folder me-1"></i>الصنف</label>
                         <select class="form-control form-control-sm" id="factoryCategoryFilter">
                             <option value="">جميع الأصناف</option>
-                            <?php foreach ($productCategories as $cat): ?>
-                                <option value="<?php echo htmlspecialchars($cat['name']); ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
-                            <?php endforeach; ?>
+                            <?php if (!empty($productCategories)): ?>
+                                <?php foreach ($productCategories as $cat): ?>
+                                    <option value="<?php echo htmlspecialchars($cat['name']); ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <option value="صابون">صابون</option>
+                                <option value="زيت زيتون">زيت زيتون</option>
+                                <option value="كريمات">كريمات</option>
+                                <option value="زيوت">زيوت</option>
+                                <option value="اخري">اخري</option>
+                            <?php endif; ?>
                         </select>
                     </div>
                     <div class="col-md-2">
@@ -1591,9 +1637,17 @@ foreach ($factoryProducts as $product) {
                         <label class="form-label small mb-1"><i class="bi bi-folder me-1"></i>الصنف</label>
                         <select class="form-control form-control-sm" id="externalCategoryFilter">
                             <option value="">جميع الأصناف</option>
-                            <?php foreach ($productCategories as $cat): ?>
-                                <option value="<?php echo htmlspecialchars($cat['name']); ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
-                            <?php endforeach; ?>
+                            <?php if (!empty($productCategories)): ?>
+                                <?php foreach ($productCategories as $cat): ?>
+                                    <option value="<?php echo htmlspecialchars($cat['name']); ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <option value="صابون">صابون</option>
+                                <option value="زيت زيتون">زيت زيتون</option>
+                                <option value="كريمات">كريمات</option>
+                                <option value="زيوت">زيوت</option>
+                                <option value="اخري">اخري</option>
+                            <?php endif; ?>
                         </select>
                     </div>
                     <div class="col-md-2">
@@ -1725,9 +1779,17 @@ foreach ($factoryProducts as $product) {
                         <label class="form-label">الصنف <span class="text-danger">*</span></label>
                         <select class="form-control" name="category_id" id="add_category_id" required>
                             <option value="">اختر الصنف</option>
-                            <?php foreach ($productCategories as $cat): ?>
-                                <option value="<?php echo $cat['id']; ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
-                            <?php endforeach; ?>
+                            <?php if (!empty($productCategories)): ?>
+                                <?php foreach ($productCategories as $cat): ?>
+                                    <option value="<?php echo intval($cat['id']); ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <option value="1">صابون</option>
+                                <option value="2">زيت زيتون</option>
+                                <option value="3">كريمات</option>
+                                <option value="4">زيوت</option>
+                                <option value="5">اخري</option>
+                            <?php endif; ?>
                         </select>
                     </div>
                     <div class="mb-3" id="add_custom_category_div" style="display: none;">
@@ -1779,9 +1841,17 @@ foreach ($factoryProducts as $product) {
                         <label class="form-label">الصنف <span class="text-danger">*</span></label>
                         <select class="form-control" name="category_id" id="edit_category_id" required>
                             <option value="">اختر الصنف</option>
-                            <?php foreach ($productCategories as $cat): ?>
-                                <option value="<?php echo $cat['id']; ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
-                            <?php endforeach; ?>
+                            <?php if (!empty($productCategories)): ?>
+                                <?php foreach ($productCategories as $cat): ?>
+                                    <option value="<?php echo intval($cat['id']); ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <option value="1">صابون</option>
+                                <option value="2">زيت زيتون</option>
+                                <option value="3">كريمات</option>
+                                <option value="4">زيوت</option>
+                                <option value="5">اخري</option>
+                            <?php endif; ?>
                         </select>
                     </div>
                     <div class="mb-3" id="edit_custom_category_div" style="display: none;">
@@ -1833,9 +1903,17 @@ foreach ($factoryProducts as $product) {
                         <label class="form-label">الصنف <span class="text-danger">*</span></label>
                         <select class="form-control" name="category_id" id="edit_factory_category_id" required>
                             <option value="">اختر الصنف</option>
-                            <?php foreach ($productCategories as $cat): ?>
-                                <option value="<?php echo $cat['id']; ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
-                            <?php endforeach; ?>
+                            <?php if (!empty($productCategories)): ?>
+                                <?php foreach ($productCategories as $cat): ?>
+                                    <option value="<?php echo intval($cat['id']); ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <option value="1">صابون</option>
+                                <option value="2">زيت زيتون</option>
+                                <option value="3">كريمات</option>
+                                <option value="4">زيوت</option>
+                                <option value="5">اخري</option>
+                            <?php endif; ?>
                         </select>
                     </div>
                     <div class="mb-3" id="edit_factory_custom_category_div" style="display: none;">
@@ -1969,9 +2047,17 @@ foreach ($factoryProducts as $product) {
                 <label class="form-label">الصنف <span class="text-danger">*</span></label>
                 <select class="form-control" name="category_id" id="addCard_category_id" required>
                     <option value="">اختر الصنف</option>
-                    <?php foreach ($productCategories as $cat): ?>
-                        <option value="<?php echo $cat['id']; ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
-                    <?php endforeach; ?>
+                    <?php if (!empty($productCategories)): ?>
+                        <?php foreach ($productCategories as $cat): ?>
+                            <option value="<?php echo intval($cat['id']); ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <option value="1">صابون</option>
+                        <option value="2">زيت زيتون</option>
+                        <option value="3">كريمات</option>
+                        <option value="4">زيوت</option>
+                        <option value="5">اخري</option>
+                    <?php endif; ?>
                 </select>
             </div>
             <div class="mb-3" id="addCard_custom_category_div" style="display: none;">
@@ -2017,9 +2103,17 @@ foreach ($factoryProducts as $product) {
                 <label class="form-label">الصنف <span class="text-danger">*</span></label>
                 <select class="form-control" name="category_id" id="editCard_category_id" required>
                     <option value="">اختر الصنف</option>
-                    <?php foreach ($productCategories as $cat): ?>
-                        <option value="<?php echo $cat['id']; ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
-                    <?php endforeach; ?>
+                    <?php if (!empty($productCategories)): ?>
+                        <?php foreach ($productCategories as $cat): ?>
+                            <option value="<?php echo intval($cat['id']); ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <option value="1">صابون</option>
+                        <option value="2">زيت زيتون</option>
+                        <option value="3">كريمات</option>
+                        <option value="4">زيوت</option>
+                        <option value="5">اخري</option>
+                    <?php endif; ?>
                 </select>
             </div>
             <div class="mb-3" id="editCard_custom_category_div" style="display: none;">

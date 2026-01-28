@@ -419,7 +419,8 @@ function generateInvoiceNumber($posType = null) {
 }
 
 /**
- * توليد رقم فاتورة عشوائي مكون من 5 أرقام (لنقطة البيع الخاصة بالمندوب)
+ * توليد رقم فاتورة عشوائي يبدأ بـ 0 ثم أرقام عشوائية (لنقطة البيع الخاصة بالمندوب)
+ * الصيغة: 0 + 4 أرقام عشوائية = 5 أرقام إجمالاً (مثل: 01234)
  */
 function generateRandomInvoiceNumber() {
     $db = db();
@@ -436,9 +437,10 @@ function generateRandomInvoiceNumber() {
         $attempt = 0;
         
         while ($attempt < $maxAttempts) {
-            // توليد رقم عشوائي مكون من 5 أرقام (من 10000 إلى 99999)
-            $randomNumber = rand(10000, 99999);
-            $invoiceNumber = (string)$randomNumber;
+            // توليد رقم يبدأ بـ 0 ثم 4 أرقام عشوائية (من 0 إلى 9999)
+            // الصيغة: 0 + 4 أرقام عشوائية = 5 أرقام إجمالاً
+            $randomDigits = rand(0, 9999);
+            $invoiceNumber = '0' . str_pad((string)$randomDigits, 4, '0', STR_PAD_LEFT);
             
             // التحقق من عدم وجود فاتورة بنفس الرقم
             $existing = $db->queryOne(
@@ -461,7 +463,7 @@ function generateRandomInvoiceNumber() {
         // إذا فشلت جميع المحاولات، استخدم timestamp + رقم عشوائي
         $timestamp = substr(time(), -4);
         $random = rand(10, 99);
-        $invoiceNumber = $timestamp . $random;
+        $invoiceNumber = '0' . $timestamp . $random;
         
         // التحقق النهائي
         $existing = $db->queryOne(
@@ -479,7 +481,7 @@ function generateRandomInvoiceNumber() {
         }
         
         // إذا كان موجوداً، أضف رقم عشوائي إضافي
-        $invoiceNumber = $timestamp . rand(100, 999);
+        $invoiceNumber = '0' . $timestamp . rand(100, 999);
         error_log("Generated random invoice number with extended fallback: {$invoiceNumber}");
         return $invoiceNumber;
         
@@ -495,24 +497,27 @@ function generateRandomInvoiceNumber() {
         error_log("Error generating random invoice number: " . $e->getMessage());
         
         // استخدام طريقة احتياطية
-        $randomNumber = rand(10000, 99999);
+        $randomDigits = rand(0, 9999);
+        $invoiceNumber = '0' . str_pad((string)$randomDigits, 4, '0', STR_PAD_LEFT);
         $existing = $db->queryOne(
             "SELECT id FROM invoices WHERE invoice_number = ? LIMIT 1",
-            [(string)$randomNumber]
+            [$invoiceNumber]
         );
         
         if (!$existing) {
-            return (string)$randomNumber;
+            return $invoiceNumber;
         }
         
         // إذا كان موجوداً، استخدم timestamp
         $timestamp = substr(time(), -5);
-        return $timestamp;
+        return '0' . $timestamp;
     }
 }
 
 /**
  * توليد رقم فاتورة عداد تصاعدي يبدأ من 1 (لنقطة البيع الخاصة بالمدير/المحاسب)
+ * الأرقام من 1 إلى 9999 للعداد التصاعدي
+ * الأرقام التي تبدأ بـ 0 (مثل 01234) هي من نقطة البيع الخاصة بالمندوب
  */
 function generateSequentialInvoiceNumber() {
     $db = db();
@@ -526,11 +531,13 @@ function generateSequentialInvoiceNumber() {
     
     try {
         // البحث عن آخر رقم فاتورة من نوع العداد التصاعدي (أرقام فقط بدون prefix)
-        // نبحث عن أرقام تبدأ من 1 وتكون أرقام فقط (بدون أي prefix أو format)
-        // نستثني الأرقام من 10000 إلى 99999 لأنها من نقطة البيع الخاصة بالمندوب (أرقام عشوائية)
+        // نبحث عن أرقام من 1 إلى 9999 (عداد تصاعدي)
+        // نستثني الأرقام التي تبدأ بـ 0 لأنها من نقطة البيع الخاصة بالمندوب
         $result = $db->queryOne(
             "SELECT invoice_number, id FROM invoices 
              WHERE invoice_number REGEXP '^[0-9]+$'
+             AND invoice_number NOT LIKE '0%'
+             AND CAST(invoice_number AS UNSIGNED) >= 1
              AND CAST(invoice_number AS UNSIGNED) < 10000
              ORDER BY CAST(invoice_number AS UNSIGNED) DESC, id DESC LIMIT 1
              FOR UPDATE"
@@ -621,7 +628,18 @@ function generateSequentialInvoiceNumber() {
             return (string)$serial;
         }
         
-        // إذا كان موجوداً، استخدم timestamp
+        // إذا كان موجوداً، جرب الرقم التالي
+        $serial = 2;
+        $existing = $db->queryOne(
+            "SELECT id FROM invoices WHERE invoice_number = ? LIMIT 1",
+            [(string)$serial]
+        );
+        
+        if (!$existing) {
+            return (string)$serial;
+        }
+        
+        // إذا كان موجوداً أيضاً، استخدم timestamp
         $timestamp = time();
         return (string)$timestamp;
     }
