@@ -1537,6 +1537,12 @@ if (ob_get_level() === 0) {
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
     
+    <!-- jQuery - يجب تحميله قبل Bootstrap JS -->
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    
+    <!-- Bootstrap JS - يجب تحميله قبل استخدام الدوال -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
@@ -2004,6 +2010,11 @@ if (ob_get_level() === 0) {
         
     };
 })();
+
+// التأكد من أن showLocalCustomerReturnModal متاحة في النطاق العام
+if (typeof window.showLocalCustomerReturnModal === 'undefined') {
+    console.error('showLocalCustomerReturnModal غير معرّفة!');
+}
 </script>
 
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3">
@@ -6452,7 +6463,11 @@ function printDebtorCustomers() {
     window.open(printUrl, '_blank');
 }
 </script>
-<script src="<?php echo ASSETS_URL; ?>js/customer_export.js?v=<?php echo time(); ?>" defer></script>
+<?php 
+$customerExportJsPath = ($basePath ? $basePath : '') . '/assets/js/customer_export.js';
+if (file_exists(__DIR__ . '/../assets/js/customer_export.js')): ?>
+<script src="<?php echo htmlspecialchars($customerExportJsPath, ENT_QUOTES, 'UTF-8'); ?>?v=<?php echo time(); ?>" defer></script>
+<?php endif; ?>
 <?php endif; ?>
 
 <!-- Modal استيراد العملاء المحليين من CSV -->
