@@ -2143,7 +2143,7 @@ function tasksHtml(string $value): string
         if (modalContent) {
             modalContent.innerHTML = content;
         }
-
+ 
         const modalElement = document.getElementById('viewTaskModal');
         if (modalElement && typeof bootstrap !== 'undefined') {
             const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
