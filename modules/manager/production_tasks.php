@@ -649,44 +649,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($action === 'cancel_task') {
         $taskId = intval($_POST['task_id'] ?? 0);
 
-        if ($taskId <= 0) {
-            $error = 'معرف المهمة غير صحيح.';
-        } else {
-            try {
-                $db->beginTransaction();
-
-                // السماح للمحاسب والمدير بإلغاء أي مهمة
-                $isAccountant = ($currentUser['role'] ?? '') === 'accountant';
-                $isManager = ($currentUser['role'] ?? '') === 'manager';
-                
-                if ($isAccountant || $isManager) {
-                    // المحاسب والمدير يمكنهم إلغاء أي مهمة
-                    $task = $db->queryOne(
-                        "SELECT id, title, status FROM tasks WHERE id = ? LIMIT 1",
-                        [$taskId]
-                    );
+                if ($taskId <= 0) {
+                    $error = 'معرف المهمة غير صحيح.';
                 } else {
-                    // المستخدمون الآخرون يمكنهم إلغاء المهام التي أنشأوها فقط
-                    $task = $db->queryOne(
-                        "SELECT id, title, status FROM tasks WHERE id = ? AND created_by = ? LIMIT 1",
-                        [$taskId, $currentUser['id']]
-                    );
-                }
+                    try {
+                        $db->beginTransaction();
 
-                if (!$task) {
-                    if ($isAccountant || $isManager) {
-                        throw new Exception('المهمة غير موجودة.');
-                    } else {
-                        throw new Exception('المهمة غير موجودة أو ليست من إنشائك.');
-                    }
-                }
+                        // السماح للمحاسب والمدير بحذف أي مهمة
+                        $isAccountant = ($currentUser['role'] ?? '') === 'accountant';
+                        $isManager = ($currentUser['role'] ?? '') === 'manager';
+                        
+                        if ($isAccountant || $isManager) {
+                            // المحاسب والمدير يمكنهم حذف أي مهمة
+                            $task = $db->queryOne(
+                                "SELECT id, title, status FROM tasks WHERE id = ? LIMIT 1",
+                                [$taskId]
+                            );
+                        } else {
+                            // المستخدمون الآخرون يمكنهم حذف المهام التي أنشأوها فقط
+                            $task = $db->queryOne(
+                                "SELECT id, title, status FROM tasks WHERE id = ? AND created_by = ? LIMIT 1",
+                                [$taskId, $currentUser['id']]
+                            );
+                        }
 
-                if ($task['status'] === 'cancelled') {
-                    throw new Exception('المهمة ملغاة مسبقاً.');
-                }
+                        if (!$task) {
+                            if ($isAccountant || $isManager) {
+                                throw new Exception('المهمة غير موجودة.');
+                            } else {
+                                throw new Exception('المهمة غير موجودة أو ليست من إنشائك.');
+                            }
+                        }
 
+                // حذف المهمة بدلاً من تغيير الحالة إلى cancelled
                 $db->execute(
-                    "UPDATE tasks SET status = 'cancelled', updated_at = NOW() WHERE id = ?",
+                    "DELETE FROM tasks WHERE id = ?",
                     [$taskId]
                 );
 
@@ -695,26 +692,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     "UPDATE notifications SET `read` = 1 WHERE message = ? AND type IN ('info','success','warning')",
                     [$task['title']]
                 );
-
-                // إرسال إشعار عاجل لجميع عمال الإنتاج
-                $workers = $db->query("SELECT id FROM users WHERE status = 'active' AND role = 'production'");
-                $alertTitle = 'تنبيه هام: تم إلغاء مهمة';
-                $alertMessage = 'تم إلغاء المهمة "' . $task['title'] . '" من قبل الإدارة. يرجى تجاهلها.';
-                $alertLink = getRelativeUrl('production.php?page=tasks');
-
-                foreach ($workers as $worker) {
-                    try {
-                        createNotification(
-                            (int)$worker['id'],
-                            $alertTitle,
-                            $alertMessage,
-                            'error',
-                            $alertLink
-                        );
-                    } catch (Exception $notifyError) {
-                        error_log('Cancel task notification error: ' . $notifyError->getMessage());
-                    }
-                }
 
                 logAudit(
                     $currentUser['id'],
@@ -728,7 +705,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $db->commit();
                 
                 // استخدام preventDuplicateSubmission لإعادة التوجيه مع cache-busting
-                $successMessage = 'تم إلغاء المهمة وإخطار عمال الإنتاج بنجاح.';
+                $successMessage = 'تم حذف المهمة بنجاح.';
                 // تحديد role بناءً على المستخدم الحالي
                 $userRole = ($currentUser['role'] ?? '') === 'accountant' ? 'accountant' : 'manager';
                 preventDuplicateSubmission($successMessage, ['page' => 'production_tasks'], null, $userRole);
@@ -787,6 +764,7 @@ try {
             SELECT status, COUNT(*) as total
             FROM tasks
             WHERE created_by = ?
+            AND status != 'cancelled'
             GROUP BY status
         ", [$currentUser['id']]);
     }
@@ -854,6 +832,7 @@ try {
             FROM tasks t
             LEFT JOIN users u ON t.assigned_to = u.id
             WHERE t.created_by = ?
+            AND t.status != 'cancelled'
             ORDER BY t.created_at DESC, t.id DESC
             LIMIT 10
         ", [$currentUser['id']]);
@@ -1295,14 +1274,14 @@ try {
                                                 </a>
                                             <?php endif; ?>
                                             
-                                            <?php if (in_array($task['status'], ['completed', 'cancelled'], true)): ?>
+                                            <?php if ($task['status'] === 'completed'): ?>
                                                 <span class="text-muted small">لا يوجد إجراء</span>
                                             <?php else: ?>
-                                                <form method="post" class="d-inline" onsubmit="return confirm('هل أنت متأكد من إلغاء هذه المهمة؟');">
+                                                <form method="post" class="d-inline" onsubmit="return confirm('هل أنت متأكد من حذف هذه المهمة؟ سيتم حذفها نهائياً ولن تظهر في الجدول.');">
                                                     <input type="hidden" name="action" value="cancel_task">
                                                     <input type="hidden" name="task_id" value="<?php echo (int)$task['id']; ?>">
                                                     <button type="submit" class="btn btn-outline-danger btn-sm">
-                                                        <i class="bi bi-x-circle me-1"></i> 
+                                                        <i class="bi bi-trash me-1"></i>حذف المهمة
                                                     </button>
                                                 </form>
                                             <?php endif; ?>
@@ -1476,6 +1455,30 @@ document.addEventListener('DOMContentLoaded', function () {
     // تحديث حالة أزرار الحذف عند التحميل
     updateRemoveButtons();
 });
+
+// طباعة تلقائية للإيصال بعد إنشاء المهمة بنجاح
+(function() {
+    'use strict';
+    
+    // التحقق من وجود معلومات الطباعة في session
+    <?php if (isset($_SESSION['print_task_id']) && isset($_SESSION['print_task_url'])): ?>
+    const printTaskId = <?php echo (int)$_SESSION['print_task_id']; ?>;
+    const printTaskUrl = <?php echo json_encode($_SESSION['print_task_url'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+    
+    // فتح نافذة الطباعة تلقائياً
+    if (printTaskId > 0 && printTaskUrl) {
+        // فتح نافذة جديدة للطباعة
+        const printWindow = window.open(printTaskUrl, '_blank', 'width=400,height=600');
+        
+        // بعد فتح النافذة، مسح معلومات الطباعة من session
+        // سيتم مسحها عند إعادة تحميل الصفحة
+        <?php 
+        unset($_SESSION['print_task_id']);
+        unset($_SESSION['print_task_url']);
+        ?>
+    }
+    <?php endif; ?>
+})();
 
 // لا حاجة لإعادة التحميل التلقائي - preventDuplicateSubmission يتولى ذلك
 </script>
