@@ -4,6 +4,11 @@
  * منفصلة تماماً عن عملاء المندوبين
  */
 
+// بدء output buffering مبكر جداً لتحسين الأداء
+if (ob_get_level() === 0) {
+    ob_start();
+}
+
 // تعريف ثابت الوصول للسماح بالوصول المباشر كـ PWA
 if (!defined('ACCESS_ALLOWED')) {
     define('ACCESS_ALLOWED', true);
@@ -64,10 +69,19 @@ if (!defined('LOCAL_CUSTOMERS_PURCHASE_HISTORY_AJAX')) {
 // $currentUser تم تعريفه بالفعل في السطر 35
 $db = db();
 
+// تحسين الأداء: استخدام cache لفحص الجداول لتجنب الاستعلامات المتكررة
+$tablesCacheKey = 'local_customers_tables_check_' . md5(__FILE__);
+$tablesChecked = false;
+if (isset($_SESSION[$tablesCacheKey]) && $_SESSION[$tablesCacheKey] > time() - 3600) {
+    // تم فحص الجداول خلال الساعة الماضية، تخطي الفحص
+    $tablesChecked = true;
+}
+
 // إنشاء جدول local_customer_phones إذا لم يكن موجوداً
-try {
-    $localCustomerPhonesTable = $db->queryOne("SHOW TABLES LIKE 'local_customer_phones'");
-    if (empty($localCustomerPhonesTable)) {
+if (!$tablesChecked) {
+    try {
+        $localCustomerPhonesTable = $db->queryOne("SHOW TABLES LIKE 'local_customer_phones'");
+        if (empty($localCustomerPhonesTable)) {
         $db->execute("
             CREATE TABLE IF NOT EXISTS `local_customer_phones` (
                 `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -80,16 +94,16 @@ try {
                 CONSTRAINT `local_customer_phones_ibfk_1` FOREIGN KEY (`customer_id`) REFERENCES `local_customers` (`id`) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ");
-        error_log('Table local_customer_phones created successfully');
+            error_log('Table local_customer_phones created successfully');
+        }
+    } catch (Exception $e) {
+        error_log('Error creating local_customer_phones table: ' . $e->getMessage());
     }
-} catch (Exception $e) {
-    error_log('Error creating local_customer_phones table: ' . $e->getMessage());
-}
 
-// التأكد من وجود الجداول
-try {
-    // إنشاء جدول regions إذا لم يكن موجوداً
-    $regionsTable = $db->queryOne("SHOW TABLES LIKE 'regions'");
+    // التأكد من وجود الجداول
+    try {
+        // إنشاء جدول regions إذا لم يكن موجوداً
+        $regionsTable = $db->queryOne("SHOW TABLES LIKE 'regions'");
     if (empty($regionsTable)) {
         $createRegionsTableSql = "CREATE TABLE IF NOT EXISTS `regions` (
             `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -271,8 +285,12 @@ try {
             error_log('Error creating local_collections table: ' . $e->getMessage());
         }
     }
+    
+    // حفظ حالة الفحص في cache
+    $_SESSION[$tablesCacheKey] = time();
 } catch (Throwable $e) {
     error_log('Error checking local_customers tables: ' . $e->getMessage());
+}
 }
 
 // معالجة get_local_customer_phones AJAX
@@ -1273,11 +1291,13 @@ if ($regionFilter !== null) {
     $statsParams[] = $regionFilter;
 }
 
-// التحقق النهائي من وجود الجدول قبل تنفيذ الاستعلامات
-$tableCheck = $db->queryOne("SHOW TABLES LIKE 'local_customers'");
-if (empty($tableCheck)) {
-    error_log('CRITICAL: local_customers table does not exist before query execution');
-    die('<div class="alert alert-danger">خطأ: جدول العملاء المحليين غير موجود. يرجى التحقق من قاعدة البيانات أو الاتصال بالدعم الفني.</div>');
+// التحقق النهائي من وجود الجدول قبل تنفيذ الاستعلامات (فقط إذا لم يتم فحصه مسبقاً)
+if (!$tablesChecked) {
+    $tableCheck = $db->queryOne("SHOW TABLES LIKE 'local_customers'");
+    if (empty($tableCheck)) {
+        error_log('CRITICAL: local_customers table does not exist before query execution');
+        die('<div class="alert alert-danger">خطأ: جدول العملاء المحليين غير موجود. يرجى التحقق من قاعدة البيانات أو الاتصال بالدعم الفني.</div>');
+    }
 }
 
 try {
@@ -1376,12 +1396,24 @@ try {
     $totalCollectionsAmount = 0.0;
     
     // 1. حساب التحصيلات من جدول local_collections
-    $localCollectionsTableExists = $db->queryOne("SHOW TABLES LIKE 'local_collections'");
+    // استخدام cache لتجنب الاستعلامات المتكررة
+    $collectionsTableCacheKey = 'local_collections_table_exists';
+    $collectionsStatusCacheKey = 'local_collections_status_column';
+    
+    if (!$tablesChecked || !isset($_SESSION[$collectionsTableCacheKey])) {
+        $localCollectionsTableExists = $db->queryOne("SHOW TABLES LIKE 'local_collections'");
+        $_SESSION[$collectionsTableCacheKey] = !empty($localCollectionsTableExists);
+    } else {
+        $localCollectionsTableExists = $_SESSION[$collectionsTableCacheKey] ? ['exists' => true] : null;
+    }
+    
     if (!empty($localCollectionsTableExists)) {
-        $collectionsStatusExists = false;
-        $statusCheck = $db->query("SHOW COLUMNS FROM local_collections LIKE 'status'");
-        if (!empty($statusCheck)) {
-            $collectionsStatusExists = true;
+        if (!$tablesChecked || !isset($_SESSION[$collectionsStatusCacheKey])) {
+            $statusCheck = $db->query("SHOW COLUMNS FROM local_collections LIKE 'status'");
+            $collectionsStatusExists = !empty($statusCheck);
+            $_SESSION[$collectionsStatusCacheKey] = $collectionsStatusExists;
+        } else {
+            $collectionsStatusExists = $_SESSION[$collectionsStatusCacheKey];
         }
 
         // حساب إجمالي التحصيلات من جميع العملاء المحليين بدون فلاتر
@@ -1402,11 +1434,25 @@ try {
     }
     
     // 2. إضافة المبيعات المدفوعة بالكامل من الفواتير المحلية
-    $localInvoicesTableExists = $db->queryOne("SHOW TABLES LIKE 'local_invoices'");
+    $invoicesTableCacheKey = 'local_invoices_table_exists';
+    $invoicesStatusCacheKey = 'local_invoices_status_column';
+    
+    if (!$tablesChecked || !isset($_SESSION[$invoicesTableCacheKey])) {
+        $localInvoicesTableExists = $db->queryOne("SHOW TABLES LIKE 'local_invoices'");
+        $_SESSION[$invoicesTableCacheKey] = !empty($localInvoicesTableExists);
+    } else {
+        $localInvoicesTableExists = $_SESSION[$invoicesTableCacheKey] ? ['exists' => true] : null;
+    }
+    
     if (!empty($localInvoicesTableExists)) {
         try {
             // التحقق من وجود عمود status في جدول local_invoices
-            $hasStatusColumn = !empty($db->queryOne("SHOW COLUMNS FROM local_invoices LIKE 'status'"));
+            if (!$tablesChecked || !isset($_SESSION[$invoicesStatusCacheKey])) {
+                $hasStatusColumn = !empty($db->queryOne("SHOW COLUMNS FROM local_invoices LIKE 'status'"));
+                $_SESSION[$invoicesStatusCacheKey] = $hasStatusColumn;
+            } else {
+                $hasStatusColumn = $_SESSION[$invoicesStatusCacheKey];
+            }
             
             if ($hasStatusColumn) {
                 // حساب المبيعات المدفوعة بالكامل (paid_amount للفواتير التي status = 'paid')
@@ -1457,8 +1503,18 @@ $assetsUrl = ($basePath ? $basePath : '') . '/assets';
 $manifestUrl = ($basePath ? $basePath : '') . '/cus/manifest.php';
 $iconUrl = ($basePath ? $basePath : '') . '/cus/cus.png';
 
-// بدء output buffering
-ob_start();
+// إضافة HTTP caching headers لتحسين الأداء
+if (!headers_sent()) {
+    // السماح بالـ cache للصفحة لمدة 5 دقائق
+    header('Cache-Control: private, max-age=300, must-revalidate');
+    header('Pragma: no-cache');
+    header('X-Content-Type-Options: nosniff');
+}
+
+// بدء output buffering (إذا لم يبدأ بالفعل)
+if (ob_get_level() === 0) {
+    ob_start();
+}
 ?>
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -8440,15 +8496,19 @@ window.addEventListener('load', function() {
 
     <!-- PWA Service Worker -->
     <script>
+    // تسجيل Service Worker فوراً بدون انتظار تحميل الصفحة بالكامل
     if ('serviceWorker' in navigator) {
-        window.addEventListener('load', function() {
-            navigator.serviceWorker.register('<?php echo ($basePath ? $basePath : '') . '/cus/service-worker.js'; ?>')
-                .then(function(registration) {
-                    console.log('Service Worker registered successfully:', registration.scope);
-                })
-                .catch(function(error) {
-                    console.log('Service Worker registration failed:', error);
-                });
+        // تسجيل فوري لتسريع التحميل
+        navigator.serviceWorker.register('<?php echo ($basePath ? $basePath : '') . '/cus/service-worker.js'; ?>', {
+            scope: '<?php echo ($basePath ? $basePath : '') . '/cus/'; ?>'
+        })
+        .then(function(registration) {
+            console.log('Service Worker registered successfully:', registration.scope);
+            // تحديث Service Worker في الخلفية
+            registration.update();
+        })
+        .catch(function(error) {
+            console.log('Service Worker registration failed:', error);
         });
     }
     

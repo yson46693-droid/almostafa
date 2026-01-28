@@ -171,25 +171,46 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // معالجة طلبات HTML
+  // معالجة طلبات HTML - استخدام cache-first لتسريع التحميل
   const acceptsHTML = request.headers.get('accept')?.includes('text/html');
 
   if (acceptsHTML) {
     event.respondWith(
-      fetch(request)
-        .then((networkResponse) => {
-          if (networkResponse.status === 200) {
-            const responseClone = networkResponse.clone();
-            caches.open(RUNTIME_CACHE_NAME).then((cache) => cache.put(request, responseClone));
+      caches.open(RUNTIME_CACHE_NAME).then((cache) => {
+        // محاولة استخدام cache أولاً لتسريع التحميل
+        return cache.match(request).then((cached) => {
+          if (cached) {
+            // تحديث cache في الخلفية بدون انتظار
+            fetch(request)
+              .then((networkResponse) => {
+                if (networkResponse.status === 200) {
+                  cache.put(request, networkResponse.clone());
+                }
+              })
+              .catch(() => {
+                // تجاهل الأخطاء في التحديث
+              });
+            return cached;
           }
-          return networkResponse;
-        })
-        .catch(() => {
-          return caches.match(request)
-            .then((cached) => cached || caches.match(PWA_BASE + '/index.php'))
-            .then((cached) => cached || caches.match('/cus/index.php'))
-            .then((cached) => cached || caches.match('index.php'));
-        })
+          
+          // إذا لم يكن في cache، جلب من network
+          return fetch(request)
+            .then((networkResponse) => {
+              if (networkResponse.status === 200) {
+                const responseClone = networkResponse.clone();
+                cache.put(request, responseClone);
+              }
+              return networkResponse;
+            })
+            .catch(() => {
+              // محاولة العثور على أي نسخة في cache
+              return caches.match(request)
+                .then((cached) => cached || caches.match(PWA_BASE + '/index.php'))
+                .then((cached) => cached || caches.match('/cus/index.php'))
+                .then((cached) => cached || caches.match('index.php'));
+            });
+        });
+      })
     );
     return;
   }
