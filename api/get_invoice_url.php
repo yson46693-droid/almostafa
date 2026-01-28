@@ -132,20 +132,54 @@ try {
     $filepath = $uploadDir . $filename;
 
     // تحويل HTML إلى PDF وحفظه
-    try {
-        apdfSavePdfToPath($invoiceHtml, $filepath, [
-            'pageSize' => 'A4',
-            'printBackground' => true,
-            'margin' => [
-                'top' => '15mm',
-                'right' => '12mm',
-                'bottom' => '15mm',
-                'left' => '12mm',
-            ],
-        ]);
-    } catch (Throwable $pdfError) {
-        error_log('PDF generation error: ' . $pdfError->getMessage());
-        // في حالة فشل إنشاء PDF، حفظ HTML كبديل
+    $pdfGenerated = false;
+    
+    // التحقق من وجود API key و cURL قبل المحاولة
+    $hasApiKey = defined('APDF_IO_API_KEY') && APDF_IO_API_KEY !== '' && APDF_IO_API_KEY !== 'your-api-key-here';
+    $hasCurl = function_exists('curl_init');
+    
+    if ($hasApiKey && $hasCurl) {
+        try {
+            // محاولة إنشاء PDF
+            $result = apdfGeneratePdf($invoiceHtml, [
+                'pageSize' => 'A4',
+                'printBackground' => true,
+                'margin' => [
+                    'top' => '15mm',
+                    'right' => '12mm',
+                    'bottom' => '15mm',
+                    'left' => '12mm',
+                ],
+            ]);
+            
+            if ($result['success'] && isset($result['data']) && strlen($result['data']) > 200) {
+                // حفظ PDF
+                if (file_put_contents($filepath, $result['data']) !== false) {
+                    $pdfGenerated = true;
+                    error_log('PDF generated successfully: ' . $filename . ' (' . strlen($result['data']) . ' bytes)');
+                } else {
+                    error_log('Failed to save PDF file: ' . $filepath);
+                }
+            } else {
+                $status = $result['status'] ?? 'unknown';
+                $preview = $result['preview'] ?? 'no preview';
+                error_log('PDF generation failed - Status: ' . $status . ', Preview: ' . substr($preview, 0, 200));
+            }
+        } catch (Throwable $pdfError) {
+            error_log('PDF generation exception: ' . $pdfError->getMessage());
+            error_log('PDF generation file: ' . $pdfError->getFile() . ':' . $pdfError->getLine());
+        }
+    } else {
+        if (!$hasApiKey) {
+            error_log('PDF generation skipped: APDF_IO_API_KEY not defined or empty');
+        }
+        if (!$hasCurl) {
+            error_log('PDF generation skipped: cURL extension not available');
+        }
+    }
+    
+    // إذا فشل إنشاء PDF، حفظ HTML كبديل
+    if (!$pdfGenerated) {
         $htmlFilename = str_replace('.pdf', '.html', $filename);
         $htmlFilepath = $uploadDir . $htmlFilename;
         if (file_put_contents($htmlFilepath, $invoiceHtml) === false) {
@@ -153,6 +187,7 @@ try {
         }
         $filename = $htmlFilename;
         $filepath = $htmlFilepath;
+        error_log('HTML file saved as fallback: ' . $filename);
     }
 
     // إنشاء رابط الملف - استخدام absolute URL
@@ -175,7 +210,7 @@ try {
 
     $isPdf = strpos($filename, '.pdf') !== false;
     
-    echo json_encode([
+    $response = [
         'success' => true,
         'url' => $printUrl,
         'file_url' => $fileUrl,
@@ -184,7 +219,15 @@ try {
         'invoice_number' => $invoiceNumber,
         'customer_name' => $customerName,
         'title' => 'فاتورة رقم: ' . $invoiceNumber . ($customerName ? ' - ' . $customerName : '')
-    ]);
+    ];
+    
+    // إضافة معلومات إضافية للتشخيص (فقط في حالة عدم إنشاء PDF)
+    if (!$isPdf) {
+        $response['pdf_failed'] = true;
+        $response['pdf_failed_reason'] = !$hasApiKey ? 'API key missing' : (!$hasCurl ? 'cURL not available' : 'PDF generation failed');
+    }
+    
+    echo json_encode($response);
 } catch (InvalidArgumentException $invalid) {
     http_response_code(422);
     echo json_encode(['success' => false, 'error' => $invalid->getMessage()]);

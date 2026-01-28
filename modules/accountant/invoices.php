@@ -839,6 +839,24 @@ async function shareInvoiceExternal(invoiceId) {
         const invoiceTitle = data.title || 'فاتورة رقم: ' + (data.invoice_number || invoiceId);
         const fileName = 'فاتورة-' + (data.invoice_number || invoiceId) + '.' + fileType;
         
+        // تسجيل معلومات للتشخيص
+        console.log('Invoice share data:', {
+            fileType: fileType,
+            fileUrl: fileUrl,
+            pdfFailed: data.pdf_failed || false,
+            pdfFailedReason: data.pdf_failed_reason || null
+        });
+        
+        if (data.pdf_failed) {
+            console.warn('PDF generation failed:', data.pdf_failed_reason);
+            // عرض تحذير للمستخدم
+            if (data.pdf_failed_reason === 'API key missing') {
+                console.error('PDF API key is missing. Please configure APDF_IO_API_KEY in config.php');
+            } else if (data.pdf_failed_reason === 'cURL not available') {
+                console.error('cURL extension is not available. PDF generation requires cURL.');
+            }
+        }
+        
         // فتح صفحة الطباعة أولاً
         const printWindow = window.open(invoiceUrl, '_blank');
         

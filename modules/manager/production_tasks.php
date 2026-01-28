@@ -221,6 +221,17 @@ try {
     error_log('Error checking/adding product_name column: ' . $e->getMessage());
 }
 
+// التحقق من وجود عمود unit وإضافته إذا لم يكن موجوداً
+try {
+    $unitColumn = $db->queryOne("SHOW COLUMNS FROM tasks LIKE 'unit'");
+    if (empty($unitColumn)) {
+        $db->execute("ALTER TABLE tasks ADD COLUMN unit VARCHAR(50) NULL DEFAULT 'قطعة' AFTER quantity");
+        error_log('Added unit column to tasks table');
+    }
+} catch (Exception $e) {
+    error_log('Error checking/adding unit column: ' . $e->getMessage());
+}
+
 /**
  * تحميل بيانات المستخدمين
  */
@@ -284,9 +295,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $productQuantity = null;
                 }
                 
+                $productUnit = trim($productData['unit'] ?? 'قطعة');
+                $allowedUnits = ['قطعة', 'كرتونة', 'عبوة', 'شرينك', 'جرام', 'كيلو'];
+                if (!in_array($productUnit, $allowedUnits, true)) {
+                    $productUnit = 'قطعة'; // القيمة الافتراضية
+                }
+                
                 $products[] = [
                     'name' => $productName,
-                    'quantity' => $productQuantity
+                    'quantity' => $productQuantity,
+                    'unit' => $productUnit
                 ];
             }
         }
@@ -527,8 +545,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 // حفظ الكمية الإجمالية (من أول منتج أو مجموع الكميات)
                 $totalQuantity = null;
+                $firstUnit = 'قطعة'; // القيمة الافتراضية
                 if (!empty($products)) {
                     $totalQuantity = 0;
+                    $firstUnit = $products[0]['unit'] ?? 'قطعة';
                     foreach ($products as $product) {
                         if ($product['quantity'] !== null) {
                             $totalQuantity += $product['quantity'];
@@ -542,6 +562,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } elseif ($productQuantity !== null) {
                     $columns[] = 'quantity';
                     $values[] = $productQuantity;
+                    $placeholders[] = '?';
+                }
+                
+                // حفظ الوحدة (من أول منتج)
+                if (!empty($products)) {
+                    $columns[] = 'unit';
+                    $values[] = $firstUnit;
+                    $placeholders[] = '?';
+                } elseif (!empty($_POST['unit'])) {
+                    $unit = trim($_POST['unit'] ?? 'قطعة');
+                    $allowedUnits = ['قطعة', 'كرتونة', 'عبوة', 'شرينك', 'جرام', 'كيلو'];
+                    if (!in_array($unit, $allowedUnits, true)) {
+                        $unit = 'قطعة';
+                    }
+                    $columns[] = 'unit';
+                    $values[] = $unit;
                     $placeholders[] = '?';
                 }
 
@@ -814,7 +850,7 @@ try {
         // للمستخدمين الآخرين، عرض المهام التي أنشأوها فقط
         $recentTasks = $db->query("
             SELECT t.id, t.title, t.status, t.priority, t.due_date, t.created_at,
-                   t.quantity, t.notes, t.product_id, u.full_name AS assigned_name, t.assigned_to
+                   t.quantity, t.unit, t.notes, t.product_id, u.full_name AS assigned_name, t.assigned_to
             FROM tasks t
             LEFT JOIN users u ON t.assigned_to = u.id
             WHERE t.created_by = ?
@@ -1114,13 +1150,24 @@ try {
                             <div id="productsContainer">
                                 <div class="product-row mb-3 p-3 border rounded" data-product-index="0">
                                     <div class="row g-2">
-                                        <div class="col-md-6">
+                                        <div class="col-md-5">
                                             <label class="form-label small">اسم المنتج</label>
                                             <input type="text" class="form-control product-name-input" name="products[0][name]" placeholder="أدخل اسم المنتج أو القالب" list="templateSuggestions" autocomplete="off">
                                         </div>
-                                        <div class="col-md-4">
+                                        <div class="col-md-3">
                                             <label class="form-label small">الكمية</label>
                                             <input type="number" class="form-control product-quantity-input" name="products[0][quantity]" step="0.01" min="0" placeholder="مثال: 120">
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label class="form-label small">الوحدة</label>
+                                            <select class="form-select form-select-sm product-unit-input" name="products[0][unit]">
+                                                <option value="كرتونة">كرتونة</option>
+                                                <option value="عبوة">عبوة</option>
+                                                <option value="كيلو">كيلو</option>
+                                                <option value="جرام">جرام</option>
+                                                <option value="شرينك">شرينك</option>
+                                                <option value="قطعة" selected>قطعة</option>
+                                            </select>
                                         </div>
                                         <div class="col-md-2 d-flex align-items-end">
                                             <button type="button" class="btn btn-danger btn-sm w-100 remove-product-btn" style="display: none;">
@@ -1200,7 +1247,10 @@ try {
                                         }
                                         ?>
                                         <?php if ((float)($task['quantity'] ?? 0) > 0): ?>
-                                            <div class="text-muted small">الكمية: <?php echo number_format((float)$task['quantity'], 2); ?></div>
+                                            <?php 
+                                            $unit = !empty($task['unit']) ? $task['unit'] : 'قطعة';
+                                            ?>
+                                            <div class="text-muted small">الكمية: <?php echo number_format((float)$task['quantity'], 2) . ' ' . htmlspecialchars($unit); ?></div>
                                         <?php endif; ?>
                                     </td>
                                     <td>
@@ -1373,13 +1423,24 @@ document.addEventListener('DOMContentLoaded', function () {
         newRow.setAttribute('data-product-index', productIndex);
         newRow.innerHTML = `
             <div class="row g-2">
-                <div class="col-md-6">
+                <div class="col-md-5">
                     <label class="form-label small">اسم المنتج</label>
                     <input type="text" class="form-control product-name-input" name="products[${productIndex}][name]" placeholder="أدخل اسم المنتج أو القالب" list="templateSuggestions" autocomplete="off">
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label small">الكمية</label>
                     <input type="number" class="form-control product-quantity-input" name="products[${productIndex}][quantity]" step="0.01" min="0" placeholder="مثال: 120">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">الوحدة</label>
+                    <select class="form-select form-select-sm product-unit-input" name="products[${productIndex}][unit]">
+                        <option value="كرتونة">كرتونة</option>
+                        <option value="عبوة">عبوة</option>
+                        <option value="كيلو">كيلو</option>
+                        <option value="جرام">جرام</option>
+                        <option value="شرينك">شرينك</option>
+                        <option value="قطعة" selected>قطعة</option>
+                    </select>
                 </div>
                 <div class="col-md-2 d-flex align-items-end">
                     <button type="button" class="btn btn-danger btn-sm w-100 remove-product-btn">
