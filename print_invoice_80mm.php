@@ -308,7 +308,7 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 /* الفواصل */
 .invoice-divider {
     border-top: 1px solid #000;
-    margin: 3px 0;
+    margin: 2px 0;
 }
 
 /* معلومات الفاتورة والعميل */
@@ -322,42 +322,43 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 }
 
 .section-title {
-    font-weight: 700;
-    font-size: 9px;
-    margin-bottom: 3px;
+    font-weight: 900;
+    font-size: 8px;
+    margin-bottom: 1px;
     text-align: center;
     background: #f0f0f0;
-    padding: 2px 1px;
+    padding: 1px 0.5px;
     border: 1px solid #ddd;
     width: 100%;
     box-sizing: border-box;
     word-wrap: break-word;
+    -webkit-text-stroke: 0.1px #000;
 }
 
 .info-row {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 1px;
-    font-size: 7px;
-    line-height: 1.2;
+    margin-bottom: 0.5px;
+    font-size: 6.5px;
+    line-height: 1.1;
     width: 100%;
     box-sizing: border-box;
 }
 
 .info-row .label {
-    font-weight: 700;
-    margin-left: 2px;
+    font-weight: 800;
+    margin-left: 1px;
     white-space: nowrap;
     flex-shrink: 0;
-    font-size: 7px;
+    font-size: 6.5px;
 }
 
 .info-row .value {
     text-align: left;
     flex: 1;
-    font-weight: 700;
+    font-weight: 800;
     min-width: 0;
-    font-size: 7px;
+    font-size: 6.5px;
     word-wrap: break-word;
     overflow-wrap: break-word;
 }
@@ -365,9 +366,9 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 .info-row-dual {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 1px;
-    gap: 2px;
-    font-size: 7px;
+    margin-bottom: 0.5px;
+    gap: 1px;
+    font-size: 6.5px;
     width: 100%;
     box-sizing: border-box;
 }
@@ -382,18 +383,18 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 }
 
 .info-row-dual .info-item .label {
-    font-weight: 700;
-    margin-left: 1px;
+    font-weight: 800;
+    margin-left: 0.5px;
     white-space: nowrap;
     flex-shrink: 0;
-    font-size: 7px;
+    font-size: 6.5px;
 }
 
 .info-row-dual .info-item .value {
     text-align: left;
     flex: 1;
-    font-weight: 700;
-    font-size: 7px;
+    font-weight: 800;
+    font-size: 6.5px;
     min-width: 0;
     word-wrap: break-word;
     overflow-wrap: break-word;
@@ -425,15 +426,17 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 }
 
 .items-table-80mm th {
-    padding: 1px 0.5px;
+    padding: 0.5px 0.3px;
     text-align: center;
     font-weight: 900;
-    font-size: 6px;
+    font-size: 5.5px;
     border-left: 1px solid #000;
-    line-height: 1.1;
+    line-height: 1.0;
     word-wrap: break-word;
     overflow-wrap: break-word;
-    letter-spacing: 0.1px;
+    letter-spacing: 0px;
+    -webkit-text-stroke: 0.1px #000;
+    text-shadow: 0.1px 0.1px 0px #000;
 }
 
 .items-table-80mm th:first-child {
@@ -441,17 +444,18 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 }
 
 .items-table-80mm td {
-    padding: 1px 0.5px;
+    padding: 0.5px 0.3px;
     text-align: center;
     border-bottom: 1px solid #000;
     border-left: 1px solid #000;
-    font-size: 6px;
-    line-height: 1.1;
+    font-size: 5.5px;
+    line-height: 1.0;
     vertical-align: top;
-    font-weight: 700;
+    font-weight: 800;
     word-wrap: break-word;
     overflow-wrap: break-word;
-    letter-spacing: 0.1px;
+    letter-spacing: 0px;
+    -webkit-text-stroke: 0.05px #000;
 }
 
 .items-table-80mm td:first-child {
@@ -462,33 +466,37 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 .items-table-80mm .col-product {
     width: 28%;
     text-align: right;
-    padding-right: 0.5px;
-    font-weight: 800;
+    padding-right: 0.3px;
+    font-weight: 900;
+    font-size: 5.5px;
 }
 
 .items-table-80mm .col-batch {
     width: 18%;
-    font-size: 5px;
-    font-weight: 700;
+    font-size: 4.5px;
+    font-weight: 800;
 }
 
 .items-table-80mm .col-qty {
     width: 12%;
-    font-weight: 800;
+    font-weight: 900;
+    font-size: 5.5px;
 }
 
 .items-table-80mm .col-price {
     width: 21%;
     text-align: left;
-    padding-left: 0.5px;
-    font-weight: 800;
+    padding-left: 0.3px;
+    font-weight: 900;
+    font-size: 5.5px;
 }
 
 .items-table-80mm .col-total {
     width: 21%;
     text-align: left;
     font-weight: 900;
-    padding-left: 0.5px;
+    padding-left: 0.3px;
+    font-size: 5.5px;
 }
 
 /* الملخص المالي */
@@ -503,26 +511,26 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 .summary-row {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 1px;
-    font-size: 7px;
-    line-height: 1.2;
+    margin-bottom: 0.5px;
+    font-size: 6.5px;
+    line-height: 1.1;
     width: 100%;
     box-sizing: border-box;
 }
 
 .summary-row .label {
-    font-weight: 700;
-    margin-left: 2px;
+    font-weight: 800;
+    margin-left: 1px;
     white-space: nowrap;
     flex-shrink: 0;
-    font-size: 7px;
+    font-size: 6.5px;
 }
 
 .summary-row .value {
     text-align: left;
     flex: 1;
-    font-weight: 700;
-    font-size: 7px;
+    font-weight: 800;
+    font-size: 6.5px;
     word-wrap: break-word;
     overflow-wrap: break-word;
 }
@@ -692,67 +700,74 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
     }
 
     .items-table-80mm {
-        font-size: 6px !important;
+        font-size: 5.5px !important;
         width: 100% !important;
         max-width: 100% !important;
     }
 
     .items-table-80mm th,
     .items-table-80mm td {
-        font-size: 6px !important;
-        padding: 1px 0.5px !important;
+        font-size: 5.5px !important;
+        padding: 0.5px 0.3px !important;
         border: 1px solid #000 !important;
-        font-weight: 700 !important;
-        line-height: 1.1 !important;
+        font-weight: 800 !important;
+        line-height: 1.0 !important;
+        -webkit-text-stroke: 0.05px #000 !important;
     }
     
     .items-table-80mm .col-batch {
-        font-size: 5px !important;
-        font-weight: 700 !important;
+        font-size: 4.5px !important;
+        font-weight: 800 !important;
     }
     
     .items-table-80mm .col-product {
-        font-weight: 800 !important;
+        font-weight: 900 !important;
+        font-size: 5.5px !important;
+        -webkit-text-stroke: 0.1px #000 !important;
     }
     
     .items-table-80mm .col-qty,
     .items-table-80mm .col-price {
-        font-weight: 800 !important;
+        font-weight: 900 !important;
+        font-size: 5.5px !important;
     }
     
     .items-table-80mm .col-total {
         font-weight: 900 !important;
+        font-size: 5.5px !important;
     }
 
     .items-table-80mm th {
         background: #f0f0f0 !important;
         font-weight: 900 !important;
+        -webkit-text-stroke: 0.1px #000 !important;
+        text-shadow: 0.1px 0.1px 0px #000 !important;
     }
 
     .items-table-80mm td {
-        font-weight: 700 !important;
+        font-weight: 800 !important;
     }
 
     .info-row,
     .info-row-dual,
     .summary-row {
-        font-size: 7px !important;
-        margin-bottom: 1px !important;
-        line-height: 1.2 !important;
+        font-size: 6.5px !important;
+        margin-bottom: 0.5px !important;
+        line-height: 1.1 !important;
     }
     
     .info-row .label,
     .info-row .value,
     .info-row-dual .info-item .label,
     .info-row-dual .info-item .value {
-        font-size: 7px !important;
-        font-weight: 700 !important;
+        font-size: 6.5px !important;
+        font-weight: 800 !important;
     }
     
     .summary-row .label,
     .summary-row .value {
-        font-size: 7px !important;
-        font-weight: 700 !important;
+        font-size: 6.5px !important;
+        font-weight: 800 !important;
     }
 
     .summary-row.due .remaining-amount {
@@ -777,7 +792,11 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 
     .section-title {
         background: #f0f0f0 !important;
-        font-size: 9px !important;
+        font-size: 8px !important;
+        font-weight: 900 !important;
+        padding: 1px 0.5px !important;
+        margin-bottom: 1px !important;
+        -webkit-text-stroke: 0.1px #000 !important;
     }
     
     .notes-text {
