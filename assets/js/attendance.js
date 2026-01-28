@@ -987,6 +987,8 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             
             if (card && cardTitle) {
+                console.log('Card found, preparing to show...');
+                
                 // تحديث العنوان
                 if (action === 'check_in') {
                     cardTitle.textContent = 'تسجيل الحضور - التقاط صورة';
@@ -997,9 +999,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 // إعادة تعيين الحالة
                 resetCameraState(true);
                 
-                // إزالة class d-md-none إذا كان موجوداً
-                card.classList.remove('d-md-none');
+                // إزالة جميع classes التي قد تخفي البطاقة
+                card.classList.remove('d-none', 'd-md-none');
                 card.classList.add('d-block', 'force-show');
+                
+                // إزالة أي inline style قد يخفي البطاقة أولاً
+                card.style.removeProperty('display');
+                card.style.removeProperty('visibility');
+                card.style.removeProperty('opacity');
                 
                 // إظهار Card - استخدام setProperty مع !important
                 card.style.setProperty('display', 'block', 'important');
@@ -1008,14 +1015,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 card.style.setProperty('position', 'relative', 'important');
                 card.style.setProperty('z-index', '1000', 'important');
                 
-                // إزالة أي inline style قد يخفي البطاقة
-                if (card.style.display === 'none') {
-                    card.style.removeProperty('display');
-                    card.style.setProperty('display', 'block', 'important');
-                }
-                
                 // إجبار reflow لضمان أن البطاقة ظاهرة في DOM
                 card.offsetHeight;
+                
+                console.log('Card styles applied:', {
+                    display: card.style.display,
+                    visibility: card.style.visibility,
+                    opacity: card.style.opacity,
+                    classes: card.className
+                });
                 
                 // التحقق من أن البطاقة ظاهرة بعد التعديلات
                 setTimeout(function() {
@@ -1044,25 +1052,54 @@ document.addEventListener('DOMContentLoaded', function() {
                 setTimeout(function() {
                     // التحقق مرة أخرى من أن البطاقة ظاهرة قبل التمرير
                     const computedStyle = window.getComputedStyle(card);
-                    if (computedStyle.display === 'none') {
-                        console.error('Card is still hidden, cannot scroll to it');
+                    console.log('Before scroll - Card computed style:', {
+                        display: computedStyle.display,
+                        visibility: computedStyle.visibility,
+                        opacity: computedStyle.opacity
+                    });
+                    
+                    if (computedStyle.display === 'none' || computedStyle.visibility === 'hidden') {
+                        console.error('Card is still hidden, forcing display again...');
+                        // محاولة إجبار الإظهار مرة أخرى
+                        card.style.setProperty('display', 'block', 'important');
+                        card.style.setProperty('visibility', 'visible', 'important');
+                        card.style.setProperty('opacity', '1', 'important');
+                        card.classList.remove('d-none', 'd-md-none');
+                        card.classList.add('d-block', 'force-show');
+                        
+                        // انتظر قليلاً ثم حاول التمرير مرة أخرى
+                        setTimeout(function() {
+                            if (card.scrollIntoView) {
+                                card.scrollIntoView({
+                                    behavior: 'smooth',
+                                    block: 'start',
+                                    inline: 'nearest'
+                                });
+                            }
+                            scrollToElement(card);
+                        }, 100);
                         return;
                     }
                     
                     // طريقة 1: استخدام scrollIntoView (الأفضل للموبايل)
                     if (card.scrollIntoView) {
-                        card.scrollIntoView({
-                            behavior: 'smooth',
-                            block: 'start',
-                            inline: 'nearest'
-                        });
+                        try {
+                            card.scrollIntoView({
+                                behavior: 'smooth',
+                                block: 'start',
+                                inline: 'nearest'
+                            });
+                            console.log('ScrollIntoView executed successfully');
+                        } catch (e) {
+                            console.error('Error in scrollIntoView:', e);
+                        }
                     }
                     
                     // طريقة 2: استخدام دالة scrollToElement كبديل
                     setTimeout(function() {
                         scrollToElement(card);
                     }, 100);
-                }, 150);
+                }, 200);
                 
                 // تهيئة الكاميرا بعد التأكد من أن Card مرئي
                 setTimeout(async () => {
@@ -1268,6 +1305,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const card = document.getElementById('cameraCard');
             if (card) {
                 card.style.display = 'none';
+            }
+        });
+    }
+});
+
+'none';
             }
         });
     }

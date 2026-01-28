@@ -11,7 +11,7 @@ const CDN_CACHE_NAME = `albarakah-cdn-${CACHE_VERSION}`;
 // Maximum cache size: 50MB (approximate)
 const MAX_CACHE_SIZE = 50 * 1024 * 1024;
 
-// Assets to precache during install - جميع الأيقونات والملفات الأساسية
+// Assets to precache during install - جميع الأيقونات والملفات الأساسية 
 const PRECACHE_ASSETS = [
   '/offline.html',
   // جميع الأيقونات الأساسية للكاش المسبق
@@ -42,7 +42,8 @@ const CDN_ASSETS = [
   'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css',
   'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css',
   'https://code.jquery.com/jquery-3.7.0.min.js',
-  'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js'
+  'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js',
+  'https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap'
 ];
 
 // Critical static assets to cache (CSS, JS, Fonts) - ملفات حرجة للكاش

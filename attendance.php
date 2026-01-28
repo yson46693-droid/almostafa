@@ -624,7 +624,7 @@ $lang = isset($translations) ? $translations : [];
 </div>
 
 <!-- Card الكاميرا - للموبايل فقط -->
-<div class="card shadow-sm mb-4 d-md-none" id="cameraCard" style="display: none;">
+<div class="card shadow-sm mb-4 d-md-none" id="cameraCard" style="display: none; position: relative; z-index: 1000;">
     <div class="card-header bg-primary text-white">
         <h5 class="mb-0" id="cameraCardTitle">التقاط صورة</h5>
     </div>
@@ -703,6 +703,13 @@ $lang = isset($translations) ? $translations : [];
 @media (max-width: 768px) {
     #cameraModal {
         display: none !important;
+    }
+    
+    /* إظهار Card على الموبايل عند إضافة class force-show */
+    #cameraCard.force-show {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
     }
 }
 
