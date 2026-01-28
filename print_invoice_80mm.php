@@ -265,11 +265,13 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
     background: #ffffff;
     color: #000;
     font-size: 9px;
-    line-height: 1.3;
+    line-height: 1.2;
     box-sizing: border-box;
     overflow: hidden;
     word-wrap: break-word;
     overflow-wrap: break-word;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 /* رأس الفاتورة */
@@ -312,7 +314,7 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 /* معلومات الفاتورة والعميل */
 .invoice-info-80mm,
 .customer-info-80mm {
-    padding: 1mm 0.5mm;
+    padding: 0.8mm 0.5mm;
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
@@ -335,27 +337,27 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 .info-row {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 2px;
-    font-size: 8px;
-    line-height: 1.3;
+    margin-bottom: 1px;
+    font-size: 7px;
+    line-height: 1.2;
     width: 100%;
     box-sizing: border-box;
 }
 
 .info-row .label {
-    font-weight: 600;
-    margin-left: 3px;
+    font-weight: 700;
+    margin-left: 2px;
     white-space: nowrap;
     flex-shrink: 0;
-    font-size: 8px;
+    font-size: 7px;
 }
 
 .info-row .value {
     text-align: left;
     flex: 1;
-    font-weight: 500;
+    font-weight: 700;
     min-width: 0;
-    font-size: 8px;
+    font-size: 7px;
     word-wrap: break-word;
     overflow-wrap: break-word;
 }
@@ -363,9 +365,9 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 .info-row-dual {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 2px;
-    gap: 3px;
-    font-size: 8px;
+    margin-bottom: 1px;
+    gap: 2px;
+    font-size: 7px;
     width: 100%;
     box-sizing: border-box;
 }
@@ -380,18 +382,18 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 }
 
 .info-row-dual .info-item .label {
-    font-weight: 600;
-    margin-left: 2px;
+    font-weight: 700;
+    margin-left: 1px;
     white-space: nowrap;
     flex-shrink: 0;
-    font-size: 8px;
+    font-size: 7px;
 }
 
 .info-row-dual .info-item .value {
     text-align: left;
     flex: 1;
-    font-weight: 500;
-    font-size: 8px;
+    font-weight: 700;
+    font-size: 7px;
     min-width: 0;
     word-wrap: break-word;
     overflow-wrap: break-word;
@@ -410,8 +412,8 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
     width: 100%;
     max-width: 100%;
     border-collapse: collapse;
-    font-size: 7px;
-    margin-top: 2px;
+    font-size: 6px;
+    margin-top: 1px;
     table-layout: fixed;
     border-spacing: 0;
     box-sizing: border-box;
@@ -423,14 +425,15 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 }
 
 .items-table-80mm th {
-    padding: 2px 1px;
+    padding: 1px 0.5px;
     text-align: center;
-    font-weight: 700;
-    font-size: 7px;
+    font-weight: 900;
+    font-size: 6px;
     border-left: 1px solid #000;
-    line-height: 1.2;
+    line-height: 1.1;
     word-wrap: break-word;
     overflow-wrap: break-word;
+    letter-spacing: 0.1px;
 }
 
 .items-table-80mm th:first-child {
@@ -438,16 +441,17 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 }
 
 .items-table-80mm td {
-    padding: 2px 1px;
+    padding: 1px 0.5px;
     text-align: center;
     border-bottom: 1px solid #000;
     border-left: 1px solid #000;
-    font-size: 7px;
-    line-height: 1.2;
+    font-size: 6px;
+    line-height: 1.1;
     vertical-align: top;
-    font-weight: 500;
+    font-weight: 700;
     word-wrap: break-word;
     overflow-wrap: break-word;
+    letter-spacing: 0.1px;
 }
 
 .items-table-80mm td:first-child {
@@ -458,34 +462,38 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 .items-table-80mm .col-product {
     width: 28%;
     text-align: right;
-    padding-right: 1px;
+    padding-right: 0.5px;
+    font-weight: 800;
 }
 
 .items-table-80mm .col-batch {
     width: 18%;
-    font-size: 6px;
+    font-size: 5px;
+    font-weight: 700;
 }
 
 .items-table-80mm .col-qty {
     width: 12%;
+    font-weight: 800;
 }
 
 .items-table-80mm .col-price {
     width: 21%;
     text-align: left;
-    padding-left: 1px;
+    padding-left: 0.5px;
+    font-weight: 800;
 }
 
 .items-table-80mm .col-total {
     width: 21%;
     text-align: left;
-    font-weight: 600;
-    padding-left: 1px;
+    font-weight: 900;
+    padding-left: 0.5px;
 }
 
 /* الملخص المالي */
 .summary-section-80mm {
-    padding: 1mm 0.5mm;
+    padding: 0.8mm 0.5mm;
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
@@ -495,26 +503,26 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 .summary-row {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 2px;
-    font-size: 8px;
-    line-height: 1.3;
+    margin-bottom: 1px;
+    font-size: 7px;
+    line-height: 1.2;
     width: 100%;
     box-sizing: border-box;
 }
 
 .summary-row .label {
-    font-weight: 600;
-    margin-left: 3px;
+    font-weight: 700;
+    margin-left: 2px;
     white-space: nowrap;
     flex-shrink: 0;
-    font-size: 8px;
+    font-size: 7px;
 }
 
 .summary-row .value {
     text-align: left;
     flex: 1;
-    font-weight: 500;
-    font-size: 8px;
+    font-weight: 700;
+    font-size: 7px;
     word-wrap: break-word;
     overflow-wrap: break-word;
 }
@@ -712,14 +720,23 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
     .info-row,
     .info-row-dual,
     .summary-row {
-        font-size: 8px !important;
+        font-size: 7px !important;
+        margin-bottom: 1px !important;
+        line-height: 1.2 !important;
     }
     
     .info-row .label,
     .info-row .value,
     .info-row-dual .info-item .label,
     .info-row-dual .info-item .value {
-        font-size: 8px !important;
+        font-size: 7px !important;
+        font-weight: 700 !important;
+    }
+    
+    .summary-row .label,
+    .summary-row .value {
+        font-size: 7px !important;
+        font-weight: 700 !important;
     }
 
     .summary-row.due .remaining-amount {

@@ -1754,6 +1754,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             }
                             
                             $posInvoiceLinks = $reportInfo;
+                            $posInvoiceLinks['invoice_id'] = $invoiceId;
                         }
                     }
                 } catch (Throwable $invoiceError) {
@@ -4483,9 +4484,13 @@ try {
     <?php if (!empty($posInvoiceLinks['absolute_report_url'])): ?>
     const invoiceUrl = <?php echo json_encode($posInvoiceLinks['absolute_report_url'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
     const invoicePrintUrl = <?php echo !empty($posInvoiceLinks['absolute_print_url']) ? json_encode($posInvoiceLinks['absolute_print_url'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : 'null'; ?>;
+    const invoiceId = <?php echo !empty($posInvoiceLinks['invoice_id']) ? (int)$posInvoiceLinks['invoice_id'] : 'null'; ?>;
+    const printInvoiceBaseUrl = <?php echo json_encode(getRelativeUrl('print_invoice.php'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
     <?php else: ?>
     const invoiceUrl = null;
     const invoicePrintUrl = null;
+    const invoiceId = null;
+    const printInvoiceBaseUrl = null;
     <?php endif; ?>
     
     function initInvoiceModal() {
@@ -4508,7 +4513,18 @@ try {
         }
         
         window.printInvoice = function() {
-            const url = invoicePrintUrl || (invoiceUrl ? invoiceUrl + (invoiceUrl.includes('?') ? '&' : '?') + 'print=1' : null);
+            // السؤال عن حجم الفاتورة قبل الطباعة
+            const printFormat = confirm('هل حجم الفاتورة 80mm؟\n\nاضغط "موافق" للطباعة بحجم 80mm\nاضغط "إلغاء" للطباعة بحجم A4');
+            
+            let url;
+            if (printFormat && invoiceId && printInvoiceBaseUrl) {
+                // استخدام print_invoice.php مع format=80mm
+                url = printInvoiceBaseUrl + (printInvoiceBaseUrl.includes('?') ? '&' : '?') + 'id=' + invoiceId + '&format=80mm&print=1';
+            } else {
+                // استخدام الرابط الافتراضي (A4)
+                url = invoicePrintUrl || (invoiceUrl ? invoiceUrl + (invoiceUrl.includes('?') ? '&' : '?') + 'print=1' : null);
+            }
+            
             if (url) {
                 const printWindow = window.open(url, '_blank');
                 if (printWindow) {
