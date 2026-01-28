@@ -15,23 +15,32 @@ function isMobile() {
 function scrollToElement(element) {
     if (!element) return;
     
-    // الانتظار قليلاً للتأكد من أن العنصر ظاهر
-    setTimeout(function() {
-        // استخدام getBoundingClientRect للحصول على الموضع النسبي
-        const rect = element.getBoundingClientRect();
-        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-        const elementTop = rect.top + scrollTop;
-        const offset = 80; // offset من الأعلى (لإعطاء مساحة للـ header)
-        const targetPosition = elementTop - offset;
-        
-        // استخدام requestAnimationFrame لضمان smooth scroll
-        requestAnimationFrame(function() {
-            window.scrollTo({
-                top: Math.max(0, targetPosition), // التأكد من عدم السكرول لأعلى من الصفحة
-                behavior: 'smooth'
-            });
+    // استخدام scrollIntoView كطريقة أساسية (أفضل للموبايل)
+    if (element.scrollIntoView) {
+        element.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start',
+            inline: 'nearest'
         });
-    }, 200);
+    } else {
+        // طريقة بديلة للـ scroll
+        setTimeout(function() {
+            // استخدام getBoundingClientRect للحصول على الموضع النسبي
+            const rect = element.getBoundingClientRect();
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            const elementTop = rect.top + scrollTop;
+            const offset = 80; // offset من الأعلى (لإعطاء مساحة للـ header)
+            const targetPosition = elementTop - offset;
+            
+            // استخدام requestAnimationFrame لضمان smooth scroll
+            requestAnimationFrame(function() {
+                window.scrollTo({
+                    top: Math.max(0, targetPosition), // التأكد من عدم السكرول لأعلى من الصفحة
+                    behavior: 'smooth'
+                });
+            });
+        }, 100);
+    }
 }
 
 // الحصول على API path ديناميكياً
@@ -957,10 +966,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 card.style.setProperty('visibility', 'visible', 'important');
                 card.style.setProperty('opacity', '1', 'important');
                 
-                // التمرير التلقائي
+                // إجبار reflow لضمان أن البطاقة ظاهرة في DOM
+                card.offsetHeight;
+                
+                // التمرير التلقائي للبطاقة - استخدام طرق متعددة لضمان العمل على جميع الأجهزة
                 setTimeout(function() {
-                    scrollToElement(card);
-                }, 50);
+                    // طريقة 1: استخدام scrollIntoView (الأفضل للموبايل)
+                    if (card.scrollIntoView) {
+                        card.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'start',
+                            inline: 'nearest'
+                        });
+                    }
+                    
+                    // طريقة 2: استخدام دالة scrollToElement كبديل
+                    setTimeout(function() {
+                        scrollToElement(card);
+                    }, 100);
+                }, 100);
                 
                 // تهيئة الكاميرا بعد التأكد من أن Card مرئي
                 setTimeout(async () => {
@@ -969,7 +993,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     } catch (error) {
                         console.error('Error initializing camera in card:', error);
                     }
-                }, 200);
+                }, 300);
             } else {
                 console.error('Card elements not found!', { card: !!card, cardTitle: !!cardTitle });
             }
