@@ -1825,7 +1825,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                         <button type="button" class="btn btn-link local-search-clear" id="localSearchClearBtn" title="مسح البحث" style="display: <?php echo $search !== '' ? 'inline-block' : 'none'; ?>;">
                             <i class="bi bi-x-circle-fill text-muted"></i>
                         </button>
-                        <span class="local-search-hint small text-muted">اكتب أي حرف — النتائج تظهر فور التوقف عن الكتابة</span>
+                        <span class="local-search-hint small text-muted">اكتب أي حرف — النتائج تُحدَّث بشكل لحظي</span>
                     </div>
                 </div>
                 <div class="col-12 col-md-auto d-flex flex-wrap gap-2 align-items-center">
@@ -8250,8 +8250,8 @@ document.addEventListener('DOMContentLoaded', function() {
             var v = this.value;
             if (v === undefined || v === null) { this.value = ''; v = ''; }
             toggleLocalSearchClearBtn();
-            if (searchTimeout) clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(function() { fetchCustomers(1); }, 280);
+            if (searchTimeout) { clearTimeout(searchTimeout); searchTimeout = null; }
+            fetchCustomers(1);
         });
 
         customerSearchInput.addEventListener('keydown', function(e) {
