@@ -834,32 +834,51 @@ async function shareInvoiceExternal(invoiceId) {
         }
 
         const invoiceUrl = data.url;
+        const fileUrl = data.file_url || data.url;
         const invoiceTitle = data.title || 'فاتورة رقم: ' + (data.invoice_number || invoiceId);
         
-        // التحقق من أن الرابط absolute أو نسبي
-        let fullUrl = invoiceUrl;
-        if (!invoiceUrl.startsWith('http://') && !invoiceUrl.startsWith('https://')) {
-            // إذا كان الرابط نسبياً، أضف origin
-            fullUrl = window.location.origin + (invoiceUrl.startsWith('/') ? invoiceUrl : '/' + invoiceUrl);
-        }
-
         // فتح صفحة الطباعة أولاً
-        const printWindow = window.open(invoiceUrl.startsWith('http') ? invoiceUrl : fullUrl, '_blank');
+        const printWindow = window.open(invoiceUrl, '_blank');
         
         // بعد فتح صفحة الطباعة، انتظر قليلاً ثم استخدم Web Share API
         setTimeout(async () => {
             try {
-                // محاولة استخدام Web Share API
+                // محاولة استخدام Web Share API مع الملف الفعلي
                 if (navigator.share) {
-                    await navigator.share({
-                        title: invoiceTitle,
-                        text: invoiceTitle,
-                        url: fullUrl
-                    });
-                    alert('تم مشاركة الفاتورة بنجاح');
+                    // محاولة جلب الملف ومشاركته
+                    try {
+                        const response = await fetch(fileUrl);
+                        if (response.ok) {
+                            const blob = await response.blob();
+                            const file = new File([blob], 'فاتورة-' + (data.invoice_number || invoiceId) + '.html', { type: 'text/html' });
+                            
+                            await navigator.share({
+                                title: invoiceTitle,
+                                text: invoiceTitle,
+                                files: [file]
+                            });
+                            alert('تم مشاركة الفاتورة بنجاح');
+                        } else {
+                            // إذا فشل جلب الملف، استخدم الرابط
+                            await navigator.share({
+                                title: invoiceTitle,
+                                text: invoiceTitle,
+                                url: fileUrl
+                            });
+                            alert('تم مشاركة رابط الفاتورة بنجاح');
+                        }
+                    } catch (fileError) {
+                        // إذا فشل مشاركة الملف، استخدم الرابط
+                        await navigator.share({
+                            title: invoiceTitle,
+                            text: invoiceTitle,
+                            url: fileUrl
+                        });
+                        alert('تم مشاركة رابط الفاتورة بنجاح');
+                    }
                 } else {
                     // إذا لم يكن Web Share API متاحاً، نسخ الرابط
-                    await navigator.clipboard.writeText(fullUrl);
+                    await navigator.clipboard.writeText(fileUrl);
                     alert('تم نسخ رابط الفاتورة إلى الحافظة\nيمكنك الآن مشاركته من أي تطبيق');
                 }
             } catch (shareError) {
@@ -867,11 +886,11 @@ async function shareInvoiceExternal(invoiceId) {
                 if (shareError.name !== 'AbortError') {
                     // نسخ الرابط كبديل
                     try {
-                        await navigator.clipboard.writeText(fullUrl);
+                        await navigator.clipboard.writeText(fileUrl);
                         alert('تم نسخ رابط الفاتورة إلى الحافظة\nيمكنك الآن مشاركته من أي تطبيق');
                     } catch (clipError) {
                         // عرض الرابط في نافذة منبثقة
-                        prompt('انسخ هذا الرابط للمشاركة:', fullUrl);
+                        prompt('انسخ هذا الرابط للمشاركة:', fileUrl);
                     }
                 }
             }
