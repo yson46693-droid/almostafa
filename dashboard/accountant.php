@@ -1031,19 +1031,25 @@ if ($isAjaxNavigation) {
                 <!-- لوحة مالية مصغرة -->
                 <div class="cards-grid">
                     <?php
-                    // حساب رصيد الخزنة من financial_transactions و accountant_transactions
-                    $cashBalanceResult = $db->queryOne("
+                    // حساب ملخص الخزنة بشكل شامل ومحدث
+                    $treasurySummary = $db->queryOne("
                         SELECT
                             (SELECT COALESCE(SUM(CASE WHEN type = 'income' AND status = 'approved' THEN amount ELSE 0 END), 0) FROM financial_transactions) +
-                            (SELECT COALESCE(SUM(CASE WHEN transaction_type IN ('collection_from_sales_rep', 'income') AND status = 'approved' THEN amount ELSE 0 END), 0) FROM accountant_transactions) AS total_income,
-                            (SELECT COALESCE(SUM(CASE WHEN type IN ('expense', 'payment') AND status = 'approved' THEN amount ELSE 0 END), 0) FROM financial_transactions) +
-                            (SELECT COALESCE(SUM(CASE WHEN transaction_type IN ('expense', 'payment') AND status = 'approved' THEN amount ELSE 0 END), 0) FROM accountant_transactions) AS total_expenses
+                            (SELECT COALESCE(SUM(CASE WHEN transaction_type IN ('collection_from_sales_rep', 'income') AND status = 'approved' THEN amount ELSE 0 END), 0) FROM accountant_transactions) AS approved_income,
+                            (SELECT COALESCE(SUM(CASE WHEN type = 'expense' AND status = 'approved' THEN amount ELSE 0 END), 0) FROM financial_transactions) +
+                            (SELECT COALESCE(SUM(CASE WHEN transaction_type = 'expense' AND status = 'approved' 
+                                AND (description NOT LIKE '%سلفة%' AND description NOT LIKE '%سلف%')
+                                AND description NOT LIKE '%تسوية رصيد دائن ل%'
+                                THEN amount ELSE 0 END), 0) FROM accountant_transactions) AS approved_expense,
+                            (SELECT COALESCE(SUM(CASE WHEN type = 'payment' AND status = 'approved' THEN amount ELSE 0 END), 0) FROM financial_transactions) +
+                            (SELECT COALESCE(SUM(CASE WHEN transaction_type = 'payment' AND status = 'approved' AND (description NOT LIKE '%تسوية راتب%' OR description IS NULL) THEN amount ELSE 0 END), 0) FROM accountant_transactions) AS approved_payment
                     ");
                     
-                    $totalIncome = (float)($cashBalanceResult['total_income'] ?? 0);
-                    $totalExpenses = (float)($cashBalanceResult['total_expenses'] ?? 0);
+                    $approvedIncome = (float)($treasurySummary['approved_income'] ?? 0);
+                    $approvedExpense = (float)($treasurySummary['approved_expense'] ?? 0);
+                    $approvedPayment = (float)($treasurySummary['approved_payment'] ?? 0);
                     
-                    // حساب إجمالي المرتبات (المعتمدة والمدفوعة) لخصمها من الرصيد
+                    // حساب إجمالي المرتبات (المعتمدة والمدفوعة)
                     $totalSalaries = 0.0;
                     $salariesTableExists = $db->queryOne("SHOW TABLES LIKE 'salaries'");
                     if (!empty($salariesTableExists)) {
@@ -1055,7 +1061,50 @@ if ($isAjaxNavigation) {
                         $totalSalaries = (float)($salariesResult['total_salaries'] ?? 0);
                     }
                     
-                    $cashBalance = $totalIncome - $totalExpenses - $totalSalaries;
+                    // حساب إجمالي تسويات المرتبات (يشمل التسويات والسلف)
+                    $totalSalaryAdjustments = 0.0;
+                    $accountantTableExists = $db->queryOne("SHOW TABLES LIKE 'accountant_transactions'");
+                    if (!empty($accountantTableExists)) {
+                        $adjustmentsResult = $db->queryOne(
+                            "SELECT COALESCE(SUM(amount), 0) as total_adjustments
+                             FROM accountant_transactions
+                             WHERE status = 'approved'
+                             AND (
+                                 (transaction_type = 'payment' AND description LIKE '%تسوية راتب%')
+                                 OR (transaction_type = 'expense' AND (description LIKE '%سلفة%' OR description LIKE '%سلف%'))
+                             )"
+                        );
+                        $totalSalaryAdjustments = (float)($adjustmentsResult['total_adjustments'] ?? 0);
+                    }
+                    
+                    // حساب إجمالي تسويات أرصدة العملاء
+                    $totalCustomerCreditSettlements = 0.0;
+                    if (!empty($accountantTableExists)) {
+                        $customerSettlementsResult = $db->queryOne(
+                            "SELECT COALESCE(SUM(amount), 0) as total_settlements
+                             FROM accountant_transactions
+                             WHERE transaction_type = 'expense' 
+                             AND status = 'approved'
+                             AND (description LIKE '%تسوية رصيد دائن لعميل محلي%' OR description LIKE '%تسوية رصيد دائن لعميل مندوب%')"
+                        );
+                        $totalCustomerCreditSettlements = (float)($customerSettlementsResult['total_settlements'] ?? 0);
+                    }
+                    
+                    // حساب إجمالي توريدات الإدارة
+                    $totalManagementSupplies = 0.0;
+                    if (!empty($accountantTableExists)) {
+                        $managementSuppliesResult = $db->queryOne(
+                            "SELECT COALESCE(SUM(amount), 0) as total_supplies
+                             FROM accountant_transactions
+                             WHERE transaction_type = 'income' 
+                             AND status = 'approved'
+                             AND description LIKE '%تحصيل للإدارة%'"
+                        );
+                        $totalManagementSupplies = (float)($managementSuppliesResult['total_supplies'] ?? 0);
+                    }
+                    
+                    // حساب صافي الرصيد المعتمد بشكل شامل
+                    $cashBalance = $approvedIncome - $approvedExpense - $approvedPayment - $totalSalaries - $totalSalaryAdjustments - $totalCustomerCreditSettlements - $totalManagementSupplies;
                     ?>
                     <div class="stat-card">
                         <div class="stat-card-header">
