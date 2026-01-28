@@ -1724,7 +1724,72 @@ function updateQuantityStep(index) {
 
 // دالة لفتح modal تغيير الحالة - يجب أن تكون في النطاق العام
 window.openChangeStatusModal = function(taskId, currentStatus) {
+    function ensureChangeStatusCardExists() {
+        if (document.getElementById('changeStatusCardCollapse')) {
+            return true;
+        }
+
+        const host = document.querySelector('main') || document.getElementById('main-content') || document.body;
+        if (!host) {
+            return false;
+        }
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'container-fluid px-0';
+        wrapper.innerHTML = `
+            <div class="collapse" id="changeStatusCardCollapse">
+                <div class="card shadow-sm border-info mb-3">
+                    <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="bi bi-gear me-2"></i>تغيير حالة الطلب
+                        </h5>
+                        <button type="button" class="btn btn-sm btn-light" onclick="closeChangeStatusCard()" aria-label="إغلاق">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                    <form method="POST" id="changeStatusCardForm" action="">
+                        <input type="hidden" name="action" value="update_task_status">
+                        <input type="hidden" name="task_id" id="changeStatusCardTaskId">
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">الحالة الحالية</label>
+                                <div id="currentStatusCardDisplay" class="alert alert-info mb-0"></div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="newStatusCard" class="form-label fw-bold">اختر الحالة الجديدة <span class="text-danger">*</span></label>
+                                <select class="form-select" name="status" id="newStatusCard" required>
+                                    <option value="">-- اختر الحالة --</option>
+                                    <option value="pending">معلقة</option>
+                                    <option value="received">مستلمة</option>
+                                    <option value="in_progress">قيد التنفيذ</option>
+                                    <option value="completed">مكتملة</option>
+                                    <option value="cancelled">ملغاة</option>
+                                </select>
+                                <div class="form-text">سيتم تحديث حالة الطلب فوراً بعد الحفظ.</div>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-secondary w-50" onclick="closeChangeStatusCard()">
+                                    <i class="bi bi-x-circle me-1"></i>إلغاء
+                                </button>
+                                <button type="submit" class="btn btn-info w-50">
+                                    <i class="bi bi-check-circle me-1"></i>حفظ
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+
+        // ضعه في نهاية main ليكون داخل المحتوى المعروض
+        host.appendChild(wrapper);
+        return !!document.getElementById('changeStatusCardCollapse');
+    }
+
     function openChangeStatusCard(taskIdInner, currentStatusInner) {
+        // في بعض حالات AJAX navigation قد لا تكون عناصر البطاقة موجودة
+        ensureChangeStatusCardExists();
+
         const collapseEl = document.getElementById('changeStatusCardCollapse');
         const taskIdInput = document.getElementById('changeStatusCardTaskId');
         const currentStatusDisplay = document.getElementById('currentStatusCardDisplay');
