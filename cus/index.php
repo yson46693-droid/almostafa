@@ -52,7 +52,7 @@ if (!$currentUser || !in_array(strtolower($currentUser['role'] ?? ''), ['manager
 if (!defined('LOCAL_CUSTOMERS_MODULE_BOOTSTRAPPED')) {
     define('LOCAL_CUSTOMERS_MODULE_BOOTSTRAPPED', true);
 
-    require_once __DIR__ . '/../../includes/audit_log.php';
+    require_once __DIR__ . '/../includes/audit_log.php';
 
     requireRole(['accountant', 'manager', 'developer']);
 }
@@ -782,7 +782,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $localInvoicesTableExists = $db->queryOne("SHOW TABLES LIKE 'local_invoices'");
                 if (!empty($localInvoicesTableExists)) {
                     try {
-                        require_once __DIR__ . '/../../includes/local_invoices_helper.php';
+                        require_once __DIR__ . '/../includes/local_invoices_helper.php';
                         if (function_exists('distributeLocalCollectionToInvoices')) {
                             distributeLocalCollectionToInvoices($customerId, $amount, $currentUser['id']);
                         }
