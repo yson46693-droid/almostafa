@@ -3,7 +3,7 @@
 // ============================================
 // Configuration
 // ============================================
-const CACHE_VERSION = 'v2.1.0'; // تحديث الإصدار لإضافة الكاش المحسّن
+const CACHE_VERSION = 'v2.2.0'; // تحديث الإصدار لإضافة الكاش المحسّن
 const PRECACHE_NAME = `albarakah-precache-${CACHE_VERSION}`;
 const STATIC_CACHE_NAME = `albarakah-static-${CACHE_VERSION}`;
 const CDN_CACHE_NAME = `albarakah-cdn-${CACHE_VERSION}`;
