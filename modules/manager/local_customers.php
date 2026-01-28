@@ -3753,8 +3753,10 @@ function closeViewLocationCard() {
 document.addEventListener('DOMContentLoaded', function () {
     // ===== تنظيف فوري شامل للـ backdrop و body و sidebar عند تحميل الصفحة - حل جذري =====
     
-    // تعريف dashboardWrapper مرة واحدة
-    var dashboardWrapper = document.querySelector('.dashboard-wrapper');
+    // استخدام dashboardWrapper الموجود في النطاق العام
+    if (!dashboardWrapper) {
+        dashboardWrapper = document.querySelector('.dashboard-wrapper');
+    }
     
     // 1. التحقق من عدم وجود نماذج مفتوحة وإزالة backdrops
     const openModals = document.querySelectorAll('.modal.show, .modal.showing');
@@ -7622,13 +7624,18 @@ function closeImportLocalCustomersCard() {
     }
 }
 
+// تعريف dashboardWrapper في النطاق العام لاستخدامه في جميع DOMContentLoaded listeners
+var dashboardWrapper = null;
+
 document.addEventListener('DOMContentLoaded', function() {
     // تحسين الأداء على الجوال: تأخير الكود غير الضروري
     var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     var initDelay = isMobile ? 100 : 0; // تأخير 100ms على الجوال لتجنب التجمد
     
     // تعريف dashboardWrapper مرة واحدة لاستخدامه في جميع الأماكن
-    var dashboardWrapper = document.querySelector('.dashboard-wrapper');
+    if (!dashboardWrapper) {
+        dashboardWrapper = document.querySelector('.dashboard-wrapper');
+    }
     
     setTimeout(function() {
         var deleteModal = document.getElementById('deleteLocalCustomerModal');
@@ -7751,7 +7758,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.body.style.height = '';
                 
                 // إزالة class sidebar-open إذا كان موجوداً (إصلاح مشكلة overlay الـ sidebar)
-                const dashboardWrapper = document.querySelector('.dashboard-wrapper');
                 if (dashboardWrapper && window.innerWidth <= 768) {
                     dashboardWrapper.classList.remove('sidebar-open');
                     document.body.classList.remove('sidebar-open');
@@ -8634,7 +8640,6 @@ document.addEventListener('DOMContentLoaded', function() {
     toggleLocalSearchClearBtn();
     
     // ===== مراقبة تغييرات الـ sidebar وإزالة overlay عند إغلاقه - حل جذري =====
-    const dashboardWrapper = document.querySelector('.dashboard-wrapper');
     if (dashboardWrapper) {
         // مراقبة تغييرات class sidebar-open
         const observer = new MutationObserver(function(mutations) {
