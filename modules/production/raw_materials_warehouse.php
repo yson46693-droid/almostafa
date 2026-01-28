@@ -4018,10 +4018,12 @@ if (!$isApiMode && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     $db->execute("UPDATE date_stock SET quantity = quantity - ?, updated_at = NOW() WHERE id = ?", [$quantity, $stockId]);
                     
                     // تسجيل في سجل التالف
-                    $db->execute(
-                        "INSERT INTO damaged_materials (material_category, material_type, stock_id, supplier_id, quantity, reason, recorded_by) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        ['date', 'بلح', $stockId, $stock['supplier_id'], $quantity, $reason, $currentUser['id']]
-                    );
+                    if (ensureRawMaterialDamageLogsTable()) {
+                        $db->execute(
+                            "INSERT INTO raw_material_damage_logs (material_category, stock_id, supplier_id, item_label, variety, quantity, unit, reason, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            ['date', $stockId, $stock['supplier_id'], 'بلح', null, $quantity, 'كجم', $reason ?: null, $currentUser['id']]
+                        );
+                    }
                     
                     logAudit($currentUser['id'], 'damage_date', 'date_stock', $stockId, null, ['quantity' => $quantity, 'reason' => $reason]);
                     

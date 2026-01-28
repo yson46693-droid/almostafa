@@ -72,6 +72,10 @@ $companyName = COMPANY_NAME;
             margin: 0 auto 15px auto;
             padding: 0 10px;
         }
+        
+        .invoice-container {
+            border: none;
+        }
         <?php endif; ?>
 
         @media (max-width: 768px) {
@@ -139,8 +143,8 @@ $companyName = COMPANY_NAME;
                 <button class="btn btn-primary" onclick="window.print()">
                     <i class="bi bi-printer me-2"></i>طباعة
                 </button>
-                <button class="btn btn-success" onclick="shareInvoiceExternal(<?php echo $invoiceId; ?>)">
-                    <i class="bi bi-share me-2"></i>مشاركة خارج المتصفح
+                <button class="btn btn-success" onclick="shareInvoiceToChat(<?php echo $invoiceId; ?>)">
+                    <i class="bi bi-share me-2"></i>مشاركة إلى الشات
                 </button>
                 <a href="<?php echo getRelativeUrl('dashboard/accountant.php?page=invoices'); ?>" class="btn btn-secondary">
                     <i class="bi bi-arrow-left me-2"></i>رجوع
