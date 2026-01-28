@@ -7898,11 +7898,16 @@ document.addEventListener('DOMContentLoaded', function() {
     var customerSearchInput = document.getElementById('customerSearch');
     var searchForm = document.getElementById('localCustomersSearchForm') || (customerSearchInput ? customerSearchInput.closest('form') : null);
     var searchTimeout = null;
-    var currentPage = 1;
+    var currentPage = <?php echo $pageNum; ?>;
     var isLoading = false;
     var currentFetchController = null;
     var localSearchClearBtn = document.getElementById('localSearchClearBtn');
     var localSearchResetBtn = document.getElementById('localSearchResetBtn');
+    
+    // التأكد من وجود العناصر المطلوبة
+    if (!customerSearchInput || !searchForm) {
+        console.warn('Search elements not found in local_customers.php');
+    }
 
     function toggleLocalSearchClearBtn() {
         if (!localSearchClearBtn) return;
@@ -8149,7 +8154,30 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // إعداد البحث الفوري - مع تأخير للجوال لتجنب التجمد
-    if (customerSearchInput && searchForm) {
+    if (!customerSearchInput || !searchForm) {
+        console.error('Search elements not found:', {
+            customerSearchInput: !!customerSearchInput,
+            searchForm: !!searchForm
+        });
+        // إعادة المحاولة بعد 100ms
+        setTimeout(function() {
+            customerSearchInput = document.getElementById('customerSearch');
+            searchForm = document.getElementById('localCustomersSearchForm') || (customerSearchInput ? customerSearchInput.closest('form') : null);
+            if (customerSearchInput && searchForm) {
+                initSearchHandlers();
+            }
+        }, 100);
+    } else {
+        initSearchHandlers();
+    }
+    
+    function initSearchHandlers() {
+        // التأكد من وجود العناصر
+        if (!customerSearchInput || !searchForm) {
+            console.error('initSearchHandlers: Elements not found');
+            return;
+        }
+        
         // إصلاح خاص للجوال: ضمان أن الحقل قابل للنقر والتركيز والكتابة
         var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         if (isMobile) {
@@ -8254,9 +8282,16 @@ document.addEventListener('DOMContentLoaded', function() {
             toggleLocalSearchClearBtn();
             // Debouncing: تأخير الطلب 300ms لتقليل عدد الطلبات
             if (searchTimeout) { clearTimeout(searchTimeout); }
-            if (currentFetchController) { currentFetchController.abort(); }
+            if (currentFetchController) { 
+                currentFetchController.abort(); 
+                currentFetchController = null;
+            }
             searchTimeout = setTimeout(function() { 
-                fetchCustomers(1); 
+                if (typeof fetchCustomers === 'function') {
+                    fetchCustomers(1);
+                } else {
+                    console.error('fetchCustomers function not found');
+                }
             }, 300);
         });
 
