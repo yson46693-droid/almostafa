@@ -7169,6 +7169,8 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
 }
 .local-search-input-wrapper {
     max-width: 100%;
+    position: relative;
+    z-index: 10;
 }
 .local-search-icon {
     position: absolute;
@@ -7214,7 +7216,7 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
 /* Autocomplete Dropdown للبحث الفوري */
 .autocomplete-dropdown {
     position: absolute;
-    top: 100%;
+    top: calc(100% + 2px);
     left: 0;
     right: 0;
     background: #fff;
@@ -7224,12 +7226,18 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
     max-height: 400px;
     overflow-y: auto;
-    z-index: 1000;
-    margin-top: -1px;
+    z-index: 1050 !important;
+    margin-top: 0;
     display: none;
+    width: 100%;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
 }
 .autocomplete-dropdown.show {
-    display: block;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 .autocomplete-item {
     padding: 0.75rem 1rem;
@@ -8266,14 +8274,33 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // ===== البحث الفوري مع Autocomplete =====
+    console.log('Initializing autocomplete search...');
     var autocompleteDropdown = document.getElementById('autocompleteDropdown');
     var autocompleteTimeout = null;
     var autocompleteAbortController = null;
     var selectedAutocompleteIndex = -1;
     var autocompleteResults = [];
     
+    // التحقق من وجود العناصر المطلوبة
+    if (!autocompleteDropdown) {
+        console.error('Autocomplete dropdown element not found!');
+    } else {
+        console.log('Autocomplete dropdown found:', autocompleteDropdown);
+    }
+    
+    if (!customerSearchInput) {
+        console.error('Customer search input not found!');
+    } else {
+        console.log('Customer search input found:', customerSearchInput);
+    }
+    
     // دالة للبحث الفوري في autocomplete
     function performAutocompleteSearch(query) {
+        if (!autocompleteDropdown) {
+            console.warn('Autocomplete dropdown not available');
+            return;
+        }
+        
         if (!query || query.length < 1) {
             hideAutocomplete();
             return;
@@ -8290,18 +8317,22 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // جلب النتائج من API
         var apiUrl = '<?php echo getRelativeUrl("fs.php"); ?>';
+        console.log('Fetching autocomplete from:', apiUrl + '?q=' + encodeURIComponent(query));
+        
         fetch(apiUrl + '?q=' + encodeURIComponent(query), {
             method: 'GET',
             credentials: 'include',
             signal: autocompleteAbortController.signal
         })
         .then(function(response) {
+            console.log('Response status:', response.status);
             if (!response.ok) {
-                throw new Error('Network response was not ok');
+                throw new Error('Network response was not ok: ' + response.status);
             }
             return response.json();
         })
         .then(function(data) {
+            console.log('Autocomplete data received:', data);
             if (data.success && data.results) {
                 autocompleteResults = data.results;
                 displayAutocompleteResults(data.results, query);
@@ -8319,12 +8350,17 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // دالة لعرض نتائج autocomplete
     function displayAutocompleteResults(results, query) {
-        if (!autocompleteDropdown) return;
+        if (!autocompleteDropdown) {
+            console.warn('Cannot display results: dropdown not found');
+            return;
+        }
         
         if (results.length === 0) {
             showAutocompleteNoResults();
             return;
         }
+        
+        console.log('Displaying', results.length, 'autocomplete results');
         
         var html = '';
         results.forEach(function(result, index) {
@@ -8351,7 +8387,10 @@ document.addEventListener('DOMContentLoaded', function() {
         
         autocompleteDropdown.innerHTML = html;
         autocompleteDropdown.classList.add('show');
-        customerSearchInput.setAttribute('aria-expanded', 'true');
+        autocompleteDropdown.style.display = 'block';
+        if (customerSearchInput) {
+            customerSearchInput.setAttribute('aria-expanded', 'true');
+        }
         
         // إضافة event listeners للعناصر
         autocompleteDropdown.querySelectorAll('.autocomplete-item').forEach(function(item, index) {
@@ -8370,18 +8409,30 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // دالة لإظهار حالة التحميل
     function showAutocompleteLoading() {
-        if (!autocompleteDropdown) return;
+        if (!autocompleteDropdown) {
+            console.warn('Cannot show loading: dropdown not found');
+            return;
+        }
         autocompleteDropdown.innerHTML = '<div class="autocomplete-loading"><i class="bi bi-hourglass-split"></i> جاري البحث...</div>';
         autocompleteDropdown.classList.add('show');
-        customerSearchInput.setAttribute('aria-expanded', 'true');
+        autocompleteDropdown.style.display = 'block';
+        if (customerSearchInput) {
+            customerSearchInput.setAttribute('aria-expanded', 'true');
+        }
     }
     
     // دالة لإظهار عدم وجود نتائج
     function showAutocompleteNoResults() {
-        if (!autocompleteDropdown) return;
+        if (!autocompleteDropdown) {
+            console.warn('Cannot show no results: dropdown not found');
+            return;
+        }
         autocompleteDropdown.innerHTML = '<div class="autocomplete-no-results">لا توجد نتائج</div>';
         autocompleteDropdown.classList.add('show');
-        customerSearchInput.setAttribute('aria-expanded', 'true');
+        autocompleteDropdown.style.display = 'block';
+        if (customerSearchInput) {
+            customerSearchInput.setAttribute('aria-expanded', 'true');
+        }
     }
     
     // دالة لإخفاء autocomplete
@@ -8419,29 +8470,33 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Event listener للبحث الفوري
-    customerSearchInput.addEventListener('input', function() {
-        var v = this.value;
-        if (v === undefined || v === null) { this.value = ''; v = ''; }
-        toggleLocalSearchClearBtn();
-        
-        // البحث الفوري في autocomplete
-        if (autocompleteTimeout) clearTimeout(autocompleteTimeout);
-        if (autocompleteAbortController) autocompleteAbortController.abort();
-        
-        var query = v.trim();
-        if (query.length >= 1) {
-            autocompleteTimeout = setTimeout(function() {
-                performAutocompleteSearch(query);
-            }, 200); // debounce 200ms للبحث الفوري
-        } else {
-            hideAutocomplete();
-        }
-        
-        // البحث الكامل بعد تأخير أطول
-        if (searchTimeout) clearTimeout(searchTimeout);
-        if (currentAbortController) currentAbortController.abort();
-        searchTimeout = setTimeout(function() { fetchCustomers(1); }, 500);
-    });
+    if (customerSearchInput) {
+        customerSearchInput.addEventListener('input', function() {
+            var v = this.value;
+            if (v === undefined || v === null) { this.value = ''; v = ''; }
+            toggleLocalSearchClearBtn();
+            
+            // البحث الفوري في autocomplete
+            if (autocompleteTimeout) clearTimeout(autocompleteTimeout);
+            if (autocompleteAbortController) autocompleteAbortController.abort();
+            
+            var query = v.trim();
+            if (query.length >= 1) {
+                autocompleteTimeout = setTimeout(function() {
+                    performAutocompleteSearch(query);
+                }, 200); // debounce 200ms للبحث الفوري
+            } else {
+                hideAutocomplete();
+            }
+            
+            // البحث الكامل بعد تأخير أطول
+            if (searchTimeout) clearTimeout(searchTimeout);
+            if (currentAbortController) currentAbortController.abort();
+            searchTimeout = setTimeout(function() { fetchCustomers(1); }, 500);
+        });
+    } else {
+        console.warn('Customer search input not found');
+    }
     
     customerSearchInput.addEventListener('keydown', function(e) {
         // إذا كان autocomplete مفتوحاً، معالجة مفاتيح التنقل
