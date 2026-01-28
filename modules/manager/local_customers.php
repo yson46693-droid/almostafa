@@ -3512,9 +3512,10 @@ window.showLocalCustomerPurchaseHistoryModal = function(button) {
             const addressElement = document.getElementById('localPurchaseHistoryCustomerAddress');
             const loadingElement = document.getElementById('localPurchaseHistoryLoading');
             const contentElement = document.getElementById('localPurchaseHistoryTable');
-            const errorElement = document.getElementById('localPurchaseHistoryError');
+            let errorElement = document.getElementById('localPurchaseHistoryError');
             
-            if (!nameElement || !phoneElement || !addressElement || !loadingElement || !contentElement || !errorElement) {
+            // التحقق من العناصر الأساسية المطلوبة
+            if (!nameElement || !phoneElement || !addressElement || !loadingElement || !contentElement) {
                 console.error('Required elements not found in modal:', {
                     nameElement: !!nameElement,
                     phoneElement: !!phoneElement,
@@ -3526,6 +3527,23 @@ window.showLocalCustomerPurchaseHistoryModal = function(button) {
                 return false;
             }
             
+            // إنشاء errorElement ديناميكياً إذا لم يكن موجوداً
+            if (!errorElement) {
+                const modalBody = modal.querySelector('.modal-body');
+                if (modalBody && loadingElement) {
+                    // إنشاء error element
+                    errorElement = document.createElement('div');
+                    errorElement.className = 'alert alert-danger d-none';
+                    errorElement.id = 'localPurchaseHistoryError';
+                    // إدراجه بعد loading element مباشرة
+                    if (loadingElement.nextSibling) {
+                        loadingElement.parentNode.insertBefore(errorElement, loadingElement.nextSibling);
+                    } else {
+                        loadingElement.parentNode.appendChild(errorElement);
+                    }
+                }
+            }
+            
             // تحديث معلومات العميل
             nameElement.textContent = customerName || '-';
             phoneElement.textContent = customerPhone || '-';
@@ -3534,8 +3552,10 @@ window.showLocalCustomerPurchaseHistoryModal = function(button) {
             // إظهار loading وإخفاء المحتوى
             loadingElement.classList.remove('d-none');
             contentElement.classList.add('d-none');
-            errorElement.classList.add('d-none');
-            errorElement.innerHTML = '';
+            if (errorElement) {
+                errorElement.classList.add('d-none');
+                errorElement.innerHTML = '';
+            }
             
             // إخفاء الأزرار مؤقتاً
             const printBtn = document.getElementById('printLocalCustomerStatementBtn');
@@ -3582,7 +3602,22 @@ window.showLocalCustomerPurchaseHistoryModal = function(button) {
                 triggerLoad();
             } else {
                 console.error('Failed to update modal elements after shown event');
-                const errorElement = document.getElementById('localPurchaseHistoryError');
+                let errorElement = document.getElementById('localPurchaseHistoryError');
+                // إنشاء errorElement إذا لم يكن موجوداً
+                if (!errorElement) {
+                    const modalBody = modal.querySelector('.modal-body');
+                    const loadingEl = modalBody ? modalBody.querySelector('#localPurchaseHistoryLoading') : null;
+                    if (loadingEl) {
+                        errorElement = document.createElement('div');
+                        errorElement.className = 'alert alert-danger d-none';
+                        errorElement.id = 'localPurchaseHistoryError';
+                        if (loadingEl.nextSibling) {
+                            loadingEl.parentNode.insertBefore(errorElement, loadingEl.nextSibling);
+                        } else {
+                            loadingEl.parentNode.appendChild(errorElement);
+                        }
+                    }
+                }
                 if (errorElement) {
                     errorElement.innerHTML = '<div class="alert alert-danger mb-0"><strong>خطأ:</strong> فشل في تحميل عناصر الواجهة</div>';
                     errorElement.classList.remove('d-none');
@@ -4746,12 +4781,41 @@ function loadLocalCustomerPurchaseHistory() {
     const contentElement = isMobileDevice
         ? document.getElementById('localPurchaseHistoryCardTable')
         : document.getElementById('localPurchaseHistoryTable');
-    const errorElement = isMobileDevice
+    let errorElement = isMobileDevice
         ? document.getElementById('localPurchaseHistoryCardError')
         : document.getElementById('localPurchaseHistoryError');
     const tableBody = isMobileDevice
         ? document.getElementById('localPurchaseHistoryCardTableBody')
         : document.getElementById('localPurchaseHistoryTableBody');
+    
+    // إنشاء errorElement ديناميكياً إذا لم يكن موجوداً
+    if (!errorElement) {
+        if (isMobileDevice) {
+            const card = document.getElementById('localCustomerPurchaseHistoryCard');
+            if (card) {
+                const cardBody = card.querySelector('.card-body');
+                const loadingEl = cardBody ? cardBody.querySelector('#localPurchaseHistoryCardLoading') : null;
+                if (loadingEl) {
+                    errorElement = document.createElement('div');
+                    errorElement.className = 'alert alert-danger d-none';
+                    errorElement.id = 'localPurchaseHistoryCardError';
+                    loadingEl.parentNode.insertBefore(errorElement, loadingEl.nextSibling);
+                }
+            }
+        } else {
+            const modal = document.getElementById('localCustomerPurchaseHistoryModal');
+            if (modal) {
+                const modalBody = modal.querySelector('.modal-body');
+                const loadingEl = modalBody ? modalBody.querySelector('#localPurchaseHistoryLoading') : null;
+                if (loadingEl) {
+                    errorElement = document.createElement('div');
+                    errorElement.className = 'alert alert-danger d-none';
+                    errorElement.id = 'localPurchaseHistoryError';
+                    loadingEl.parentNode.insertBefore(errorElement, loadingEl.nextSibling);
+                }
+            }
+        }
+    }
     
     // دالة مساعدة لعرض الخطأ
     function showError(message, details) {
@@ -4772,8 +4836,8 @@ function loadLocalCustomerPurchaseHistory() {
         console.error('Purchase History Error:', message, details);
     }
     
-    // التحقق من وجود العناصر المطلوبة
-    if (!loadingElement || !contentElement || !errorElement || !tableBody) {
+    // التحقق من وجود العناصر المطلوبة (errorElement أصبح اختياري)
+    if (!loadingElement || !contentElement || !tableBody) {
         showError('خطأ في تحميل عناصر الواجهة', 'عناصر HTML المطلوبة غير موجودة');
         return;
     }
