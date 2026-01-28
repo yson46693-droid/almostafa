@@ -93,6 +93,18 @@ try {
     
     $regionFilter = isset($_GET['region_id']) && $_GET['region_id'] !== '' ? (int)$_GET['region_id'] : null;
     
+    // فلتر التاريخ (تاريخ الإنشاء)
+    $dateFrom = isset($_GET['date_from']) && $_GET['date_from'] !== '' ? trim($_GET['date_from']) : null;
+    $dateTo = isset($_GET['date_to']) && $_GET['date_to'] !== '' ? trim($_GET['date_to']) : null;
+    
+    // التحقق من صحة التواريخ
+    if ($dateFrom && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateFrom)) {
+        $dateFrom = null;
+    }
+    if ($dateTo && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateTo)) {
+        $dateTo = null;
+    }
+    
     // معاملات pagination
     $pageNum = isset($_GET['p']) ? max(1, (int)$_GET['p']) : 1;
     $isMobile = isset($_SERVER['HTTP_USER_AGENT']) && preg_match('/(android|iphone|ipad|mobile)/i', $_SERVER['HTTP_USER_AGENT']);
@@ -144,6 +156,21 @@ try {
         $countSql .= " AND region_id = ?";
         $params[] = $regionFilter;
         $countParams[] = $regionFilter;
+    }
+    
+    // فلتر التاريخ (تاريخ الإنشاء)
+    if ($dateFrom) {
+        $sql .= " AND DATE(c.created_at) >= ?";
+        $countSql .= " AND DATE(created_at) >= ?";
+        $params[] = $dateFrom;
+        $countParams[] = $dateFrom;
+    }
+    
+    if ($dateTo) {
+        $sql .= " AND DATE(c.created_at) <= ?";
+        $countSql .= " AND DATE(created_at) <= ?";
+        $params[] = $dateTo;
+        $countParams[] = $dateTo;
     }
     
     // جلب العدد الإجمالي
@@ -243,6 +270,8 @@ try {
             'search' => $search,
             'debt_status' => $debtStatus,
             'region_id' => $regionFilter,
+            'date_from' => $dateFrom,
+            'date_to' => $dateTo,
         ],
     ]);
     
