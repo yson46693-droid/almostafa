@@ -125,14 +125,20 @@ $subtotal        = $invoiceData['subtotal'] ?? 0;
 $discount        = $invoiceData['discount_amount'] ?? 0;
 $total           = $invoiceData['total_amount'] ?? 0;
 $paidAmount      = $invoiceData['paid_amount'] ?? 0;
-// استخدام remaining_amount من قاعدة البيانات إذا كان موجوداً، وإلا حسابها من total - paid
-// ملاحظة: عند البيع بالآجل، paidAmount = 0، لذا remaining_amount يجب أن يكون = total
-$dueAmount       = isset($invoiceData['remaining_amount']) && $invoiceData['remaining_amount'] !== null 
-    ? (float)$invoiceData['remaining_amount'] 
-    : max(0, $total - $paidAmount);
-// التأكد من أن dueAmount لا يكون 0 إذا كان total > 0 و paidAmount = 0 (بيع بالآجل)
-if ($total > 0 && $paidAmount <= 0.01 && $dueAmount <= 0.01) {
-    $dueAmount = $total;
+// حساب المبلغ المتبقي بشكل صحيح
+if (isset($invoiceData['remaining_amount']) && $invoiceData['remaining_amount'] !== null) {
+    $dueAmount = (float)$invoiceData['remaining_amount'];
+    if ($dueAmount < 0) {
+        $dueAmount = 0;
+    } elseif ($dueAmount > $total) {
+        $dueAmount = max(0, $total - $paidAmount);
+    }
+} else {
+    $dueAmount = max(0, round($total - $paidAmount, 2));
+}
+
+if ($paidAmount >= $total || abs($paidAmount - $total) < 0.01) {
+    $dueAmount = 0;
 }
 $creditUsed      = (float)($invoiceData['credit_used'] ?? 0);
 $paidFromCredit  = isset($invoiceData['paid_from_credit']) ? (int)$invoiceData['paid_from_credit'] : 0;
