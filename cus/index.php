@@ -9,17 +9,49 @@ if (!defined('ACCESS_ALLOWED')) {
     define('ACCESS_ALLOWED', true);
 }
 
+// بدء الجلسة إذا لم تكن قد بدأت
+if (session_status() === PHP_SESSION_NONE) {
+    @session_start();
+}
+
+// تحميل ملفات النظام الأساسية للتحقق من تسجيل الدخول
+require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/path_helper.php';
+
+// التحقق من تسجيل الدخول - إذا لم يكن مسجل دخول، توجهه إلى صفحة تسجيل الدخول
+if (!isLoggedIn()) {
+    $loginUrl = 'login.php';
+    if (!headers_sent()) {
+        header('Location: ' . $loginUrl);
+        exit;
+    }
+    echo '<script>window.location.href = "' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '";</script>';
+    exit;
+}
+
+// التحقق من الصلاحيات - يجب أن يكون المستخدم مدير أو محاسب
+$currentUser = getCurrentUser();
+if (!$currentUser || !in_array(strtolower($currentUser['role'] ?? ''), ['manager', 'accountant', 'developer'])) {
+    // إذا لم يكن لديه الصلاحية، توجهه إلى صفحة تسجيل الدخول
+    session_destroy();
+    $loginUrl = 'login.php';
+    if (!headers_sent()) {
+        header('Location: ' . $loginUrl);
+        exit;
+    }
+    echo '<script>window.location.href = "' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '";</script>';
+    exit;
+}
+
 // ملاحظة: Headers يتم إرسالها من dashboard/accountant.php أو dashboard/manager.php
 // لا حاجة لإرسالها هنا لتجنب مشاكل headers already sent
 
 if (!defined('LOCAL_CUSTOMERS_MODULE_BOOTSTRAPPED')) {
     define('LOCAL_CUSTOMERS_MODULE_BOOTSTRAPPED', true);
 
-    require_once __DIR__ . '/../../includes/config.php';
-    require_once __DIR__ . '/../../includes/db.php';
-    require_once __DIR__ . '/../../includes/auth.php';
     require_once __DIR__ . '/../../includes/audit_log.php';
-    require_once __DIR__ . '/../../includes/path_helper.php';
 
     requireRole(['accountant', 'manager', 'developer']);
 }
@@ -28,7 +60,7 @@ if (!defined('LOCAL_CUSTOMERS_PURCHASE_HISTORY_AJAX')) {
     require_once __DIR__ . '/../../includes/table_styles.php';
 }
 
-$currentUser = getCurrentUser();
+// $currentUser تم تعريفه بالفعل في السطر 35
 $db = db();
 
 // إنشاء جدول local_customer_phones إذا لم يكن موجوداً
