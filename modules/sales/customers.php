@@ -3877,6 +3877,113 @@ $delegateCards = [
             font-size: 0.875rem;
         }
     }
+    
+    /* Autocomplete Dropdown للبحث الفوري */
+    .autocomplete-dropdown {
+        position: absolute;
+        top: calc(100% + 2px);
+        left: 0;
+        right: 0;
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-top: none;
+        border-radius: 0 0 10px 10px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        max-height: 400px;
+        overflow-y: auto;
+        z-index: 1050 !important;
+        margin-top: 0;
+        display: none;
+        width: 100%;
+        visibility: hidden;
+        opacity: 0;
+        transition: opacity 0.2s ease, visibility 0.2s ease;
+    }
+    .autocomplete-dropdown.show {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+    .autocomplete-item {
+        padding: 0.75rem 1rem;
+        cursor: pointer;
+        border-bottom: 1px solid #f1f5f9;
+        transition: background-color 0.15s ease;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+    .autocomplete-item:last-child {
+        border-bottom: none;
+    }
+    .autocomplete-item:hover,
+    .autocomplete-item.selected {
+        background-color: #f8fafc;
+    }
+    .autocomplete-item-name {
+        font-weight: 600;
+        color: #1e293b;
+        font-size: 0.95rem;
+    }
+    .autocomplete-item-sub {
+        font-size: 0.85rem;
+        color: #64748b;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+    .autocomplete-item-balance {
+        margin-right: auto;
+        padding: 0.15rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+    .autocomplete-item-balance.positive {
+        background-color: #fef3c7;
+        color: #92400e;
+    }
+    .autocomplete-item-balance.negative {
+        background-color: #dbeafe;
+        color: #1e40af;
+    }
+    .autocomplete-item-balance.zero {
+        background-color: #f1f5f9;
+        color: #64748b;
+    }
+    .autocomplete-no-results {
+        padding: 1rem;
+        text-align: center;
+        color: #94a3b8;
+        font-size: 0.9rem;
+    }
+    .autocomplete-loading {
+        padding: 1rem;
+        text-align: center;
+        color: #64748b;
+        font-size: 0.9rem;
+    }
+    
+    @media (max-width: 768px) {
+        .autocomplete-dropdown {
+            max-height: 300px;
+            font-size: 0.9rem;
+        }
+        .autocomplete-item {
+            padding: 0.65rem 0.85rem;
+        }
+        .autocomplete-item-name {
+            font-size: 0.9rem;
+        }
+        .autocomplete-item-sub {
+            font-size: 0.8rem;
+        }
+        .autocomplete-item-balance {
+            font-size: 0.75rem;
+            padding: 0.1rem 0.4rem;
+        }
+    }
 </style>
 
 <script>
@@ -4488,6 +4595,113 @@ document.addEventListener('DOMContentLoaded', function () {
         .dashboard-table thead th:nth-child(8),
         .dashboard-table tbody td:nth-child(8) {
             min-width: 130px;
+        }
+    }
+    
+    /* Autocomplete Dropdown للبحث الفوري */
+    .autocomplete-dropdown {
+        position: absolute;
+        top: calc(100% + 2px);
+        left: 0;
+        right: 0;
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-top: none;
+        border-radius: 0 0 10px 10px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        max-height: 400px;
+        overflow-y: auto;
+        z-index: 1050 !important;
+        margin-top: 0;
+        display: none;
+        width: 100%;
+        visibility: hidden;
+        opacity: 0;
+        transition: opacity 0.2s ease, visibility 0.2s ease;
+    }
+    .autocomplete-dropdown.show {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+    .autocomplete-item {
+        padding: 0.75rem 1rem;
+        cursor: pointer;
+        border-bottom: 1px solid #f1f5f9;
+        transition: background-color 0.15s ease;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+    .autocomplete-item:last-child {
+        border-bottom: none;
+    }
+    .autocomplete-item:hover,
+    .autocomplete-item.selected {
+        background-color: #f8fafc;
+    }
+    .autocomplete-item-name {
+        font-weight: 600;
+        color: #1e293b;
+        font-size: 0.95rem;
+    }
+    .autocomplete-item-sub {
+        font-size: 0.85rem;
+        color: #64748b;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+    .autocomplete-item-balance {
+        margin-right: auto;
+        padding: 0.15rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+    .autocomplete-item-balance.positive {
+        background-color: #fef3c7;
+        color: #92400e;
+    }
+    .autocomplete-item-balance.negative {
+        background-color: #dbeafe;
+        color: #1e40af;
+    }
+    .autocomplete-item-balance.zero {
+        background-color: #f1f5f9;
+        color: #64748b;
+    }
+    .autocomplete-no-results {
+        padding: 1rem;
+        text-align: center;
+        color: #94a3b8;
+        font-size: 0.9rem;
+    }
+    .autocomplete-loading {
+        padding: 1rem;
+        text-align: center;
+        color: #64748b;
+        font-size: 0.9rem;
+    }
+    
+    @media (max-width: 768px) {
+        .autocomplete-dropdown {
+            max-height: 300px;
+            font-size: 0.9rem;
+        }
+        .autocomplete-item {
+            padding: 0.65rem 0.85rem;
+        }
+        .autocomplete-item-name {
+            font-size: 0.9rem;
+        }
+        .autocomplete-item-sub {
+            font-size: 0.8rem;
+        }
+        .autocomplete-item-balance {
+            font-size: 0.75rem;
+            padding: 0.1rem 0.4rem;
         }
     }
 </style>
@@ -5170,7 +5384,7 @@ document.addEventListener('DOMContentLoaded', function () {
             <?php endif; ?>
             <div class="col-12 col-md-6 col-lg-5">
                 <label for="customerSearch" class="visually-hidden">بحث عن العملاء</label>
-                <div class="input-group input-group-sm shadow-sm">
+                <div class="input-group input-group-sm shadow-sm position-relative">
                     <span class="input-group-text bg-light text-muted border-end-0">
                         <i class="bi bi-search"></i>
                     </span>
@@ -5182,7 +5396,12 @@ document.addEventListener('DOMContentLoaded', function () {
                         value="<?php echo htmlspecialchars($search); ?>"
                         placeholder="بحث في جميع بيانات العميل"
                         autocomplete="off"
+                        aria-autocomplete="list"
+                        aria-expanded="false"
+                        aria-controls="autocompleteDropdown"
                     >
+                    <!-- Autocomplete Dropdown -->
+                    <div id="autocompleteDropdown" class="autocomplete-dropdown" role="listbox" aria-label="نتائج البحث"></div>
                 </div>
             </div>
             <div class="col-6 col-md-3 col-lg-2">
@@ -6699,22 +6918,285 @@ function printDebtorCustomers() {
         });
     }
     
+    // ===== البحث الفوري مع Autocomplete =====
+    var autocompleteDropdown = document.getElementById('autocompleteDropdown');
+    var autocompleteTimeout = null;
+    var autocompleteAbortController = null;
+    var selectedAutocompleteIndex = -1;
+    var autocompleteResults = [];
+    
+    // دالة للبحث الفوري في autocomplete
+    function performAutocompleteSearch(query) {
+        if (!autocompleteDropdown) return;
+        
+        if (!query || query.length < 1) {
+            hideAutocomplete();
+            return;
+        }
+        
+        // إلغاء الطلب السابق إن وجد
+        if (autocompleteAbortController) {
+            autocompleteAbortController.abort();
+        }
+        autocompleteAbortController = new AbortController();
+        
+        // إظهار حالة التحميل
+        showAutocompleteLoading();
+        
+        // جلب النتائج من API
+        var apiUrl = '<?php echo getRelativeUrl("api/get_customers_autocomplete.php"); ?>';
+        var section = '<?php echo htmlspecialchars($section ?? ""); ?>';
+        var url = apiUrl + '?q=' + encodeURIComponent(query);
+        if (section) {
+            url += '&section=' + encodeURIComponent(section);
+        }
+        
+        fetch(url, {
+            method: 'GET',
+            credentials: 'include',
+            signal: autocompleteAbortController.signal
+        })
+        .then(function(response) {
+            if (!response.ok) {
+                throw new Error('Network response was not ok: ' + response.status);
+            }
+            return response.json();
+        })
+        .then(function(data) {
+            if (data.success && data.results) {
+                autocompleteResults = data.results;
+                displayAutocompleteResults(data.results, query);
+            } else {
+                showAutocompleteNoResults();
+            }
+        })
+        .catch(function(error) {
+            if (error.name !== 'AbortError') {
+                console.error('Autocomplete search error:', error);
+                hideAutocomplete();
+            }
+        });
+    }
+    
+    // دالة لعرض نتائج autocomplete
+    function displayAutocompleteResults(results, query) {
+        if (!autocompleteDropdown) return;
+        
+        if (results.length === 0) {
+            showAutocompleteNoResults();
+            return;
+        }
+        
+        var html = '';
+        results.forEach(function(result, index) {
+            var balanceClass = 'zero';
+            var balanceText = 'رصيد: ' + result.balance_formatted;
+            if (result.balance > 0) {
+                balanceClass = 'positive';
+                balanceText = 'مدين: ' + result.balance_formatted;
+            } else if (result.balance < 0) {
+                balanceClass = 'negative';
+                balanceText = 'دائن: ' + result.balance_formatted;
+            }
+            
+            html += '<div class="autocomplete-item" data-index="' + index + '" data-customer-id="' + result.id + '" role="option" tabindex="0">';
+            html += '<div class="autocomplete-item-name">' + escapeHtml(result.name) + '</div>';
+            html += '<div class="autocomplete-item-sub">';
+            if (result.sub_text) {
+                html += '<span>' + escapeHtml(result.sub_text) + '</span>';
+            }
+            html += '<span class="autocomplete-item-balance ' + balanceClass + '">' + balanceText + '</span>';
+            html += '</div>';
+            html += '</div>';
+        });
+        
+        autocompleteDropdown.innerHTML = html;
+        autocompleteDropdown.classList.add('show');
+        autocompleteDropdown.style.display = 'block';
+        if (searchInput) {
+            searchInput.setAttribute('aria-expanded', 'true');
+        }
+        
+        // إضافة event listeners للعناصر
+        autocompleteDropdown.querySelectorAll('.autocomplete-item').forEach(function(item, index) {
+            item.addEventListener('click', function() {
+                selectAutocompleteResult(results[index]);
+            });
+            item.addEventListener('mouseenter', function() {
+                removeAutocompleteSelection();
+                selectedAutocompleteIndex = index;
+                item.classList.add('selected');
+            });
+        });
+        
+        selectedAutocompleteIndex = -1;
+    }
+    
+    // دالة لإظهار حالة التحميل
+    function showAutocompleteLoading() {
+        if (!autocompleteDropdown) return;
+        autocompleteDropdown.innerHTML = '<div class="autocomplete-loading"><i class="bi bi-hourglass-split"></i> جاري البحث...</div>';
+        autocompleteDropdown.classList.add('show');
+        autocompleteDropdown.style.display = 'block';
+        if (searchInput) {
+            searchInput.setAttribute('aria-expanded', 'true');
+        }
+    }
+    
+    // دالة لإظهار عدم وجود نتائج
+    function showAutocompleteNoResults() {
+        if (!autocompleteDropdown) return;
+        autocompleteDropdown.innerHTML = '<div class="autocomplete-no-results">لا توجد نتائج</div>';
+        autocompleteDropdown.classList.add('show');
+        autocompleteDropdown.style.display = 'block';
+        if (searchInput) {
+            searchInput.setAttribute('aria-expanded', 'true');
+        }
+    }
+    
+    // دالة لإخفاء autocomplete
+    function hideAutocomplete() {
+        if (!autocompleteDropdown) return;
+        autocompleteDropdown.classList.remove('show');
+        autocompleteDropdown.style.display = 'none';
+        autocompleteDropdown.innerHTML = '';
+        if (searchInput) {
+            searchInput.setAttribute('aria-expanded', 'false');
+        }
+        selectedAutocompleteIndex = -1;
+        autocompleteResults = [];
+    }
+    
+    // دالة لإزالة التمييز من جميع العناصر
+    function removeAutocompleteSelection() {
+        if (autocompleteDropdown) {
+            autocompleteDropdown.querySelectorAll('.autocomplete-item').forEach(function(item) {
+                item.classList.remove('selected');
+            });
+        }
+    }
+    
+    // دالة لاختيار نتيجة من autocomplete
+    function selectAutocompleteResult(result) {
+        if (!result) return;
+        
+        // تعيين قيمة البحث واخفاء autocomplete
+        searchInput.value = result.name;
+        hideAutocomplete();
+        
+        // تنفيذ البحث الكامل
+        if (searchTimeout) clearTimeout(searchTimeout);
+        if (currentAbortController) currentAbortController.abort();
+        loadCustomers(1);
+    }
+    
+    // دالة للهروب من HTML
+    function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
     // البحث الفوري عند الكتابة (مع debouncing)
     searchInput.addEventListener('input', function() {
+        var v = this.value;
+        if (v === undefined || v === null) { this.value = ''; v = ''; }
+        
+        // البحث الفوري في autocomplete
+        if (autocompleteTimeout) clearTimeout(autocompleteTimeout);
+        if (autocompleteAbortController) autocompleteAbortController.abort();
+        
+        var query = v.trim();
+        if (query.length >= 1) {
+            autocompleteTimeout = setTimeout(function() {
+                performAutocompleteSearch(query);
+            }, 200); // debounce 200ms للبحث الفوري
+        } else {
+            hideAutocomplete();
+        }
+        
+        // البحث الكامل بعد تأخير أطول
         if (searchTimeout) clearTimeout(searchTimeout);
         if (currentAbortController) currentAbortController.abort();
         searchTimeout = setTimeout(function() { 
             loadCustomers(1); 
-        }, 300);
+        }, 500);
     });
     
     // البحث عند الضغط على Enter
     searchInput.addEventListener('keydown', function(e) {
+        // إذا كان autocomplete مفتوحاً، معالجة مفاتيح التنقل
+        if (autocompleteDropdown && autocompleteDropdown.classList.contains('show')) {
+            var items = autocompleteDropdown.querySelectorAll('.autocomplete-item');
+            
+            if (e.key === 'ArrowDown' || e.keyCode === 40) {
+                e.preventDefault();
+                removeAutocompleteSelection();
+                selectedAutocompleteIndex = Math.min(selectedAutocompleteIndex + 1, items.length - 1);
+                if (items[selectedAutocompleteIndex]) {
+                    items[selectedAutocompleteIndex].classList.add('selected');
+                    items[selectedAutocompleteIndex].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                }
+                return;
+            }
+            
+            if (e.key === 'ArrowUp' || e.keyCode === 38) {
+                e.preventDefault();
+                removeAutocompleteSelection();
+                selectedAutocompleteIndex = Math.max(selectedAutocompleteIndex - 1, -1);
+                if (selectedAutocompleteIndex >= 0 && items[selectedAutocompleteIndex]) {
+                    items[selectedAutocompleteIndex].classList.add('selected');
+                    items[selectedAutocompleteIndex].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                }
+                return;
+            }
+            
+            if (e.key === 'Enter' || e.keyCode === 13) {
+                e.preventDefault();
+                if (selectedAutocompleteIndex >= 0 && autocompleteResults[selectedAutocompleteIndex]) {
+                    selectAutocompleteResult(autocompleteResults[selectedAutocompleteIndex]);
+                } else {
+                    // تنفيذ البحث الكامل
+                    hideAutocomplete();
+                    if (searchTimeout) clearTimeout(searchTimeout);
+                    loadCustomers(1);
+                }
+                return;
+            }
+            
+            if (e.key === 'Escape' || e.keyCode === 27) {
+                e.preventDefault();
+                hideAutocomplete();
+                return;
+            }
+        }
+        
+        // Enter للبحث الكامل إذا لم يكن autocomplete مفتوحاً
         if (e.key === 'Enter' || e.keyCode === 13) {
             e.preventDefault();
+            hideAutocomplete();
             if (searchTimeout) clearTimeout(searchTimeout);
             loadCustomers(1);
         }
+    });
+    
+    // إخفاء autocomplete عند النقر خارج الحقل
+    document.addEventListener('click', function(e) {
+        if (autocompleteDropdown && 
+            !searchInput.contains(e.target) && 
+            !autocompleteDropdown.contains(e.target)) {
+            hideAutocomplete();
+        }
+    });
+    
+    // إخفاء autocomplete عند فقدان التركيز
+    searchInput.addEventListener('blur', function() {
+        setTimeout(function() {
+            if (document.activeElement !== searchInput && 
+                !autocompleteDropdown.contains(document.activeElement)) {
+                hideAutocomplete();
+            }
+        }, 200);
     });
     
     // البحث الفوري عند تغيير الفلاتر

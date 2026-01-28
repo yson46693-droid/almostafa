@@ -1412,7 +1412,6 @@ function handleReportCardSubmit(event) {
     window.open(fullUrl, '_blank');
     
     // إعادة تعيين النموذج بعد فتح التقرير
-    const form = document.getElementById('generateReportCardForm');
     if (form) {
         form.reset();
         // إعادة تعيين القيم الافتراضية
