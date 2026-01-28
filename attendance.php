@@ -361,7 +361,8 @@ $lang = isset($translations) ? $translations : [];
                 </div>
                 <div class="card-body text-center">
                     <button type="button" class="btn btn-success btn-lg w-100" id="checkInBtn" data-action="check_in" 
-                            <?php echo !$canCheckIn ? 'disabled' : ''; ?>>
+                            <?php echo !$canCheckIn ? 'disabled' : ''; ?>
+                            style="touch-action: manipulation; -webkit-tap-highlight-color: transparent; min-height: 48px;">
                         <i class="bi bi-camera me-2"></i>
                         <?php echo $canCheckIn ? 'تسجيل الحضور' : 'تم تسجيل الحضور'; ?>
                     </button>
@@ -383,7 +384,8 @@ $lang = isset($translations) ? $translations : [];
                 </div>
                 <div class="card-body text-center">
                     <button type="button" class="btn btn-danger btn-lg w-100" id="checkOutBtn" data-action="check_out"
-                            <?php echo !$canCheckOut ? 'disabled' : ''; ?>>
+                            <?php echo !$canCheckOut ? 'disabled' : ''; ?>
+                            style="touch-action: manipulation; -webkit-tap-highlight-color: transparent; min-height: 48px;">
                         <i class="bi bi-camera me-2"></i>
                         <?php echo $canCheckOut ? 'تسجيل الانصراف' : 'لا يمكن تسجيل الانصراف'; ?>
                     </button>
@@ -703,6 +705,19 @@ $lang = isset($translations) ? $translations : [];
 @media (max-width: 768px) {
     #cameraModal {
         display: none !important;
+    }
+    
+    /* ضمان أن Card يمكن إظهاره على الموبايل */
+    #cameraCard {
+        display: none; /* افتراضي مخفي، سيتم إظهاره بواسطة JavaScript */
+    }
+    
+    /* عند فتح البطاقة، يجب أن تظهر */
+    #cameraCard[style*="display: block"],
+    #cameraCard[style*="display:block"] {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
     }
 }
 

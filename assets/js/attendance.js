@@ -945,38 +945,63 @@ document.addEventListener('DOMContentLoaded', function() {
             
             console.log('Opening card:', { card: !!card, cardTitle: !!cardTitle });
             
-            if (card && cardTitle) {
-                // تحديث العنوان
-                if (action === 'check_in') {
-                    cardTitle.textContent = 'تسجيل الحضور - التقاط صورة';
-                } else {
-                    cardTitle.textContent = 'تسجيل الانصراف - التقاط صورة';
-                }
-                
-                // إعادة تعيين الحالة
-                resetCameraState(true);
-                
-                // إظهار Card - استخدام setProperty مع !important
-                card.style.setProperty('display', 'block', 'important');
-                card.style.setProperty('visibility', 'visible', 'important');
-                card.style.setProperty('opacity', '1', 'important');
-                
-                // التمرير التلقائي
-                setTimeout(function() {
-                    scrollToElement(card);
-                }, 50);
-                
-                // تهيئة الكاميرا بعد التأكد من أن Card مرئي
-                setTimeout(async () => {
-                    try {
-                        await initCamera();
-                    } catch (error) {
-                        console.error('Error initializing camera in card:', error);
-                    }
-                }, 200);
-            } else {
-                console.error('Card elements not found!', { card: !!card, cardTitle: !!cardTitle });
+            if (!card) {
+                console.error('cameraCard element not found in DOM!');
+                alert('حدث خطأ: لم يتم العثور على بطاقة الكاميرا. يرجى تحديث الصفحة والمحاولة مرة أخرى.');
+                return;
             }
+            
+            if (!cardTitle) {
+                console.error('cameraCardTitle element not found in DOM!');
+                alert('حدث خطأ: لم يتم العثور على عنوان البطاقة. يرجى تحديث الصفحة والمحاولة مرة أخرى.');
+                return;
+            }
+            
+            // تحديث العنوان
+            if (action === 'check_in') {
+                cardTitle.textContent = 'تسجيل الحضور - التقاط صورة';
+            } else {
+                cardTitle.textContent = 'تسجيل الانصراف - التقاط صورة';
+            }
+            
+            // إعادة تعيين الحالة
+            resetCameraState(true);
+            
+            // إزالة أي classes قد تخفي البطاقة
+            card.classList.remove('d-none');
+            card.classList.add('d-md-none'); // إظهار على الموبايل فقط
+            
+            // إظهار Card - استخدام setProperty مع !important
+            card.style.setProperty('display', 'block', 'important');
+            card.style.setProperty('visibility', 'visible', 'important');
+            card.style.setProperty('opacity', '1', 'important');
+            card.style.setProperty('position', 'relative', 'important');
+            card.style.setProperty('z-index', '1000', 'important');
+            
+            // إجبار reflow لضمان أن التغييرات مطبقة
+            card.offsetHeight;
+            
+            console.log('Card display properties:', {
+                display: card.style.display,
+                visibility: card.style.visibility,
+                opacity: card.style.opacity,
+                computedDisplay: window.getComputedStyle(card).display,
+                computedVisibility: window.getComputedStyle(card).visibility
+            });
+            
+            // التمرير التلقائي
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+            
+            // تهيئة الكاميرا بعد التأكد من أن Card مرئي
+            setTimeout(async () => {
+                try {
+                    await initCamera();
+                } catch (error) {
+                    console.error('Error initializing camera in card:', error);
+                }
+            }, 200);
         } else {
             // على الكمبيوتر: استخدام Modal
             console.log('Opening modal');
@@ -1079,7 +1104,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // إضافة event listeners للأزرار مع التحقق من حالة التعطيل
     if (checkInBtn) {
+        // إضافة event listeners متعددة لضمان العمل على جميع الأجهزة
         checkInBtn.addEventListener('click', function(e) {
+            console.log('checkInBtn clicked', { disabled: checkInBtn.disabled });
             if (checkInBtn.disabled) {
                 e.preventDefault();
                 e.stopPropagation();
@@ -1088,10 +1115,28 @@ document.addEventListener('DOMContentLoaded', function() {
             // تعيين الإجراء وفتح modal/card
             openCamera('check_in');
         });
+        
+        // إضافة touchstart للموبايل أيضاً
+        checkInBtn.addEventListener('touchstart', function(e) {
+            console.log('checkInBtn touchstart', { disabled: checkInBtn.disabled });
+            if (checkInBtn.disabled) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+            // منع النقر المزدوج
+            e.preventDefault();
+            // تعيين الإجراء وفتح modal/card
+            openCamera('check_in');
+        }, { passive: false });
+    } else {
+        console.error('checkInBtn not found!');
     }
     
     if (checkOutBtn) {
+        // إضافة event listeners متعددة لضمان العمل على جميع الأجهزة
         checkOutBtn.addEventListener('click', function(e) {
+            console.log('checkOutBtn clicked', { disabled: checkOutBtn.disabled });
             if (checkOutBtn.disabled) {
                 e.preventDefault();
                 e.stopPropagation();
@@ -1100,6 +1145,22 @@ document.addEventListener('DOMContentLoaded', function() {
             // تعيين الإجراء وفتح modal/card
             openCamera('check_out');
         });
+        
+        // إضافة touchstart للموبايل أيضاً
+        checkOutBtn.addEventListener('touchstart', function(e) {
+            console.log('checkOutBtn touchstart', { disabled: checkOutBtn.disabled });
+            if (checkOutBtn.disabled) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+            // منع النقر المزدوج
+            e.preventDefault();
+            // تعيين الإجراء وفتح modal/card
+            openCamera('check_out');
+        }, { passive: false });
+    } else {
+        console.error('checkOutBtn not found!');
     }
     
     // أحداث الأزرار (Modal)
@@ -1151,10 +1212,3 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
-
-'none';
-            }
-        });
-    }
-});
-

@@ -657,10 +657,59 @@ body.attendance-page.modal-open .modal-backdrop {
     transition: none !important;
 }
 
-/* إزالة تأثيرات من alert */
+    /* إزالة تأثيرات من alert */
 .attendance-page .alert {
     box-shadow: none !important;
     border: 1px solid;
+}
+
+/* ===== Camera Card Mobile Fix ===== */
+/* ضمان أن بطاقة الكاميرا تظهر على الموبايل */
+@media (max-width: 768px) {
+    #cameraCard {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        position: relative !important;
+        z-index: 1000 !important;
+        margin-bottom: 1rem !important;
+    }
+    
+    /* عند إخفاء البطاقة، يجب أن يكون بواسطة JavaScript فقط */
+    #cameraCard[style*="display: none"] {
+        display: none !important;
+    }
+    
+    /* ضمان أن البطاقة مرئية عند فتحها */
+    #cameraCard:not([style*="display: none"]) {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+    
+    /* تحسين عرض البطاقة على الموبايل */
+    #cameraCard .card-body {
+        padding: 1rem !important;
+    }
+    
+    #cameraCard .card-header {
+        padding: 0.75rem 1rem !important;
+    }
+    
+    /* ضمان أن الأزرار قابلة للنقر */
+    #cameraCard .btn {
+        min-height: 44px !important;
+        touch-action: manipulation !important;
+        pointer-events: auto !important;
+    }
+    
+    /* ضمان أن الفيديو مرئي */
+    #cameraCard #videoCard {
+        display: block !important;
+        visibility: visible !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
 }
 
 /* ===== Touch Device Optimizations ===== */

@@ -1453,8 +1453,8 @@ foreach ($factoryProducts as $product) {
             
             <!-- شريط البحث والفلترة لمنتجات المصنع -->
             <div class="mb-3 p-3 bg-light rounded" style="border: 1px solid #dee2e6;">
-                <div class="row g-2 align-items-end">
-                    <div class="col-md-6 mb-2">
+                <div class="row g-3">
+                    <div class="col-md-6">
                         <label class="form-label small mb-1"><i class="bi bi-search me-1"></i>البحث</label>
                         <input type="text" 
                                class="form-control form-control-sm" 
@@ -1462,7 +1462,7 @@ foreach ($factoryProducts as $product) {
                                placeholder="اسم المنتج، رقم تشغيلة..." 
                                autocomplete="off">
                     </div>
-                    <div class="col-md-6 mb-2">
+                    <div class="col-md-6">
                         <label class="form-label small mb-1"><i class="bi bi-folder me-1"></i>الصنف</label>
                         <select class="form-control form-control-sm" id="factoryCategoryFilter">
                             <option value="">جميع الأصناف</option>
@@ -1479,7 +1479,7 @@ foreach ($factoryProducts as $product) {
                             <?php endif; ?>
                         </select>
                     </div>
-                    <div class="col-md-6 mb-2">
+                    <div class="col-md-6">
                         <label class="form-label small mb-1"><i class="bi bi-currency-dollar me-1"></i>سعر من</label>
                         <input type="number" 
                                class="form-control form-control-sm" 
@@ -1488,7 +1488,7 @@ foreach ($factoryProducts as $product) {
                                step="0.01" 
                                min="0">
                     </div>
-                    <div class="col-md-6 mb-2">
+                    <div class="col-md-6">
                         <label class="form-label small mb-1"><i class="bi bi-currency-dollar me-1"></i>سعر إلى</label>
                         <input type="number" 
                                class="form-control form-control-sm" 
@@ -1832,8 +1832,8 @@ foreach ($factoryProducts as $product) {
         <div class="card-body">
             <!-- شريط البحث والفلترة للمنتجات الخارجية -->
             <div class="mb-3 p-3 bg-light rounded" style="border: 1px solid #dee2e6;">
-                <div class="row g-2 align-items-end">
-                    <div class="col-md-6 mb-2">
+                <div class="row g-3">
+                    <div class="col-md-6">
                         <label class="form-label small mb-1"><i class="bi bi-search me-1"></i>البحث</label>
                         <input type="text" 
                                class="form-control form-control-sm" 
@@ -1841,7 +1841,7 @@ foreach ($factoryProducts as $product) {
                                placeholder="اسم المنتج..." 
                                autocomplete="off">
                     </div>
-                    <div class="col-md-6 mb-2">
+                    <div class="col-md-6">
                         <label class="form-label small mb-1"><i class="bi bi-folder me-1"></i>الصنف</label>
                         <select class="form-control form-control-sm" id="externalCategoryFilter">
                             <option value="">جميع الأصناف</option>
@@ -1858,7 +1858,7 @@ foreach ($factoryProducts as $product) {
                             <?php endif; ?>
                         </select>
                     </div>
-                    <div class="col-md-6 mb-2">
+                    <div class="col-md-6">
                         <label class="form-label small mb-1"><i class="bi bi-currency-dollar me-1"></i>سعر من</label>
                         <input type="number" 
                                class="form-control form-control-sm" 
@@ -1867,7 +1867,7 @@ foreach ($factoryProducts as $product) {
                                step="0.01" 
                                min="0">
                     </div>
-                    <div class="col-md-6 mb-2">
+                    <div class="col-md-6">
                         <label class="form-label small mb-1"><i class="bi bi-currency-dollar me-1"></i>سعر إلى</label>
                         <input type="number" 
                                class="form-control form-control-sm" 
@@ -1876,7 +1876,7 @@ foreach ($factoryProducts as $product) {
                                step="0.01" 
                                min="0">
                     </div>
-                    <div class="col-md-6 mb-2">
+                    <div class="col-md-6">
                         <label class="form-label small mb-1"><i class="bi bi-box me-1"></i>كمية من</label>
                         <input type="number" 
                                class="form-control form-control-sm" 
@@ -1885,7 +1885,7 @@ foreach ($factoryProducts as $product) {
                                step="0.01" 
                                min="0">
                     </div>
-                    <div class="col-md-6 mb-2">
+                    <div class="col-md-6">
                         <label class="form-label small mb-1"><i class="bi bi-box me-1"></i>كمية إلى</label>
                         <input type="number" 
                                class="form-control form-control-sm" 
