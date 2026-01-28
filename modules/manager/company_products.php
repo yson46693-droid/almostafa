@@ -424,6 +424,140 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 );
             }
         }
+    } elseif ($action === 'create_factory_product') {
+        $productName = trim($_POST['product_name'] ?? '');
+        $categoryId = intval($_POST['category_id'] ?? 0);
+        $customCategory = trim($_POST['custom_category'] ?? '');
+        $productionDate = trim($_POST['production_date'] ?? '');
+        $expiryDate = trim($_POST['expiry_date'] ?? '');
+        $quantityProduced = max(0.01, floatval($_POST['quantity_produced'] ?? 0));
+        $unitPrice = max(0, floatval($_POST['unit_price'] ?? 0));
+        
+        if ($productName === '' || $productionDate === '' || $quantityProduced <= 0) {
+            $error = 'يرجى إدخال جميع البيانات المطلوبة.';
+            preventDuplicateSubmission(
+                null,
+                ['page' => 'company_products'],
+                null,
+                'manager',
+                $error
+            );
+        } else {
+            try {
+                require_once __DIR__ . '/../../includes/batch_creation.php';
+                
+                // معالجة الصنف
+                $categoryName = 'اخري';
+                if ($categoryId > 0) {
+                    $category = $db->queryOne("SELECT name FROM product_categories WHERE id = ?", [$categoryId]);
+                    if ($category) {
+                        $categoryName = $category['name'];
+                    }
+                } elseif (!empty($customCategory)) {
+                    // حفظ الصنف المخصص في جدول الأصناف
+                    try {
+                        $db->execute(
+                            "INSERT INTO product_categories (name, is_default) VALUES (?, 0)",
+                            [$customCategory]
+                        );
+                        $categoryName = $customCategory;
+                    } catch (Exception $e) {
+                        // الصنف موجود بالفعل
+                        $categoryName = $customCategory;
+                    }
+                }
+                
+                // التحقق من وجود جدول finished_products
+                $finishedProductsTableExists = $db->queryOne("SHOW TABLES LIKE 'finished_products'");
+                if (empty($finishedProductsTableExists)) {
+                    throw new Exception('جدول finished_products غير موجود');
+                }
+                
+                // التحقق من وجود جدول batches
+                $batchesTableExists = $db->queryOne("SHOW TABLES LIKE 'batches'");
+                if (empty($batchesTableExists)) {
+                    throw new Exception('جدول batches غير موجود');
+                }
+                
+                // توليد رقم باركود باستخدام دالة batchCreationGenerateNumber
+                $pdo = batchCreationGetPdo();
+                $batchNumber = batchCreationGenerateNumber($pdo);
+                
+                // إنشاء batch_id في جدول batches
+                $batchInsertResult = $db->execute(
+                    "INSERT INTO batches (batch_number, product_id, production_date, expiry_date, quantity, status)
+                     VALUES (?, NULL, ?, ?, ?, 'completed')",
+                    [$batchNumber, $productionDate, !empty($expiryDate) ? $expiryDate : null, (int)$quantityProduced]
+                );
+                
+                $batchId = $batchInsertResult['insert_id'] ?? $db->getLastInsertId();
+                
+                if (empty($batchId)) {
+                    throw new Exception('فشل في إنشاء batch_id');
+                }
+                
+                // البحث عن product_id من جدول products أو إنشاء منتج جديد
+                $productId = null;
+                $existingProduct = $db->queryOne(
+                    "SELECT id FROM products WHERE name = ? AND category = ? LIMIT 1",
+                    [$productName, $categoryName]
+                );
+                
+                if ($existingProduct) {
+                    $productId = $existingProduct['id'];
+                } else {
+                    // إنشاء منتج جديد في جدول products
+                    $productInsertResult = $db->execute(
+                        "INSERT INTO products (name, category, product_type, quantity, unit, unit_price, status)
+                         VALUES (?, ?, 'internal', 0, 'قطعة', ?, 'active')",
+                        [$productName, $categoryName, $unitPrice > 0 ? $unitPrice : 0]
+                    );
+                    $productId = $productInsertResult['insert_id'] ?? $db->getLastInsertId();
+                }
+                
+                // إدراج المنتج في جدول finished_products
+                $db->execute(
+                    "INSERT INTO finished_products (batch_id, product_id, product_name, batch_number, production_date, expiry_date, quantity_produced, unit_price)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    [
+                        $batchId,
+                        $productId,
+                        $productName,
+                        $batchNumber,
+                        $productionDate,
+                        !empty($expiryDate) ? $expiryDate : null,
+                        (int)$quantityProduced,
+                        $unitPrice > 0 ? $unitPrice : null
+                    ]
+                );
+                
+                $finishedProductId = $db->getLastInsertId();
+                
+                logAudit($currentUser['id'] ?? null, 'create_factory_product', 'finished_product', $finishedProductId, null, [
+                    'product_name' => $productName,
+                    'batch_number' => $batchNumber,
+                    'category' => $categoryName,
+                    'quantity_produced' => $quantityProduced,
+                    'unit_price' => $unitPrice
+                ]);
+                
+                preventDuplicateSubmission(
+                    'تم إضافة منتج المصنع بنجاح. رقم الباركود: ' . $batchNumber,
+                    ['page' => 'company_products'],
+                    null,
+                    'manager'
+                );
+            } catch (Exception $e) {
+                error_log('create_factory_product error: ' . $e->getMessage());
+                preventDuplicateSubmission(
+                    null,
+                    ['page' => 'company_products'],
+                    null,
+                    'manager',
+                    'تعذر إضافة منتج المصنع. يرجى المحاولة لاحقاً: ' . $e->getMessage()
+                );
+            }
+        }
     }
 }
 
@@ -1241,6 +1375,9 @@ foreach ($factoryProducts as $product) {
                 منتجات المصنع
             </h5>
             <span class="badge" id="factoryProductsCount"><?php echo $totalFactoryProducts; ?> منتج</span>
+            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addFactoryProductModal" style="margin-right: 10px;">
+                <i class="bi bi-plus-circle me-1"></i>إضافة منتج مصنع جديد
+            </button>
         </div>
         <div class="card-body">
             <!-- شريط البحث والفلترة لمنتجات المصنع -->
@@ -1924,6 +2061,73 @@ foreach ($factoryProducts as $product) {
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
                     <button type="submit" class="btn btn-warning">حفظ التغييرات</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal إضافة منتج مصنع جديد -->
+<!-- Modal للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="addFactoryProductModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>إضافة منتج مصنع جديد</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" id="addFactoryProductForm">
+                <input type="hidden" name="action" value="create_factory_product">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">اسم المنتج <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="product_name" id="add_factory_product_name" required placeholder="أدخل اسم المنتج">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">الصنف <span class="text-danger">*</span></label>
+                        <select class="form-control" name="category_id" id="add_factory_category_id" required>
+                            <option value="">اختر الصنف</option>
+                            <?php if (!empty($productCategories)): ?>
+                                <?php foreach ($productCategories as $cat): ?>
+                                    <option value="<?php echo intval($cat['id']); ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <option value="1">صابون</option>
+                                <option value="2">زيت زيتون</option>
+                                <option value="3">كريمات</option>
+                                <option value="4">زيوت</option>
+                                <option value="5">اخري</option>
+                            <?php endif; ?>
+                        </select>
+                    </div>
+                    <div class="mb-3" id="add_factory_custom_category_div" style="display: none;">
+                        <label class="form-label">أدخل الصنف يدوياً <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="custom_category" id="add_factory_custom_category" placeholder="أدخل اسم الصنف">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">تاريخ الإنتاج <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" name="production_date" id="add_factory_production_date" required value="<?php echo date('Y-m-d'); ?>">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">تاريخ انتهاء الصلاحية</label>
+                        <input type="date" class="form-control" name="expiry_date" id="add_factory_expiry_date">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">الكمية المنتجة <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" name="quantity_produced" id="add_factory_quantity" required min="0.01" step="0.01" placeholder="أدخل الكمية">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">سعر الوحدة</label>
+                        <input type="number" class="form-control" name="unit_price" id="add_factory_unit_price" min="0" step="0.01" placeholder="أدخل سعر الوحدة">
+                    </div>
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        سيتم توليد رقم باركود تلقائياً بصيغة: تاريخ اليوم - رقم عشوائي من 6 أرقام
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">إضافة المنتج</button>
                 </div>
             </form>
         </div>
@@ -3908,6 +4112,52 @@ function initEditExternalButtons() {
                 editFactoryCustomCategoryInput.required = isOther;
                 if (!isOther) {
                     editFactoryCustomCategoryInput.value = '';
+                }
+            }
+        });
+    }
+    
+    // إدارة نموذج إضافة منتج مصنع جديد
+    const addFactoryCategorySelect = document.getElementById('add_factory_category_id');
+    const addFactoryCustomCategoryDiv = document.getElementById('add_factory_custom_category_div');
+    const addFactoryCustomCategoryInput = document.getElementById('add_factory_custom_category');
+    const addFactoryProductForm = document.getElementById('addFactoryProductForm');
+    const addFactoryProductModal = document.getElementById('addFactoryProductModal');
+    
+    if (addFactoryCategorySelect) {
+        addFactoryCategorySelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            const isOther = selectedOption && selectedOption.textContent.trim() === 'اخري';
+            
+            if (addFactoryCustomCategoryDiv) {
+                addFactoryCustomCategoryDiv.style.display = isOther ? 'block' : 'none';
+            }
+            if (addFactoryCustomCategoryInput) {
+                addFactoryCustomCategoryInput.required = isOther;
+                if (!isOther) {
+                    addFactoryCustomCategoryInput.value = '';
+                }
+            }
+        });
+    }
+    
+    // إعادة تعيين النموذج عند إغلاق الـ modal
+    if (addFactoryProductModal) {
+        addFactoryProductModal.addEventListener('hidden.bs.modal', function() {
+            if (addFactoryProductForm) {
+                addFactoryProductForm.reset();
+                // إعادة تعيين تاريخ الإنتاج إلى اليوم
+                const productionDateInput = document.getElementById('add_factory_production_date');
+                if (productionDateInput) {
+                    productionDateInput.value = new Date().toISOString().split('T')[0];
+                }
+                // إخفاء حقل الصنف المخصص
+                if (addFactoryCustomCategoryDiv) {
+                    addFactoryCustomCategoryDiv.style.display = 'none';
+                }
+                if (addFactoryCustomCategoryInput) {
+                    addFactoryCustomCategoryInput.required = false;
+                    addFactoryCustomCategoryInput.value = '';
                 }
             }
         });
