@@ -696,6 +696,114 @@ $lang = isset($translations) ? $translations : [];
         id: <?php echo $currentUser['id']; ?>,
         role: '<?php echo htmlspecialchars($currentUser['role']); ?>'
     };
+    
+    // حل بديل مباشر للأزرار على الموبايل
+    document.addEventListener('DOMContentLoaded', function() {
+        // إعادة المحاولة عدة مرات لضمان تحميل الكود
+        let attempts = 0;
+        const maxAttempts = 10;
+        
+        function tryAttachButtons() {
+            attempts++;
+            const checkInBtn = document.getElementById('checkInBtn');
+            const checkOutBtn = document.getElementById('checkOutBtn');
+            
+            if ((checkInBtn || checkOutBtn) && attempts < maxAttempts) {
+                // التحقق من أن attendance.js تم تحميله
+                if (typeof openCamera === 'function') {
+                    console.log('attendance.js loaded, using main handlers');
+                    return; // الكود الرئيسي سيتولى الأمر
+                }
+                
+                // حل بديل مباشر
+                if (checkInBtn && !checkInBtn.dataset.fallbackAttached) {
+                    checkInBtn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('Fallback checkInBtn handler');
+                        if (!checkInBtn.disabled) {
+                            // استخدام openCamera إذا كانت متاحة، وإلا فتح البطاقة مباشرة
+                            if (typeof window.openCamera === 'function') {
+                                try {
+                                    window.openCamera('check_in');
+                                } catch (error) {
+                                    console.error('Error calling openCamera:', error);
+                                    // Fallback: فتح البطاقة مباشرة
+                                    openCardDirectly();
+                                }
+                            } else {
+                                // Fallback: فتح البطاقة مباشرة
+                                openCardDirectly();
+                            }
+                        }
+                        return false;
+                        
+                        function openCardDirectly() {
+                            const card = document.getElementById('cameraCard');
+                            if (card) {
+                                card.classList.remove('d-none');
+                                card.classList.add('d-md-none');
+                                card.style.setProperty('display', 'block', 'important');
+                                card.style.setProperty('visibility', 'visible', 'important');
+                                card.style.setProperty('opacity', '1', 'important');
+                                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                console.log('Card opened via fallback handler');
+                            } else {
+                                console.error('cameraCard not found');
+                                alert('حدث خطأ: لم يتم العثور على بطاقة الكاميرا');
+                            }
+                        }
+                    }, true);
+                    checkInBtn.dataset.fallbackAttached = 'true';
+                }
+                
+                if (checkOutBtn && !checkOutBtn.dataset.fallbackAttached) {
+                    checkOutBtn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('Fallback checkOutBtn handler');
+                        if (!checkOutBtn.disabled) {
+                            // استخدام openCamera إذا كانت متاحة، وإلا فتح البطاقة مباشرة
+                            if (typeof window.openCamera === 'function') {
+                                try {
+                                    window.openCamera('check_out');
+                                } catch (error) {
+                                    console.error('Error calling openCamera:', error);
+                                    // Fallback: فتح البطاقة مباشرة
+                                    openCardDirectly();
+                                }
+                            } else {
+                                // Fallback: فتح البطاقة مباشرة
+                                openCardDirectly();
+                            }
+                        }
+                        return false;
+                        
+                        function openCardDirectly() {
+                            const card = document.getElementById('cameraCard');
+                            if (card) {
+                                card.classList.remove('d-none');
+                                card.classList.add('d-md-none');
+                                card.style.setProperty('display', 'block', 'important');
+                                card.style.setProperty('visibility', 'visible', 'important');
+                                card.style.setProperty('opacity', '1', 'important');
+                                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                console.log('Card opened via fallback handler');
+                            } else {
+                                console.error('cameraCard not found');
+                                alert('حدث خطأ: لم يتم العثور على بطاقة الكاميرا');
+                            }
+                        }
+                    }, true);
+                    checkOutBtn.dataset.fallbackAttached = 'true';
+                }
+            } else if (attempts < maxAttempts) {
+                setTimeout(tryAttachButtons, 200);
+            }
+        }
+        
+        tryAttachButtons();
+    });
 </script>
 <script src="<?php echo ASSETS_URL; ?>js/attendance.js"></script>
 <script src="<?php echo ASSETS_URL; ?>js/attendance_notifications.js"></script>

@@ -775,7 +775,8 @@ async function updateTimeSummary() {
 }
 
 // معالجة فتح الـ modal
-document.addEventListener('DOMContentLoaded', function() {
+// دالة للتحقق من وجود العناصر وإعادة المحاولة
+function initAttendanceButtons() {
     const cameraModal = document.getElementById('cameraModal');
     const checkInBtn = document.getElementById('checkInBtn');
     const checkOutBtn = document.getElementById('checkOutBtn');
@@ -784,10 +785,22 @@ document.addEventListener('DOMContentLoaded', function() {
     const submitBtn = document.getElementById('submitBtn');
     const cancelBtn = document.getElementById('cancelBtn');
     
-    // التحقق من وجود العناصر
-    if (!cameraModal) {
-        console.error('Camera modal not found');
+    console.log('initAttendanceButtons called', {
+        cameraModal: !!cameraModal,
+        checkInBtn: !!checkInBtn,
+        checkOutBtn: !!checkOutBtn
+    });
+    
+    // التحقق من وجود العناصر الأساسية
+    if (!checkInBtn && !checkOutBtn) {
+        console.warn('Attendance buttons not found, retrying in 100ms...');
+        setTimeout(initAttendanceButtons, 100);
         return;
+    }
+    
+    // التحقق من وجود modal (اختياري - قد لا يكون موجوداً على الموبايل)
+    if (!cameraModal) {
+        console.warn('Camera modal not found (this is OK on mobile)');
     }
     
     // دالة لإزالة backdrop
@@ -932,7 +945,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // دالة لفتح الكاميرا (Modal للكمبيوتر أو Card للموبايل)
-    function openCamera(action) {
+    // جعلها متاحة عالمياً
+    window.openCamera = function(action) {
         currentAction = action;
         const isMobileDevice = isMobile();
         
@@ -1008,7 +1022,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const modal = new bootstrap.Modal(cameraModal);
             modal.show();
         }
-    }
+    };
     
     // دالة لإعادة تعيين حالة الكاميرا
     function resetCameraState(isMobileDevice) {
@@ -1104,61 +1118,146 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // إضافة event listeners للأزرار مع التحقق من حالة التعطيل
     if (checkInBtn) {
-        // إضافة event listeners متعددة لضمان العمل على جميع الأجهزة
-        checkInBtn.addEventListener('click', function(e) {
-            console.log('checkInBtn clicked', { disabled: checkInBtn.disabled });
+        // التحقق من وجود event listener مسبقاً
+        if (checkInBtn.dataset.listenerAttached === 'true') {
+            console.log('checkInBtn listeners already attached, skipping');
+        } else {
+            // إضافة event listeners متعددة لضمان العمل على جميع الأجهزة
+            checkInBtn.addEventListener('click', function(e) {
+            console.log('checkInBtn clicked', { 
+                disabled: checkInBtn.disabled,
+                isMobile: isMobile()
+            });
+            e.preventDefault();
+            e.stopPropagation();
+            
             if (checkInBtn.disabled) {
-                e.preventDefault();
-                e.stopPropagation();
+                console.warn('checkInBtn is disabled');
                 return false;
             }
+            
             // تعيين الإجراء وفتح modal/card
-            openCamera('check_in');
-        });
+            try {
+                openCamera('check_in');
+            } catch (error) {
+                console.error('Error opening camera for check_in:', error);
+                alert('حدث خطأ في فتح الكاميرا. يرجى المحاولة مرة أخرى.');
+            }
+            return false;
+        }, true); // استخدام capture phase
         
         // إضافة touchstart للموبايل أيضاً
         checkInBtn.addEventListener('touchstart', function(e) {
-            console.log('checkInBtn touchstart', { disabled: checkInBtn.disabled });
+            console.log('checkInBtn touchstart', { 
+                disabled: checkInBtn.disabled,
+                isMobile: isMobile()
+            });
+            e.preventDefault();
+            e.stopPropagation();
+            
             if (checkInBtn.disabled) {
-                e.preventDefault();
-                e.stopPropagation();
+                console.warn('checkInBtn is disabled');
                 return false;
             }
-            // منع النقر المزدوج
-            e.preventDefault();
+            
             // تعيين الإجراء وفتح modal/card
-            openCamera('check_in');
-        }, { passive: false });
+            try {
+                openCamera('check_in');
+            } catch (error) {
+                console.error('Error opening camera for check_in:', error);
+                alert('حدث خطأ في فتح الكاميرا. يرجى المحاولة مرة أخرى.');
+            }
+            return false;
+        }, { passive: false, capture: true });
+        
+        // إضافة mousedown أيضاً كحل بديل
+        checkInBtn.addEventListener('mousedown', function(e) {
+            if (isMobile()) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!checkInBtn.disabled) {
+                    openCamera('check_in');
+                }
+                return false;
+            }
+        }, true);
+        
+        // وضع علامة أن event listeners تم إضافتها
+        checkInBtn.dataset.listenerAttached = 'true';
+        console.log('checkInBtn event listeners added');
     } else {
         console.error('checkInBtn not found!');
     }
     
     if (checkOutBtn) {
-        // إضافة event listeners متعددة لضمان العمل على جميع الأجهزة
-        checkOutBtn.addEventListener('click', function(e) {
-            console.log('checkOutBtn clicked', { disabled: checkOutBtn.disabled });
-            if (checkOutBtn.disabled) {
+        // التحقق من وجود event listener مسبقاً
+        if (checkOutBtn.dataset.listenerAttached === 'true') {
+            console.log('checkOutBtn listeners already attached, skipping');
+        } else {
+            // إضافة event listeners متعددة لضمان العمل على جميع الأجهزة
+            checkOutBtn.addEventListener('click', function(e) {
+                console.log('checkOutBtn clicked', { 
+                    disabled: checkOutBtn.disabled,
+                    isMobile: isMobile()
+                });
                 e.preventDefault();
                 e.stopPropagation();
+                
+                if (checkOutBtn.disabled) {
+                    console.warn('checkOutBtn is disabled');
+                    return false;
+                }
+                
+                // تعيين الإجراء وفتح modal/card
+                try {
+                    openCamera('check_out');
+                } catch (error) {
+                    console.error('Error opening camera for check_out:', error);
+                    alert('حدث خطأ في فتح الكاميرا. يرجى المحاولة مرة أخرى.');
+                }
                 return false;
-            }
-            // تعيين الإجراء وفتح modal/card
-            openCamera('check_out');
-        });
-        
-        // إضافة touchstart للموبايل أيضاً
-        checkOutBtn.addEventListener('touchstart', function(e) {
-            console.log('checkOutBtn touchstart', { disabled: checkOutBtn.disabled });
-            if (checkOutBtn.disabled) {
+            }, true); // استخدام capture phase
+            
+            // إضافة touchstart للموبايل أيضاً
+            checkOutBtn.addEventListener('touchstart', function(e) {
+                console.log('checkOutBtn touchstart', { 
+                    disabled: checkOutBtn.disabled,
+                    isMobile: isMobile()
+                });
                 e.preventDefault();
                 e.stopPropagation();
+                
+                if (checkOutBtn.disabled) {
+                    console.warn('checkOutBtn is disabled');
+                    return false;
+                }
+                
+                // تعيين الإجراء وفتح modal/card
+                try {
+                    openCamera('check_out');
+                } catch (error) {
+                    console.error('Error opening camera for check_out:', error);
+                    alert('حدث خطأ في فتح الكاميرا. يرجى المحاولة مرة أخرى.');
+                }
                 return false;
-            }
-            // منع النقر المزدوج
-            e.preventDefault();
-            // تعيين الإجراء وفتح modal/card
-            openCamera('check_out');
-        }, { passive: false });
+            }, { passive: false, capture: true });
+            
+            // إضافة mousedown أيضاً كحل بديل
+            checkOutBtn.addEventListener('mousedown', function(e) {
+                if (isMobile()) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!checkOutBtn.disabled) {
+                        openCamera('check_out');
+                    }
+                    return false;
+                }
+            }, true);
+            
+            // وضع علامة أن event listeners تم إضافتها
+            checkOutBtn.dataset.listenerAttached = 'true';
+            console.log('checkOutBtn event listeners added');
+        }
     } else {
         console.error('checkOutBtn not found!');
     }
@@ -1211,4 +1310,44 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+    
+    // إرجاع العناصر المحدثة
+    return {
+        checkInBtn: checkInBtn ? document.getElementById('checkInBtn') : null,
+        checkOutBtn: checkOutBtn ? document.getElementById('checkOutBtn') : null
+    };
+}
+
+// تهيئة عند تحميل DOM
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAttendanceButtons);
+} else {
+    // DOM محمل بالفعل
+    initAttendanceButtons();
+}
+
+// إعادة المحاولة بعد تحميل الصفحة بالكامل
+window.addEventListener('load', function() {
+    setTimeout(initAttendanceButtons, 100);
 });
+
+// إعادة المحاولة كل 500ms لمدة 3 ثوانٍ كحد أقصى
+let retryCount = 0;
+const maxRetries = 6;
+const retryInterval = setInterval(function() {
+    const checkInBtn = document.getElementById('checkInBtn');
+    const checkOutBtn = document.getElementById('checkOutBtn');
+    
+    if ((checkInBtn && !checkInBtn.onclick) || (checkOutBtn && !checkOutBtn.onclick)) {
+        if (retryCount < maxRetries) {
+            console.log('Retrying to attach event listeners, attempt:', retryCount + 1);
+            initAttendanceButtons();
+            retryCount++;
+        } else {
+            clearInterval(retryInterval);
+            console.warn('Max retries reached for attendance buttons');
+        }
+    } else {
+        clearInterval(retryInterval);
+    }
+}, 500);
