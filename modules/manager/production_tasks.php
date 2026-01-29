@@ -1374,7 +1374,20 @@ try {
                                             <?php echo htmlspecialchars($priorityMeta['label']); ?>
                                         </span>
                                     </td>
-                                    <td><?php echo $task['due_date'] ? htmlspecialchars($task['due_date']) : '<span class="text-muted">غير محدد</span>'; ?></td>
+                                    <td>
+                                        <?php
+                                        if ($task['due_date']) {
+                                            $dt = DateTime::createFromFormat('Y-m-d', $task['due_date']);
+                                            if ($dt) {
+                                                echo htmlspecialchars($dt->format('d/m'));
+                                            } else {
+                                                echo htmlspecialchars($task['due_date']);
+                                            }
+                                        } else {
+                                            echo '<span class="text-muted">غير محدد</span>';
+                                        }
+                                        ?>
+                                    </td>
                                     <td>
                                         <div class="btn-group btn-group-sm" role="group">
                                             <?php if ($isAccountant || $isManager || $isAdmin || $isProduction || $isDeveloper): ?>
