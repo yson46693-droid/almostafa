@@ -153,6 +153,277 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'get_sales_rep_balance') {
     exit;
 }
 
+/**
+ * إرجاع HTML جدول المعاملات المالية مع الترقيم (للاستخدام العادي ولطلبات AJAX)
+ */
+function getCompanyCashTransactionsHtml($db) {
+    $searchType = isset($_GET['search_type']) && $_GET['search_type'] !== '' ? $_GET['search_type'] : null;
+    $searchStatus = isset($_GET['search_status']) && $_GET['search_status'] !== '' ? $_GET['search_status'] : null;
+    $searchDateFrom = isset($_GET['search_date_from']) && $_GET['search_date_from'] !== '' ? $_GET['search_date_from'] : null;
+    $searchDateTo = isset($_GET['search_date_to']) && $_GET['search_date_to'] !== '' ? $_GET['search_date_to'] : null;
+    $searchAmountFrom = isset($_GET['search_amount_from']) && $_GET['search_amount_from'] !== '' ? floatval($_GET['search_amount_from']) : null;
+    $searchAmountTo = isset($_GET['search_amount_to']) && $_GET['search_amount_to'] !== '' ? floatval($_GET['search_amount_to']) : null;
+    $searchDescription = isset($_GET['search_description']) && $_GET['search_description'] !== '' ? trim($_GET['search_description']) : null;
+    $searchReference = isset($_GET['search_reference']) && $_GET['search_reference'] !== '' ? trim($_GET['search_reference']) : null;
+    $searchCreatedBy = isset($_GET['search_created_by']) && $_GET['search_created_by'] !== '' ? intval($_GET['search_created_by']) : null;
+    $searchApprovedBy = isset($_GET['search_approved_by']) && $_GET['search_approved_by'] !== '' ? $_GET['search_approved_by'] : null;
+
+    $whereConditions = [];
+    $queryParams = [];
+
+    if ($searchType !== null) {
+        $whereConditions[] = "combined.type = ?";
+        $queryParams[] = $searchType;
+    }
+    if ($searchStatus !== null) {
+        $whereConditions[] = "combined.status = ?";
+        $queryParams[] = $searchStatus;
+    }
+    if ($searchDateFrom !== null) {
+        $whereConditions[] = "DATE(combined.created_at) >= ?";
+        $queryParams[] = $searchDateFrom;
+    }
+    if ($searchDateTo !== null) {
+        $whereConditions[] = "DATE(combined.created_at) <= ?";
+        $queryParams[] = $searchDateTo;
+    }
+    if ($searchAmountFrom !== null) {
+        $whereConditions[] = "combined.amount >= ?";
+        $queryParams[] = $searchAmountFrom;
+    }
+    if ($searchAmountTo !== null) {
+        $whereConditions[] = "combined.amount <= ?";
+        $queryParams[] = $searchAmountTo;
+    }
+    if ($searchDescription !== null) {
+        $whereConditions[] = "combined.description LIKE ?";
+        $queryParams[] = '%' . $searchDescription . '%';
+    }
+    if ($searchReference !== null) {
+        $whereConditions[] = "combined.reference_number LIKE ?";
+        $queryParams[] = '%' . $searchReference . '%';
+    }
+    if ($searchCreatedBy !== null) {
+        $whereConditions[] = "combined.created_by = ?";
+        $queryParams[] = $searchCreatedBy;
+    }
+    if ($searchApprovedBy !== null) {
+        if ($searchApprovedBy === 'null') {
+            $whereConditions[] = "combined.approved_by IS NULL";
+        } else {
+            $whereConditions[] = "combined.approved_by = ?";
+            $queryParams[] = intval($searchApprovedBy);
+        }
+    }
+
+    $whereClause = !empty($whereConditions) ? 'WHERE ' . implode(' AND ', $whereConditions) : '';
+    $pageNum = isset($_GET['p']) ? max(1, intval($_GET['p'])) : 1;
+    $perPage = 6;
+    $offset = ($pageNum - 1) * $perPage;
+
+    $countQuery = "
+        SELECT COUNT(*) as total
+        FROM (
+            SELECT id, type, amount, description, reference_number, status, created_by, approved_by, created_at
+            FROM financial_transactions
+            UNION ALL
+            SELECT id,
+                CASE
+                    WHEN transaction_type = 'collection_from_sales_rep' THEN 'income'
+                    WHEN transaction_type = 'expense' THEN 'expense'
+                    WHEN transaction_type = 'income' THEN 'income'
+                    WHEN transaction_type = 'transfer' THEN 'transfer'
+                    WHEN transaction_type = 'payment' THEN 'payment'
+                    ELSE 'other'
+                END as type,
+                amount, description, reference_number, status, created_by, approved_by, created_at
+            FROM accountant_transactions
+        ) as combined
+        $whereClause
+    ";
+    $totalCountResult = $db->queryOne($countQuery, $queryParams);
+    $totalCount = (int)($totalCountResult['total'] ?? 0);
+    $totalPages = ceil($totalCount / $perPage);
+
+    $dataQuery = "
+        SELECT combined.*, u1.full_name as created_by_name, u2.full_name as approved_by_name
+        FROM (
+            SELECT id, type, amount, description, reference_number, status, created_by, approved_by, created_at,
+                NULL as transaction_type, 'financial_transactions' as source_table
+            FROM financial_transactions
+            UNION ALL
+            SELECT id,
+                CASE
+                    WHEN transaction_type = 'collection_from_sales_rep' THEN 'income'
+                    WHEN transaction_type = 'expense' THEN 'expense'
+                    WHEN transaction_type = 'income' THEN 'income'
+                    WHEN transaction_type = 'transfer' THEN 'transfer'
+                    WHEN transaction_type = 'payment' THEN 'payment'
+                    ELSE 'other'
+                END as type,
+                amount, description, reference_number, status, created_by, approved_by, created_at,
+                transaction_type, 'accountant_transactions' as source_table
+            FROM accountant_transactions
+        ) as combined
+        LEFT JOIN users u1 ON combined.created_by = u1.id
+        LEFT JOIN users u2 ON combined.approved_by = u2.id
+        $whereClause
+        ORDER BY combined.created_at DESC
+        LIMIT ? OFFSET ?
+    ";
+    $queryParams[] = $perPage;
+    $queryParams[] = $offset;
+    $financialTransactions = $db->query($dataQuery, $queryParams) ?: [];
+
+    $typeLabels = ['income' => 'إيراد', 'expense' => 'مصروف', 'transfer' => 'تحويل', 'payment' => 'دفعة', 'other' => 'أخرى'];
+    $statusLabels = ['pending' => 'معلق', 'approved' => 'معتمد', 'rejected' => 'مرفوض'];
+    $statusColors = ['pending' => 'warning', 'approved' => 'success', 'rejected' => 'danger'];
+
+    ob_start();
+    ?>
+    <div class="table-responsive">
+        <table class="table table-hover table-striped">
+            <thead class="table-light">
+                <tr>
+                    <th>التاريخ</th>
+                    <th>النوع</th>
+                    <th>المبلغ</th>
+                    <th>الوصف</th>
+                    <th>الرقم المرجعي</th>
+                    <th>الحالة</th>
+                    <th>أنشأه</th>
+                    <th>إجراءات</th>
+                    <th>اعتمده</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (empty($financialTransactions)): ?>
+                    <tr>
+                        <td colspan="9" class="text-center text-muted py-4">
+                            <i class="bi bi-inbox me-2"></i>لا توجد حركات مالية حالياً
+                        </td>
+                    </tr>
+                <?php else: ?>
+                    <?php foreach ($financialTransactions as $trans): ?>
+                        <?php
+                        $rowClass = $trans['type'] === 'expense' ? 'table-danger' : ($trans['type'] === 'income' ? 'table-success' : '');
+                        ?>
+                        <tr class="<?php echo $rowClass; ?>">
+                            <td><?php echo formatDateTime($trans['created_at']); ?></td>
+                            <td>
+                                <span class="badge bg-<?php echo $trans['type'] === 'income' ? 'success' : ($trans['type'] === 'expense' ? 'danger' : 'info'); ?>">
+                                    <?php echo htmlspecialchars($typeLabels[$trans['type']] ?? $trans['type'], ENT_QUOTES, 'UTF-8'); ?>
+                                </span>
+                            </td>
+                            <td class="fw-bold <?php echo $trans['type'] === 'income' ? 'text-success' : 'text-danger'; ?>">
+                                <?php echo $trans['type'] === 'income' ? '+' : '-'; ?><?php echo formatCurrency($trans['amount']); ?>
+                            </td>
+                            <td><?php echo htmlspecialchars($trans['description'], ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td>
+                                <?php if ($trans['reference_number']): ?>
+                                    <span class="text-muted small"><?php echo htmlspecialchars($trans['reference_number'], ENT_QUOTES, 'UTF-8'); ?></span>
+                                <?php else: ?>
+                                    <span class="text-muted">-</span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <span class="badge bg-<?php echo $statusColors[$trans['status']] ?? 'secondary'; ?>">
+                                    <?php echo htmlspecialchars($statusLabels[$trans['status']] ?? $trans['status'], ENT_QUOTES, 'UTF-8'); ?>
+                                </span>
+                            </td>
+                            <td><?php echo htmlspecialchars($trans['created_by_name'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td>
+                                <?php
+                                $isCollectionFromSalesRep = (
+                                    ($trans['source_table'] ?? '') === 'accountant_transactions' &&
+                                    ($trans['type'] ?? '') === 'income' &&
+                                    ($trans['transaction_type'] ?? '') === 'collection_from_sales_rep'
+                                );
+                                if ($isCollectionFromSalesRep):
+                                    $printUrl = getRelativeUrl('print_collection_receipt.php?id=' . $trans['id']);
+                                ?>
+                                    <a href="<?php echo htmlspecialchars($printUrl, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" class="btn btn-sm btn-outline-primary" title="طباعة فاتورة التحصيل">
+                                        <i class="bi bi-printer"></i>
+                                    </a>
+                                <?php else: ?>
+                                    <span class="text-muted small">-</span>
+                                <?php endif; ?>
+                            </td>
+                            <td><?php echo htmlspecialchars($trans['approved_by_name'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+    <?php if ($totalPages > 1): ?>
+    <?php
+    $searchParams = [];
+    if ($searchType !== null) $searchParams['search_type'] = $searchType;
+    if ($searchStatus !== null) $searchParams['search_status'] = $searchStatus;
+    if ($searchDateFrom !== null) $searchParams['search_date_from'] = $searchDateFrom;
+    if ($searchDateTo !== null) $searchParams['search_date_to'] = $searchDateTo;
+    if ($searchAmountFrom !== null) $searchParams['search_amount_from'] = $searchAmountFrom;
+    if ($searchAmountTo !== null) $searchParams['search_amount_to'] = $searchAmountTo;
+    if ($searchDescription !== null) $searchParams['search_description'] = $searchDescription;
+    if ($searchReference !== null) $searchParams['search_reference'] = $searchReference;
+    if ($searchCreatedBy !== null) $searchParams['search_created_by'] = $searchCreatedBy;
+    if ($searchApprovedBy !== null) $searchParams['search_approved_by'] = $searchApprovedBy;
+    $baseUrl = '?page=company_cash';
+    $searchQueryString = !empty($searchParams) ? '&' . http_build_query($searchParams) : '';
+    ?>
+    <nav aria-label="Page navigation" class="mt-3">
+        <ul class="pagination justify-content-center flex-wrap">
+            <li class="page-item <?php echo $pageNum <= 1 ? 'disabled' : ''; ?>">
+                <a class="page-link" href="<?php echo $baseUrl . ($pageNum > 1 ? '&p=' . ($pageNum - 1) : '') . $searchQueryString; ?>">
+                    <i class="bi bi-chevron-right"></i>
+                </a>
+            </li>
+            <?php $startPage = max(1, $pageNum - 2); $endPage = min($totalPages, $pageNum + 2); ?>
+            <?php if ($startPage > 1): ?>
+                <li class="page-item"><a class="page-link" href="<?php echo $baseUrl . '&p=1' . $searchQueryString; ?>">1</a></li>
+                <?php if ($startPage > 2): ?>
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                <?php endif; ?>
+            <?php endif; ?>
+            <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
+                <li class="page-item <?php echo $i == $pageNum ? 'active' : ''; ?>">
+                    <a class="page-link" href="<?php echo $baseUrl . '&p=' . $i . $searchQueryString; ?>"><?php echo $i; ?></a>
+                </li>
+            <?php endfor; ?>
+            <?php if ($endPage < $totalPages): ?>
+                <?php if ($endPage < $totalPages - 1): ?>
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                <?php endif; ?>
+                <li class="page-item"><a class="page-link" href="<?php echo $baseUrl . '&p=' . $totalPages . $searchQueryString; ?>"><?php echo $totalPages; ?></a></li>
+            <?php endif; ?>
+            <li class="page-item <?php echo $pageNum >= $totalPages ? 'disabled' : ''; ?>">
+                <a class="page-link" href="<?php echo $baseUrl . '&p=' . ($pageNum + 1) . $searchQueryString; ?>">
+                    <i class="bi bi-chevron-left"></i>
+                </a>
+            </li>
+        </ul>
+        <div class="text-center text-muted small mt-2">
+            عرض <?php echo number_format(($pageNum - 1) * $perPage + 1); ?> - <?php echo number_format(min($pageNum * $perPage, $totalCount)); ?> من أصل <?php echo number_format($totalCount); ?> حركة
+            <?php if (!empty($searchParams)): ?>
+                <span class="badge bg-info ms-2">نتائج البحث</span>
+            <?php endif; ?>
+        </div>
+    </nav>
+    <?php endif; ?>
+    <?php
+    return ob_get_clean();
+}
+
+// طلب AJAX لجلب جدول المعاملات فقط (تنقل سلس بين الصفحات بدون ريفريش)
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'transactions_list') {
+    while (ob_get_level() > 0) ob_end_clean();
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-cache, must-revalidate');
+    echo json_encode(['html' => getCompanyCashTransactionsHtml($db)], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 $financialSuccess = '';
 $financialError = '';
 $financialFormData = [];
@@ -975,351 +1246,9 @@ $typeColorMap = [
             </div>
         </div>
         
-        <?php
-        // معالجة معاملات البحث
-        $searchType = isset($_GET['search_type']) && $_GET['search_type'] !== '' ? $_GET['search_type'] : null;
-        $searchStatus = isset($_GET['search_status']) && $_GET['search_status'] !== '' ? $_GET['search_status'] : null;
-        $searchDateFrom = isset($_GET['search_date_from']) && $_GET['search_date_from'] !== '' ? $_GET['search_date_from'] : null;
-        $searchDateTo = isset($_GET['search_date_to']) && $_GET['search_date_to'] !== '' ? $_GET['search_date_to'] : null;
-        $searchAmountFrom = isset($_GET['search_amount_from']) && $_GET['search_amount_from'] !== '' ? floatval($_GET['search_amount_from']) : null;
-        $searchAmountTo = isset($_GET['search_amount_to']) && $_GET['search_amount_to'] !== '' ? floatval($_GET['search_amount_to']) : null;
-        $searchDescription = isset($_GET['search_description']) && $_GET['search_description'] !== '' ? trim($_GET['search_description']) : null;
-        $searchReference = isset($_GET['search_reference']) && $_GET['search_reference'] !== '' ? trim($_GET['search_reference']) : null;
-        $searchCreatedBy = isset($_GET['search_created_by']) && $_GET['search_created_by'] !== '' ? intval($_GET['search_created_by']) : null;
-        $searchApprovedBy = isset($_GET['search_approved_by']) && $_GET['search_approved_by'] !== '' ? $_GET['search_approved_by'] : null;
-        
-        // بناء شروط البحث
-        $whereConditions = [];
-        $queryParams = [];
-        
-        if ($searchType !== null) {
-            $whereConditions[] = "combined.type = ?";
-            $queryParams[] = $searchType;
-        }
-        
-        if ($searchStatus !== null) {
-            $whereConditions[] = "combined.status = ?";
-            $queryParams[] = $searchStatus;
-        }
-        
-        if ($searchDateFrom !== null) {
-            $whereConditions[] = "DATE(combined.created_at) >= ?";
-            $queryParams[] = $searchDateFrom;
-        }
-        
-        if ($searchDateTo !== null) {
-            $whereConditions[] = "DATE(combined.created_at) <= ?";
-            $queryParams[] = $searchDateTo;
-        }
-        
-        if ($searchAmountFrom !== null) {
-            $whereConditions[] = "combined.amount >= ?";
-            $queryParams[] = $searchAmountFrom;
-        }
-        
-        if ($searchAmountTo !== null) {
-            $whereConditions[] = "combined.amount <= ?";
-            $queryParams[] = $searchAmountTo;
-        }
-        
-        if ($searchDescription !== null) {
-            $whereConditions[] = "combined.description LIKE ?";
-            $queryParams[] = '%' . $searchDescription . '%';
-        }
-        
-        if ($searchReference !== null) {
-            $whereConditions[] = "combined.reference_number LIKE ?";
-            $queryParams[] = '%' . $searchReference . '%';
-        }
-        
-        if ($searchCreatedBy !== null) {
-            $whereConditions[] = "combined.created_by = ?";
-            $queryParams[] = $searchCreatedBy;
-        }
-        
-        if ($searchApprovedBy !== null) {
-            if ($searchApprovedBy === 'null') {
-                $whereConditions[] = "combined.approved_by IS NULL";
-            } else {
-                $whereConditions[] = "combined.approved_by = ?";
-                $queryParams[] = intval($searchApprovedBy);
-            }
-        }
-        
-        $whereClause = !empty($whereConditions) ? 'WHERE ' . implode(' AND ', $whereConditions) : '';
-        
-        // Pagination
-        $pageNum = isset($_GET['p']) ? max(1, intval($_GET['p'])) : 1;
-        $perPage = 6;
-        $offset = ($pageNum - 1) * $perPage;
-        
-        // حساب العدد الإجمالي للحركات مع الفلاتر
-        $countQuery = "
-            SELECT COUNT(*) as total
-            FROM (
-                SELECT 
-                    id, 
-                    type, 
-                    amount, 
-                    description, 
-                    reference_number, 
-                    status, 
-                    created_by, 
-                    approved_by,
-                    created_at
-                FROM financial_transactions
-                UNION ALL
-                SELECT 
-                    id, 
-                    CASE 
-                        WHEN transaction_type = 'collection_from_sales_rep' THEN 'income'
-                        WHEN transaction_type = 'expense' THEN 'expense'
-                        WHEN transaction_type = 'income' THEN 'income'
-                        WHEN transaction_type = 'transfer' THEN 'transfer'
-                        WHEN transaction_type = 'payment' THEN 'payment'
-                        ELSE 'other'
-                    END as type,
-                    amount, 
-                    description, 
-                    reference_number, 
-                    status, 
-                    created_by, 
-                    approved_by,
-                    created_at
-                FROM accountant_transactions
-            ) as combined
-            $whereClause
-        ";
-        
-        $totalCountResult = $db->queryOne($countQuery, $queryParams);
-        $totalCount = (int)($totalCountResult['total'] ?? 0);
-        $totalPages = ceil($totalCount / $perPage);
-        
-        // جلب الحركات المالية مع الفلاتر
-        $dataQuery = "
-            SELECT 
-                combined.*,
-                u1.full_name as created_by_name,
-                u2.full_name as approved_by_name
-            FROM (
-                SELECT 
-                    id, 
-                    type, 
-                    amount, 
-                    description, 
-                    reference_number, 
-                    status, 
-                    created_by, 
-                    approved_by,
-                    created_at,
-                    NULL as transaction_type,
-                    'financial_transactions' as source_table
-                FROM financial_transactions
-                UNION ALL
-                SELECT 
-                    id, 
-                    CASE 
-                        WHEN transaction_type = 'collection_from_sales_rep' THEN 'income'
-                        WHEN transaction_type = 'expense' THEN 'expense'
-                        WHEN transaction_type = 'income' THEN 'income'
-                        WHEN transaction_type = 'transfer' THEN 'transfer'
-                        WHEN transaction_type = 'payment' THEN 'payment'
-                        ELSE 'other'
-                    END as type,
-                    amount, 
-                    description, 
-                    reference_number, 
-                    status, 
-                    created_by, 
-                    approved_by,
-                    created_at,
-                    transaction_type,
-                    'accountant_transactions' as source_table
-                FROM accountant_transactions
-            ) as combined
-            LEFT JOIN users u1 ON combined.created_by = u1.id
-            LEFT JOIN users u2 ON combined.approved_by = u2.id
-            $whereClause
-            ORDER BY combined.created_at DESC
-            LIMIT ? OFFSET ?
-        ";
-        
-        $queryParams[] = $perPage;
-        $queryParams[] = $offset;
-        
-        $financialTransactions = $db->query($dataQuery, $queryParams) ?: [];
-        
-        $typeLabels = [
-            'income' => 'إيراد',
-            'expense' => 'مصروف',
-            'transfer' => 'تحويل',
-            'payment' => 'دفعة',
-            'other' => 'أخرى'
-        ];
-        
-        $statusLabels = [
-            'pending' => 'معلق',
-            'approved' => 'معتمد',
-            'rejected' => 'مرفوض'
-        ];
-        
-        $statusColors = [
-            'pending' => 'warning',
-            'approved' => 'success',
-            'rejected' => 'danger'
-        ];
-        ?>
-        
-        <div class="table-responsive">
-            <table class="table table-hover table-striped">
-                <thead class="table-light">
-                    <tr>
-                        <th>التاريخ</th>
-                        <th>النوع</th>
-                        <th>المبلغ</th>
-                        <th>الوصف</th>
-                        <th>الرقم المرجعي</th>
-                        <th>الحالة</th>
-                        <th>أنشأه</th>
-                        <th>إجراءات</th>
-                        <th>اعتمده</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if (empty($financialTransactions)): ?>
-                        <tr>
-                            <td colspan="9" class="text-center text-muted py-4">
-                                <i class="bi bi-inbox me-2"></i>لا توجد حركات مالية حالياً
-                            </td>
-                        </tr>
-                    <?php else: ?>
-                        <?php foreach ($financialTransactions as $trans): ?>
-                            <?php 
-                            $isExpense = $trans['type'] === 'expense';
-                            $rowClass = $isExpense ? 'table-danger' : ($trans['type'] === 'income' ? 'table-success' : '');
-                            ?>
-                            <tr class="<?php echo $rowClass; ?>">
-                                <td><?php echo formatDateTime($trans['created_at']); ?></td>
-                                <td>
-                                    <span class="badge bg-<?php echo $trans['type'] === 'income' ? 'success' : ($trans['type'] === 'expense' ? 'danger' : 'info'); ?>">
-                                        <?php echo htmlspecialchars($typeLabels[$trans['type']] ?? $trans['type'], ENT_QUOTES, 'UTF-8'); ?>
-                                    </span>
-                                </td>
-                                <td class="fw-bold <?php echo $trans['type'] === 'income' ? 'text-success' : 'text-danger'; ?>">
-                                    <?php echo $trans['type'] === 'income' ? '+' : '-'; ?><?php echo formatCurrency($trans['amount']); ?>
-                                </td>
-                                <td><?php echo htmlspecialchars($trans['description'], ENT_QUOTES, 'UTF-8'); ?></td>
-                                <td>
-                                    <?php if ($trans['reference_number']): ?>
-                                        <span class="text-muted small"><?php echo htmlspecialchars($trans['reference_number'], ENT_QUOTES, 'UTF-8'); ?></span>
-                                    <?php else: ?>
-                                        <span class="text-muted">-</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <span class="badge bg-<?php echo $statusColors[$trans['status']] ?? 'secondary'; ?>">
-                                        <?php echo htmlspecialchars($statusLabels[$trans['status']] ?? $trans['status'], ENT_QUOTES, 'UTF-8'); ?>
-                                    </span>
-                                </td>
-                                <td><?php echo htmlspecialchars($trans['created_by_name'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></td>
-                                <td>
-                                    <?php 
-                                    // عرض زر الطباعة فقط للحركات من نوع إيراد (income) من accountant_transactions
-                                    // مع transaction_type = 'collection_from_sales_rep'
-                                    $isCollectionFromSalesRep = (
-                                        ($trans['source_table'] ?? '') === 'accountant_transactions' && 
-                                        ($trans['type'] ?? '') === 'income' &&
-                                        ($trans['transaction_type'] ?? '') === 'collection_from_sales_rep'
-                                    );
-                                    
-                                    if ($isCollectionFromSalesRep):
-                                        $printUrl = getRelativeUrl('print_collection_receipt.php?id=' . $trans['id']);
-                                    ?>
-                                        <a href="<?php echo htmlspecialchars($printUrl, ENT_QUOTES, 'UTF-8'); ?>" 
-                                           target="_blank" 
-                                           class="btn btn-sm btn-outline-primary" 
-                                           title="طباعة فاتورة التحصيل">
-                                            <i class="bi bi-printer"></i>
-                                        </a>
-                                    <?php else: ?>
-                                        <span class="text-muted small">-</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td><?php echo htmlspecialchars($trans['approved_by_name'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </tbody>
-            </table>
+        <div id="company-cash-transactions-list">
+        <?php echo getCompanyCashTransactionsHtml($db); ?>
         </div>
-        
-        <!-- Pagination -->
-        <?php if ($totalPages > 1): ?>
-        <?php
-        // بناء معاملات البحث للروابط
-        $searchParams = [];
-        if ($searchType !== null) $searchParams['search_type'] = $searchType;
-        if ($searchStatus !== null) $searchParams['search_status'] = $searchStatus;
-        if ($searchDateFrom !== null) $searchParams['search_date_from'] = $searchDateFrom;
-        if ($searchDateTo !== null) $searchParams['search_date_to'] = $searchDateTo;
-        if ($searchAmountFrom !== null) $searchParams['search_amount_from'] = $searchAmountFrom;
-        if ($searchAmountTo !== null) $searchParams['search_amount_to'] = $searchAmountTo;
-        if ($searchDescription !== null) $searchParams['search_description'] = $searchDescription;
-        if ($searchReference !== null) $searchParams['search_reference'] = $searchReference;
-        if ($searchCreatedBy !== null) $searchParams['search_created_by'] = $searchCreatedBy;
-        if ($searchApprovedBy !== null) $searchParams['search_approved_by'] = $searchApprovedBy;
-        
-        $baseUrl = '?page=company_cash';
-        $searchQueryString = !empty($searchParams) ? '&' . http_build_query($searchParams) : '';
-        ?>
-        <nav aria-label="Page navigation" class="mt-3">
-            <ul class="pagination justify-content-center flex-wrap">
-                <li class="page-item <?php echo $pageNum <= 1 ? 'disabled' : ''; ?>">
-                    <a class="page-link" href="<?php echo $baseUrl . ($pageNum > 1 ? '&p=' . ($pageNum - 1) : '') . $searchQueryString; ?>">
-                        <i class="bi bi-chevron-right"></i>
-                    </a>
-                </li>
-                
-                <?php
-                $startPage = max(1, $pageNum - 2);
-                $endPage = min($totalPages, $pageNum + 2);
-                
-                if ($startPage > 1): ?>
-                    <li class="page-item"><a class="page-link" href="<?php echo $baseUrl . '&p=1' . $searchQueryString; ?>">1</a></li>
-                    <?php if ($startPage > 2): ?>
-                        <li class="page-item disabled"><span class="page-link">...</span></li>
-                    <?php endif; ?>
-                <?php endif; ?>
-                
-                <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
-                    <li class="page-item <?php echo $i == $pageNum ? 'active' : ''; ?>">
-                        <a class="page-link" href="<?php echo $baseUrl . '&p=' . $i . $searchQueryString; ?>">
-                            <?php echo $i; ?>
-                        </a>
-                    </li>
-                <?php endfor; ?>
-                
-                <?php if ($endPage < $totalPages): ?>
-                    <?php if ($endPage < $totalPages - 1): ?>
-                        <li class="page-item disabled"><span class="page-link">...</span></li>
-                    <?php endif; ?>
-                    <li class="page-item"><a class="page-link" href="<?php echo $baseUrl . '&p=' . $totalPages . $searchQueryString; ?>"><?php echo $totalPages; ?></a></li>
-                <?php endif; ?>
-                
-                <li class="page-item <?php echo $pageNum >= $totalPages ? 'disabled' : ''; ?>">
-                    <a class="page-link" href="<?php echo $baseUrl . '&p=' . ($pageNum + 1) . $searchQueryString; ?>">
-                        <i class="bi bi-chevron-left"></i>
-                    </a>
-                </li>
-            </ul>
-            <div class="text-center text-muted small mt-2">
-                عرض <?php echo number_format(($pageNum - 1) * $perPage + 1); ?> - <?php echo number_format(min($pageNum * $perPage, $totalCount)); ?> من أصل <?php echo number_format($totalCount); ?> حركة
-                <?php if (!empty($searchParams)): ?>
-                    <span class="badge bg-info ms-2">نتائج البحث</span>
-                <?php endif; ?>
-            </div>
-        </nav>
-        <?php endif; ?>
     </div>
 </div>
 
@@ -1581,6 +1510,54 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!validateCollectAmount(collectCardAmount, collectCardAmount.getAttribute('data-max-balance'), collectCardSubmitBtn)) {
                 e.preventDefault();
                 return false;
+            }
+        });
+    }
+
+    // ===== تنقل سلس بين صفحات سجل المعاملات (بدون ريفريش) =====
+    var transactionsListEl = document.getElementById('company-cash-transactions-list');
+    if (transactionsListEl) {
+        function buildAjaxUrl(href) {
+            if (!href || href === '#' || href === '') return null;
+            var sep = href.indexOf('?') >= 0 ? '&' : '?';
+            return href + sep + 'ajax=transactions_list';
+        }
+        function loadTransactionsList(url, pushState) {
+            if (!url) return;
+            transactionsListEl.style.opacity = '0.6';
+            transactionsListEl.style.pointerEvents = 'none';
+            fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, cache: 'no-cache' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data && data.html) {
+                        transactionsListEl.innerHTML = data.html;
+                        if (pushState !== false) {
+                            try {
+                                var u = new URL(url, window.location.origin);
+                                u.searchParams.delete('ajax');
+                                window.history.pushState({ companyCashList: true }, '', u.pathname + '?' + u.searchParams.toString());
+                            } catch (e) {}
+                        }
+                    }
+                })
+                .catch(function() {})
+                .finally(function() {
+                    transactionsListEl.style.opacity = '';
+                    transactionsListEl.style.pointerEvents = '';
+                });
+        }
+        transactionsListEl.addEventListener('click', function(e) {
+            var link = e.target.closest('a.page-link');
+            if (!link || !link.href || link.closest('.page-item.disabled')) return;
+            if (link.getAttribute('href').indexOf('page=company_cash') === -1) return;
+            e.preventDefault();
+            var ajaxUrl = buildAjaxUrl(link.getAttribute('href'));
+            if (ajaxUrl) loadTransactionsList(ajaxUrl, true);
+        });
+        window.addEventListener('popstate', function(e) {
+            if (window.location.search.indexOf('page=company_cash') >= 0) {
+                var ajaxUrl = buildAjaxUrl(window.location.href);
+                if (ajaxUrl) loadTransactionsList(ajaxUrl, false);
             }
         });
     }
