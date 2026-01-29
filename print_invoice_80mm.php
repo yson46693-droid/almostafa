@@ -274,7 +274,7 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 /* رأس الفاتورة */
 .invoice-header-80mm {
     text-align: center;
-    padding: 1.5mm 0.5mm 1mm 0.5mm;
+    padding: 1.5mm 1.5mm 1mm 1.5mm;
     border-bottom: 2px solid #000;
     width: 100%;
     max-width: 100%;
@@ -311,7 +311,7 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 /* معلومات الفاتورة والعميل */
 .invoice-info-80mm,
 .customer-info-80mm {
-    padding: 0.8mm 0.5mm;
+    padding: 0.8mm 1.5mm;
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
@@ -324,7 +324,7 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
     margin-bottom: 1px;
     text-align: center;
     background: #f0f0f0;
-    padding: 1px 0.5px;
+    padding: 1.2mm 1mm;
     border: 1px solid #ddd;
     width: 100%;
     box-sizing: border-box;
@@ -405,7 +405,7 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 
 /* جدول المنتجات */
 .items-section-80mm {
-    padding: 0.8mm 0.5mm;
+    padding: 0.8mm 1.5mm;
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
@@ -429,12 +429,12 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 }
 
 .items-table-80mm th {
-    padding: 1px 0.5px;
+    padding: 1.2mm 1mm;
     text-align: center;
     font-weight: 600;
     font-size: 5.5px;
     border-left: 1px solid #000;
-    line-height: 1.1;
+    line-height: 1.2;
     word-wrap: break-word;
     overflow-wrap: break-word;
     letter-spacing: 0px;
@@ -445,12 +445,12 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 }
 
 .items-table-80mm td {
-    padding: 1px 0.5px;
+    padding: 1.2mm 1mm;
     text-align: center;
     border-bottom: 1px solid #000;
     border-left: 1px solid #000;
     font-size: 5.5px;
-    line-height: 1.1;
+    line-height: 1.2;
     vertical-align: middle;
     font-weight: 500;
     word-wrap: break-word;
@@ -464,11 +464,14 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 }
 
 .items-table-80mm .col-product {
-    width: 28%;
+    width: 42%;
+    min-width: 0;
     text-align: right;
-    padding-right: 0.5px;
+    padding-right: 1mm;
+    padding-left: 1mm;
     font-weight: 500;
     font-size: 5.5px;
+    word-break: break-word;
 }
 
 .items-table-80mm .col-batch {
@@ -481,21 +484,25 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
     width: 12%;
     font-weight: 500;
     font-size: 5.5px;
+    padding-left: 0.5mm;
+    padding-right: 0.5mm;
 }
 
 .items-table-80mm .col-price {
-    width: 21%;
+    width: 22%;
     text-align: left;
-    padding-left: 0.5px;
+    padding-left: 1mm;
+    padding-right: 0.5mm;
     font-weight: 500;
     font-size: 5.5px;
 }
 
 .items-table-80mm .col-total {
-    width: 21%;
+    width: 24%;
     text-align: left;
     font-weight: 600;
-    padding-left: 0.5px;
+    padding-left: 1mm;
+    padding-right: 1mm;
     font-size: 5.5px;
 }
 
@@ -682,8 +689,8 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
         max-width: 100% !important;
         box-sizing: border-box !important;
         overflow: hidden !important;
-        padding-left: 0.5mm !important;
-        padding-right: 0.5mm !important;
+        padding-left: 1.5mm !important;
+        padding-right: 1.5mm !important;
     }
     
     .items-table-80mm {
@@ -710,7 +717,7 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
     .items-section-80mm,
     .summary-section-80mm,
     .notes-section-80mm {
-        padding: 0.8mm 0.5mm !important;
+        padding: 0.8mm 1.5mm !important;
     }
 
     .items-table-80mm {
@@ -722,10 +729,10 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
     .items-table-80mm th,
     .items-table-80mm td {
         font-size: 5.5px !important;
-        padding: 1px 0.5px !important;
+        padding: 1.2mm 1mm !important;
         border: 1px solid #000 !important;
         font-weight: 500 !important;
-        line-height: 1.1 !important;
+        line-height: 1.2 !important;
     }
     
     .items-table-80mm .col-batch {
@@ -736,6 +743,8 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
     .items-table-80mm .col-product {
         font-weight: 500 !important;
         font-size: 5.5px !important;
+        width: 42% !important;
+        padding: 1.2mm 1mm !important;
     }
     
     .items-table-80mm .col-qty,
@@ -747,6 +756,7 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
     .items-table-80mm .col-total {
         font-weight: 600 !important;
         font-size: 5.5px !important;
+        width: 24% !important;
     }
 
     .items-table-80mm th {

@@ -448,6 +448,9 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
     box-shadow: 0 20px 45px rgba(15, 23, 42, 0.12);
     position: relative;
     overflow: hidden;
+    min-width: 320px;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .invoice-card::before {
@@ -626,7 +629,7 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
 }
 
 .items-table th {
-    padding: 14px 12px;
+    padding: 14px 16px;
     font-size: 13px;
     color: #0f4c81;
     text-align: right;
@@ -639,7 +642,7 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
 }
 
 .items-table td {
-    padding: 16px 12px;
+    padding: 16px 16px;
     font-size: 14px;
     color: #1f2937;
     border-bottom: 1px solid rgba(148, 163, 184, 0.25);
@@ -659,6 +662,9 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
     font-weight: 600;
     margin-bottom: 6px;
     color: #0f172a;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    min-width: 0;
 }
 
 .items-table .product-unit {
