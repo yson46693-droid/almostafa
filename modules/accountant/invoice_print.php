@@ -690,6 +690,20 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
     border-left: none;
 }
 
+/* تقليل المسافة بين عمود المنتج وعمود الكمية */
+.items-table th.col-product {
+    padding-left: 4px;
+}
+.items-table th:nth-child(2) {
+    padding-right: 4px;
+}
+.items-table td.product-cell {
+    padding-left: 4px;
+}
+.items-table td:nth-child(2) {
+    padding-right: 4px;
+}
+
 .items-table td {
     padding: 16px 12px;
     font-size: 14px;
@@ -1028,6 +1042,13 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
         border-left: none !important;
     }
 
+    .items-table th.col-product {
+        padding-left: 4px !important;
+    }
+    .items-table th:nth-child(2) {
+        padding-right: 4px !important;
+    }
+
     .items-table td {
         padding: 12px 8px !important;
         font-size: 12px !important;
@@ -1040,6 +1061,13 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
 
     .items-table td:first-child {
         border-left: none !important;
+    }
+
+    .items-table td.product-cell {
+        padding-left: 4px !important;
+    }
+    .items-table td:nth-child(2) {
+        padding-right: 4px !important;
     }
 
     .items-table .product-name {
@@ -1232,9 +1260,23 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
         font-size: 7px !important;
     }
 
+    .items-table th.col-product {
+        padding-left: 2px !important;
+    }
+    .items-table th:nth-child(2) {
+        padding-right: 2px !important;
+    }
+
     .items-table td {
         padding: 2px 1px !important;
         font-size: 7px !important;
+    }
+
+    .items-table td.product-cell {
+        padding-left: 2px !important;
+    }
+    .items-table td:nth-child(2) {
+        padding-right: 2px !important;
     }
 
     .items-table td.product-cell,
