@@ -1736,8 +1736,20 @@ function updateQuantityStep(index) {
 // دالة لفتح modal تغيير الحالة - يجب أن تكون في النطاق العام
 window.openChangeStatusModal = function(taskId, currentStatus) {
     function ensureChangeStatusCardExists() {
-        if (document.getElementById('changeStatusCardCollapse')) {
-            return true;
+        const existingCollapse = document.getElementById('changeStatusCardCollapse');
+        if (existingCollapse) {
+            // تأكد أن البطاقة كاملة (كل العناصر الداخلية موجودة)
+            const taskIdInput = existingCollapse.querySelector('#changeStatusCardTaskId');
+            const currentStatusDisplay = existingCollapse.querySelector('#currentStatusCardDisplay');
+            const newStatusSelect = existingCollapse.querySelector('#newStatusCard');
+            if (taskIdInput && currentStatusDisplay && newStatusSelect) {
+                return true;
+            }
+            // بطاقة ناقصة (مثلاً بعد تنقل AJAX) — أزل الوعاء وأعد الإنشاء
+            const wrapper = existingCollapse.closest('.container-fluid') || existingCollapse.parentElement;
+            if (wrapper && wrapper.parentNode) {
+                wrapper.remove();
+            }
         }
 
         const host = document.querySelector('main') || document.getElementById('main-content') || document.body;
@@ -1804,18 +1816,24 @@ window.openChangeStatusModal = function(taskId, currentStatus) {
             return false;
         }
 
-        // إعطاء DOM وقت للتحديث بعد إنشاء العناصر
         const collapseEl = document.getElementById('changeStatusCardCollapse');
-        const taskIdInput = document.getElementById('changeStatusCardTaskId');
-        const currentStatusDisplay = document.getElementById('currentStatusCardDisplay');
-        const newStatusSelect = document.getElementById('newStatusCard');
+        if (!collapseEl) {
+            if (retryCount < 3) {
+                setTimeout(() => openChangeStatusCard(taskIdInner, currentStatusInner, retryCount + 1), 80);
+                return false;
+            }
+            console.error('Change status card elements not found after retries');
+            return false;
+        }
 
-        if (!collapseEl || !taskIdInput || !currentStatusDisplay || !newStatusSelect) {
-            // محاولة مرة أخرى بعد تأخير قصير (حد أقصى محاولتين)
-            if (retryCount < 2) {
-                setTimeout(() => {
-                    openChangeStatusCard(taskIdInner, currentStatusInner, retryCount + 1);
-                }, 100);
+        // استخراج العناصر من داخل نفس البطاقة لتجنب تداخل IDs أو بطاقة ناقصة
+        const taskIdInput = collapseEl.querySelector('#changeStatusCardTaskId');
+        const currentStatusDisplay = collapseEl.querySelector('#currentStatusCardDisplay');
+        const newStatusSelect = collapseEl.querySelector('#newStatusCard');
+
+        if (!taskIdInput || !currentStatusDisplay || !newStatusSelect) {
+            if (retryCount < 3) {
+                setTimeout(() => openChangeStatusCard(taskIdInner, currentStatusInner, retryCount + 1), 80);
                 return false;
             }
             console.error('Change status card elements not found after retries');
