@@ -692,16 +692,16 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
 
 /* تقليل المسافة بين عمود المنتج وعمود الكمية */
 .items-table th.col-product {
-    padding-left: 4px;
+    padding-left: 1px;
 }
 .items-table th:nth-child(2) {
-    padding-right: 4px;
+    padding-right: 1px;
 }
 .items-table td.product-cell {
-    padding-left: 4px;
+    padding-left: 1px;
 }
 .items-table td:nth-child(2) {
-    padding-right: 4px;
+    padding-right: 1px;
 }
 
 .items-table td {
@@ -1043,10 +1043,10 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
     }
 
     .items-table th.col-product {
-        padding-left: 4px !important;
+        padding-left: 1px !important;
     }
     .items-table th:nth-child(2) {
-        padding-right: 4px !important;
+        padding-right: 1px !important;
     }
 
     .items-table td {
@@ -1064,10 +1064,10 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
     }
 
     .items-table td.product-cell {
-        padding-left: 4px !important;
+        padding-left: 1px !important;
     }
     .items-table td:nth-child(2) {
-        padding-right: 4px !important;
+        padding-right: 1px !important;
     }
 
     .items-table .product-name {
@@ -1261,10 +1261,10 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
     }
 
     .items-table th.col-product {
-        padding-left: 2px !important;
+        padding-left: 1px !important;
     }
     .items-table th:nth-child(2) {
-        padding-right: 2px !important;
+        padding-right: 1px !important;
     }
 
     .items-table td {
@@ -1273,10 +1273,10 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
     }
 
     .items-table td.product-cell {
-        padding-left: 2px !important;
+        padding-left: 1px !important;
     }
     .items-table td:nth-child(2) {
-        padding-right: 2px !important;
+        padding-right: 1px !important;
     }
 
     .items-table td.product-cell,
