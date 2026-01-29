@@ -75,9 +75,23 @@ $companyName = COMPANY_NAME;
         }
         .no-print .btn { font-size: 13px; padding: 6px 12px; }
         @media print {
-            body { background: #fff; padding: 0; margin: 0; }
+            html, body {
+                width: 80mm !important;
+                max-width: 80mm !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow-x: hidden !important;
+                background: #fff !important;
+            }
             .no-print { display: none !important; }
-            .print-sale-80mm-wrap { max-width: 80mm; margin: 0; box-shadow: none; }
+            .print-sale-80mm-wrap {
+                width: 80mm !important;
+                max-width: 80mm !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: hidden !important;
+                box-shadow: none !important;
+            }
             @page { size: 80mm auto; margin: 3mm; }
         }
     </style>

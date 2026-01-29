@@ -247,8 +247,8 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
                 <div class="invoice-title"><?php echo htmlspecialchars($documentTitleText); ?></div>
                 <div class="invoice-number"><?php echo htmlspecialchars($documentNumberLabel); ?><span><?php echo htmlspecialchars($invoiceData['invoice_number']); ?></span></div>
                 <div class="invoice-meta-grid">
-                    <div class="meta-item"><span>تاريخ الإصدار:</span> <strong><?php echo $issueDate; ?></strong></div>
-                    <div class="meta-item"><span>تاريخ الاستحقاق:</span> <strong><?php echo $dueDate; ?></strong></div>
+                    <div class="meta-item"><span> اصدار:</span> <strong><?php echo $issueDate; ?></strong></div>
+                    <div class="meta-item"><span> استحقاق:</span> <strong><?php echo $dueDate; ?></strong></div>
                     <div class="meta-item"><span>الحالة:</span> <strong class="<?php echo $statusClass; ?>"><?php echo $statusLabel; ?></strong></div>
                 </div>
             </div>
@@ -658,6 +658,7 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
 
 .items-table table {
     width: 100%;
+    max-width: 100%;
     border-collapse: separate;
     border-spacing: 0;
     border-radius: 18px;
@@ -1089,27 +1090,32 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
         margin: 5mm;
     }
 
-    body {
+    html, body {
         padding: 0 !important;
         margin: 0 !important;
         background: #ffffff !important;
+        overflow-x: hidden !important;
+        width: 80mm !important;
+        max-width: 80mm !important;
     }
 
     .invoice-wrapper {
-        width: 100% !important;
+        width: 80mm !important;
         max-width: 80mm !important;
-        margin: 0 auto !important;
+        margin: 0 !important;
         padding: 0 !important;
+        overflow: hidden !important;
     }
 
     .invoice-card {
         box-shadow: none !important;
         border: none !important;
-        padding: 8px !important;
+        padding: 6px !important;
         border-radius: 0 !important;
         page-break-inside: avoid !important;
         width: 100% !important;
         max-width: 100% !important;
+        overflow: hidden !important;
     }
 
     .invoice-card::before {
@@ -1195,23 +1201,32 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
 
     .items-table {
         page-break-inside: auto !important;
-        margin-bottom: 12px !important;
+        margin-bottom: 8px !important;
+        overflow: hidden !important;
+        width: 100% !important;
+        max-width: 100% !important;
     }
 
     .items-table table {
-        font-size: 9px !important;
+        font-size: 8px !important;
         width: 100% !important;
+        max-width: 100% !important;
         table-layout: fixed !important;
     }
 
+    /* توزيع الأعمدة في الطباعة لظهور الكل دون سكرول: عمود المنتج أصغر */
+    .items-table th.col-product {
+        width: 32% !important;
+    }
+
     .items-table th {
-        padding: 6px 4px !important;
-        font-size: 9px !important;
+        padding: 3px 2px !important;
+        font-size: 8px !important;
     }
 
     .items-table td {
-        padding: 6px 4px !important;
-        font-size: 9px !important;
+        padding: 3px 2px !important;
+        font-size: 8px !important;
     }
 
     .items-table td.product-cell,
@@ -1222,12 +1237,12 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
     }
 
     .items-table .product-name-wrap {
-        font-size: 8px !important;
-        line-height: 1.2 !important;
+        font-size: 7px !important;
+        line-height: 1.15 !important;
     }
 
     .items-table .product-notes-wrap {
-        font-size: 7px !important;
+        font-size: 6px !important;
     }
 
     .items-table tbody tr {
