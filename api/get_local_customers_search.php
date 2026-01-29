@@ -203,6 +203,14 @@ try {
         $hasLocation = isset($customer['latitude'], $customer['longitude']) &&
             $customer['latitude'] !== null &&
             $customer['longitude'] !== null;
+
+        $balanceUpdatedAt = isset($customer['balance_updated_at']) ? trim($customer['balance_updated_at']) : '';
+        $balance_updated_at_formatted = '';
+        if (!empty($balanceUpdatedAt) && function_exists('formatDateTime')) {
+            $balance_updated_at_formatted = formatDateTime($balanceUpdatedAt);
+        } elseif (!empty($balanceUpdatedAt)) {
+            $balance_updated_at_formatted = date('Y-m-d H:i', strtotime($balanceUpdatedAt));
+        }
         
         $result[] = [
             'id' => $customerId,
@@ -221,6 +229,8 @@ try {
             'latitude' => $hasLocation ? (float)$customer['latitude'] : null,
             'longitude' => $hasLocation ? (float)$customer['longitude'] : null,
             'raw_balance' => number_format($balance, 2, '.', ''),
+            'balance_updated_at' => $balanceUpdatedAt,
+            'balance_updated_at_formatted' => $balance_updated_at_formatted,
         ];
     }
     

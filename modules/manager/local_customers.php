@@ -203,7 +203,18 @@ try {
         error_log('CRITICAL: local_customers table does not exist after creation attempt');
         die('<div class="alert alert-danger">خطأ: جدول العملاء المحليين غير موجود. يرجى التحقق من قاعدة البيانات أو الاتصال بالدعم الفني.</div>');
     }
-    
+
+    // إضافة عمود balance_updated_at إذا لم يكن موجوداً (تاريخ/توقيت آخر تعديل للرصيد من نموذج التعديل)
+    $balanceUpdatedAtColumn = $db->queryOne("SHOW COLUMNS FROM local_customers LIKE 'balance_updated_at'");
+    if (empty($balanceUpdatedAtColumn)) {
+        try {
+            $db->rawQuery("ALTER TABLE `local_customers` ADD COLUMN `balance_updated_at` datetime DEFAULT NULL COMMENT 'آخر تعديل للرصيد من نموذج التعديل' AFTER `balance`");
+            error_log('Column balance_updated_at added to local_customers');
+        } catch (Throwable $e) {
+            error_log('Error adding balance_updated_at to local_customers: ' . $e->getMessage());
+        }
+    }
+
     // إنشاء جدول local_collections إذا لم يكن موجوداً
     $localCollectionsTable = $db->queryOne("SHOW TABLES LIKE 'local_collections'");
     if (empty($localCollectionsTable)) {
@@ -937,6 +948,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             if ($balance !== null) {
                                 $updateFields[] = 'balance = ?';
                                 $updateValues[] = $balance;
+                                $updateFields[] = 'balance_updated_at = NOW()';
                             }
                         }
                         
@@ -1900,7 +1912,20 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                         <?php foreach ($customers as $customer): ?>
                             <tr>
                                 <td><strong><?php echo (int)$customer['id']; ?></strong></td>
-                                <td><strong><?php echo htmlspecialchars($customer['name']); ?></strong></td>
+                                <td>
+                                    <?php
+                                    $balanceUpdatedAt = isset($customer['balance_updated_at']) ? trim($customer['balance_updated_at']) : '';
+                                    if (!empty($balanceUpdatedAt) && function_exists('formatDateTime')): ?>
+                                        <span class="badge bg-info-subtle text-info mb-1 d-inline-block" style="font-size: 0.7rem;" title="آخر تعديل للرصيد">
+                                            <i class="bi bi-clock-history me-1"></i><?php echo formatDateTime($balanceUpdatedAt); ?>
+                                        </span>
+                                    <?php elseif (!empty($balanceUpdatedAt)): ?>
+                                        <span class="badge bg-info-subtle text-info mb-1 d-inline-block" style="font-size: 0.7rem;" title="آخر تعديل للرصيد">
+                                            <i class="bi bi-clock-history me-1"></i><?php echo date('Y-m-d H:i', strtotime($balanceUpdatedAt)); ?>
+                                        </span>
+                                    <?php endif; ?>
+                                    <strong><?php echo htmlspecialchars($customer['name']); ?></strong>
+                                </td>
                                 <td>
                                     <?php
                                     // استخدام البيانات المجمعة مسبقاً بدلاً من استعلام منفصل
@@ -8171,9 +8196,15 @@ document.addEventListener('DOMContentLoaded', function() {
             actionsHtml += '<button type="button" class="btn btn-sm btn-outline-warning local-customer-return-btn" onclick="showLocalCustomerReturnModal(this)" data-customer-id="' + customer.id + '" data-customer-name="' + escapeHtml(customer.name) + '" data-customer-phone="' + escapeHtml(customer.phone || '') + '" data-customer-address="' + escapeHtml(customer.address || '') + '"><i class="bi bi-arrow-return-left me-1"></i>مرتجع</button>';
             actionsHtml += '</div>';
             
+            var nameCellHtml = '';
+            if (customer.balance_updated_at_formatted) {
+                nameCellHtml += '<span class="badge bg-info-subtle text-info mb-1 d-inline-block" style="font-size: 0.7rem;" title="آخر تعديل للرصيد"><i class="bi bi-clock-history me-1"></i>' + escapeHtml(customer.balance_updated_at_formatted) + '</span><br>';
+            }
+            nameCellHtml += '<strong>' + escapeHtml(customer.name) + '</strong>';
+
             row.innerHTML = 
                 '<td><strong>' + customer.id + '</strong></td>' +
-                '<td><strong>' + escapeHtml(customer.name) + '</strong></td>' +
+                '<td>' + nameCellHtml + '</td>' +
                 '<td>' + phonesHtml + '</td>' +
                 '<td>' + balanceHtml + '</td>' +
                 '<td>' + escapeHtml(customer.address || '-') + '</td>' +
