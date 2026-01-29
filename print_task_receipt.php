@@ -140,7 +140,7 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
         
         @page {
             size: 80mm auto;
-            margin: 5mm;
+            margin: 0;
         }
         
         @media print {
@@ -151,12 +151,15 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
                 margin: 0;
                 padding: 0;
                 background: #ffffff;
+                width: 80mm;
             }
             .receipt-container {
                 box-shadow: none;
                 border: none;
-                padding: 0;
+                padding: 2mm 1mm;
                 margin: 0;
+                max-width: 80mm;
+                width: 80mm;
             }
         }
         
@@ -170,6 +173,7 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
         
         .receipt-container {
             max-width: 80mm;
+            width: 100%;
             margin: 0 auto;
             padding: 5px;
             background: white;
@@ -232,7 +236,7 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
         }
         
         .info-table td {
-            padding: 8px 5px;
+            padding: 8px 2px;
             vertical-align: top;
             line-height: 1.6;
         }
@@ -277,7 +281,7 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
         }
         
         .products-table th {
-            padding: 8px 5px;
+            padding: 8px 2px;
             text-align: right;
             font-weight: 700;
             font-size: 13px;
@@ -286,7 +290,7 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
         }
         
         .products-table td {
-            padding: 8px 5px;
+            padding: 8px 2px;
             text-align: right;
             border-bottom: 1px solid #ddd;
             color: #000;
