@@ -247,18 +247,9 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
                 <div class="invoice-title"><?php echo htmlspecialchars($documentTitleText); ?></div>
                 <div class="invoice-number"><?php echo htmlspecialchars($documentNumberLabel); ?><span><?php echo htmlspecialchars($invoiceData['invoice_number']); ?></span></div>
                 <div class="invoice-meta-grid">
-                    <div class="meta-item">
-                        <span>تاريخ الإصدار</span>
-                        <strong><?php echo $issueDate; ?></strong>
-                    </div>
-                    <div class="meta-item">
-                        <span>تاريخ الاستحقاق</span>
-                        <strong><?php echo $dueDate; ?></strong>
-                    </div>
-                    <div class="meta-item">
-                        <span>الحالة</span>
-                        <strong class="<?php echo $statusClass; ?>"><?php echo $statusLabel; ?></strong>
-                    </div>
+                    <div class="meta-item"><span>تاريخ الإصدار:</span> <strong><?php echo $issueDate; ?></strong></div>
+                    <div class="meta-item"><span>تاريخ الاستحقاق:</span> <strong><?php echo $dueDate; ?></strong></div>
+                    <div class="meta-item"><span>الحالة:</span> <strong class="<?php echo $statusClass; ?>"><?php echo $statusLabel; ?></strong></div>
                 </div>
             </div>
         </header>
@@ -294,13 +285,18 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
             <table>
                 <thead>
                     <tr>
-                        <th style="width: 30%;">المنتج</th>
                         <?php if ($isReturnDocument): ?>
-                            <th style="width: 15%; text-align: center;">الحالة</th>
+                            <th class="col-product" style="width: 28%;">المنتج</th>
+                            <th style="width: 12%; text-align: center;">الحالة</th>
+                            <th style="width: 12%; text-align: center;">الكمية</th>
+                            <th style="width: 24%; text-align: end;">سعر الوحدة</th>
+                            <th style="width: 24%; text-align: end;">الإجمالي</th>
+                        <?php else: ?>
+                            <th class="col-product" style="width: 38%;">المنتج</th>
+                            <th style="width: 15%; text-align: center;">الكمية</th>
+                            <th style="width: 23%; text-align: end;">سعر الوحدة</th>
+                            <th style="width: 24%; text-align: end;">الإجمالي</th>
                         <?php endif; ?>
-                        <th style="width: 12%; text-align: center;">الكمية</th>
-                        <th style="width: 15%; text-align: end;">سعر الوحدة</th>
-                        <th style="width: 15%; text-align: end;">الإجمالي</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -319,14 +315,12 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
                             $itemNotes = trim((string)($item['notes'] ?? '')); // استخدام itemNotes بدلاً من notes لتجنب التعارض مع ملاحظات الفاتورة
                     ?>
                     <tr>
-                        <td>
-                            <div class="product-name" style="font-weight: 600; margin-bottom: 4px;">
+                        <td class="product-cell">
+                            <div class="product-name product-name-wrap">
                                 <?php echo htmlspecialchars($item['product_name'] ?? 'منتج'); ?>
                             </div>
                             <?php if ($itemNotes && !$isReturnDocument): ?>
-                                <div style="font-size: 12px; color: #64748b; margin-top: 4px;">
-                                    <?php echo nl2br(htmlspecialchars($itemNotes)); ?>
-                                </div>
+                                <div class="product-notes-wrap"><?php echo nl2br(htmlspecialchars($itemNotes)); ?></div>
                             <?php endif; ?>
                         </td>
                         <?php if ($isReturnDocument): ?>
@@ -382,7 +376,7 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
                         </div>
                     <?php endif; ?>
                     <div class="summary-row total">
-                        <span>الإجمالي النهائي</span>
+                        <span>الإجمالي </span>
                         <strong><?php echo formatCurrency($total); ?></strong>
                     </div>
                     <?php 
@@ -590,26 +584,31 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
 
 .invoice-meta-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(160px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
 }
 
 .meta-item {
     background: #f8fafc;
     border: 1px solid rgba(15, 76, 129, 0.08);
-    border-radius: 12px;
-    padding: 12px 16px;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .meta-item span {
-    display: block;
-    font-size: 12px;
+    display: inline;
+    font-size: 11px;
     color: #64748b;
-    margin-bottom: 6px;
 }
 
 .meta-item strong {
-    font-size: 15px;
+    display: inline;
+    font-size: 11px;
+    font-weight: 600;
     color: #0f172a;
 }
 
@@ -704,8 +703,29 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
     box-sizing: border-box;
 }
 
-.items-table td:first-child {
+.items-table td:first-child,
+.items-table td.product-cell {
     border-left: none;
+    min-width: 0;
+    word-break: break-word;
+    overflow-wrap: break-word;
+}
+
+.items-table .product-name-wrap {
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: #0f172a;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.3;
+}
+
+.items-table .product-notes-wrap {
+    font-size: 11px;
+    color: #64748b;
+    margin-top: 2px;
+    word-break: break-word;
+    overflow-wrap: break-word;
 }
 
 .items-table tbody tr:last-child td {
@@ -934,20 +954,18 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
     }
 
     .invoice-meta-grid {
-        grid-template-columns: 1fr !important;
-        gap: 8px !important;
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 4px !important;
     }
 
     .meta-item {
-        padding: 10px 12px !important;
+        padding: 4px 6px !important;
+        font-size: 10px !important;
     }
 
-    .meta-item span {
-        font-size: 11px !important;
-    }
-
+    .meta-item span,
     .meta-item strong {
-        font-size: 13px !important;
+        font-size: 10px !important;
     }
 
     .info-grid {
@@ -1141,20 +1159,18 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
     }
 
     .invoice-meta-grid {
-        grid-template-columns: 1fr !important;
-        gap: 4px !important;
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 2px !important;
     }
 
     .meta-item {
-        padding: 6px 8px !important;
-    }
-
-    .meta-item span {
+        padding: 4px 4px !important;
         font-size: 9px !important;
     }
 
+    .meta-item span,
     .meta-item strong {
-        font-size: 11px !important;
+        font-size: 9px !important;
     }
 
     .info-grid {
@@ -1185,6 +1201,7 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
     .items-table table {
         font-size: 9px !important;
         width: 100% !important;
+        table-layout: fixed !important;
     }
 
     .items-table th {
@@ -1195,6 +1212,22 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
     .items-table td {
         padding: 6px 4px !important;
         font-size: 9px !important;
+    }
+
+    .items-table td.product-cell,
+    .items-table td:first-child {
+        word-break: break-word !important;
+        overflow-wrap: break-word !important;
+        min-width: 0 !important;
+    }
+
+    .items-table .product-name-wrap {
+        font-size: 8px !important;
+        line-height: 1.2 !important;
+    }
+
+    .items-table .product-notes-wrap {
+        font-size: 7px !important;
     }
 
     .items-table tbody tr {
