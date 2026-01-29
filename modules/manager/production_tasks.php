@@ -1312,7 +1312,7 @@ try {
                     <thead class="table-light">
                         <tr>
                             <th>رقم الطلب</th>
-                            <th>العنوان</th>
+                            <th>الاوردر</th>
                             <th>الحاله</th>
                             <th>الأولوية</th>
                             <th>تاريخ التسليم</th>
@@ -1389,16 +1389,16 @@ try {
                                         ?>
                                     </td>
                                     <td>
-                                        <div class="btn-group btn-group-sm" role="group">
+                                        <div class="btn-group btn-group-sm" role="group" style="--bs-btn-padding-y: 0.2rem; --bs-btn-padding-x: 0.35rem;">
                                             <?php if ($isAccountant || $isManager || $isAdmin || $isProduction || $isDeveloper): ?>
-                                                <a href="<?php echo getRelativeUrl('print_task_receipt.php?id=' . (int) $task['id']); ?>" target="_blank" class="btn btn-outline-primary" title="طباعة الاوردر">
+                                                <a href="<?php echo getRelativeUrl('print_task_receipt.php?id=' . (int) $task['id']); ?>" target="_blank" class="btn btn-outline-primary btn-sm py-1 px-2" title="طباعة الاوردر">
                                                     <i class="bi bi-printer"></i>
                                                 </a>
                                             <?php endif; ?>
                                             
                                             <?php if ($isAccountant || $isManager): ?>
-                                                <button type="button" class="btn btn-outline-info btn-sm" onclick="openChangeStatusModal(<?php echo (int)$task['id']; ?>, '<?php echo htmlspecialchars($task['status'], ENT_QUOTES, 'UTF-8'); ?>')" title="تغيير حالة الطلب">
-                                                    <i class="bi bi-gear me-1"></i> 
+                                                <button type="button" class="btn btn-outline-info btn-sm py-1 px-2" onclick="openChangeStatusModal(<?php echo (int)$task['id']; ?>, '<?php echo htmlspecialchars($task['status'], ENT_QUOTES, 'UTF-8'); ?>')" title="تغيير حالة الطلب">
+                                                    <i class="bi bi-gear"></i>
                                                 </button>
                                             <?php endif; ?>
                                             
@@ -1408,8 +1408,8 @@ try {
                                                 <form method="post" class="d-inline" onsubmit="return confirm('هل أنت متأكد من حذف هذه المهمة؟ سيتم حذفها نهائياً ولن تظهر في الجدول.');">
                                                     <input type="hidden" name="action" value="cancel_task">
                                                     <input type="hidden" name="task_id" value="<?php echo (int)$task['id']; ?>">
-                                                    <button type="submit" class="btn btn-outline-danger btn-sm">
-                                                        <i class="bi bi-trash me-1"></i> 
+                                                    <button type="submit" class="btn btn-outline-danger btn-sm py-1 px-2">
+                                                        <i class="bi bi-trash"></i>
                                                     </button>
                                                 </form>
                                             <?php endif; ?>
