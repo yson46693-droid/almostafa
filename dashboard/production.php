@@ -1018,31 +1018,7 @@ if ($isAjaxNavigation) {
                 <script>
                     window.initialNotifications = <?php echo json_encode($notifications, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
                 </script>
-                <script>
-                    document.addEventListener('DOMContentLoaded', function() {
-                        document.querySelectorAll('.mark-dashboard-notification').forEach(function(button) {
-                            button.addEventListener('click', function() {
-                                const notificationId = this.getAttribute('data-id');
-                                if (!notificationId) {
-                                    return;
-                                }
-
-                                const parentItem = this.closest('.production-dashboard-notification');
-                                const listGroup = parentItem ? parentItem.parentElement : null;
-                                deleteNotification(notificationId).then(function() {
-                                    if (parentItem) {
-                                        parentItem.remove();
-                                    }
-                                    if (listGroup && !listGroup.querySelector('.production-dashboard-notification')) {
-                                        listGroup.innerHTML = '<p class="text-center text-muted mb-0">لا توجد إشعارات حالياً</p>';
-                                    }
-                                }).catch(function(err) {
-                                    console.error('Mark notification as read failed:', err);
-                                });
-                            });
-                        });
-                    });
-                </script>
+               
                 
                 <!-- آخر الإنتاج -->
                 <div class="card shadow-sm mb-4">
