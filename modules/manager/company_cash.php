@@ -82,8 +82,47 @@ function ensureAccountantTransactionsTable() {
     }
 }
 
-// التأكد من وجود الجدول
+// التأكد من وجود جدول financial_transactions (لتجنب تعطّل الصفحة عند غيابه على السيرفر)
+function ensureFinancialTransactionsTable() {
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+    try {
+        $db = db();
+        $tableCheck = $db->queryOne("SHOW TABLES LIKE 'financial_transactions'");
+        if (empty($tableCheck)) {
+            $db->execute("
+                CREATE TABLE IF NOT EXISTS `financial_transactions` (
+                  `id` int(11) NOT NULL AUTO_INCREMENT,
+                  `type` enum('expense','income','transfer','payment') NOT NULL,
+                  `amount` decimal(15,2) NOT NULL,
+                  `supplier_id` int(11) DEFAULT NULL,
+                  `description` text NOT NULL,
+                  `reference_number` varchar(50) DEFAULT NULL,
+                  `status` enum('pending','approved','rejected') DEFAULT 'pending',
+                  `approved_by` int(11) DEFAULT NULL,
+                  `created_by` int(11) NOT NULL,
+                  `approved_at` timestamp NULL DEFAULT NULL,
+                  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  PRIMARY KEY (`id`),
+                  KEY `supplier_id` (`supplier_id`),
+                  KEY `created_by` (`created_by`),
+                  KEY `approved_by` (`approved_by`),
+                  KEY `status` (`status`),
+                  KEY `created_at` (`created_at`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ");
+        }
+    } catch (Throwable $e) {
+        error_log('Error ensuring financial_transactions table: ' . $e->getMessage());
+    }
+}
+
+// التأكد من وجود الجداول
 ensureAccountantTransactionsTable();
+ensureFinancialTransactionsTable();
 
 // معالجة AJAX لجلب رصيد المندوب
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'get_sales_rep_balance') {
@@ -730,6 +769,8 @@ $pageTitle = isset($lang['menu_financial']) ? $lang['menu_financial'] : 'خزن�
 
 
 <?php
+$company_cash_error = null;
+try {
 // حساب ملخص الخزينة من financial_transactions و accountant_transactions
 $treasurySummary = $db->queryOne("
     SELECT
@@ -1569,6 +1610,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
-
+<?php } catch (Throwable $company_cash_ex) {
+    $company_cash_error = $company_cash_ex->getMessage();
+    error_log('Company cash page error: ' . $company_cash_error . ' | ' . $company_cash_ex->getTraceAsString());
+}
+if (!empty($company_cash_error)) {
+    echo '<div class="alert alert-danger m-3"><i class="bi bi-exclamation-triangle me-2"></i>حدث خطأ في تحميل صفحة الخزنة. يرجى المحاولة لاحقاً أو مراجعة المدير.</div>';
+    return;
+}
+?>
 <!-- تم حذف المودالات - Cards أصبحت ثابتة دائماً ظاهرة -->
 
