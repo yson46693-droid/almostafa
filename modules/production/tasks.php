@@ -913,16 +913,7 @@ LEFT JOIN users uCreate ON t.created_by = uCreate.id
 LEFT JOIN products p ON t.product_id = p.id
 " . $templateJoins . "
 $whereClause
-ORDER BY 
-    CASE t.priority
-        WHEN 'urgent' THEN 1
-        WHEN 'high' THEN 2
-        WHEN 'normal' THEN 3
-        WHEN 'low' THEN 4
-        ELSE 5
-    END,
-    COALESCE(t.due_date, '9999-12-31') ASC,
-    t.created_at DESC
+ORDER BY t.created_at DESC, t.id DESC
 LIMIT ? OFFSET ?";
 
 $queryParams = array_merge($params, [$perPage, $offset]);
