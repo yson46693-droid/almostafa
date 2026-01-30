@@ -1012,33 +1012,7 @@ if ($isAjaxNavigation) {
 
                 <div class="card shadow-sm mb-4">
                  
-                    <div class="card-body">
-                        <?php if (!empty($notifications)): ?>
-                        <div class="list-group">
-                            <?php foreach ($notifications as $notif): ?>
-                                <div class="list-group-item production-dashboard-notification" data-notification-id="<?php echo (int)($notif['id'] ?? 0); ?>">
-                                    <div class="d-flex justify-content-between align-items-start gap-3">
-                                    <div>
-                                        <h6 class="mb-1"><?php echo htmlspecialchars($notif['title'] ?? ''); ?></h6>
-                                        <p class="mb-1"><?php echo htmlspecialchars($notif['message'] ?? ''); ?></p>
-                                        <small class="text-muted"><?php echo date('Y-m-d H:i', strtotime($notif['created_at'] ?? 'now')); ?></small>
-                                    </div>
-                                    <div class="text-end">
-                                        <?php if (empty($notif['read'])): ?>
-                                            <span class="badge bg-primary d-block mb-2"><?php echo isset($lang['new']) ? $lang['new'] : 'جديد'; ?></span>
-                                        <?php endif; ?>
-                                        <button type="button" class="btn btn-sm btn-outline-secondary mark-dashboard-notification" data-id="<?php echo (int)($notif['id'] ?? 0); ?>">
-                                            <i class="bi bi-check2 me-1"></i>تم الرؤية
-                                        </button>
-                                    </div>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                        </div>
-                        <?php else: ?>
-                        <p class="text-center text-muted mb-0"><?php echo isset($lang['no_notifications']) ? $lang['no_notifications'] : 'لا توجد إشعارات حالياً'; ?></p>
-                        <?php endif; ?>
-                    </div>
+                    
                 </div>
 
                 <script>
