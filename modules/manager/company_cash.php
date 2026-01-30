@@ -21,7 +21,8 @@ requireRole(['manager', 'accountant', 'developer']);
 $currentUser = getCurrentUser();
 $db = db();
 
-// التأكد من وجود جدول accountant_transactions
+// التأكد من وجود جدول accountant_transactions (لا نعيد التعريف إذا كانت الدالة موجودة من accountant.php)
+if (!function_exists('ensureAccountantTransactionsTable')) {
 function ensureAccountantTransactionsTable() {
     static $checked = false;
     if ($checked) {
@@ -80,6 +81,7 @@ function ensureAccountantTransactionsTable() {
     } catch (Throwable $e) {
         error_log('Error creating accountant_transactions table: ' . $e->getMessage());
     }
+}
 }
 
 // التأكد من وجود جدول financial_transactions (لتجنب تعطّل الصفحة عند غيابه على السيرفر)

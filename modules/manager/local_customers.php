@@ -4430,21 +4430,38 @@ function loadLocalReturnInvoiceByNumber() {
     if (loadBtn) loadBtn.disabled = true;
     const apiBaseUrl = '<?php echo getRelativeUrl("api/customer_purchase_history.php"); ?>';
     const url = apiBaseUrl + (apiBaseUrl.indexOf('?') !== -1 ? '&' : '?') + 'action=get_invoice_by_number&customer_id=' + encodeURIComponent(customerId) + '&invoice_number=' + encodeURIComponent(invoiceNumber) + '&type=local';
+
+    function showInvoiceError(msg) {
+        if (loadSpinner) loadSpinner.classList.add('d-none');
+        if (loadBtn) loadBtn.disabled = false;
+        if (loadError) {
+            loadError.textContent = msg || 'الفاتورة غير موجودة أو غير مرتبطة بهذا العميل';
+            loadError.classList.remove('d-none');
+            loadError.style.display = 'block';
+        }
+    }
+
     fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
         .then(function(r) {
-            if (!r.ok) throw new Error('خطأ في الطلب');
-            return r.json();
+            return r.text().then(function(text) {
+                var data;
+                try { data = text ? JSON.parse(text) : {}; } catch (e) { data = {}; }
+                if (!r.ok) {
+                    var msg = (data && data.message) ? data.message : ('خطأ في الطلب: ' + (r.status === 404 ? 'الصفحة غير موجودة (404)' : r.status));
+                    showInvoiceError(msg);
+                    return Promise.reject(new Error(msg));
+                }
+                return data;
+            });
         })
         .then(function(data) {
             if (loadSpinner) loadSpinner.classList.add('d-none');
             if (loadBtn) loadBtn.disabled = false;
-            if (!data.success) {
-                if (loadError) {
-                    loadError.textContent = data.message || 'الفاتورة غير موجودة أو غير مرتبطة بهذا العميل';
-                    loadError.classList.remove('d-none');
-                }
+            if (!data || !data.success) {
+                showInvoiceError((data && data.message) ? data.message : 'الفاتورة غير موجودة أو غير مرتبطة بهذا العميل');
                 return;
             }
+            if (loadError) { loadError.classList.add('d-none'); loadError.textContent = ''; }
             localReturnLoadedData = data;
             document.getElementById('localReturnInvoiceInfoCard')?.classList.remove('d-none');
             document.getElementById('localReturnRefundMethodCard')?.classList.remove('d-none');
@@ -4455,11 +4472,8 @@ function loadLocalReturnInvoiceByNumber() {
             renderLocalReturnInvoiceItems();
         })
         .catch(function(err) {
-            if (loadSpinner) loadSpinner.classList.add('d-none');
-            if (loadBtn) loadBtn.disabled = false;
-            if (loadError) {
-                loadError.textContent = err.message || 'حدث خطأ أثناء التحقق من الفاتورة';
-                loadError.classList.remove('d-none');
+            if (loadError && loadError.classList.contains('d-none')) {
+                showInvoiceError(err.message || 'حدث خطأ أثناء التحقق من الفاتورة');
             }
         });
 }
