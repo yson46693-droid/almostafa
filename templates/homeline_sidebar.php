@@ -902,7 +902,91 @@ if (empty($menuItems)) {
             ?>
         </ul>
     </nav>
+
+    <!-- جزء التعريف الشخصي وتسجيل الخروج - يظهر لجميع المستخدمين (كل الأدوار) دون استثناء -->
+    <div class="homeline-sidebar-profile-section" role="region" aria-label="التعريف الشخصي وتسجيل الخروج">
+        <div class="sidebar-profile-label text-muted small text-uppercase mb-2">التعريف الشخصي وتسجيل الخروج</div>
+        <?php if (isset($currentUser) && is_array($currentUser) && !empty($currentUser)): ?>
+            <div class="sidebar-profile-name mb-1" title="الاسم الكامل"><?php echo htmlspecialchars($currentUser['full_name'] ?? '—'); ?></div>
+            <div class="sidebar-profile-username mb-2 small text-muted" title="اسم المستخدم"><?php echo htmlspecialchars($currentUser['username'] ?? '—'); ?></div>
+            <a href="<?php echo getRelativeUrl('logout.php'); ?>" class="btn btn-danger btn-sm w-100 d-flex align-items-center justify-content-center gap-2 homeline-sidebar-logout-btn" data-no-splash="true">
+                <i class="bi bi-box-arrow-right"></i>
+                <span><?php echo isset($lang['logout']) ? $lang['logout'] : 'تسجيل الخروج'; ?></span>
+            </a>
+        <?php else: ?>
+            <a href="<?php echo getRelativeUrl('index.php'); ?>" class="btn btn-danger btn-sm w-100 d-flex align-items-center justify-content-center gap-2 homeline-sidebar-logout-btn" data-no-splash="true">
+                <i class="bi bi-box-arrow-in-right"></i>
+                <span><?php echo isset($lang['login']) ? $lang['login'] : 'تسجيل الدخول'; ?></span>
+            </a>
+        <?php endif; ?>
+    </div>
 </aside>
+
+<style>
+.homeline-sidebar .homeline-sidebar-profile-section {
+    margin-top: auto;
+    padding: 1rem 1rem 1.25rem;
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    background: rgba(0, 0, 0, 0.02);
+    flex-shrink: 0;
+}
+.homeline-sidebar .sidebar-profile-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.02em;
+    opacity: 0.85;
+}
+.homeline-sidebar .sidebar-profile-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--bs-body-color, #212529);
+}
+.homeline-sidebar .homeline-sidebar-logout-btn {
+    font-weight: 500;
+    padding: 0.5rem 0.75rem;
+}
+.homeline-sidebar .homeline-sidebar-logout-btn:hover {
+    background-color: var(--bs-danger);
+    color: #fff;
+    border-color: var(--bs-danger);
+    opacity: 0.92;
+}
+/* ضمان أن الشريط يعرض الجزء السفلي بشكل صحيح */
+.homeline-sidebar {
+    display: flex;
+    flex-direction: column;
+}
+.homeline-sidebar .sidebar-nav {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+/* عند طي الشريط: إظهار قسم التعريف بشكل مضغوط لجميع المستخدمين */
+.dashboard-wrapper.sidebar-collapsed .homeline-sidebar .homeline-sidebar-profile-section {
+    padding: 0.75rem 0.5rem;
+}
+.dashboard-wrapper.sidebar-collapsed .homeline-sidebar .sidebar-profile-label,
+.dashboard-wrapper.sidebar-collapsed .homeline-sidebar .sidebar-profile-name,
+.dashboard-wrapper.sidebar-collapsed .homeline-sidebar .sidebar-profile-username {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+    margin: 0;
+    padding: 0;
+    position: absolute;
+    pointer-events: none;
+}
+.dashboard-wrapper.sidebar-collapsed .homeline-sidebar .homeline-sidebar-logout-btn span {
+    opacity: 0;
+    width: 0;
+    overflow: hidden;
+    position: absolute;
+}
+.dashboard-wrapper.sidebar-collapsed .homeline-sidebar .homeline-sidebar-logout-btn {
+    justify-content: center;
+    padding: 0.5rem;
+}
+</style>
 
 <!-- PWA Performance: Prefetching للروابط في الشريط الجانبي -->
 <script>

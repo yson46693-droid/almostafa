@@ -351,6 +351,28 @@
     border-color: var(--border-color);
 }
 
+[data-theme="dark"] .homeline-sidebar .homeline-sidebar-profile-section {
+    border-top-color: var(--border-color);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+[data-theme="dark"] .homeline-sidebar .sidebar-profile-name {
+    color: var(--gray-700);
+}
+
+[data-theme="dark"] .homeline-sidebar .homeline-sidebar-logout-btn {
+    background-color: var(--accent-red);
+    border-color: var(--accent-red);
+    color: #fff;
+}
+
+[data-theme="dark"] .homeline-sidebar .homeline-sidebar-logout-btn:hover {
+    background-color: var(--accent-red);
+    border-color: var(--accent-red);
+    color: #fff;
+    opacity: 0.9;
+}
+
 [data-theme="dark"] .homeline-topbar {
     background: var(--bg-topbar);
     border-color: var(--border-color);

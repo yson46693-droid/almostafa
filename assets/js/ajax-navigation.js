@@ -1413,7 +1413,46 @@
      */
     function handleLinkClick(event) {
         const link = event.target.closest('a');
-        if (!link || !shouldInterceptLink(link)) {
+        if (!link) return;
+
+        // تنقل سلس لترقيم الحركات المالية (خزنة الشركة / صفحة المحاسب) بدون ريفريش للمحتوى
+        const transactionsContainer = link.closest('#company-cash-transactions-list') || link.closest('#accountant-financial-transactions-list');
+        if (transactionsContainer && link.classList.contains('page-link') && !link.closest('.page-item.disabled')) {
+            const href = link.getAttribute('href') || link.href || '';
+            if (href && (href.indexOf('page=company_cash') !== -1 || href.indexOf('page=financial') !== -1)) {
+                event.preventDefault();
+                event.stopPropagation();
+                const sep = href.indexOf('?') >= 0 ? '&' : '?';
+                let ajaxUrl = href + sep + 'ajax=transactions_list';
+                if (ajaxUrl.indexOf('http') !== 0) {
+                    const base = window.location.origin + window.location.pathname;
+                    ajaxUrl = (ajaxUrl.charAt(0) === '?' ? base + ajaxUrl : base + '?' + ajaxUrl);
+                }
+                transactionsContainer.style.opacity = '0.6';
+                transactionsContainer.style.pointerEvents = 'none';
+                fetch(ajaxUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, cache: 'no-cache' })
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        if (data && data.html) {
+                            transactionsContainer.innerHTML = data.html;
+                            try {
+                                const u = new URL(ajaxUrl, window.location.origin);
+                                u.searchParams.delete('ajax');
+                                window.history.pushState({ url: u.pathname + '?' + u.searchParams.toString() }, '', u.pathname + '?' + u.searchParams.toString());
+                                currentUrl = window.location.href;
+                            } catch (e) {}
+                        }
+                    })
+                    .catch(function() {})
+                    .finally(function() {
+                        transactionsContainer.style.opacity = '';
+                        transactionsContainer.style.pointerEvents = '';
+                    });
+                return;
+            }
+        }
+
+        if (!shouldInterceptLink(link)) {
             return;
         }
 
