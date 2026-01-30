@@ -2129,8 +2129,9 @@ if ($isAjaxNavigation) {
             </style>
                 
             <?php elseif ($page === 'accountant_cash'): ?>
+                <!-- صفحة خزنة المحاسب - نفس صفحة خزنة الشركة (company_cash) التي تسمح بدور المحاسب -->
                 <?php 
-                $modulePath = __DIR__ . '/../modules/accountant/cash_register.php';
+                $modulePath = __DIR__ . '/../modules/manager/company_cash.php';
                 if (file_exists($modulePath)) {
                     include $modulePath;
                 } else {
