@@ -905,10 +905,23 @@ if (empty($menuItems)) {
 
     <!-- جزء التعريف الشخصي وتسجيل الخروج - يظهر لجميع المستخدمين (كل الأدوار) دون استثناء -->
     <div class="homeline-sidebar-profile-section" role="region" aria-label="التعريف الشخصي وتسجيل الخروج">
-        <div class="sidebar-profile-label text-muted small text-uppercase mb-2">التعريف الشخصي وتسجيل الخروج</div>
         <?php if (isset($currentUser) && is_array($currentUser) && !empty($currentUser)): ?>
-            <div class="sidebar-profile-name mb-1" title="الاسم الكامل"><?php echo htmlspecialchars($currentUser['full_name'] ?? '—'); ?></div>
-            <div class="sidebar-profile-username mb-2 small text-muted" title="اسم المستخدم"><?php echo htmlspecialchars($currentUser['username'] ?? '—'); ?></div>
+            <?php
+            $profileFullName = trim($currentUser['full_name'] ?? '') ?: '—';
+            $profileUsername = trim($currentUser['username'] ?? '') ?: '—';
+            ?>
+            <div class="sidebar-profile-info mb-2">
+                <div class="sidebar-profile-row" title="<?php echo htmlspecialchars($profileFullName); ?>">
+                    <span class="sidebar-profile-row-icon"><i class="bi bi-person-fill" aria-hidden="true"></i></span>
+                    <span class="sidebar-profile-row-label">الاسم</span>
+                    <span class="sidebar-profile-row-value sidebar-profile-name"><?php echo htmlspecialchars($profileFullName); ?></span>
+                </div>
+                <div class="sidebar-profile-row" title="<?php echo htmlspecialchars($profileUsername); ?>">
+                    <span class="sidebar-profile-row-icon"><i class="bi bi-at" aria-hidden="true"></i></span>
+                    <span class="sidebar-profile-row-label">اسم المستخدم</span>
+                    <span class="sidebar-profile-row-value sidebar-profile-username"><?php echo htmlspecialchars($profileUsername); ?></span>
+                </div>
+            </div>
             <a href="<?php echo getRelativeUrl('logout.php'); ?>" class="btn btn-danger btn-sm w-100 d-flex align-items-center justify-content-center gap-2 homeline-sidebar-logout-btn" data-no-splash="true">
                 <i class="bi bi-box-arrow-right"></i>
                 <span><?php echo isset($lang['logout']) ? $lang['logout'] : 'تسجيل الخروج'; ?></span>
@@ -935,10 +948,53 @@ if (empty($menuItems)) {
     letter-spacing: 0.02em;
     opacity: 0.85;
 }
+.homeline-sidebar .sidebar-profile-info {
+    background: rgba(0, 0, 0, 0.03);
+    border-radius: 0.375rem;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+}
+.homeline-sidebar .sidebar-profile-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 1.5rem;
+    margin-bottom: 0.35rem;
+    line-height: 1.35;
+}
+.homeline-sidebar .sidebar-profile-row:last-child {
+    margin-bottom: 0;
+}
+.homeline-sidebar .sidebar-profile-row-icon {
+    flex-shrink: 0;
+    width: 1.25rem;
+    text-align: center;
+    color: var(--bs-secondary, #6c757d);
+    font-size: 0.85rem;
+}
+.homeline-sidebar .sidebar-profile-row-label {
+    flex-shrink: 0;
+    font-size: 0.7rem;
+    color: var(--bs-secondary, #6c757d);
+    min-width: 4.5em;
+}
+.homeline-sidebar .sidebar-profile-row-value {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--bs-body-color, #212529);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 .homeline-sidebar .sidebar-profile-name {
     font-weight: 600;
-    font-size: 0.95rem;
-    color: var(--bs-body-color, #212529);
+}
+.homeline-sidebar .sidebar-profile-username {
+    font-weight: 500;
+    font-size: 0.75rem;
+    color: var(--bs-body-color, #495057);
 }
 .homeline-sidebar .homeline-sidebar-logout-btn {
     font-weight: 500;
@@ -965,6 +1021,7 @@ if (empty($menuItems)) {
     padding: 0.75rem 0.5rem;
 }
 .dashboard-wrapper.sidebar-collapsed .homeline-sidebar .sidebar-profile-label,
+.dashboard-wrapper.sidebar-collapsed .homeline-sidebar .sidebar-profile-info,
 .dashboard-wrapper.sidebar-collapsed .homeline-sidebar .sidebar-profile-name,
 .dashboard-wrapper.sidebar-collapsed .homeline-sidebar .sidebar-profile-username {
     opacity: 0;

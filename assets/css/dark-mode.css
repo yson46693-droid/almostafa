@@ -356,8 +356,20 @@
     background: rgba(255, 255, 255, 0.03);
 }
 
+[data-theme="dark"] .homeline-sidebar .sidebar-profile-info {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--border-color);
+}
+[data-theme="dark"] .homeline-sidebar .sidebar-profile-row-value,
 [data-theme="dark"] .homeline-sidebar .sidebar-profile-name {
     color: var(--gray-700);
+}
+[data-theme="dark"] .homeline-sidebar .sidebar-profile-username {
+    color: var(--gray-600);
+}
+[data-theme="dark"] .homeline-sidebar .sidebar-profile-row-icon,
+[data-theme="dark"] .homeline-sidebar .sidebar-profile-row-label {
+    color: var(--gray-500);
 }
 
 [data-theme="dark"] .homeline-sidebar .homeline-sidebar-logout-btn {
