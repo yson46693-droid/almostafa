@@ -86,7 +86,7 @@
         if (currentPage === 'accountant.php' || currentRole === 'accountant') {
             links.dashboard = 'accountant.php';
             links.chat = 'accountant.php?page=chat';
-            links.financial = 'accountant.php?page=financial';
+            links.financial = 'accountant.php?page=accountant_cash';
             links.reports = 'accountant.php?page=reports';
             links.invoices = 'accountant.php?page=invoices';
             links.payments = 'accountant.php?page=payments';
@@ -335,7 +335,7 @@
             } else if (currentPage === 'accountant.php') {
                 const accountantHandlers = {
                     '1': () => navigateToPage('dashboard'),
-                    '2': () => navigateToPage('financial'),
+                    '2': () => navigateToPage('accountant_cash'),
                     '3': () => navigateToPage('reports'),
                     '4': () => navigateToPage('chat'),
                     '5': () => navigateToPage('invoices'),

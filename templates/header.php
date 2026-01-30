@@ -3559,7 +3559,7 @@ if (ob_get_level() > 0) {
                                         <li><a class="dropdown-item" href="<?php echo getRelativeUrl('dashboard/sales.php?page=orders'); ?>"><i class="bi bi-cart-check me-2"></i>الطلبات</a></li>
                                         <li><hr class="dropdown-divider"></li>
                                         <li><h6 class="dropdown-header">صفحات المحاسبة</h6></li>
-                                        <li><a class="dropdown-item" href="<?php echo getRelativeUrl('dashboard/accountant.php?page=financial'); ?>"><i class="bi bi-safe me-2"></i>الخزنة</a></li>
+                                        <li><a class="dropdown-item" href="<?php echo getRelativeUrl('dashboard/accountant.php?page=accountant_cash'); ?>"><i class="bi bi-safe me-2"></i>الخزنة</a></li>
                                         <li><a class="dropdown-item" href="<?php echo getRelativeUrl('dashboard/accountant.php?page=invoices'); ?>"><i class="bi bi-receipt me-2"></i>الفواتير</a></li>
                                         <li><hr class="dropdown-divider"></li>
                                         <li><h6 class="dropdown-header">صفحات الإنتاج</h6></li>

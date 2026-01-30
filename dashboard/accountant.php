@@ -740,7 +740,7 @@ if ($page === 'financial' && isset($_GET['ajax']) && $_GET['ajax'] === 'transact
                     </tbody>
                 </table>
             </div>
-            <?php if ($totalPages > 1): $searchParams = []; if ($searchType !== null) $searchParams['search_type']=$searchType; if ($searchStatus !== null) $searchParams['search_status']=$searchStatus; if ($searchDateFrom !== null) $searchParams['search_date_from']=$searchDateFrom; if ($searchDateTo !== null) $searchParams['search_date_to']=$searchDateTo; if ($searchAmountFrom !== null) $searchParams['search_amount_from']=$searchAmountFrom; if ($searchAmountTo !== null) $searchParams['search_amount_to']=$searchAmountTo; if ($searchDescription !== null) $searchParams['search_description']=$searchDescription; if ($searchReference !== null) $searchParams['search_reference']=$searchReference; if ($searchCreatedBy !== null) $searchParams['search_created_by']=$searchCreatedBy; if ($searchApprovedBy !== null) $searchParams['search_approved_by']=$searchApprovedBy; $baseUrl = '?page=financial'; $searchQueryString = !empty($searchParams) ? '&' . http_build_query($searchParams) : ''; ?>
+            <?php if ($totalPages > 1): $searchParams = []; if ($searchType !== null) $searchParams['search_type']=$searchType; if ($searchStatus !== null) $searchParams['search_status']=$searchStatus; if ($searchDateFrom !== null) $searchParams['search_date_from']=$searchDateFrom; if ($searchDateTo !== null) $searchParams['search_date_to']=$searchDateTo; if ($searchAmountFrom !== null) $searchParams['search_amount_from']=$searchAmountFrom; if ($searchAmountTo !== null) $searchParams['search_amount_to']=$searchAmountTo; if ($searchDescription !== null) $searchParams['search_description']=$searchDescription; if ($searchReference !== null) $searchParams['search_reference']=$searchReference; if ($searchCreatedBy !== null) $searchParams['search_created_by']=$searchCreatedBy; if ($searchApprovedBy !== null) $searchParams['search_approved_by']=$searchApprovedBy; $baseUrl = '?page=accountant_cash'; $searchQueryString = !empty($searchParams) ? '&' . http_build_query($searchParams) : ''; ?>
             <nav aria-label="Page navigation" class="mt-3">
                 <ul class="pagination justify-content-center flex-wrap">
                     <li class="page-item <?php echo $pageNum <= 1 ? 'disabled' : ''; ?>"><a class="page-link" href="<?php echo $baseUrl . ($pageNum > 1 ? '&p=' . ($pageNum - 1) : '') . $searchQueryString; ?>"><i class="bi bi-chevron-right"></i></a></li>
@@ -981,7 +981,7 @@ if ($page === 'financial' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
         
-        $redirectTarget = strtok($_SERVER['REQUEST_URI'] ?? '?page=financial', '#');
+        $redirectTarget = strtok($_SERVER['REQUEST_URI'] ?? '?page=accountant_cash', '#');
         if (!headers_sent()) {
             header('Location: ' . $redirectTarget);
         } else {
@@ -1052,7 +1052,7 @@ if ($page === 'financial' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        $redirectTarget = strtok($_SERVER['REQUEST_URI'] ?? '?page=financial', '#');
+            $redirectTarget = strtok($_SERVER['REQUEST_URI'] ?? '?page=accountant_cash', '#');
         if (!headers_sent()) {
             header('Location: ' . $redirectTarget);
         } else {
@@ -1831,7 +1831,7 @@ if ($isAjaxNavigation) {
                                             <button type="submit" class="btn btn-primary">
                                                 <i class="bi bi-search me-1"></i>بحث
                                             </button>
-                                            <a href="?page=financial" class="btn btn-outline-secondary">
+                                            <a href="?page=accountant_cash" class="btn btn-outline-secondary">
                                                 <i class="bi bi-x-circle me-1"></i>إعادة تعيين
                                             </a>
                                         </div>

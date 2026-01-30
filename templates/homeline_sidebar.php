@@ -317,7 +317,7 @@ switch ($role) {
             [
                 'title' => isset($lang['menu_financial']) ? $lang['menu_financial'] : 'الخزنة',
                 'icon' => 'bi-safe',
-                'url' => $baseUrl . 'accountant.php?page=financial',
+                'url' => $baseUrl . 'accountant.php?page=accountant_cash',
                 'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'financial'),
                 'badge' => null
             ],

@@ -1488,7 +1488,7 @@ function getEntityLink($type, $entityId) {
     
     switch ($type) {
         case 'financial':
-            return getRelativeUrl('dashboard/accountant.php?page=financial&id=' . $entityId);
+            return getRelativeUrl('dashboard/accountant.php?page=accountant_cash&id=' . $entityId);
             
         case 'sales':
             return getRelativeUrl('dashboard/sales.php?page=sales_collections&id=' . $entityId);
