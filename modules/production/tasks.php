@@ -1376,7 +1376,7 @@ function tasksHtml(string $value): string
                     <table class="table dashboard-table dashboard-table--no-hover align-middle mb-0">
                         <thead class="table-light">
                             <tr>
-                                <th style="width: 60px;">رقم الاوردر</th>
+                                <th style="width: 60px;">#</th>
                                 <th>المنتج</th>
                                 <th>الكمية</th>
                                 <th>الحالة</th>
@@ -1423,7 +1423,7 @@ function tasksHtml(string $value): string
                                     && strtotime((string) $task['due_date']) < time();
                                 ?>
                                 <tr class="<?php echo $overdue ? 'table-danger' : ''; ?>" data-task-id="<?php echo (int) $task['id']; ?>">
-                                    <td><?php echo $rowNumber; ?></td>
+                                    <td><?php echo (int) $task['id']; ?></td>
                                     <td><?php 
                                         $productName = $task['product_name'] ?? '';
                                         if (!empty($productName) && trim($productName) !== '') {
