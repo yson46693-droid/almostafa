@@ -77,6 +77,8 @@ $customerPhone = $customer['phone'] ?? '';
 $customerAddress = $customer['address'] ?? '';
 $salesRepName = $customer['sales_rep_name'] ?? $customer['sales_rep_username'] ?? null;
 $customerCreatedAt = $customer['created_at'] ?? null;
+// الرصيد المعروض = الرصيد المحسوب من سجل الحركات (لضمان تطابقه مع الجدول بعد التحصيل)
+$displayBalance = isset($statementData['totals']['net_balance']) ? (float)$statementData['totals']['net_balance'] : (float)($customer['balance'] ?? 0);
 $customerBalance = (float)($customer['balance'] ?? 0);
 
 $statementDate = formatDate(date('Y-m-d'));
@@ -103,6 +105,7 @@ function getCustomerStatementData($customerId) {
         $movements[] = [
             'sort_date' => $inv['date'],
             'sort_id' => (int)$inv['id'],
+            'type_order' => 1, // فاتورة أولاً
             'type' => 'invoice',
             'date' => $inv['date'],
             'label' => 'فاتورة ' . ($inv['invoice_number'] ?? ''),
@@ -122,6 +125,7 @@ function getCustomerStatementData($customerId) {
         $movements[] = [
             'sort_date' => $ret['return_date'],
             'sort_id' => (int)$ret['id'],
+            'type_order' => 2, // مرتجع ثانياً
             'type' => 'return',
             'date' => $ret['return_date'],
             'label' => 'مرتجع ' . ($ret['return_number'] ?? '') . ($ret['invoice_number'] ? ' - فاتورة ' . $ret['invoice_number'] : ''),
@@ -151,6 +155,7 @@ function getCustomerStatementData($customerId) {
         $movements[] = [
             'sort_date' => $col['date'],
             'sort_id' => (int)$col['id'],
+            'type_order' => 3, // تحصيل ثالثاً
             'type' => 'collection',
             'date' => $col['date'],
             'label' => 'تحصيل #' . $col['id'] . ($col['invoice_number'] ? ' - فاتورة ' . $col['invoice_number'] : ''),
@@ -159,10 +164,12 @@ function getCustomerStatementData($customerId) {
         ];
     }
     
-    // ترتيب من الأقدم للأحدث
+    // ترتيب من الأقدم للأحدث، وفي نفس اليوم: فاتورة ثم مرتجع ثم تحصيل
     usort($movements, function ($a, $b) {
         $c = strcmp($a['sort_date'], $b['sort_date']);
-        return $c !== 0 ? $c : ($a['sort_id'] - $b['sort_id']);
+        if ($c !== 0) return $c;
+        $to = ($a['type_order'] ?? 9) - ($b['type_order'] ?? 9);
+        return $to !== 0 ? $to : ($a['sort_id'] - $b['sort_id']);
     });
     
     // حساب الرصيد بعد كل معاملة
@@ -204,6 +211,7 @@ function getLocalCustomerStatementData($customerId) {
             $movements[] = [
                 'sort_date' => $inv['date'],
                 'sort_id' => (int)$inv['id'],
+                'type_order' => 1,
                 'type' => 'invoice',
                 'date' => $inv['date'],
                 'label' => 'فاتورة ' . ($inv['invoice_number'] ?? ''),
@@ -225,6 +233,7 @@ function getLocalCustomerStatementData($customerId) {
             $movements[] = [
                 'sort_date' => $ret['return_date'],
                 'sort_id' => (int)$ret['id'],
+                'type_order' => 2,
                 'type' => 'return',
                 'date' => $ret['return_date'],
                 'label' => 'مرتجع ' . ($ret['return_number'] ?? ''),
@@ -246,6 +255,7 @@ function getLocalCustomerStatementData($customerId) {
             $movements[] = [
                 'sort_date' => $col['date'],
                 'sort_id' => (int)$col['id'],
+                'type_order' => 3,
                 'type' => 'collection',
                 'date' => $col['date'],
                 'label' => 'تحصيل #' . $col['id'],
@@ -255,10 +265,12 @@ function getLocalCustomerStatementData($customerId) {
         }
     }
     
-    // ترتيب من الأقدم للأحدث
+    // ترتيب من الأقدم للأحدث، وفي نفس اليوم: فاتورة ثم مرتجع ثم تحصيل
     usort($movements, function ($a, $b) {
         $c = strcmp($a['sort_date'], $b['sort_date']);
-        return $c !== 0 ? $c : ($a['sort_id'] - $b['sort_id']);
+        if ($c !== 0) return $c;
+        $to = ($a['type_order'] ?? 9) - ($b['type_order'] ?? 9);
+        return $to !== 0 ? $to : ($a['sort_id'] - $b['sort_id']);
     });
     
     // حساب الرصيد بعد كل معاملة
@@ -610,10 +622,10 @@ function getLocalCustomerStatementData($customerId) {
                 </div>
                 <?php endif; ?>
                 <div class="customer-info-item">
-                    <div class="customer-info-label">الرصيد الحالي</div>
-                    <div class="customer-info-value <?php echo $customerBalance >= 0 ? 'amount-positive' : 'amount-negative'; ?>">
-                        <?php echo formatCurrency(abs($customerBalance)); ?>
-                        <?php echo $customerBalance < 0 ? ' (دائن)' : ' (مدين)'; ?>
+                    <div class="customer-info-label">الرصيد الحالي (حسب سجل الحركات)</div>
+                    <div class="customer-info-value <?php echo $displayBalance >= 0 ? 'amount-positive' : 'amount-negative'; ?>">
+                        <?php echo formatCurrency(abs($displayBalance)); ?>
+                        <?php echo $displayBalance < 0 ? ' (دائن)' : ' (مدين)'; ?>
                     </div>
                 </div>
             </div>
