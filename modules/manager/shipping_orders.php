@@ -1372,9 +1372,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'cancel_shipping_order') {
         $orderId = isset($_POST['order_id']) ? (int)$_POST['order_id'] : 0;
+        $deductedAmount = isset($_POST['deducted_amount']) ? cleanFinancialValue($_POST['deducted_amount'], true) : null;
 
         if ($orderId <= 0) {
             $_SESSION[$sessionErrorKey] = 'طلب غير صالح للإلغاء.';
+            redirectAfterPost('shipping_orders', [], [], 'manager');
+            exit;
+        }
+
+        if ($deductedAmount === null || $deductedAmount < 0) {
+            $_SESSION[$sessionErrorKey] = 'يرجى إدخال مبلغ الشحن المخصوم (صفر أو أكثر).';
             redirectAfterPost('shipping_orders', [], [], 'manager');
             exit;
         }
@@ -1386,7 +1393,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $transactionStarted = true;
 
             $order = $db->queryOne(
-                "SELECT id, shipping_company_id, customer_id, total_amount, status, invoice_id FROM shipping_company_orders WHERE id = ? FOR UPDATE",
+                "SELECT id, shipping_company_id, customer_id, total_amount, status, invoice_id, order_number FROM shipping_company_orders WHERE id = ? FOR UPDATE",
                 [$orderId]
             );
 
@@ -1402,12 +1409,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new InvalidArgumentException('لا يمكن إلغاء طلب تم تسليمه بالفعل.');
             }
 
-            $totalAmount = (float)($order['total_amount'] ?? 0.0);
+            $deductedAmount = (float)$deductedAmount;
 
-            // خصم المبلغ من ديون شركة الشحن
+            // خصم المبلغ المدخل من ديون شركة الشحن
             $db->execute(
                 "UPDATE shipping_companies SET balance = balance - ?, updated_by = ?, updated_at = NOW() WHERE id = ?",
-                [$totalAmount, $currentUser['id'] ?? null, $order['shipping_company_id']]
+                [$deductedAmount, $currentUser['id'] ?? null, $order['shipping_company_id']]
             );
 
             // إرجاع المنتجات إلى المخزن الرئيسي
@@ -1561,7 +1568,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $orderId,
                 null,
                 [
-                    'total_amount' => $totalAmount,
+                    'deducted_amount' => $deductedAmount,
                     'shipping_company_id' => $order['shipping_company_id'],
                 ]
             );
@@ -1569,7 +1576,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db->commit();
             $transactionStarted = false;
 
-            $_SESSION[$sessionSuccessKey] = 'تم إلغاء الطلب وإرجاع المنتجات إلى المخزن الرئيسي بنجاح.';
+            $_SESSION[$sessionSuccessKey] = 'تم إلغاء الطلب وخصم مبلغ ' . number_format($deductedAmount, 2) . ' من ديون شركة الشحن وإرجاع المنتجات إلى المخزن الرئيسي بنجاح.';
         } catch (InvalidArgumentException $validationError) {
             if ($transactionStarted) {
                 $db->rollback();
@@ -3310,7 +3317,9 @@ $hasShippingCompanies = !empty($shippingCompanies);
                                         </td>
                                         <td>
                                             <div class="d-flex flex-wrap gap-2">
-                                                <form method="POST" class="d-inline cancel-order-form" onsubmit="return handleCancelOrder(event, this);">
+                                                <form method="POST" class="d-inline cancel-order-form" onsubmit="return handleCancelOrder(event, this);"
+                                                      data-order-number="<?php echo htmlspecialchars($order['order_number'] ?? ''); ?>"
+                                                      data-total-amount="<?php echo (float)($order['total_amount'] ?? 0); ?>">
                                                     <input type="hidden" name="action" value="cancel_shipping_order">
                                                     <input type="hidden" name="order_id" value="<?php echo (int)$order['id']; ?>">
                                                     <button type="submit" class="btn btn-outline-danger btn-sm cancel-order-btn">
@@ -3643,6 +3652,44 @@ $hasShippingCompanies = !empty($shippingCompanies);
                     <button type="submit" class="btn btn-primary">تحصيل المبلغ</button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal إلغاء الطلب - إدخال مبلغ الشحن المخصوم -->
+<div class="modal fade" id="cancelOrderModal" tabindex="-1" aria-labelledby="cancelOrderModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title" id="cancelOrderModalLabel">
+                    <i class="bi bi-x-circle me-2"></i>إلغاء الطلب - مبلغ الشحن المخصوم
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info mb-3">
+                    <i class="bi bi-info-circle me-2"></i>
+                    سيتم خصم المبلغ المدخل من ديون شركة الشحن وإرجاع المنتجات إلى المخزن الرئيسي.
+                </div>
+                <div class="mb-2">
+                    <span class="text-muted">رقم الطلب:</span> <strong id="cancelModalOrderNumber">-</strong>
+                </div>
+                <div class="mb-2">
+                    <span class="text-muted">مبلغ الطلب:</span> <strong id="cancelModalOrderTotal">-</strong>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="cancelModalDeductedAmount">مبلغ الشحن المخصوم <span class="text-danger">*</span></label>
+                    <input type="number" class="form-control" id="cancelModalDeductedAmount" step="0.01" min="0" placeholder="0.00" required>
+                    <div class="form-text">المبلغ الذي سيُخصم من ديون شركة الشحن</div>
+                    <div class="invalid-feedback" id="cancelModalAmountError"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                <button type="button" class="btn btn-warning" id="cancelOrderModalConfirmBtn" onclick="confirmCancelOrderWithDeductedAmount();">
+                    <i class="bi bi-x-circle me-1"></i>تأكيد الإلغاء وخصم المبلغ
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -4397,44 +4444,69 @@ function closeAddLocalCustomerCard() {
     }
 })();
 
-// دالة معالجة إلغاء الطلب
+// نموذج الإلغاء المؤجل (لإظهار بطاقة مبلغ الشحن المخصوم)
+let _pendingCancelForm = null;
+
+// دالة معالجة إلغاء الطلب - إظهار بطاقة إدخال مبلغ الشحن المخصوم
 function handleCancelOrder(event, form) {
     if (!event) {
         return false;
     }
-    
-    // منع السلوك الافتراضي
     event.preventDefault();
     event.stopPropagation();
-    
-    // التحقق من التأكيد
-    const confirmed = confirm('هل ترغب في إلغاء هذا الطلب وإرجاع المنتجات إلى المخزن الرئيسي؟');
-    
-    if (!confirmed) {
-        return false;
+
+    const orderNumber = form.getAttribute('data-order-number') || '-';
+    const totalAmount = parseFloat(form.getAttribute('data-total-amount') || '0') || 0;
+    const totalFormatted = new Intl.NumberFormat('ar-EG', { style: 'currency', currency: 'EGP', minimumFractionDigits: 2 }).format(totalAmount);
+
+    document.getElementById('cancelModalOrderNumber').textContent = '#' + orderNumber;
+    document.getElementById('cancelModalOrderTotal').textContent = totalFormatted;
+    document.getElementById('cancelModalDeductedAmount').value = totalAmount > 0 ? totalAmount.toFixed(2) : '';
+    document.getElementById('cancelModalAmountError').textContent = '';
+    document.getElementById('cancelModalDeductedAmount').classList.remove('is-invalid');
+
+    _pendingCancelForm = form;
+    const cancelModal = new bootstrap.Modal(document.getElementById('cancelOrderModal'));
+    cancelModal.show();
+    return false;
+}
+
+// تأكيد إلغاء الطلب بعد إدخال مبلغ الشحن المخصوم
+function confirmCancelOrderWithDeductedAmount() {
+    if (!_pendingCancelForm) return;
+
+    const amountInput = document.getElementById('cancelModalDeductedAmount');
+    const amount = parseFloat(amountInput.value);
+    const errorEl = document.getElementById('cancelModalAmountError');
+
+    if (isNaN(amount) || amount < 0) {
+        amountInput.classList.add('is-invalid');
+        errorEl.textContent = 'يرجى إدخال مبلغ صحيح (صفر أو أكثر).';
+        return;
     }
-    
-    // تعطيل الزر لمنع الإرسال المتكرر
-    const submitBtn = form.querySelector('.cancel-order-btn');
+
+    amountInput.classList.remove('is-invalid');
+    errorEl.textContent = '';
+
+    // إضافة حقل المبلغ المخصوم للنموذج
+    let hiddenInput = _pendingCancelForm.querySelector('input[name="deducted_amount"]');
+    if (!hiddenInput) {
+        hiddenInput = document.createElement('input');
+        hiddenInput.type = 'hidden';
+        hiddenInput.name = 'deducted_amount';
+        _pendingCancelForm.appendChild(hiddenInput);
+    }
+    hiddenInput.value = amount.toFixed(2);
+
+    const submitBtn = _pendingCancelForm.querySelector('.cancel-order-btn');
     if (submitBtn) {
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جاري الإلغاء...';
     }
-    
-    // إرسال النموذج
-    try {
-        form.submit();
-    } catch (error) {
-        console.error('Error submitting cancel order form:', error);
-        if (submitBtn) {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = '<i class="bi bi-x-circle me-1"></i>طلب ملغي';
-        }
-        alert('حدث خطأ أثناء إلغاء الطلب. يرجى المحاولة مرة أخرى.');
-        return false;
-    }
-    
-    return false;
+
+    bootstrap.Modal.getInstance(document.getElementById('cancelOrderModal')).hide();
+    _pendingCancelForm.submit();
+    _pendingCancelForm = null;
 }
 </script>
 
