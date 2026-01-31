@@ -276,11 +276,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 throw new InvalidArgumentException('لا توجد ديون نشطة على هذا العميل.');
             }
             
-            if ($amount > $currentBalance) {
-                throw new InvalidArgumentException('المبلغ المدخل أكبر من ديون العميل الحالية.');
-            }
-            
-            $newBalance = round(max($currentBalance - $amount, 0), 2);
+            // السماح بمبلغ أكبر من الدين؛ الفرق يتحول إلى رصيد دائن للعميل
+            $newBalance = round($currentBalance - $amount, 2);
             
             // تحديث رصيد العميل
             $db->execute(
@@ -2498,7 +2495,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (successDiv) successDiv.classList.add('d-none');
 
                 amountInput.value = debtAmount.toFixed(2);
-                amountInput.setAttribute('max', debtAmount.toFixed(2));
+                amountInput.removeAttribute('max');
                 amountInput.setAttribute('min', '0');
                 amountInput.readOnly = debtAmount <= 0;
                 if (debtAmount > 0) {
@@ -2955,7 +2952,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             min="0.01"
                             required
                         >
-                        <div class="form-text">لن يتم قبول مبلغ أكبر من قيمة الديون الحالية.</div>
+                        <div class="form-text">يمكن إدخال مبلغ أكبر من الدين؛ الفرق يُحول تلقائياً إلى رصيد دائن للعميل.</div>
                     </div>
                     <div id="repCollectionError" class="alert alert-danger d-none" role="alert"></div>
                     <div id="repCollectionSuccess" class="alert alert-success d-none" role="alert"></div>
@@ -3000,7 +2997,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     min="0.01"
                     required
                 >
-                <div class="form-text">لن يتم قبول مبلغ أكبر من قيمة الديون الحالية.</div>
+                <div class="form-text">يمكن إدخال مبلغ أكبر من الدين؛ الفرق يُحول تلقائياً إلى رصيد دائن للعميل.</div>
             </div>
             <div id="repCollectionCardError" class="alert alert-danger d-none" role="alert"></div>
             <div id="repCollectionCardSuccess" class="alert alert-success d-none" role="alert"></div>
@@ -4325,7 +4322,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             min="0.01"
                             required
                         >
-                        <div class="form-text">لن يتم قبول مبلغ أكبر من قيمة الديون الحالية.</div>
+                        <div class="form-text">يمكن إدخال مبلغ أكبر من الدين؛ الفرق يُحول تلقائياً إلى رصيد دائن للعميل.</div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -4439,7 +4436,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     min="0.01"
                     required
                 >
-                <div class="form-text">لن يتم قبول مبلغ أكبر من قيمة الديون الحالية.</div>
+                <div class="form-text">يمكن إدخال مبلغ أكبر من الدين؛ الفرق يُحول تلقائياً إلى رصيد دائن للعميل.</div>
             </div>
             <div class="d-flex gap-2">
                 <button type="submit" class="btn btn-primary">تحصيل المبلغ</button>
@@ -4501,7 +4498,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 customerIdInput.value = triggerButton.getAttribute('data-customer-id') || '';
 
                 amountInput.value = debtAmount.toFixed(2);
-                amountInput.setAttribute('max', debtAmount.toFixed(2));
+                amountInput.removeAttribute('max');
                 amountInput.setAttribute('min', '0');
                 amountInput.readOnly = debtAmount <= 0;
                 if (debtAmount > 0) {
@@ -6730,7 +6727,7 @@ function showRepCollectPaymentModal(button) {
             if (debtEl) debtEl.textContent = balanceFormatted;
             if (amountInput) {
                 amountInput.value = debtAmount.toFixed(2);
-                amountInput.setAttribute('max', debtAmount.toFixed(2));
+                amountInput.removeAttribute('max');
                 amountInput.setAttribute('min', '0');
                 amountInput.readOnly = debtAmount <= 0;
             }
@@ -6758,7 +6755,7 @@ function showRepCollectPaymentModal(button) {
             if (debtEl) debtEl.textContent = balanceFormatted;
             if (amountInput) {
                 amountInput.value = debtAmount.toFixed(2);
-                amountInput.setAttribute('max', debtAmount.toFixed(2));
+                amountInput.removeAttribute('max');
                 amountInput.setAttribute('min', '0');
                 amountInput.readOnly = debtAmount <= 0;
                 if (debtAmount > 0) amountInput.focus();
@@ -6818,7 +6815,7 @@ function showAllCustomersCollectPaymentModal(button) {
             if (debtEl) debtEl.textContent = balanceFormatted;
             if (amountInput) {
                 amountInput.value = debtAmount.toFixed(2);
-                amountInput.setAttribute('max', debtAmount.toFixed(2));
+                amountInput.removeAttribute('max');
                 amountInput.setAttribute('min', '0');
                 amountInput.readOnly = debtAmount <= 0;
             }
@@ -6842,7 +6839,7 @@ function showAllCustomersCollectPaymentModal(button) {
             if (debtEl) debtEl.textContent = balanceFormatted;
             if (amountInput) {
                 amountInput.value = debtAmount.toFixed(2);
-                amountInput.setAttribute('max', debtAmount.toFixed(2));
+                amountInput.removeAttribute('max');
                 amountInput.setAttribute('min', '0');
                 amountInput.readOnly = debtAmount <= 0;
                 if (debtAmount > 0) amountInput.focus();

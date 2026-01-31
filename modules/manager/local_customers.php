@@ -637,11 +637,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new InvalidArgumentException('لا توجد ديون نشطة على هذا العميل.');
                 }
 
-                if ($amount > $currentBalance) {
-                    throw new InvalidArgumentException('المبلغ المدخل أكبر من ديون العميل الحالية.');
-                }
-
-                $newBalance = round(max($currentBalance - $amount, 0), 2);
+                // السماح بمبلغ أكبر من الدين؛ الفرق يتحول إلى رصيد دائن للعميل
+                $newBalance = round($currentBalance - $amount, 2);
 
                 $db->execute(
                     "UPDATE local_customers SET balance = ? WHERE id = ?",
@@ -2136,7 +2133,7 @@ window.LOCAL_CUSTOMERS_CONFIG = { currentRole: <?php echo json_encode($currentRo
                             min="0.01"
                             required
                         >
-                        <div class="form-text">لن يتم قبول مبلغ أكبر من قيمة الديون الحالية.</div>
+                        <div class="form-text">يمكن إدخال مبلغ أكبر من الدين؛ الفرق يُحول تلقائياً إلى رصيد دائن للعميل.</div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">نوع التحصيل <span class="text-danger">*</span></label>
@@ -2203,7 +2200,7 @@ window.LOCAL_CUSTOMERS_CONFIG = { currentRole: <?php echo json_encode($currentRo
                     min="0.01"
                     required
                 >
-                <div class="form-text">لن يتم قبول مبلغ أكبر من قيمة الديون الحالية.</div>
+                <div class="form-text">يمكن إدخال مبلغ أكبر من الدين؛ الفرق يُحول تلقائياً إلى رصيد دائن للعميل.</div>
             </div>
             <div class="mb-3">
                 <label class="form-label">نوع التحصيل <span class="text-danger">*</span></label>
@@ -3229,8 +3226,8 @@ function showCollectPaymentModal(button) {
             if (debtEl) debtEl.textContent = balanceFormatted;
             if (amountInput) {
                 amountInput.value = debtAmount.toFixed(2);
-                amountInput.setAttribute('max', debtAmount.toFixed(2));
-                amountInput.setAttribute('min', '0');
+                amountInput.removeAttribute('max');
+                amountInput.setAttribute('min', '0.01');
                 amountInput.readOnly = debtAmount <= 0;
             }
             
@@ -3939,8 +3936,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 customerIdInput.value = triggerButton.getAttribute('data-customer-id') || '';
 
                 amountInput.value = debtAmount.toFixed(2);
-                amountInput.setAttribute('max', debtAmount.toFixed(2));
-                amountInput.setAttribute('min', '0');
+                amountInput.removeAttribute('max');
+                amountInput.setAttribute('min', '0.01');
                 amountInput.readOnly = debtAmount <= 0;
                 amountInput.focus();
             });
