@@ -1859,7 +1859,10 @@ var dashboardWrapper = null;
         </form>
     </div>
 </div>
-
+<script>
+window.LOCAL_CUSTOMERS_CONFIG = { currentRole: <?php echo json_encode($currentRole); ?>, apiBase: <?php echo json_encode(function_exists('getBasePath') ? rtrim(getBasePath(), '/') : ''); ?>, pageNum: <?php echo (int)$pageNum; ?> };
+(function runLocalCustomersSearchInit(tries) { tries = tries || 0; if (typeof window.initLocalCustomersSearch === 'function') { window.initLocalCustomersSearch(); } else if (tries < 100) { setTimeout(function() { runLocalCustomersSearchInit(tries + 1); }, 30); } })();
+</script>
 <!-- قائمة العملاء -->
 <div class="card shadow-sm">
     <div class="card-header bg-primary text-white">
@@ -8251,21 +8254,6 @@ function closeImportLocalCustomersCard() {
             }
         });
     }
-    
-    // ===== البحث المتقدم اللحظي - تهيئة من سكربت خارجي (يعمل مع التحميل العادي و AJAX) =====
-    window.LOCAL_CUSTOMERS_CONFIG = {
-        currentRole: <?php echo json_encode($currentRole); ?>,
-        apiBase: <?php echo json_encode(function_exists('getBasePath') ? rtrim(getBasePath(), '/') : ''); ?>,
-        pageNum: <?php echo (int)$pageNum; ?>
-    };
-    (function runLocalCustomersSearchInit(tries) {
-        tries = tries || 0;
-        if (typeof window.initLocalCustomersSearch === 'function') {
-            window.initLocalCustomersSearch();
-        } else if (tries < 100) {
-            setTimeout(function() { runLocalCustomersSearchInit(tries + 1); }, 30);
-        }
-    })();
     
     // ===== مراقبة تغييرات الـ sidebar وإزالة overlay عند إغلاقه - حل جذري =====
     if (dashboardWrapper) {

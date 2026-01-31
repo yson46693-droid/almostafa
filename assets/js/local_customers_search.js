@@ -13,21 +13,23 @@
     }
 
     function initLocalCustomersSearch() {
+        var customerSearchInput = document.getElementById('customerSearch');
+        var tableBody = document.getElementById('customersTableBody');
+        if (!customerSearchInput || !tableBody) return;
+        if (customerSearchInput.getAttribute('data-local-search-inited') === '1') return;
+        customerSearchInput.setAttribute('data-local-search-inited', '1');
+
         var config = window.LOCAL_CUSTOMERS_CONFIG || {};
         var currentRole = config.currentRole || 'manager';
         var localCustomersApiBase = config.apiBase !== undefined && config.apiBase !== '' ? config.apiBase : getApiBase();
         var currentPage = parseInt(config.pageNum, 10) || 1;
 
-        var customerSearchInput = document.getElementById('customerSearch');
         var searchForm = document.getElementById('localCustomersSearchForm');
-        var tableBody = document.getElementById('customersTableBody');
         var localSearchClearBtn = document.getElementById('localSearchClearBtn');
         var localSearchResetBtn = document.getElementById('localSearchResetBtn');
         var filterStatus = document.getElementById('debtStatusFilter');
         var filterRegion = document.getElementById('regionFilter');
         var autocompleteDropdown = document.getElementById('autocompleteDropdown');
-
-        if (!customerSearchInput || !tableBody) return;
 
         var searchTimeout = null;
         var currentAbortController = null;
@@ -465,4 +467,18 @@
     }
 
     window.initLocalCustomersSearch = initLocalCustomersSearch;
+
+    (function observeLocalCustomersPage() {
+        var main = document.querySelector('main');
+        if (!main) return;
+        function tryInit() {
+            var el = document.getElementById('customerSearch');
+            if (el && el.getAttribute('data-local-search-inited') !== '1' && window.LOCAL_CUSTOMERS_CONFIG) {
+                initLocalCustomersSearch();
+            }
+        }
+        var observer = new MutationObserver(function() { tryInit(); });
+        observer.observe(main, { childList: true, subtree: true });
+        setTimeout(tryInit, 100);
+    })();
 })();
