@@ -7861,7 +7861,8 @@ function closeImportLocalCustomersCard() {
 }
 
 // dashboardWrapper معرّف في بداية الصفحة؛ نعينه هنا عند جاهزية DOM
-document.addEventListener('DOMContentLoaded', function() {
+// تشغيل فوري عند AJAX (readyState=complete) أو عند DOMContentLoaded عند التحميل الكامل
+(function runLocalCustomersDOMInit() {
     // تحسين الأداء على الجوال: تأخير الكود غير الضروري
     var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     var initDelay = isMobile ? 100 : 0; // تأخير 100ms على الجوال لتجنب التجمد
