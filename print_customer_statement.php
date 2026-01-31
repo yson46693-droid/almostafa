@@ -164,6 +164,28 @@ function getCustomerStatementData($customerId) {
         ];
     }
     
+    // إذا كان إجمالي الدائن أكبر من المدين، نضيف "رصيد أول المدة" لتصفير الرصيد الصافي
+    $sumDebit = 0.0;
+    $sumCredit = 0.0;
+    foreach ($movements as $m) {
+        $sumDebit += $m['debit'];
+        $sumCredit += $m['credit'];
+    }
+    if ($sumCredit > $sumDebit) {
+        $openingDebit = round($sumCredit - $sumDebit, 2);
+        $minDate = !empty($movements) ? min(array_column($movements, 'sort_date')) : date('Y-m-d');
+        array_unshift($movements, [
+            'sort_date' => $minDate,
+            'sort_id' => 0,
+            'type_order' => 0,
+            'type' => 'opening',
+            'date' => $minDate,
+            'label' => 'رصيد أول المدة / دين سابق',
+            'debit' => $openingDebit,
+            'credit' => 0.0,
+        ]);
+    }
+    
     // ترتيب من الأقدم للأحدث، وفي نفس اليوم: فاتورة ثم مرتجع ثم تحصيل
     usort($movements, function ($a, $b) {
         $c = strcmp($a['sort_date'], $b['sort_date']);
@@ -263,6 +285,28 @@ function getLocalCustomerStatementData($customerId) {
                 'credit' => (float)($col['amount'] ?? 0),
             ];
         }
+    }
+    
+    // إذا كان إجمالي الدائن أكبر من المدين (تحصيلات/مرتجعات بدون فواتير مسجلة)، نضيف "رصيد أول المدة" لتصفير الرصيد الصافي
+    $sumDebit = 0.0;
+    $sumCredit = 0.0;
+    foreach ($movements as $m) {
+        $sumDebit += $m['debit'];
+        $sumCredit += $m['credit'];
+    }
+    if ($sumCredit > $sumDebit) {
+        $openingDebit = round($sumCredit - $sumDebit, 2);
+        $minDate = !empty($movements) ? min(array_column($movements, 'sort_date')) : date('Y-m-d');
+        array_unshift($movements, [
+            'sort_date' => $minDate,
+            'sort_id' => 0,
+            'type_order' => 0,
+            'type' => 'opening',
+            'date' => $minDate,
+            'label' => 'رصيد أول المدة / دين سابق',
+            'debit' => $openingDebit,
+            'credit' => 0.0,
+        ]);
     }
     
     // ترتيب من الأقدم للأحدث، وفي نفس اليوم: فاتورة ثم مرتجع ثم تحصيل
