@@ -309,6 +309,12 @@
             if (dashboardWrapper && dashboardWrapper.classList.contains('sidebar-open')) {
                 dashboardWrapper.classList.remove('sidebar-open');
                 document.body.classList.remove('sidebar-open');
+                // منع النقر الشبح: المحتوى الرئيسي لا يستقبل لمسات لمدة 450ms بعد إغلاق الشريط
+                // حتى لا تُفعّل عناصر صفحة العملاء المحليين (أو أي صفحة) عند نفس إحداثيات الضغط
+                document.body.classList.add('sidebar-nav-guard');
+                setTimeout(function() {
+                    document.body.classList.remove('sidebar-nav-guard');
+                }, 450);
             }
         }
         
