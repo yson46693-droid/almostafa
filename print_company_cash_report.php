@@ -582,9 +582,6 @@ $statusLabels = [
                                 <th>المبلغ</th>
                                 <th>الوصف</th>
                                 <th>الرقم المرجعي</th>
-                                <th>الحالة</th>
-                                <th>أنشأه</th>
-                                <th>اعتمده</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -613,17 +610,6 @@ $statusLabels = [
                                     -
                                 <?php endif; ?>
                             </td>
-                                    <td>
-                                        <span class="status-badge">
-                                            <?php echo htmlspecialchars($statusLabels[$trans['status']] ?? $trans['status'], ENT_QUOTES, 'UTF-8'); ?>
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <?php echo getUserName($trans['created_by'], $users); ?>
-                                    </td>
-                                    <td>
-                                        <?php echo getUserName($trans['approved_by'], $users); ?>
-                                    </td>
                                 </tr>
                             <?php endforeach; ?>
                             <tr class="total-row">
@@ -635,7 +621,7 @@ $statusLabels = [
                                         <?php echo ($type === 'income' ? '+' : '-'); ?><?php echo formatCurrency($typeTotal); ?>
                                     </span>
                                 </td>
-                                <td colspan="5"></td>
+                                <td colspan="3"></td>
                             </tr>
                         </tbody>
                     </table>
@@ -659,9 +645,6 @@ $statusLabels = [
                         <th>المبلغ</th>
                         <th>الوصف</th>
                         <th>الرقم المرجعي</th>
-                        <th>الحالة</th>
-                        <th>أنشأه</th>
-                        <th>اعتمده</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -691,17 +674,6 @@ $statusLabels = [
                                 <?php else: ?>
                                     -
                                 <?php endif; ?>
-                            </td>
-                            <td>
-                                <span class="status-badge">
-                                    <?php echo htmlspecialchars($statusLabels[$trans['status']] ?? $trans['status'], ENT_QUOTES, 'UTF-8'); ?>
-                                </span>
-                            </td>
-                            <td>
-                                <?php echo getUserName($trans['created_by'], $users); ?>
-                            </td>
-                            <td>
-                                <?php echo getUserName($trans['approved_by'], $users); ?>
                             </td>
                         </tr>
                     <?php endforeach; ?>
