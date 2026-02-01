@@ -581,13 +581,21 @@ function retakePhoto() {
     initCamera();
 }
 
+// قفل منع الإرسال المزدوج (ضغط متكرر أو طلبات متعددة)
+let isSubmittingAttendance = false;
+
 // إرسال تسجيل الحضور/الانصراف
 async function submitAttendance(action) {
+    if (isSubmittingAttendance) {
+        console.warn('submitAttendance: already submitting, ignoring duplicate call');
+        return;
+    }
     if (!capturedPhoto) {
         alert('يجب التقاط صورة أولاً');
         return;
     }
     
+    isSubmittingAttendance = true;
     const isMobileDevice = isMobile();
     const submitBtn = isMobileDevice ? document.getElementById('submitBtnCard') : document.getElementById('submitBtn');
     submitBtn.disabled = true;
@@ -666,6 +674,7 @@ async function submitAttendance(action) {
             updateButtonsState(action);
             
             // إعادة تحميل الصفحة مع cache-busting بعد ثانية ونصف
+            isSubmittingAttendance = false;
             setTimeout(() => {
                 // إضافة timestamp لضمان إعادة تحميل من السيرفر وليس من cache
                 const currentUrl = new URL(window.location.href);
@@ -678,6 +687,7 @@ async function submitAttendance(action) {
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = '<i class="bi bi-check-circle me-2"></i>تأكيد وإرسال';
             }
+            isSubmittingAttendance = false;
         }
         
     } catch (error) {
@@ -687,6 +697,7 @@ async function submitAttendance(action) {
             submitBtn.disabled = false;
             submitBtn.innerHTML = '<i class="bi bi-check-circle me-2"></i>تأكيد وإرسال';
         }
+        isSubmittingAttendance = false;
     }
 }
 
@@ -1391,53 +1402,54 @@ function initAttendanceButtons() {
         console.error('checkOutBtn not found!');
     }
     
-    // أحداث الأزرار (Modal)
-    if (captureBtn) {
-        captureBtn.addEventListener('click', capturePhoto);
-    }
-    if (retakeBtn) {
-        retakeBtn.addEventListener('click', retakePhoto);
-    }
-    if (submitBtn) {
-        submitBtn.addEventListener('click', function() {
-            if (currentAction) {
-                submitAttendance(currentAction);
-            }
-        });
-    }
-    if (cancelBtn) {
-        cancelBtn.addEventListener('click', function() {
-            stopCamera();
-        });
-    }
-    
-    // أحداث الأزرار (Card للموبايل)
-    const captureBtnCard = document.getElementById('captureBtnCard');
-    const retakeBtnCard = document.getElementById('retakeBtnCard');
-    const submitBtnCard = document.getElementById('submitBtnCard');
-    const cancelBtnCard = document.getElementById('cancelBtnCard');
-    
-    if (captureBtnCard) {
-        captureBtnCard.addEventListener('click', capturePhoto);
-    }
-    if (retakeBtnCard) {
-        retakeBtnCard.addEventListener('click', retakePhoto);
-    }
-    if (submitBtnCard) {
-        submitBtnCard.addEventListener('click', function() {
-            if (currentAction) {
-                submitAttendance(currentAction);
-            }
-        });
-    }
-    if (cancelBtnCard) {
-        cancelBtnCard.addEventListener('click', function() {
-            stopCamera();
-            const card = document.getElementById('cameraCard');
-            if (card) {
-                card.style.display = 'none';
-            }
-        });
+    // أحداث الأزرار (Modal و Card) - نضيفها مرة واحدة فقط لمنع تسجيل الحضور المتكرر
+    const modalButtonsAttr = 'data-attendance-modal-buttons-attached';
+    if (!document.body.hasAttribute(modalButtonsAttr)) {
+        document.body.setAttribute(modalButtonsAttr, 'true');
+        if (captureBtn) {
+            captureBtn.addEventListener('click', capturePhoto);
+        }
+        if (retakeBtn) {
+            retakeBtn.addEventListener('click', retakePhoto);
+        }
+        if (submitBtn) {
+            submitBtn.addEventListener('click', function() {
+                if (currentAction) {
+                    submitAttendance(currentAction);
+                }
+            });
+        }
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', function() {
+                stopCamera();
+            });
+        }
+        const captureBtnCard = document.getElementById('captureBtnCard');
+        const retakeBtnCard = document.getElementById('retakeBtnCard');
+        const submitBtnCard = document.getElementById('submitBtnCard');
+        const cancelBtnCard = document.getElementById('cancelBtnCard');
+        if (captureBtnCard) {
+            captureBtnCard.addEventListener('click', capturePhoto);
+        }
+        if (retakeBtnCard) {
+            retakeBtnCard.addEventListener('click', retakePhoto);
+        }
+        if (submitBtnCard) {
+            submitBtnCard.addEventListener('click', function() {
+                if (currentAction) {
+                    submitAttendance(currentAction);
+                }
+            });
+        }
+        if (cancelBtnCard) {
+            cancelBtnCard.addEventListener('click', function() {
+                stopCamera();
+                const card = document.getElementById('cameraCard');
+                if (card) {
+                    card.style.display = 'none';
+                }
+            });
+        }
     }
     
     // إرجاع العناصر المحدثة
@@ -1460,23 +1472,24 @@ window.addEventListener('load', function() {
     setTimeout(initAttendanceButtons, 100);
 });
 
-// إعادة المحاولة كل 500ms لمدة 3 ثوانٍ كحد أقصى
+// إعادة المحاولة كل 500ms حتى يتم ربط المستمعات (نستخدم listenerAttached لعدم إعادة الربط أكثر من مرة)
 let retryCount = 0;
 const maxRetries = 6;
 const retryInterval = setInterval(function() {
     const checkInBtn = document.getElementById('checkInBtn');
     const checkOutBtn = document.getElementById('checkOutBtn');
-    
-    if ((checkInBtn && !checkInBtn.onclick) || (checkOutBtn && !checkOutBtn.onclick)) {
-        if (retryCount < maxRetries) {
-            console.log('Retrying to attach event listeners, attempt:', retryCount + 1);
-            initAttendanceButtons();
-            retryCount++;
-        } else {
-            clearInterval(retryInterval);
+    const alreadyAttached = (checkInBtn && checkInBtn.dataset.listenerAttached === 'true') ||
+        (checkOutBtn && checkOutBtn.dataset.listenerAttached === 'true');
+    if (alreadyAttached || retryCount >= maxRetries) {
+        clearInterval(retryInterval);
+        if (retryCount >= maxRetries && !alreadyAttached) {
             console.warn('Max retries reached for attendance buttons');
         }
-    } else {
-        clearInterval(retryInterval);
+        return;
+    }
+    if (checkInBtn || checkOutBtn) {
+        console.log('Retrying to attach event listeners, attempt:', retryCount + 1);
+        initAttendanceButtons();
+        retryCount++;
     }
 }, 500);

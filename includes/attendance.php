@@ -664,6 +664,24 @@ function recordAttendanceCheckIn($userId, $photoBase64 = null, $delayReason = nu
     $db = db();
     $now = date('Y-m-d H:i:s');
     $today = date('Y-m-d');
+
+    // منع التسجيل المكرر: إذا كان المستخدم لديه بالفعل سجل حضور اليوم بدون انصراف، نرجع النجاح دون إدراج جديد
+    $existingOpen = $db->queryOne(
+        "SELECT id, delay_minutes FROM attendance_records 
+         WHERE user_id = ? AND date = ? AND check_out_time IS NULL 
+         ORDER BY check_in_time DESC LIMIT 1",
+        [$userId, $today]
+    );
+    if ($existingOpen) {
+        error_log("Check-in: Duplicate request ignored - user {$userId} already has open check-in today (record_id: {$existingOpen['id']})");
+        return [
+            'success' => true,
+            'record_id' => (int) $existingOpen['id'],
+            'delay_minutes' => (int) ($existingOpen['delay_minutes'] ?? 0),
+            'message' => 'تم تسجيل الحضور مسبقاً',
+            'photo_path' => null,
+        ];
+    }
     
     // الحصول على موعد العمل الرسمي
     $workTime = getOfficialWorkTime($userId);
