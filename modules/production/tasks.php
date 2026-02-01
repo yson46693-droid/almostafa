@@ -810,7 +810,7 @@ if (isset($_GET['_r'])) {
 }
 
 $pageNum = isset($_GET['p']) ? max(1, (int) $_GET['p']) : 1;
-$perPage = 20;
+$perPage = 15;
 $offset = ($pageNum - 1) * $perPage;
 
 $search = tasksSafeString($_GET['search'] ?? '');
@@ -1356,6 +1356,9 @@ function tasksHtml(string $value): string
     </div>
 
     <div class="card">
+        <div class="card-header bg-transparent border-bottom">
+            <h6 class="mb-0"><i class="bi bi-list-task me-2"></i>آخر المهام التي تم إرسالها</h6>
+        </div>
         <div class="card-body p-0">
             <?php if (empty($tasks)): ?>
                 <div class="text-center py-5">
@@ -1475,22 +1478,12 @@ function tasksHtml(string $value): string
                                                     }
                                                 }
                                                 
-                                                // السماح لأي عامل إنتاج بتغيير حالة أي مهمة مخصصة لعامل إنتاج
-                                                if ($isTaskForProduction): 
+                                                // السماح لأي عامل إنتاج بتغيير حالة أي مهمة مخصصة لعامل إنتاج - زر إكمال فقط
+                                                if ($isTaskForProduction && in_array($task['status'], ['pending', 'received', 'in_progress'])): 
                                                 ?>
-                                                    <?php if ($task['status'] === 'pending'): ?>
-                                                        <button type="button" class="btn btn-outline-info" onclick="submitTaskAction('receive_task', <?php echo (int) $task['id']; ?>)">
-                                                            <i class="bi bi-check-circle me-1"></i>استلام
-                                                        </button>
-                                                    <?php elseif ($task['status'] === 'received'): ?>
-                                                        <button type="button" class="btn btn-outline-primary" onclick="submitTaskAction('start_task', <?php echo (int) $task['id']; ?>)">
-                                                            <i class="bi bi-play-circle me-1"></i>بدء
-                                                        </button>
-                                                    <?php elseif ($task['status'] === 'in_progress'): ?>
-                                                        <button type="button" class="btn btn-outline-success" onclick="submitTaskAction('complete_task', <?php echo (int) $task['id']; ?>)">
-                                                            <i class="bi bi-check2-circle me-1"></i>إكمال
-                                                        </button>
-                                                    <?php endif; ?>
+                                                    <button type="button" class="btn btn-outline-success" onclick="submitTaskAction('complete_task', <?php echo (int) $task['id']; ?>)">
+                                                        <i class="bi bi-check2-circle me-1"></i>إكمال
+                                                    </button>
                                                 <?php endif; ?>
                                             <?php endif; ?>
 
