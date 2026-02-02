@@ -96,7 +96,7 @@ try {
     // حد أقصى للنتائج في autocomplete (10 نتائج)
     $limit = 10;
     
-    // بناء استعلام SQL للبحث في جميع بيانات العميل
+    // بناء استعلام SQL للبحث في جميع بيانات العميل (بما فيها رصيد العميل)
     $sql = "SELECT DISTINCT c.id, c.name, c.phone, c.address, c.balance, 
                    r.name as region_name, u.full_name as created_by_name
             FROM local_customers c
@@ -108,7 +108,8 @@ try {
                 OR r.name LIKE ? 
                 OR CAST(c.id AS CHAR) LIKE ?
                 OR EXISTS (SELECT 1 FROM local_customer_phones lcp WHERE lcp.customer_id = c.id AND lcp.phone LIKE ?)
-                OR u.full_name LIKE ?)
+                OR u.full_name LIKE ?
+                OR CAST(COALESCE(c.balance, 0) AS CHAR) LIKE ?)
             ORDER BY c.name ASC
             LIMIT ?";
     
@@ -121,6 +122,7 @@ try {
         $searchParam, // c.id
         $searchParam, // lcp.phone
         $searchParam, // u.full_name
+        $searchParam, // c.balance
         $limit
     ];
     

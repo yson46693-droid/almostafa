@@ -1121,8 +1121,8 @@ if ($allCustomersDebtStatus === 'debtor') {
 }
 
 if ($allCustomersSearch) {
-    $allCustomersSql .= " AND (c.name LIKE ? OR c.phone LIKE ? OR c.address LIKE ? OR r.name LIKE ? OR rep1.full_name LIKE ? OR rep2.full_name LIKE ?)";
-    $allCustomersCountSql .= " AND (c.name LIKE ? OR c.phone LIKE ? OR c.address LIKE ? OR r.name LIKE ? OR rep1.full_name LIKE ? OR rep2.full_name LIKE ?)";
+    $allCustomersSql .= " AND (c.name LIKE ? OR c.phone LIKE ? OR c.address LIKE ? OR r.name LIKE ? OR rep1.full_name LIKE ? OR rep2.full_name LIKE ? OR CAST(COALESCE(c.balance, 0) AS CHAR) LIKE ?)";
+    $allCustomersCountSql .= " AND (c.name LIKE ? OR c.phone LIKE ? OR c.address LIKE ? OR r.name LIKE ? OR rep1.full_name LIKE ? OR rep2.full_name LIKE ? OR CAST(COALESCE(c.balance, 0) AS CHAR) LIKE ?)";
     $searchParam = '%' . $allCustomersSearch . '%';
     $allCustomersParams[] = $searchParam;
     $allCustomersParams[] = $searchParam;
@@ -1130,6 +1130,8 @@ if ($allCustomersSearch) {
     $allCustomersParams[] = $searchParam;
     $allCustomersParams[] = $searchParam;
     $allCustomersParams[] = $searchParam;
+    $allCustomersParams[] = $searchParam;
+    $allCustomersCountParams[] = $searchParam;
     $allCustomersCountParams[] = $searchParam;
     $allCustomersCountParams[] = $searchParam;
     $allCustomersCountParams[] = $searchParam;

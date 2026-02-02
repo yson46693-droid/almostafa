@@ -123,7 +123,7 @@ try {
     }
     // إذا كان section = 'company' أو فارغ، نعرض جميع العملاء
     
-    // إضافة شروط البحث
+    // إضافة شروط البحث (بما فيها رصيد العميل)
     $sql .= " AND (c.name LIKE ? 
                 OR c.phone LIKE ? 
                 OR c.address LIKE ? 
@@ -131,7 +131,8 @@ try {
                 OR CAST(c.id AS CHAR) LIKE ?
                 OR EXISTS (SELECT 1 FROM customer_phones cp WHERE cp.customer_id = c.id AND cp.phone LIKE ?)
                 OR u.full_name LIKE ?
-                OR rep.full_name LIKE ?)";
+                OR rep.full_name LIKE ?
+                OR CAST(COALESCE(c.balance, 0) AS CHAR) LIKE ?)";
     
     $searchParam = '%' . $search . '%';
     $params[] = $searchParam; // c.name
@@ -142,6 +143,7 @@ try {
     $params[] = $searchParam; // cp.phone
     $params[] = $searchParam; // u.full_name
     $params[] = $searchParam; // rep.full_name
+    $params[] = $searchParam; // c.balance
     $params[] = $limit; // LIMIT
     
     $sql .= " ORDER BY c.name ASC LIMIT ?";

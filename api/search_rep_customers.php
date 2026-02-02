@@ -93,8 +93,8 @@ try {
     }
     
     if ($search) {
-        $sql .= " AND (c.name LIKE ? OR c.phone LIKE ? OR c.address LIKE ? OR r.name LIKE ? OR rep1.full_name LIKE ? OR rep2.full_name LIKE ?)";
-        $countSql .= " AND (c.name LIKE ? OR c.phone LIKE ? OR c.address LIKE ? OR r.name LIKE ? OR rep1.full_name LIKE ? OR rep2.full_name LIKE ?)";
+        $sql .= " AND (c.name LIKE ? OR c.phone LIKE ? OR c.address LIKE ? OR r.name LIKE ? OR rep1.full_name LIKE ? OR rep2.full_name LIKE ? OR CAST(COALESCE(c.balance, 0) AS CHAR) LIKE ?)";
+        $countSql .= " AND (c.name LIKE ? OR c.phone LIKE ? OR c.address LIKE ? OR r.name LIKE ? OR rep1.full_name LIKE ? OR rep2.full_name LIKE ? OR CAST(COALESCE(c.balance, 0) AS CHAR) LIKE ?)";
         $searchParam = '%' . $search . '%';
         $params[] = $searchParam;
         $params[] = $searchParam;
@@ -102,6 +102,8 @@ try {
         $params[] = $searchParam;
         $params[] = $searchParam;
         $params[] = $searchParam;
+        $params[] = $searchParam;
+        $countParams[] = $searchParam;
         $countParams[] = $searchParam;
         $countParams[] = $searchParam;
         $countParams[] = $searchParam;

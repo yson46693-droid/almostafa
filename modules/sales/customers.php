@@ -5376,7 +5376,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         id="customerSearch"
                         name="search"
                         value="<?php echo htmlspecialchars($search); ?>"
-                        placeholder="بحث في جميع بيانات العميل"
+                        placeholder="بحث في جميع بيانات العميل (بما فيها الرصيد)"
                         autocomplete="off"
                         aria-autocomplete="list"
                         aria-expanded="false"

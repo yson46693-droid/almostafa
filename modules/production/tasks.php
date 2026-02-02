@@ -48,6 +48,12 @@ try {
         $db->execute("ALTER TABLE tasks ADD COLUMN unit VARCHAR(50) NULL DEFAULT 'قطعة' AFTER quantity");
         error_log('Added unit column to tasks table in production/tasks.php');
     }
+    // التحقق من وجود عمود customer_name في جدول tasks
+    $customerNameColumn = $db->queryOne("SHOW COLUMNS FROM tasks LIKE 'customer_name'");
+    if (empty($customerNameColumn)) {
+        $db->execute("ALTER TABLE tasks ADD COLUMN customer_name VARCHAR(255) NULL DEFAULT NULL AFTER unit");
+        error_log('Added customer_name column to tasks table in production/tasks.php');
+    }
 } catch (Exception $e) {
     error_log('Error checking/adding columns in production/tasks.php: ' . $e->getMessage());
 }
@@ -593,10 +599,8 @@ function tasksHandleAction(string $action, array $input, array $context): array
             case 'receive_task':
             case 'start_task':
             case 'complete_task':
-                if (!$isProduction) {
-                    throw new RuntimeException('غير مصرح لك بتنفيذ هذا الإجراء');
-                }
-
+            case 'deliver_task':
+            case 'return_task':
                 $taskId = isset($input['task_id']) ? (int) $input['task_id'] : 0;
                 if ($taskId <= 0) {
                     throw new RuntimeException('معرف المهمة غير صحيح');
@@ -607,10 +611,9 @@ function tasksHandleAction(string $action, array $input, array $context): array
                     throw new RuntimeException('المهمة غير موجودة');
                 }
 
-                // التحقق من أن المهمة مخصصة لعامل إنتاج
+                // التحقق من أن المهمة مخصصة لعامل إنتاج (لأجل receive/start/complete ولفحص صلاحية deliver/return)
                 $isAssignedToProduction = false;
                 
-                // التحقق من assigned_to
                 if (!empty($task['assigned_to'])) {
                     $assignedUser = $db->queryOne('SELECT role FROM users WHERE id = ?', [(int) $task['assigned_to']]);
                     if ($assignedUser && $assignedUser['role'] === 'production') {
@@ -618,7 +621,6 @@ function tasksHandleAction(string $action, array $input, array $context): array
                     }
                 }
                 
-                // التحقق من notes للعثور على جميع العمال المخصصين
                 if (!$isAssignedToProduction && !empty($task['notes'])) {
                     if (preg_match('/\[ASSIGNED_WORKERS_IDS\]:\s*([0-9,]+)/', $task['notes'], $matches)) {
                         $workerIds = array_filter(array_map('intval', explode(',', $matches[1])));
@@ -627,15 +629,30 @@ function tasksHandleAction(string $action, array $input, array $context): array
                         }
                     }
                 }
-                
-                if (!$isAssignedToProduction) {
-                    throw new RuntimeException('هذه المهمة غير مخصصة لعامل إنتاج');
+
+                if (in_array($action, ['deliver_task', 'return_task'], true)) {
+                    // تم التوصيل / تم الارجاع: مسموح للمدير أو لأي عامل إنتاج عندما تكون المهمة مكتملة
+                    if (!$isManager && !$isProduction) {
+                        throw new RuntimeException('غير مصرح لك بتنفيذ هذا الإجراء');
+                    }
+                    if (($task['status'] ?? '') !== 'completed') {
+                        throw new RuntimeException('يمكن تطبيق تم التوصيل أو تم الارجاع على المهام المكتملة فقط');
+                    }
+                } else {
+                    if (!$isProduction) {
+                        throw new RuntimeException('غير مصرح لك بتنفيذ هذا الإجراء');
+                    }
+                    if (!$isAssignedToProduction) {
+                        throw new RuntimeException('هذه المهمة غير مخصصة لعامل إنتاج');
+                    }
                 }
 
                 $statusMap = [
                     'receive_task' => ['status' => 'received', 'column' => 'received_at'],
                     'start_task' => ['status' => 'in_progress', 'column' => 'started_at'],
                     'complete_task' => ['status' => 'completed', 'column' => 'completed_at'],
+                    'deliver_task' => ['status' => 'delivered', 'column' => 'completed_at'],
+                    'return_task' => ['status' => 'returned', 'column' => 'completed_at'],
                 ];
 
                 $update = $statusMap[$action];
@@ -809,6 +826,59 @@ if (isset($_GET['_r'])) {
     // سيتم إزالته عبر JavaScript لضمان تحديث الصفحة أولاً
 }
 
+// طلب تفاصيل الأوردر لعرضها في المودال (إيصال الأوردر)
+if (!empty($_GET['get_order_receipt']) && isset($_GET['order_id'])) {
+    $orderId = (int) $_GET['order_id'];
+    if ($orderId > 0) {
+        $orderTableCheck = $db->queryOne("SHOW TABLES LIKE 'customer_orders'");
+        if (!empty($orderTableCheck)) {
+            $order = $db->queryOne(
+                "SELECT o.*, c.name AS customer_name, c.phone AS customer_phone, c.address AS customer_address
+                 FROM customer_orders o
+                 LEFT JOIN customers c ON o.customer_id = c.id
+                 WHERE o.id = ?",
+                [$orderId]
+            );
+            if ($order) {
+                $itemsTable = 'order_items';
+                $itemsCheck = $db->queryOne("SHOW TABLES LIKE 'customer_order_items'");
+                if (!empty($itemsCheck)) {
+                    $itemsTable = 'customer_order_items';
+                }
+                $items = $db->query(
+                    "SELECT oi.*, COALESCE(oi.product_name, p.name) AS display_name FROM {$itemsTable} oi LEFT JOIN products p ON oi.product_id = p.id WHERE oi.order_id = ? ORDER BY oi.id",
+                    [$orderId]
+                );
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode([
+                    'success' => true,
+                    'order' => [
+                        'order_number' => $order['order_number'] ?? '',
+                        'customer_name' => $order['customer_name'] ?? '-',
+                        'customer_phone' => $order['customer_phone'] ?? '',
+                        'customer_address' => $order['customer_address'] ?? '',
+                        'order_date' => $order['order_date'] ?? '',
+                        'delivery_date' => $order['delivery_date'] ?? '',
+                        'total_amount' => $order['total_amount'] ?? 0,
+                        'notes' => $order['notes'] ?? '',
+                    ],
+                    'items' => array_map(function ($row) {
+                        return [
+                            'product_name' => $row['display_name'] ?? $row['product_name'] ?? '-',
+                            'quantity' => $row['quantity'] ?? 0,
+                            'unit' => $row['unit'] ?? 'قطعة',
+                        ];
+                    }, $items),
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+        }
+    }
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['success' => false, 'message' => 'الطلب غير موجود']);
+    exit;
+}
+
 $pageNum = isset($_GET['p']) ? max(1, (int) $_GET['p']) : 1;
 $perPage = 15;
 $offset = ($pageNum - 1) * $perPage;
@@ -900,10 +970,19 @@ if ($unifiedTemplatesExists && $productTemplatesExists) {
     $templateJoins = 'LEFT JOIN product_templates pt ON t.template_id = pt.id AND pt.status = \'active\' ';
 }
 
+$customerOrdersExists = !empty($db->queryOne("SHOW TABLES LIKE 'customer_orders'"));
+$orderCustomerJoin = '';
+$customerDisplaySelect = ", t.customer_name, COALESCE(NULLIF(TRIM(IFNULL(t.customer_name,'')), ''), '') AS customer_display";
+if ($customerOrdersExists) {
+    $orderCustomerJoin = " LEFT JOIN customer_orders co ON t.related_type = 'customer_order' AND t.related_id = co.id LEFT JOIN customers cust ON co.customer_id = cust.id";
+    $customerDisplaySelect = ", t.customer_name, COALESCE(NULLIF(TRIM(t.customer_name), ''), cust.name) AS customer_display";
+}
+
 $taskSql = "SELECT t.id, t.title, t.description, t.assigned_to, t.created_by, t.priority, t.status,
     t.due_date, t.completed_at, t.received_at, t.started_at, t.related_type, t.related_id,
     t.product_id, t.template_id, t.quantity, t.unit, t.notes, t.created_at, t.updated_at,
-    t.product_name,
+    t.product_name
+    " . $customerDisplaySelect . ",
     uAssign.full_name AS assigned_to_name,
     uCreate.full_name AS created_by_name,
     p.name AS product_name_from_db" . $templateSelect . "
@@ -911,6 +990,7 @@ FROM tasks t
 LEFT JOIN users uAssign ON t.assigned_to = uAssign.id
 LEFT JOIN users uCreate ON t.created_by = uCreate.id
 LEFT JOIN products p ON t.product_id = p.id
+" . $orderCustomerJoin . "
 " . $templateJoins . "
 $whereClause
 ORDER BY t.created_at DESC, t.id DESC
@@ -1393,6 +1473,8 @@ function tasksHtml(string $value): string
                                 <th style="width: 60px;">#</th>
                                 <th>المنتج</th>
                                 <th>الكمية</th>
+                                <th>اسم العميل</th>
+                                <th>الاوردر</th>
                                 <th>الحالة</th>
                                 <th>تاريخ التسليم</th>
                                 <th style="width: 180px;">الإجراءات</th>
@@ -1454,6 +1536,23 @@ function tasksHtml(string $value): string
                                             echo '<span class="text-muted">-</span>';
                                         }
                                     ?></td>
+                                    <td><?php 
+                                        $customerDisplay = isset($task['customer_display']) ? trim((string)$task['customer_display']) : '';
+                                        echo $customerDisplay !== '' ? tasksHtml($customerDisplay) : '<span class="text-muted">-</span>';
+                                    ?></td>
+                                    <td>
+                                        <?php 
+                                        $hasOrder = !empty($task['related_type']) && (string)$task['related_type'] === 'customer_order' && !empty($task['related_id']);
+                                        $orderId = $hasOrder ? (int)$task['related_id'] : 0;
+                                        if ($orderId > 0): 
+                                        ?>
+                                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="openOrderReceiptModal(<?php echo $orderId; ?>)" title="عرض تفاصيل الأوردر">
+                                                <i class="bi bi-receipt me-1"></i><?php echo tasksHtml($task['related_id']); ?>
+                                            </button>
+                                        <?php else: ?>
+                                            <span class="text-muted">-</span>
+                                        <?php endif; ?>
+                                    </td>
                                     <td><span class="badge bg-<?php echo $statusClass; ?>"><?php echo tasksHtml($statusLabel); ?></span></td>
                                     <td>
                                         <?php if (!empty($task['due_date'])): ?>
@@ -1503,6 +1602,18 @@ function tasksHtml(string $value): string
                                                 ?>
                                                     <button type="button" class="btn btn-outline-success" onclick="submitTaskAction('complete_task', <?php echo (int) $task['id']; ?>)">
                                                         <i class="bi bi-check2-circle me-1"></i>إكمال
+                                                    </button>
+                                                <?php endif; ?>
+                                                <?php
+                                                // بعد مكتملة: أزرار تم التوصيل و تم الارجاع (أي عامل إنتاج أو مدير)
+                                                $canDeliverReturn = ($isManager || $isProduction) && ($task['status'] ?? '') === 'completed';
+                                                if ($canDeliverReturn):
+                                                ?>
+                                                    <button type="button" class="btn btn-outline-success btn-sm" onclick="submitTaskAction('deliver_task', <?php echo (int) $task['id']; ?>)">
+                                                        <i class="bi bi-truck me-1"></i>تم التوصيل
+                                                    </button>
+                                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="submitTaskAction('return_task', <?php echo (int) $task['id']; ?>)">
+                                                        <i class="bi bi-arrow-return-left me-1"></i>تم الارجاع
                                                     </button>
                                                 <?php endif; ?>
                                             <?php endif; ?>
@@ -1655,6 +1766,28 @@ function tasksHtml(string $value): string
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
             </div>
             <div class="modal-body" id="viewTaskContent"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- مودال إيصال الأوردر -->
+<div class="modal fade" id="orderReceiptModal" tabindex="-1" aria-labelledby="orderReceiptModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-light border-bottom">
+                <h5 class="modal-title" id="orderReceiptModalLabel"><i class="bi bi-receipt me-2"></i>إيصال الأوردر</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body p-4" id="orderReceiptContent">
+                <div class="text-center py-4 text-muted" id="orderReceiptLoading">
+                    <div class="spinner-border" role="status"></div>
+                    <p class="mt-2 mb-0">جاري تحميل تفاصيل الأوردر...</p>
+                </div>
+                <div id="orderReceiptBody" style="display: none;"></div>
+            </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
             </div>
@@ -2186,6 +2319,58 @@ function tasksHtml(string $value): string
         }
     };
 
+    window.openOrderReceiptModal = function(orderId) {
+        const modalEl = document.getElementById('orderReceiptModal');
+        const loadingEl = document.getElementById('orderReceiptLoading');
+        const bodyEl = document.getElementById('orderReceiptBody');
+        if (!modalEl || !loadingEl || !bodyEl) return;
+        loadingEl.style.display = 'block';
+        bodyEl.style.display = 'none';
+        bodyEl.innerHTML = '';
+        var modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modalInstance.show();
+        var params = new URLSearchParams(window.location.search);
+        params.set('get_order_receipt', '1');
+        params.set('order_id', String(orderId));
+        fetch('?' + params.toString())
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                loadingEl.style.display = 'none';
+                if (data.success && data.order) {
+                    var o = data.order;
+                    var items = data.items || [];
+                    var total = typeof o.total_amount === 'number' ? o.total_amount : parseFloat(o.total_amount) || 0;
+                    var rows = items.map(function(it) {
+                        var qty = typeof it.quantity === 'number' ? it.quantity : parseFloat(it.quantity) || 0;
+                        var un = (it.unit || 'قطعة').trim();
+                        return '<tr><td>' + (it.product_name || '-') + '</td><td class="text-end">' + qty + ' ' + un + '</td></tr>';
+                    }).join('');
+                    bodyEl.innerHTML =
+                        '<div class="border rounded p-3 mb-3 bg-light"><h6 class="mb-2">بيانات الطلب</h6>' +
+                        '<p class="mb-1"><strong>رقم الأوردر:</strong> ' + (o.order_number || '-') + '</p>' +
+                        '<p class="mb-1"><strong>العميل:</strong> ' + (o.customer_name || '-') + '</p>' +
+                        (o.customer_phone ? '<p class="mb-1"><strong>الهاتف:</strong> ' + o.customer_phone + '</p>' : '') +
+                        (o.customer_address ? '<p class="mb-1"><strong>العنوان:</strong> ' + o.customer_address + '</p>' : '') +
+                        '<p class="mb-1"><strong>تاريخ الطلب:</strong> ' + (o.order_date || '-') + '</p>' +
+                        (o.delivery_date ? '<p class="mb-1"><strong>تاريخ التسليم:</strong> ' + o.delivery_date + '</p>' : '') +
+                        '</div>' +
+                        '<h6 class="mb-2">تفاصيل المنتجات</h6>' +
+                        '<table class="table table-sm table-bordered"><thead><tr><th>المنتج</th><th class="text-end">الكمية</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+                        '<p class="mb-0 mt-2"><strong>الإجمالي:</strong> ' + total.toFixed(2) + ' ر.س</p>' +
+                        (o.notes ? '<p class="mt-2 text-muted small mb-0"><strong>ملاحظات:</strong> ' + o.notes + '</p>' : '');
+                    bodyEl.style.display = 'block';
+                } else {
+                    bodyEl.innerHTML = '<p class="text-muted mb-0">الطلب غير موجود أو لا يمكن تحميل التفاصيل.</p>';
+                    bodyEl.style.display = 'block';
+                }
+            })
+            .catch(function() {
+                loadingEl.style.display = 'none';
+                bodyEl.innerHTML = '<p class="text-danger mb-0">حدث خطأ أثناء تحميل تفاصيل الأوردر.</p>';
+                bodyEl.style.display = 'block';
+            });
+    };
+
     document.addEventListener('DOMContentLoaded', function () {
         hideLoader();
         toggleProductionFields();
@@ -2508,7 +2693,7 @@ function closeAllForms() {
     });
     
     // إغلاق جميع Modals على الكمبيوتر
-    const modals = ['addTaskModal', 'viewTaskModal'];
+    const modals = ['addTaskModal', 'viewTaskModal', 'orderReceiptModal'];
     modals.forEach(function(modalId) {
         const modal = document.getElementById(modalId);
         if (modal) {
