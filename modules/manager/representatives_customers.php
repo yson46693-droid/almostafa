@@ -1063,6 +1063,12 @@ $allCustomersOffset = ($allCustomersPageNum - 1) * $allCustomersPerPage;
 $allCustomersSearch = trim($_GET['cs'] ?? '');
 $allCustomersDebtStatus = $_GET['cds'] ?? 'all';
 $allCustomersRepFilter = isset($_GET['rep_filter']) ? (int)$_GET['rep_filter'] : 0;
+$allCustomersBalanceFrom = isset($_GET['balance_from']) && $_GET['balance_from'] !== '' ? (float)$_GET['balance_from'] : null;
+$allCustomersBalanceTo = isset($_GET['balance_to']) && $_GET['balance_to'] !== '' ? (float)$_GET['balance_to'] : null;
+$allCustomersSortBalance = $_GET['sort_balance'] ?? '';
+if (!in_array($allCustomersSortBalance, ['asc', 'desc'], true)) {
+    $allCustomersSortBalance = '';
+}
 $allowedDebtStatuses = ['all', 'debtor', 'clear'];
 if (!in_array($allCustomersDebtStatus, $allowedDebtStatuses, true)) {
     $allCustomersDebtStatus = 'all';
@@ -1140,7 +1146,26 @@ if ($allCustomersSearch) {
     $allCustomersCountParams[] = $searchParam;
 }
 
-$allCustomersSql .= " ORDER BY c.name ASC LIMIT ? OFFSET ?";
+if ($allCustomersBalanceFrom !== null) {
+    $allCustomersSql .= " AND COALESCE(c.balance, 0) >= ?";
+    $allCustomersCountSql .= " AND COALESCE(c.balance, 0) >= ?";
+    $allCustomersParams[] = $allCustomersBalanceFrom;
+    $allCustomersCountParams[] = $allCustomersBalanceFrom;
+}
+if ($allCustomersBalanceTo !== null) {
+    $allCustomersSql .= " AND COALESCE(c.balance, 0) <= ?";
+    $allCustomersCountSql .= " AND COALESCE(c.balance, 0) <= ?";
+    $allCustomersParams[] = $allCustomersBalanceTo;
+    $allCustomersCountParams[] = $allCustomersBalanceTo;
+}
+
+if ($allCustomersSortBalance === 'asc') {
+    $allCustomersSql .= " ORDER BY COALESCE(c.balance, 0) ASC, c.name ASC LIMIT ? OFFSET ?";
+} elseif ($allCustomersSortBalance === 'desc') {
+    $allCustomersSql .= " ORDER BY COALESCE(c.balance, 0) DESC, c.name ASC LIMIT ? OFFSET ?";
+} else {
+    $allCustomersSql .= " ORDER BY c.name ASC LIMIT ? OFFSET ?";
+}
 $allCustomersParams[] = $allCustomersPerPage;
 $allCustomersParams[] = $allCustomersOffset;
 
@@ -1227,6 +1252,22 @@ try {
                             <option value="all" <?php echo $allCustomersDebtStatus === 'all' ? 'selected' : ''; ?>>الكل</option>
                             <option value="debtor" <?php echo $allCustomersDebtStatus === 'debtor' ? 'selected' : ''; ?>>مدين</option>
                             <option value="clear" <?php echo $allCustomersDebtStatus === 'clear' ? 'selected' : ''; ?>>غير مدين / لديه رصيد</option>
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-3 col-lg-2">
+                        <label for="allCustomersBalanceFrom" class="visually-hidden">رصيد من</label>
+                        <input type="number" step="any" class="form-control form-control-sm shadow-sm" id="allCustomersBalanceFrom" name="balance_from" placeholder="رصيد من" value="<?php echo $allCustomersBalanceFrom !== null ? htmlspecialchars((string)$allCustomersBalanceFrom) : ''; ?>">
+                    </div>
+                    <div class="col-6 col-md-3 col-lg-2">
+                        <label for="allCustomersBalanceTo" class="visually-hidden">رصيد إلى</label>
+                        <input type="number" step="any" class="form-control form-control-sm shadow-sm" id="allCustomersBalanceTo" name="balance_to" placeholder="رصيد إلى" value="<?php echo $allCustomersBalanceTo !== null ? htmlspecialchars((string)$allCustomersBalanceTo) : ''; ?>">
+                    </div>
+                    <div class="col-6 col-md-3 col-lg-2">
+                        <label for="allCustomersSortBalance" class="visually-hidden">ترتيب حسب الرصيد المدين</label>
+                        <select class="form-select form-select-sm shadow-sm" id="allCustomersSortBalance" name="sort_balance">
+                            <option value="" <?php echo $allCustomersSortBalance === '' ? 'selected' : ''; ?>>ترتيب عادي</option>
+                            <option value="asc" <?php echo $allCustomersSortBalance === 'asc' ? 'selected' : ''; ?>>تصاعدي حسب الرصيد المدين</option>
+                            <option value="desc" <?php echo $allCustomersSortBalance === 'desc' ? 'selected' : ''; ?>>تنازلي حسب الرصيد المدين</option>
                         </select>
                     </div>
                     <div class="col-6 col-md-3 col-lg-2 d-grid">
@@ -1430,7 +1471,7 @@ try {
         <nav aria-label="Page navigation" class="mt-3">
             <ul class="pagination justify-content-center">
                 <li class="page-item <?php echo $allCustomersPageNum <= 1 ? 'disabled' : ''; ?>">
-                    <a class="page-link" href="?page=representatives_customers&cp=<?php echo $allCustomersPageNum - 1; ?><?php echo $allCustomersSearch ? '&cs=' . urlencode($allCustomersSearch) : ''; ?>&cds=<?php echo urlencode($allCustomersDebtStatus); ?><?php echo $allCustomersRepFilter > 0 ? '&rep_filter=' . $allCustomersRepFilter : ''; ?>">
+                    <a class="page-link" href="?page=representatives_customers&cp=<?php echo $allCustomersPageNum - 1; ?><?php echo $allCustomersSearch ? '&cs=' . urlencode($allCustomersSearch) : ''; ?>&cds=<?php echo urlencode($allCustomersDebtStatus); ?><?php echo $allCustomersRepFilter > 0 ? '&rep_filter=' . $allCustomersRepFilter : ''; ?><?php echo $allCustomersBalanceFrom !== null ? '&balance_from=' . urlencode((string)$allCustomersBalanceFrom) : ''; ?><?php echo $allCustomersBalanceTo !== null ? '&balance_to=' . urlencode((string)$allCustomersBalanceTo) : ''; ?><?php echo $allCustomersSortBalance !== '' ? '&sort_balance=' . urlencode($allCustomersSortBalance) : ''; ?>">
                         <i class="bi bi-chevron-right"></i>
                     </a>
                 </li>
@@ -1463,12 +1504,12 @@ try {
                 // عرض أزرار الصفحات
                 for ($i = $startPage; $i <= $endPage; $i++): ?>
                     <li class="page-item <?php echo $i == $allCustomersPageNum ? 'active' : ''; ?>">
-                        <a class="page-link" href="?page=representatives_customers&cp=<?php echo $i; ?><?php echo $allCustomersSearch ? '&cs=' . urlencode($allCustomersSearch) : ''; ?>&cds=<?php echo urlencode($allCustomersDebtStatus); ?><?php echo $allCustomersRepFilter > 0 ? '&rep_filter=' . $allCustomersRepFilter : ''; ?>"><?php echo $i; ?></a>
+                        <a class="page-link" href="?page=representatives_customers&cp=<?php echo $i; ?><?php echo $allCustomersSearch ? '&cs=' . urlencode($allCustomersSearch) : ''; ?>&cds=<?php echo urlencode($allCustomersDebtStatus); ?><?php echo $allCustomersRepFilter > 0 ? '&rep_filter=' . $allCustomersRepFilter : ''; ?><?php echo $allCustomersBalanceFrom !== null ? '&balance_from=' . urlencode((string)$allCustomersBalanceFrom) : ''; ?><?php echo $allCustomersBalanceTo !== null ? '&balance_to=' . urlencode((string)$allCustomersBalanceTo) : ''; ?><?php echo $allCustomersSortBalance !== '' ? '&sort_balance=' . urlencode($allCustomersSortBalance) : ''; ?>"><?php echo $i; ?></a>
                     </li>
                 <?php endfor; ?>
                 
                 <li class="page-item <?php echo $allCustomersPageNum >= $allCustomersTotalPages ? 'disabled' : ''; ?>">
-                    <a class="page-link" href="?page=representatives_customers&cp=<?php echo $allCustomersPageNum + 1; ?><?php echo $allCustomersSearch ? '&cs=' . urlencode($allCustomersSearch) : ''; ?>&cds=<?php echo urlencode($allCustomersDebtStatus); ?><?php echo $allCustomersRepFilter > 0 ? '&rep_filter=' . $allCustomersRepFilter : ''; ?>">
+                    <a class="page-link" href="?page=representatives_customers&cp=<?php echo $allCustomersPageNum + 1; ?><?php echo $allCustomersSearch ? '&cs=' . urlencode($allCustomersSearch) : ''; ?>&cds=<?php echo urlencode($allCustomersDebtStatus); ?><?php echo $allCustomersRepFilter > 0 ? '&rep_filter=' . $allCustomersRepFilter : ''; ?><?php echo $allCustomersBalanceFrom !== null ? '&balance_from=' . urlencode((string)$allCustomersBalanceFrom) : ''; ?><?php echo $allCustomersBalanceTo !== null ? '&balance_to=' . urlencode((string)$allCustomersBalanceTo) : ''; ?><?php echo $allCustomersSortBalance !== '' ? '&sort_balance=' . urlencode($allCustomersSortBalance) : ''; ?>">
                         <i class="bi bi-chevron-left"></i>
                     </a>
                 </li>
@@ -7354,12 +7395,33 @@ function closeEditRepCustomerCard() {
             loadRepCustomers(1);
         });
     }
+    if (balanceFromInput) {
+        balanceFromInput.addEventListener('change', function() {
+            if (currentAbortController) currentAbortController.abort();
+            loadRepCustomers(1);
+        });
+    }
+    if (balanceToInput) {
+        balanceToInput.addEventListener('change', function() {
+            if (currentAbortController) currentAbortController.abort();
+            loadRepCustomers(1);
+        });
+    }
+    if (sortBalanceFilter) {
+        sortBalanceFilter.addEventListener('change', function() {
+            if (currentAbortController) currentAbortController.abort();
+            loadRepCustomers(1);
+        });
+    }
     
     // دالة تحميل عملاء المندوبين
     function loadRepCustomers(page) {
         const searchValue = searchInput.value.trim();
         const repFilterValue = repFilter ? repFilter.value : '0';
         const debtStatusValue = debtStatusFilter ? debtStatusFilter.value : 'all';
+        const balanceFromValue = balanceFromInput && balanceFromInput.value.trim() ? balanceFromInput.value.trim() : '';
+        const balanceToValue = balanceToInput && balanceToInput.value.trim() ? balanceToInput.value.trim() : '';
+        const sortBalanceValue = sortBalanceFilter ? sortBalanceFilter.value : '';
         currentPage = page;
         
         // إلغاء أي طلب سابق
@@ -7413,6 +7475,12 @@ function closeEditRepCustomerCard() {
                 url.searchParams.set('cs', searchValue);
                 url.searchParams.set('cds', debtStatusValue);
                 url.searchParams.set('rep_filter', repFilterValue);
+                if (balanceFromValue) url.searchParams.set('balance_from', balanceFromValue);
+                else url.searchParams.delete('balance_from');
+                if (balanceToValue) url.searchParams.set('balance_to', balanceToValue);
+                else url.searchParams.delete('balance_to');
+                if (sortBalanceValue) url.searchParams.set('sort_balance', sortBalanceValue);
+                else url.searchParams.delete('sort_balance');
                 url.searchParams.set('cp', page);
                 window.history.pushState({}, '', url);
             } else {
