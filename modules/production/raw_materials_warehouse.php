@@ -4476,9 +4476,8 @@ if (!$isApiMode && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     'تين',
                     'مشمشيه',
                     'بلوط',
-                    'حبوب اللقاح',
-                    'حبوب لقاح'
-                ];
+                    'حبوب اللقاح'
+                                ];
                 if ($supplierId <= 0) {
                     $error = 'يجب اختيار المورد';
                 } elseif (!in_array($herbalType, $allowedTypes, true)) {
