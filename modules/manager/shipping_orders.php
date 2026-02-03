@@ -2974,54 +2974,12 @@ $hasShippingCompanies = !empty($shippingCompanies);
     </div>
 <?php endif; ?>
 
-<div class="row g-2 mb-3">
-    <div class="col-4 col-sm-4 col-md-3">
-        <div class="stat-card">
-            <div class="stat-card-header">
-                <div class="stat-card-icon blue"><i class="bi bi-building"></i></div>
-            </div>
-            <div class="stat-card-title">شركات الشحن</div>
-            <div class="stat-card-value"><?php echo number_format(count($shippingCompanies)); ?></div>
-        </div>
-    </div>
-    <div class="col-4 col-sm-4 col-md-3">
-        <div class="stat-card">
-            <div class="stat-card-header">
-                <div class="stat-card-icon orange"><i class="bi bi-truck"></i></div>
-            </div>
-            <div class="stat-card-title">طلبات نشطة</div>
-            <div class="stat-card-value"><?php echo number_format($ordersStats['active_orders']); ?></div>
-        </div>
-    </div>
-    <div class="col-4 col-sm-4 col-md-3">
-        <div class="stat-card">
-            <div class="stat-card-header">
-                <div class="stat-card-icon green"><i class="bi bi-check2-circle"></i></div>
-            </div>
-            <div class="stat-card-title">طلبات مكتملة</div>
-            <div class="stat-card-value"><?php echo number_format($ordersStats['delivered_orders']); ?></div>
-        </div>
-    </div>
-    <div class="col-4 col-sm-4 col-md-3">
-        <div class="stat-card">
-            <div class="stat-card-header">
-                <div class="stat-card-icon purple"><i class="bi bi-cash-stack"></i></div>
-            </div>
-            <div class="stat-card-title">مبالغ قيد التحصيل</div>
-            <div class="stat-card-value"><?php echo formatCurrency($ordersStats['outstanding_amount']); ?></div>
-        </div>
-    </div>
-</div>
-
 <div class="card shadow-sm mb-4">
     <div class="card-header d-flex justify-content-between align-items-center">
         <div>
             <h5 class="mb-1">تسجيل طلب شحن جديد</h5>
             <small class="text-muted">قم بتسليم المنتجات لشركة الشحن وتتبع الدين عليها لحين استلام العميل.</small>
         </div>
-        <button type="button" class="btn btn-outline-primary btn-sm" onclick="showAddShippingCompanyModal()">
-            <i class="bi bi-plus-circle me-1"></i>شركة شحن جديدة
-        </button>
     </div>
     <div class="card-body">
         <?php if (!$hasShippingCompanies): ?>
@@ -3037,7 +2995,7 @@ $hasShippingCompanies = !empty($shippingCompanies);
         <?php elseif (empty($activeCustomers)): ?>
             <div class="alert alert-warning d-flex align-items-center gap-2 mb-0">
                 <i class="bi bi-people fs-5"></i>
-                <div>لا توجد عملاء نشطون في النظام. قم بإضافة عميل أولاً.</div>
+                <div>لا يوجد عملاء نشطون في النظام. قم بإضافة عميل أولاً.</div>
             </div>
         <?php else: ?>
             <form method="POST" id="shippingOrderForm" class="needs-validation" novalidate>
