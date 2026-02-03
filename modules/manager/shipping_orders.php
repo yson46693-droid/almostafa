@@ -219,6 +219,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         try {
+            // Clean output buffer to ensure valid JSON
+            while (ob_get_level()) {
+                ob_end_clean();
+            }
+            header('Content-Type: application/json; charset=utf-8');
+
             $searchTerm = "%{$query}%";
             $orders = $db->query(
                 "SELECT 
@@ -242,10 +248,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     c.name LIKE ? OR 
                     lc.phone LIKE ? OR
                     c.phone LIKE ? OR
-                    sco.notes LIKE ?
+                    sco.notes LIKE ? OR
+                    EXISTS (
+                        SELECT 1 
+                        FROM shipping_company_order_items scoi 
+                        JOIN products p ON scoi.product_id = p.id 
+                        WHERE scoi.order_id = sco.id AND (p.name LIKE ?)
+                    )
                 ORDER BY sco.created_at DESC
                 LIMIT 50",
-                [$searchTerm, $searchTerm, $searchTerm, $searchTerm, $searchTerm, $searchTerm, $searchTerm, $searchTerm]
+                [$searchTerm, $searchTerm, $searchTerm, $searchTerm, $searchTerm, $searchTerm, $searchTerm, $searchTerm, $searchTerm]
             );
 
             $html = '';
