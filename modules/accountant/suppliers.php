@@ -41,19 +41,19 @@ try {
     
     $supplierTypeCheck = $db->queryOne("SHOW COLUMNS FROM suppliers LIKE 'type'");
     if (empty($supplierTypeCheck)) {
-        $db->execute("ALTER TABLE suppliers ADD COLUMN type ENUM('honey', 'packaging', 'nuts', 'olive_oil', 'derivatives', 'beeswax', 'sesame', 'date', 'soap') NULL DEFAULT NULL AFTER supplier_code");
+        $db->execute("ALTER TABLE suppliers ADD COLUMN type ENUM('honey', 'packaging', 'nuts', 'olive_oil', 'derivatives', 'beeswax', 'sesame', 'date', 'soap', 'turbines', 'herbal') NULL DEFAULT NULL AFTER supplier_code");
     } else {
         // التحقق من وجود أنواع الموردين في ENUM وتحديثه إذا لم تكن موجودة
         $typeColumn = $db->queryOne("SHOW COLUMNS FROM suppliers WHERE Field = 'type'");
         if ($typeColumn) {
             $typeEnum = $typeColumn['Type'];
             $needsUpdate = false;
-            if (stripos($typeEnum, 'sesame') === false || stripos($typeEnum, 'date') === false || stripos($typeEnum, 'soap') === false) {
+            if (stripos($typeEnum, 'sesame') === false || stripos($typeEnum, 'date') === false || stripos($typeEnum, 'soap') === false || stripos($typeEnum, 'turbines') === false || stripos($typeEnum, 'herbal') === false) {
                 $needsUpdate = true;
             }
             if ($needsUpdate) {
                 try {
-                    $db->execute("ALTER TABLE suppliers MODIFY COLUMN type ENUM('honey', 'packaging', 'nuts', 'olive_oil', 'derivatives', 'beeswax', 'sesame', 'date', 'soap') NULL DEFAULT NULL");
+                    $db->execute("ALTER TABLE suppliers MODIFY COLUMN type ENUM('honey', 'packaging', 'nuts', 'olive_oil', 'derivatives', 'beeswax', 'sesame', 'date', 'soap', 'turbines', 'herbal') NULL DEFAULT NULL");
                 } catch (Exception $e) {
                     error_log("Error adding supplier types to enum: " . $e->getMessage());
                 }
@@ -154,6 +154,8 @@ function generateSupplierCode($type, $db) {
         'sesame' => 'SES',      // مورد سمسم
         'date' => 'DATE',       // مورد بلح
         'soap' => 'SOAP',       // مورد صابون
+        'turbines' => 'TRB',    // مورد تلبينات
+        'herbal' => 'HRB',      // مورد عطاره
     ];
     
     $prefix = $typeCodes[$type] ?? 'SUP';
@@ -725,7 +727,9 @@ if (isset($_GET['edit'])) {
                             'beeswax' => 'شمع عسل',
                             'sesame' => 'مورد سمسم',
                             'date' => 'مورد بلح',
-                            'soap' => 'مورد صابون'
+                            'soap' => 'مورد صابون',
+                            'turbines' => 'مورد تلبينات',
+                            'herbal' => 'مورد عطاره'
                         ];
                         foreach ($suppliers as $index => $supplier):
                             $supplierId = isset($supplier['id']) ? (int)$supplier['id'] : 0;
@@ -1265,6 +1269,8 @@ $historyTypeLabels = [
                     <option value="beeswax">شمع عسل</option>
                     <option value="date">مورد بلح</option>
                     <option value="soap">مورد صابون</option>
+                    <option value="turbines">مورد تلبينات</option>
+                    <option value="herbal">مورد عطاره</option>
                 </select>
                 <small class="text-muted">سيتم توليد كود المورد تلقائياً بناءً على النوع المختار</small>
             </div>
@@ -1334,6 +1340,8 @@ $historyTypeLabels = [
                             <option value="sesame" <?php echo ($editSupplier['type'] ?? '') === 'sesame' ? 'selected' : ''; ?>>مورد سمسم</option>
                             <option value="date" <?php echo ($editSupplier['type'] ?? '') === 'date' ? 'selected' : ''; ?>>مورد بلح</option>
                             <option value="soap" <?php echo ($editSupplier['type'] ?? '') === 'soap' ? 'selected' : ''; ?>>مورد صابون</option>
+                            <option value="turbines" <?php echo ($editSupplier['type'] ?? '') === 'turbines' ? 'selected' : ''; ?>>مورد تلبينات</option>
+                            <option value="herbal" <?php echo ($editSupplier['type'] ?? '') === 'herbal' ? 'selected' : ''; ?>>مورد عطاره</option>
                         </select>
                         <small class="text-muted">سيتم توليد كود جديد إذا تم تغيير النوع</small>
                     </div>
@@ -1415,6 +1423,8 @@ $historyTypeLabels = [
                     <option value="sesame" <?php echo ($editSupplier['type'] ?? '') === 'sesame' ? 'selected' : ''; ?>>مورد سمسم</option>
                     <option value="date" <?php echo ($editSupplier['type'] ?? '') === 'date' ? 'selected' : ''; ?>>مورد بلح</option>
                     <option value="soap" <?php echo ($editSupplier['type'] ?? '') === 'soap' ? 'selected' : ''; ?>>مورد صابون</option>
+                    <option value="turbines" <?php echo ($editSupplier['type'] ?? '') === 'turbines' ? 'selected' : ''; ?>>مورد تلبينات</option>
+                    <option value="herbal" <?php echo ($editSupplier['type'] ?? '') === 'herbal' ? 'selected' : ''; ?>>مورد عطاره</option>
                 </select>
                 <small class="text-muted">سيتم توليد كود جديد إذا تم تغيير النوع</small>
             </div>

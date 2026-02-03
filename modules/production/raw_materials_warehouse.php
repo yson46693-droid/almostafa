@@ -826,7 +826,7 @@ if ($sessionSuccess) {
 
 // الحصول على القسم المطلوب (افتراضياً: العسل)
 $section = $_GET['section'] ?? 'honey';
-$validSections = ['honey', 'olive_oil', 'beeswax', 'derivatives', 'nuts', 'sesame', 'date'];
+$validSections = ['honey', 'olive_oil', 'beeswax', 'derivatives', 'nuts', 'sesame', 'date', 'turbines', 'herbal'];
 if (!in_array($section, $validSections)) {
     $section = 'honey';
 }
@@ -852,7 +852,9 @@ $supplierTypeMap = [
     'derivatives' => 'derivatives',
     'nuts' => 'nuts',
     'sesame' => 'sesame',
-    'date' => 'date'
+    'date' => 'date',
+    'turbines' => 'turbines',
+    'herbal' => 'herbal'
 ];
 
 $currentSupplierType = $supplierTypeMap[$section] ?? null;
@@ -1150,6 +1152,25 @@ if (!function_exists('ensureSesameStockTable')) {
 // أنواع البلح المعتمدة في المخزن
 $dateStockTypes = ['مفتل', 'رطب قصيمي', 'عجوة مدينه', 'مجدول'];
 
+// أنواع التلبينات المعتمدة في المخزن
+$turbineStockTypes = ['تلبينه ساده', 'تلبينه محوج قرفه', 'تلبينه محوج كركم'];
+
+// أنواع العطاره المعتمدة في المخزن
+$herbalStockTypes = [
+    'حبة البركه',
+    'بذر اليقطين',
+    'جنسنج',
+    'بروبلس',
+    'قسط هندي',
+    'طلع',
+    'ميكس جنسنج و طلع',
+    'غذاء ملكات صيني',
+    'قراصيا',
+    'تين',
+    'مشمشيه',
+    'بلوط'
+];
+
 // تعريف دالة إنشاء جدول البلح
 if (!function_exists('ensureDateStockTable')) {
     function ensureDateStockTable(bool $forceRetry = false): bool
@@ -1271,6 +1292,158 @@ if (!function_exists('ensureDateStockTable')) {
     }
 }
 
+// تعريف دالة إنشاء جدول التلبينات
+if (!function_exists('ensureTurbineStockTable')) {
+    function ensureTurbineStockTable(bool $forceRetry = false): bool
+    {
+        static $checked = false;
+        static $ready = false;
+        if ($forceRetry) {
+            $checked = false;
+            $ready = false;
+        }
+        if ($checked) {
+            return $ready;
+        }
+        $checked = true;
+        try {
+            $db = db();
+            if (!$db) {
+                return false;
+            }
+            $turbineStockCheck = $db->queryOne("SHOW TABLES LIKE 'turbine_stock'");
+            if (!empty($turbineStockCheck)) {
+                $ready = true;
+                return $ready;
+            }
+            $suppliersCheck = $db->queryOne("SHOW TABLES LIKE 'suppliers'");
+            if (empty($suppliersCheck)) {
+                return false;
+            }
+            try {
+                $db->execute("
+                    CREATE TABLE IF NOT EXISTS `turbine_stock` (
+                      `id` int(11) NOT NULL AUTO_INCREMENT,
+                      `supplier_id` int(11) NOT NULL,
+                      `turbine_type` varchar(80) DEFAULT NULL COMMENT 'نوع التلبينه: تلبينه ساده، تلبينه محوج قرفه، تلبينه محوج كركم',
+                      `quantity` decimal(10,3) NOT NULL DEFAULT 0.000 COMMENT 'الكمية بالكيلوجرام',
+                      `notes` text DEFAULT NULL,
+                      `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                      `updated_at` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+                      PRIMARY KEY (`id`),
+                      KEY `supplier_id_idx` (`supplier_id`),
+                      KEY `turbine_type_idx` (`turbine_type`),
+                      CONSTRAINT `turbine_stock_ibfk_1` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers` (`id`) ON DELETE CASCADE
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                ");
+            } catch (Exception $e1) {
+                try {
+                    $db->execute("
+                        CREATE TABLE IF NOT EXISTS `turbine_stock` (
+                          `id` int(11) NOT NULL AUTO_INCREMENT,
+                          `supplier_id` int(11) NOT NULL,
+                          `turbine_type` varchar(80) DEFAULT NULL,
+                          `quantity` decimal(10,3) NOT NULL DEFAULT 0.000,
+                          `notes` text DEFAULT NULL,
+                          `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                          `updated_at` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+                          PRIMARY KEY (`id`),
+                          KEY `supplier_id_idx` (`supplier_id`),
+                          KEY `turbine_type_idx` (`turbine_type`)
+                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                    ");
+                } catch (Exception $e2) {
+                    error_log("ensureTurbineStockTable: " . $e2->getMessage());
+                    $ready = false;
+                    return $ready;
+                }
+            }
+            $verifyCheck = $db->queryOne("SHOW TABLES LIKE 'turbine_stock'");
+            $ready = !empty($verifyCheck);
+        } catch (Exception $e) {
+            error_log("ensureTurbineStockTable: " . $e->getMessage());
+            $ready = false;
+        }
+        return $ready;
+    }
+}
+
+// تعريف دالة إنشاء جدول العطاره
+if (!function_exists('ensureHerbalStockTable')) {
+    function ensureHerbalStockTable(bool $forceRetry = false): bool
+    {
+        static $checked = false;
+        static $ready = false;
+        if ($forceRetry) {
+            $checked = false;
+            $ready = false;
+        }
+        if ($checked) {
+            return $ready;
+        }
+        $checked = true;
+        try {
+            $db = db();
+            if (!$db) {
+                return false;
+            }
+            $herbalStockCheck = $db->queryOne("SHOW TABLES LIKE 'herbal_stock'");
+            if (!empty($herbalStockCheck)) {
+                $ready = true;
+                return $ready;
+            }
+            $suppliersCheck = $db->queryOne("SHOW TABLES LIKE 'suppliers'");
+            if (empty($suppliersCheck)) {
+                return false;
+            }
+            try {
+                $db->execute("
+                    CREATE TABLE IF NOT EXISTS `herbal_stock` (
+                      `id` int(11) NOT NULL AUTO_INCREMENT,
+                      `supplier_id` int(11) NOT NULL,
+                      `herbal_type` varchar(80) DEFAULT NULL COMMENT 'نوع العطاره: حبة البركه، بذر اليقطين',
+                      `quantity` decimal(10,3) NOT NULL DEFAULT 0.000 COMMENT 'الكمية بالكيلوجرام',
+                      `notes` text DEFAULT NULL,
+                      `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                      `updated_at` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+                      PRIMARY KEY (`id`),
+                      KEY `supplier_id_idx` (`supplier_id`),
+                      KEY `herbal_type_idx` (`herbal_type`),
+                      CONSTRAINT `herbal_stock_ibfk_1` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers` (`id`) ON DELETE CASCADE
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                ");
+            } catch (Exception $e1) {
+                try {
+                    $db->execute("
+                        CREATE TABLE IF NOT EXISTS `herbal_stock` (
+                          `id` int(11) NOT NULL AUTO_INCREMENT,
+                          `supplier_id` int(11) NOT NULL,
+                          `herbal_type` varchar(80) DEFAULT NULL,
+                          `quantity` decimal(10,3) NOT NULL DEFAULT 0.000,
+                          `notes` text DEFAULT NULL,
+                          `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                          `updated_at` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+                          PRIMARY KEY (`id`),
+                          KEY `supplier_id_idx` (`supplier_id`),
+                          KEY `herbal_type_idx` (`herbal_type`)
+                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                    ");
+                } catch (Exception $e2) {
+                    error_log("ensureHerbalStockTable: " . $e2->getMessage());
+                    $ready = false;
+                    return $ready;
+                }
+            }
+            $verifyCheck = $db->queryOne("SHOW TABLES LIKE 'herbal_stock'");
+            $ready = !empty($verifyCheck);
+        } catch (Exception $e) {
+            error_log("ensureHerbalStockTable: " . $e->getMessage());
+            $ready = false;
+        }
+        return $ready;
+    }
+}
+
 // البلح المتاح للاستخدام في القوالب
 $availableDateForTemplates = [];
 if (!isset($dateStockTableReady)) {
@@ -1288,6 +1461,14 @@ if ($dateStockTableReady) {
     } catch (Exception $e) {
         error_log("Error loading available date for templates: " . $e->getMessage());
     }
+}
+
+// تهيئة جداول التلبينات والعطاره للتقارير
+if (!isset($turbineStockTableReady)) {
+    $turbineStockTableReady = ensureTurbineStockTable();
+}
+if (!isset($herbalStockTableReady)) {
+    $herbalStockTableReady = ensureHerbalStockTable();
 }
 
 // السمسم المتاح للاستخدام في القوالب
@@ -1422,7 +1603,7 @@ $rawWarehouseReport['total_suppliers'] = (int)($rawReportQueryOne($db, "
     SELECT COUNT(*) AS total 
     FROM suppliers 
     WHERE status = 'active' 
-      AND type IN ('honey', 'olive_oil', 'beeswax', 'derivatives', 'nuts', 'sesame', 'date')
+      AND type IN ('honey', 'olive_oil', 'beeswax', 'derivatives', 'nuts', 'sesame', 'date', 'turbines', 'herbal')
 ")['total'] ?? 0);
 
 // Honey summary
@@ -1998,6 +2179,126 @@ if ($dateSummary) {
     ];
     $rawWarehouseReport['total_records'] += (int)($dateSummary['records'] ?? 0);
     $rawWarehouseReport['zero_items'] += (int)($dateSummary['zero_items'] ?? 0);
+}
+
+// Turbines (التلبينات) summary
+$turbineSummary = null;
+if (!empty($turbineStockTableReady)) {
+    try {
+        $turbineSummary = $rawReportQueryOne($db, "
+            SELECT 
+                COALESCE(SUM(quantity), 0) AS total_quantity,
+                COUNT(*) AS records,
+                COUNT(DISTINCT supplier_id) AS suppliers,
+                SUM(CASE WHEN COALESCE(quantity,0) <= 0 THEN 1 ELSE 0 END) AS zero_items
+            FROM turbine_stock
+        ");
+    } catch (Exception $e) {
+        $turbineSummary = null;
+    }
+}
+if ($turbineSummary) {
+    $sectionKey = 'turbines';
+    $rawWarehouseReport['sections_order'][] = $sectionKey;
+    $topTurbineItems = [];
+    if (($turbineSummary['total_quantity'] ?? 0) > 0) {
+        try {
+            $topTurbineQuery = $rawReportQuery($db, "
+                SELECT s.name AS supplier_name, ts.quantity, ts.turbine_type
+                FROM turbine_stock ts
+                LEFT JOIN suppliers s ON ts.supplier_id = s.id
+                WHERE ts.quantity > 0
+                ORDER BY ts.quantity DESC
+                LIMIT 10
+            ");
+            foreach ($topTurbineQuery as $item) {
+                $label = $item['supplier_name'] ?? 'مورد غير محدد';
+                if (!empty($item['turbine_type'])) {
+                    $label .= ' - ' . $item['turbine_type'];
+                }
+                $topTurbineItems[] = [
+                    'label' => $label,
+                    'value' => (float)($item['quantity'] ?? 0),
+                    'unit' => 'كجم',
+                    'decimals' => 3
+                ];
+            }
+        } catch (Exception $e) {
+            $topTurbineItems = [];
+        }
+    }
+    $rawWarehouseReport['sections'][$sectionKey] = [
+        'title' => 'التلبينات',
+        'records' => (int)($turbineSummary['records'] ?? 0),
+        'metrics' => [
+            ['label' => 'إجمالي مخزون التلبينات', 'value' => (float)($turbineSummary['total_quantity'] ?? 0), 'unit' => 'كجم', 'decimals' => 3],
+            ['label' => 'عدد السجلات', 'value' => (int)($turbineSummary['records'] ?? 0), 'unit' => null, 'decimals' => 0],
+            ['label' => 'عدد الموردين', 'value' => (int)($turbineSummary['suppliers'] ?? 0), 'unit' => null, 'decimals' => 0]
+        ],
+        'top_items' => $topTurbineItems
+    ];
+    $rawWarehouseReport['total_records'] += (int)($turbineSummary['records'] ?? 0);
+    $rawWarehouseReport['zero_items'] += (int)($turbineSummary['zero_items'] ?? 0);
+}
+
+// Herbal (العطاره) summary
+$herbalSummary = null;
+if (!empty($herbalStockTableReady)) {
+    try {
+        $herbalSummary = $rawReportQueryOne($db, "
+            SELECT 
+                COALESCE(SUM(quantity), 0) AS total_quantity,
+                COUNT(*) AS records,
+                COUNT(DISTINCT supplier_id) AS suppliers,
+                SUM(CASE WHEN COALESCE(quantity,0) <= 0 THEN 1 ELSE 0 END) AS zero_items
+            FROM herbal_stock
+        ");
+    } catch (Exception $e) {
+        $herbalSummary = null;
+    }
+}
+if ($herbalSummary) {
+    $sectionKey = 'herbal';
+    $rawWarehouseReport['sections_order'][] = $sectionKey;
+    $topHerbalItems = [];
+    if (($herbalSummary['total_quantity'] ?? 0) > 0) {
+        try {
+            $topHerbalQuery = $rawReportQuery($db, "
+                SELECT s.name AS supplier_name, hs.quantity, hs.herbal_type
+                FROM herbal_stock hs
+                LEFT JOIN suppliers s ON hs.supplier_id = s.id
+                WHERE hs.quantity > 0
+                ORDER BY hs.quantity DESC
+                LIMIT 10
+            ");
+            foreach ($topHerbalQuery as $item) {
+                $label = $item['supplier_name'] ?? 'مورد غير محدد';
+                if (!empty($item['herbal_type'])) {
+                    $label .= ' - ' . $item['herbal_type'];
+                }
+                $topHerbalItems[] = [
+                    'label' => $label,
+                    'value' => (float)($item['quantity'] ?? 0),
+                    'unit' => 'كجم',
+                    'decimals' => 3
+                ];
+            }
+        } catch (Exception $e) {
+            $topHerbalItems = [];
+        }
+    }
+    $rawWarehouseReport['sections'][$sectionKey] = [
+        'title' => 'العطاره',
+        'records' => (int)($herbalSummary['records'] ?? 0),
+        'metrics' => [
+            ['label' => 'إجمالي مخزون العطاره', 'value' => (float)($herbalSummary['total_quantity'] ?? 0), 'unit' => 'كجم', 'decimals' => 3],
+            ['label' => 'عدد السجلات', 'value' => (int)($herbalSummary['records'] ?? 0), 'unit' => null, 'decimals' => 0],
+            ['label' => 'عدد الموردين', 'value' => (int)($herbalSummary['suppliers'] ?? 0), 'unit' => null, 'decimals' => 0]
+        ],
+        'top_items' => $topHerbalItems
+    ];
+    $rawWarehouseReport['total_records'] += (int)($herbalSummary['records'] ?? 0);
+    $rawWarehouseReport['zero_items'] += (int)($herbalSummary['zero_items'] ?? 0);
 }
 
 $rawWarehouseReport['sections_count'] = count($rawWarehouseReport['sections']);
@@ -2938,7 +3239,7 @@ if (!$isApiMode && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $sectionRedirect = $_POST['redirect_section'] ?? $materialCategory;
             $stockSource = $_POST['stock_source'] ?? 'single';
             
-            $validCategories = ['honey', 'olive_oil', 'beeswax', 'derivatives', 'nuts', 'sesame', 'tahini', 'date'];
+            $validCategories = ['honey', 'olive_oil', 'beeswax', 'derivatives', 'nuts', 'sesame', 'tahini', 'date', 'turbines', 'herbal'];
             if (!in_array($sectionRedirect, $validCategories, true)) {
                 $sectionRedirect = $materialCategory;
             }
@@ -4068,6 +4369,168 @@ if (!$isApiMode && $_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
         
+        // عمليات التلبينات
+        elseif ($action === 'add_single_turbine') {
+            if (!isset($turbineStockTableReady)) {
+                $turbineStockTableReady = ensureTurbineStockTable(true);
+            }
+            if (!$turbineStockTableReady) {
+                $error = 'لا يمكن الوصول إلى جدول مخزون التلبينات. يرجى المحاولة لاحقاً أو التواصل مع الدعم.';
+            } else {
+                $supplierId = intval($_POST['supplier_id'] ?? 0);
+                $turbineType = trim($_POST['turbine_type'] ?? '');
+                $quantity = floatval($_POST['quantity'] ?? 0);
+                $notes = trim($_POST['notes'] ?? '');
+                $allowedTypes = ['تلبينه ساده', 'تلبينه محوج قرفه', 'تلبينه محوج كركم'];
+                if ($supplierId <= 0) {
+                    $error = 'يجب اختيار المورد';
+                } elseif (!in_array($turbineType, $allowedTypes, true)) {
+                    $error = 'يجب اختيار نوع التلبينه الصحيح';
+                } elseif ($quantity <= 0) {
+                    $error = 'يجب إدخال كمية صحيحة';
+                } else {
+                    $existing = $db->queryOne("SELECT * FROM turbine_stock WHERE supplier_id = ? AND (turbine_type <=> ?)", [$supplierId, $turbineType ?: null]);
+                    if ($existing) {
+                        $db->execute("UPDATE turbine_stock SET quantity = quantity + ?, notes = ?, updated_at = NOW() WHERE supplier_id = ? AND (turbine_type <=> ?)", [$quantity, $notes ?: $existing['notes'], $supplierId, $turbineType ?: null]);
+                    } else {
+                        $db->execute("INSERT INTO turbine_stock (supplier_id, turbine_type, quantity, notes) VALUES (?, ?, ?, ?)", [$supplierId, $turbineType ?: null, $quantity, $notes ?: null]);
+                    }
+                    logAudit($currentUser['id'], 'add_single_turbine', 'turbine_stock', $supplierId, null, ['turbine_type' => $turbineType, 'quantity' => $quantity]);
+                    $supplierRow = $db->queryOne("SELECT name FROM suppliers WHERE id = ? LIMIT 1", [$supplierId]);
+                    recordProductionSupplyLog([
+                        'material_category' => 'turbines',
+                        'material_label' => 'تلبينات',
+                        'stock_source' => 'turbine_stock',
+                        'stock_id' => null,
+                        'supplier_id' => $supplierId,
+                        'supplier_name' => $supplierRow['name'] ?? null,
+                        'quantity' => $quantity,
+                        'unit' => 'كجم',
+                        'details' => 'إضافة تلبينه - ' . $turbineType,
+                        'recorded_by' => $currentUser['id'] ?? null,
+                    ]);
+                    preventDuplicateSubmission('تم إضافة التلبينات بنجاح', ['page' => 'raw_materials_warehouse', 'section' => 'turbines'], null, $dashboardSlug);
+                }
+            }
+        }
+        elseif ($action === 'damage_turbine') {
+            if (!isset($turbineStockTableReady)) {
+                $turbineStockTableReady = ensureTurbineStockTable(true);
+            }
+            if (!$turbineStockTableReady) {
+                $error = 'لا يمكن الوصول إلى جدول مخزون التلبينات.';
+            } else {
+                $stockId = intval($_POST['stock_id'] ?? 0);
+                $quantity = floatval($_POST['quantity'] ?? 0);
+                $reason = trim($_POST['reason'] ?? '');
+                if ($stockId <= 0 || $quantity <= 0 || empty($reason)) {
+                    $error = $stockId <= 0 ? 'معرف المخزون غير صحيح' : ($quantity <= 0 ? 'يجب إدخال كمية صحيحة' : 'يجب إدخال سبب التلف');
+                } else {
+                    try {
+                        $db->beginTransaction();
+                        $stock = $db->queryOne("SELECT * FROM turbine_stock WHERE id = ?", [$stockId]);
+                        if (!$stock || $stock['quantity'] < $quantity) {
+                            throw new Exception($stock ? 'الكمية المطلوبة أكبر من المتاحة' : 'سجل المخزون غير موجود');
+                        }
+                        $db->execute("UPDATE turbine_stock SET quantity = quantity - ?, updated_at = NOW() WHERE id = ?", [$quantity, $stockId]);
+                        if (ensureRawMaterialDamageLogsTable()) {
+                            $db->execute(
+                                "INSERT INTO raw_material_damage_logs (material_category, stock_id, supplier_id, item_label, variety, quantity, unit, reason, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                ['turbines', $stockId, $stock['supplier_id'], 'تلبينات', $stock['turbine_type'] ?? null, $quantity, 'كجم', $reason, $currentUser['id']]
+                            );
+                        }
+                        logAudit($currentUser['id'], 'damage_turbine', 'turbine_stock', $stockId, null, ['quantity' => $quantity, 'reason' => $reason]);
+                        $db->commit();
+                        preventDuplicateSubmission(sprintf('تم تسجيل %.3f كجم كمية تالفة من التلبينات', $quantity), ['page' => 'raw_materials_warehouse', 'section' => 'turbines'], null, $dashboardSlug);
+                    } catch (Exception $e) {
+                        $db->rollBack();
+                        $error = 'حدث خطأ أثناء تسجيل التالف: ' . $e->getMessage();
+                    }
+                }
+            }
+        }
+        
+        // عمليات العطاره
+        elseif ($action === 'add_single_herbal') {
+            if (!isset($herbalStockTableReady)) {
+                $herbalStockTableReady = ensureHerbalStockTable(true);
+            }
+            if (!$herbalStockTableReady) {
+                $error = 'لا يمكن الوصول إلى جدول مخزون العطاره. يرجى المحاولة لاحقاً أو التواصل مع الدعم.';
+            } else {
+                $supplierId = intval($_POST['supplier_id'] ?? 0);
+                $herbalType = trim($_POST['herbal_type'] ?? '');
+                $quantity = floatval($_POST['quantity'] ?? 0);
+                $notes = trim($_POST['notes'] ?? '');
+                $allowedTypes = ['حبة البركه', 'بذر اليقطين'];
+                if ($supplierId <= 0) {
+                    $error = 'يجب اختيار المورد';
+                } elseif (!in_array($herbalType, $allowedTypes, true)) {
+                    $error = 'يجب اختيار نوع العطاره الصحيح';
+                } elseif ($quantity <= 0) {
+                    $error = 'يجب إدخال كمية صحيحة';
+                } else {
+                    $existing = $db->queryOne("SELECT * FROM herbal_stock WHERE supplier_id = ? AND (herbal_type <=> ?)", [$supplierId, $herbalType ?: null]);
+                    if ($existing) {
+                        $db->execute("UPDATE herbal_stock SET quantity = quantity + ?, notes = ?, updated_at = NOW() WHERE supplier_id = ? AND (herbal_type <=> ?)", [$quantity, $notes ?: $existing['notes'], $supplierId, $herbalType ?: null]);
+                    } else {
+                        $db->execute("INSERT INTO herbal_stock (supplier_id, herbal_type, quantity, notes) VALUES (?, ?, ?, ?)", [$supplierId, $herbalType ?: null, $quantity, $notes ?: null]);
+                    }
+                    logAudit($currentUser['id'], 'add_single_herbal', 'herbal_stock', $supplierId, null, ['herbal_type' => $herbalType, 'quantity' => $quantity]);
+                    $supplierRow = $db->queryOne("SELECT name FROM suppliers WHERE id = ? LIMIT 1", [$supplierId]);
+                    recordProductionSupplyLog([
+                        'material_category' => 'herbal',
+                        'material_label' => 'عطاره',
+                        'stock_source' => 'herbal_stock',
+                        'stock_id' => null,
+                        'supplier_id' => $supplierId,
+                        'supplier_name' => $supplierRow['name'] ?? null,
+                        'quantity' => $quantity,
+                        'unit' => 'كجم',
+                        'details' => 'إضافة عطاره - ' . $herbalType,
+                        'recorded_by' => $currentUser['id'] ?? null,
+                    ]);
+                    preventDuplicateSubmission('تم إضافة العطاره بنجاح', ['page' => 'raw_materials_warehouse', 'section' => 'herbal'], null, $dashboardSlug);
+                }
+            }
+        }
+        elseif ($action === 'damage_herbal') {
+            if (!isset($herbalStockTableReady)) {
+                $herbalStockTableReady = ensureHerbalStockTable(true);
+            }
+            if (!$herbalStockTableReady) {
+                $error = 'لا يمكن الوصول إلى جدول مخزون العطاره.';
+            } else {
+                $stockId = intval($_POST['stock_id'] ?? 0);
+                $quantity = floatval($_POST['quantity'] ?? 0);
+                $reason = trim($_POST['reason'] ?? '');
+                if ($stockId <= 0 || $quantity <= 0 || empty($reason)) {
+                    $error = $stockId <= 0 ? 'معرف المخزون غير صحيح' : ($quantity <= 0 ? 'يجب إدخال كمية صحيحة' : 'يجب إدخال سبب التلف');
+                } else {
+                    try {
+                        $db->beginTransaction();
+                        $stock = $db->queryOne("SELECT * FROM herbal_stock WHERE id = ?", [$stockId]);
+                        if (!$stock || $stock['quantity'] < $quantity) {
+                            throw new Exception($stock ? 'الكمية المطلوبة أكبر من المتاحة' : 'سجل المخزون غير موجود');
+                        }
+                        $db->execute("UPDATE herbal_stock SET quantity = quantity - ?, updated_at = NOW() WHERE id = ?", [$quantity, $stockId]);
+                        if (ensureRawMaterialDamageLogsTable()) {
+                            $db->execute(
+                                "INSERT INTO raw_material_damage_logs (material_category, stock_id, supplier_id, item_label, variety, quantity, unit, reason, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                ['herbal', $stockId, $stock['supplier_id'], 'عطاره', $stock['herbal_type'] ?? null, $quantity, 'كجم', $reason, $currentUser['id']]
+                            );
+                        }
+                        logAudit($currentUser['id'], 'damage_herbal', 'herbal_stock', $stockId, null, ['quantity' => $quantity, 'reason' => $reason]);
+                        $db->commit();
+                        preventDuplicateSubmission(sprintf('تم تسجيل %.3f كجم كمية تالفة من العطاره', $quantity), ['page' => 'raw_materials_warehouse', 'section' => 'herbal'], null, $dashboardSlug);
+                    } catch (Exception $e) {
+                        $db->rollBack();
+                        $error = 'حدث خطأ أثناء تسجيل التالف: ' . $e->getMessage();
+                    }
+                }
+            }
+        }
+        
         // إنشاء مكسرات مشكلة
         elseif ($action === 'create_mixed_nuts') {
             $batchName = trim($_POST['batch_name'] ?? '');
@@ -4602,6 +5065,18 @@ if ($isApiMode) {
 
 .section-tabs .nav-link.active[href*="sesame"] {
     background: linear-gradient(135deg, #f4d03f 0%, #f39c12 100%);
+}
+
+.section-tabs .nav-link.active[href*="date"] {
+    background: linear-gradient(135deg, #8B4513 0%, #A0522D 100%);
+}
+
+.section-tabs .nav-link.active[href*="turbines"] {
+    background: linear-gradient(135deg, #c9a227 0%, #8b6914 100%);
+}
+
+.section-tabs .nav-link.active[href*="herbal"] {
+    background: linear-gradient(135deg, #2d5016 0%, #4a7c23 100%);
 }
 
 #createMixedNutsModal .modal-dialog {
@@ -10104,6 +10579,614 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
     }
     </script>
     
+    <?php
+} elseif ($section === 'turbines') {
+    $turbineSuppliers = [];
+    try {
+        $turbineSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status = 'active' AND type = 'turbines' ORDER BY name");
+    } catch (Exception $e) {
+        $turbineSuppliers = [];
+    }
+    $turbineSectionTableError = !$turbineStockTableReady;
+    $turbineStock = [];
+    $turbineStats = ['total_quantity' => 0, 'suppliers_count' => 0];
+    if (!$turbineSectionTableError) {
+        try {
+            $turbineStock = $db->query("
+                SELECT ts.*, s.name as supplier_name, s.phone as supplier_phone
+                FROM turbine_stock ts
+                INNER JOIN suppliers s ON ts.supplier_id = s.id
+                WHERE ts.quantity > 0
+                ORDER BY COALESCE(ts.turbine_type,'') ASC, s.name
+            ");
+            $turbineStats = [
+                'total_quantity' => $db->queryOne("SELECT COALESCE(SUM(quantity), 0) as total FROM turbine_stock")['total'] ?? 0,
+                'suppliers_count' => $db->queryOne("SELECT COUNT(DISTINCT supplier_id) as total FROM turbine_stock")['total'] ?? 0
+            ];
+        } catch (Exception $e) {
+            $turbineSectionTableError = true;
+        }
+    }
+    $turbineActionsDisabledAttr = $turbineSectionTableError ? 'disabled' : '';
+    ?>
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="stats-card">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-muted small mb-1">إجمالي الكمية</div>
+                        <div class="h4 mb-0"><?php echo number_format($turbineStats['total_quantity'], 2); ?> <small>كجم</small></div>
+                    </div>
+                    <div class="stat-icon" style="background: linear-gradient(135deg, #c9a227 0%, #8b6914 100%);">
+                        <i class="bi bi-cup-hot-fill"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="stats-card">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-muted small mb-1">عدد الموردين</div>
+                        <div class="h4 mb-0"><?php echo $turbineStats['suppliers_count']; ?></div>
+                    </div>
+                    <div class="stat-icon" style="background: linear-gradient(135deg, #c9a227 0%, #8b6914 100%);">
+                        <i class="bi bi-people"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <?php if ($turbineSectionTableError): ?>
+        <div class="alert alert-warning">
+            <i class="bi bi-info-circle me-2"></i>
+            لا يمكن الوصول إلى جدول مخزون التلبينات حالياً. لن يعمل هذا القسم حتى يتم إنشاء الجدول في قاعدة البيانات.
+        </div>
+    <?php endif; ?>
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header text-white d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #c9a227 0%, #8b6914 100%);">
+                    <h5 class="mb-0"><i class="bi bi-cup-hot-fill me-2"></i>مخزون التلبينات</h5>
+                    <button class="btn btn-light btn-sm" onclick="showAddTurbineModal()" <?php echo $turbineActionsDisabledAttr; ?>>
+                        <i class="bi bi-plus-circle me-1"></i>إضافة
+                    </button>
+                </div>
+                <div class="card-body">
+                    <?php if ($turbineSectionTableError): ?>
+                        <div class="text-center text-muted py-4">يرجى التأكد من إعداد قاعدة البيانات بشكل صحيح.</div>
+                    <?php elseif (empty($turbineStock)): ?>
+                        <div class="text-center text-muted py-4"><i class="bi bi-inbox fs-1 d-block mb-3"></i>لا يوجد مخزون تلبينات</div>
+                    <?php else: ?>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>المورد</th>
+                                        <th class="text-center">نوع التلبينه</th>
+                                        <th class="text-center">الكمية (كجم)</th>
+                                        <th class="text-center">الإجراءات</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($turbineStock as $stock): ?>
+                                        <tr>
+                                            <td>
+                                                <strong><?php echo htmlspecialchars($stock['supplier_name']); ?></strong>
+                                                <?php if (!empty($stock['supplier_phone'])): ?>
+                                                    <br><small class="text-muted"><?php echo htmlspecialchars($stock['supplier_phone']); ?></small>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td class="text-center"><?php echo htmlspecialchars($stock['turbine_type'] ?? '—'); ?></td>
+                                            <td class="text-center"><strong><?php echo number_format($stock['quantity'], 3); ?></strong></td>
+                                            <td class="text-center">
+                                                <button class="btn btn-sm btn-danger"
+                                                    onclick="openDamageTurbineModal(<?php echo $stock['id']; ?>, 'تلبينات', '<?php echo htmlspecialchars($stock['supplier_name'], ENT_QUOTES); ?>', <?php echo $stock['quantity']; ?>)"
+                                                    <?php echo ($stock['quantity'] <= 0 || $turbineSectionTableError) ? 'disabled' : ''; ?>>
+                                                    <i class="bi bi-exclamation-triangle"></i> تالف
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Modal إضافة تلبينات -->
+    <div class="modal fade d-none d-md-block" id="addTurbineModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-scrollable modal-lg">
+            <div class="modal-content">
+                <div class="modal-header text-white" style="background: linear-gradient(135deg, #c9a227 0%, #8b6914 100%);">
+                    <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>إضافة تلبينات</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body scrollable-modal-body">
+                    <?php foreach ($turbineStockTypes as $tt): ?>
+                        <div class="card border mb-3">
+                            <div class="card-header py-2 text-white" style="background: linear-gradient(135deg, #c9a227 0%, #8b6914 100%);">
+                                <h6 class="mb-0"><?php echo htmlspecialchars($tt); ?></h6>
+                            </div>
+                            <div class="card-body">
+                                <form method="POST" class="add-turbine-by-type-form">
+                                    <input type="hidden" name="action" value="add_single_turbine">
+                                    <input type="hidden" name="turbine_type" value="<?php echo htmlspecialchars($tt, ENT_QUOTES); ?>">
+                                    <input type="hidden" name="submit_token" value="">
+                                    <div class="row g-2">
+                                        <div class="col-md-4">
+                                            <label class="form-label small">المورد <span class="text-danger">*</span></label>
+                                            <select name="supplier_id" class="form-select form-select-sm" required>
+                                                <option value="">اختر المورد</option>
+                                                <?php foreach ($turbineSuppliers as $supplier): ?>
+                                                    <option value="<?php echo $supplier['id']; ?>"><?php echo htmlspecialchars($supplier['name']); ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label small">الكمية (كجم) <span class="text-danger">*</span></label>
+                                            <input type="number" step="0.001" min="0.001" name="quantity" class="form-control form-control-sm" required placeholder="0.000">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label small">ملاحظات</label>
+                                            <input type="text" name="notes" class="form-control form-control-sm" placeholder="اختياري">
+                                        </div>
+                                        <div class="col-md-2 d-flex align-items-end">
+                                            <button type="submit" class="btn btn-sm w-100 text-white" style="background: linear-gradient(135deg, #c9a227 0%, #8b6914 100%);" <?php echo $turbineActionsDisabledAttr; ?>>
+                                                <i class="bi bi-plus-lg me-1"></i>إضافة
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="card shadow-sm mb-4 d-md-none" id="addTurbineCard" style="display: none;">
+        <div class="card-header text-white" style="background: linear-gradient(135deg, #c9a227 0%, #8b6914 100%);">
+            <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>إضافة تلبينات</h5>
+        </div>
+        <div class="card-body">
+            <?php foreach ($turbineStockTypes as $tt): ?>
+                <div class="border rounded p-3 mb-3">
+                    <h6 class="text-secondary mb-2"><?php echo htmlspecialchars($tt); ?></h6>
+                    <form method="POST">
+                        <input type="hidden" name="action" value="add_single_turbine">
+                        <input type="hidden" name="turbine_type" value="<?php echo htmlspecialchars($tt, ENT_QUOTES); ?>">
+                        <input type="hidden" name="submit_token" value="">
+                        <div class="mb-2">
+                            <label class="form-label small">المورد <span class="text-danger">*</span></label>
+                            <select name="supplier_id" class="form-select form-select-sm" required>
+                                <option value="">اختر المورد</option>
+                                <?php foreach ($turbineSuppliers as $supplier): ?>
+                                    <option value="<?php echo $supplier['id']; ?>"><?php echo htmlspecialchars($supplier['name']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">الكمية (كجم) <span class="text-danger">*</span></label>
+                            <input type="number" step="0.001" min="0.001" name="quantity" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">ملاحظات</label>
+                            <input type="text" name="notes" class="form-control form-control-sm">
+                        </div>
+                        <button type="submit" class="btn btn-sm w-100 text-white" style="background: linear-gradient(135deg, #c9a227 0%, #8b6914 100%);" <?php echo $turbineActionsDisabledAttr; ?>>
+                            <i class="bi bi-plus-lg me-1"></i>إضافة <?php echo htmlspecialchars($tt); ?>
+                        </button>
+                    </form>
+                </div>
+            <?php endforeach; ?>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('addTurbineCard').style.display='none'">إغلاق</button>
+        </div>
+    </div>
+    <!-- Modal تسجيل تالف تلبينات -->
+    <div class="modal fade d-none d-md-block" id="damageTurbineModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title"><i class="bi bi-exclamation-triangle me-2"></i>تسجيل كمية تالفة - تلبينات</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="POST">
+                    <input type="hidden" name="action" value="damage_turbine">
+                    <input type="hidden" name="stock_id" id="damage_turbine_stock_id">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">المورد</label>
+                            <input type="text" class="form-control" id="damage_turbine_supplier" readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">الكمية المتاحة</label>
+                            <input type="text" class="form-control" id="damage_turbine_available" readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">الكمية التالفة (كجم) <span class="text-danger">*</span></label>
+                            <input type="number" step="0.001" min="0.001" name="quantity" id="damage_turbine_quantity" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">سبب التلف <span class="text-danger">*</span></label>
+                            <textarea name="reason" id="damage_turbine_reason" class="form-control" rows="3" required></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                        <button type="submit" class="btn btn-danger"><i class="bi bi-exclamation-triangle me-1"></i>تسجيل التالف</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="card shadow-sm mb-4 d-md-none" id="damageTurbineCard" style="display: none;">
+        <div class="card-header bg-danger text-white">
+            <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>تسجيل كمية تالفة - تلبينات</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST">
+                <input type="hidden" name="action" value="damage_turbine">
+                <input type="hidden" name="stock_id" id="damage_turbine_stock_id_card">
+                <div class="mb-3">
+                    <label class="form-label">المورد</label>
+                    <input type="text" class="form-control" id="damage_turbine_supplier_card" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">الكمية المتاحة</label>
+                    <input type="text" class="form-control" id="damage_turbine_available_card" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">الكمية التالفة (كجم) <span class="text-danger">*</span></label>
+                    <input type="number" step="0.001" min="0.001" name="quantity" id="damage_turbine_quantity_card" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">سبب التلف <span class="text-danger">*</span></label>
+                    <textarea name="reason" id="damage_turbine_reason_card" class="form-control" rows="3" required></textarea>
+                </div>
+                <button type="button" class="btn btn-secondary me-2" onclick="document.getElementById('damageTurbineCard').style.display='none'">إلغاء</button>
+                <button type="submit" class="btn btn-danger"><i class="bi bi-exclamation-triangle me-1"></i>تسجيل التالف</button>
+            </form>
+        </div>
+    </div>
+    <script>
+    function showAddTurbineModal() {
+        if (typeof closeAllForms === 'function') closeAllForms();
+        if (typeof isMobile === 'function' && isMobile()) {
+            var c = document.getElementById('addTurbineCard'); if (c) { c.style.display = 'block'; if (typeof scrollToElement === 'function') scrollToElement(c); }
+        } else {
+            var m = document.getElementById('addTurbineModal'); if (m) new bootstrap.Modal(m).show();
+        }
+    }
+    function openDamageTurbineModal(id, materialType, supplier, quantity) {
+        var qty = parseFloat(quantity) || 0;
+        if (typeof isMobile === 'function' && isMobile()) {
+            var card = document.getElementById('damageTurbineCard');
+            if (!card) return;
+            var si = document.getElementById('damage_turbine_stock_id_card'); if (si) si.value = id;
+            var su = document.getElementById('damage_turbine_supplier_card'); if (su) su.value = supplier;
+            var av = document.getElementById('damage_turbine_available_card'); if (av) av.value = qty.toFixed(3) + ' كجم';
+            var q = document.getElementById('damage_turbine_quantity_card'); if (q) { q.value = ''; q.max = qty > 0 ? qty.toFixed(3) : ''; }
+            card.style.display = 'block';
+            if (typeof scrollToElement === 'function') scrollToElement(card);
+        } else {
+            var si = document.getElementById('damage_turbine_stock_id'); if (si) si.value = id;
+            var su = document.getElementById('damage_turbine_supplier'); if (su) su.value = supplier;
+            var av = document.getElementById('damage_turbine_available'); if (av) av.value = qty.toFixed(3) + ' كجم';
+            var q = document.getElementById('damage_turbine_quantity'); if (q) { q.value = ''; q.max = qty > 0 ? qty.toFixed(3) : ''; }
+            new bootstrap.Modal(document.getElementById('damageTurbineModal')).show();
+        }
+    }
+    </script>
+    <?php
+} elseif ($section === 'herbal') {
+    $herbalSuppliers = [];
+    try {
+        $herbalSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status = 'active' AND type = 'herbal' ORDER BY name");
+    } catch (Exception $e) {
+        $herbalSuppliers = [];
+    }
+    $herbalSectionTableError = !$herbalStockTableReady;
+    $herbalStock = [];
+    $herbalStats = ['total_quantity' => 0, 'suppliers_count' => 0];
+    if (!$herbalSectionTableError) {
+        try {
+            $herbalStock = $db->query("
+                SELECT hs.*, s.name as supplier_name, s.phone as supplier_phone
+                FROM herbal_stock hs
+                INNER JOIN suppliers s ON hs.supplier_id = s.id
+                WHERE hs.quantity > 0
+                ORDER BY COALESCE(hs.herbal_type,'') ASC, s.name
+            ");
+            $herbalStats = [
+                'total_quantity' => $db->queryOne("SELECT COALESCE(SUM(quantity), 0) as total FROM herbal_stock")['total'] ?? 0,
+                'suppliers_count' => $db->queryOne("SELECT COUNT(DISTINCT supplier_id) as total FROM herbal_stock")['total'] ?? 0
+            ];
+        } catch (Exception $e) {
+            $herbalSectionTableError = true;
+        }
+    }
+    $herbalActionsDisabledAttr = $herbalSectionTableError ? 'disabled' : '';
+    ?>
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="stats-card">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-muted small mb-1">إجمالي الكمية</div>
+                        <div class="h4 mb-0"><?php echo number_format($herbalStats['total_quantity'], 2); ?> <small>كجم</small></div>
+                    </div>
+                    <div class="stat-icon" style="background: linear-gradient(135deg, #2d5016 0%, #4a7c23 100%);">
+                        <i class="bi bi-flower2"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="stats-card">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-muted small mb-1">عدد الموردين</div>
+                        <div class="h4 mb-0"><?php echo $herbalStats['suppliers_count']; ?></div>
+                    </div>
+                    <div class="stat-icon" style="background: linear-gradient(135deg, #2d5016 0%, #4a7c23 100%);">
+                        <i class="bi bi-people"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <?php if ($herbalSectionTableError): ?>
+        <div class="alert alert-warning">
+            <i class="bi bi-info-circle me-2"></i>
+            لا يمكن الوصول إلى جدول مخزون العطاره حالياً. لن يعمل هذا القسم حتى يتم إنشاء الجدول في قاعدة البيانات.
+        </div>
+    <?php endif; ?>
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header text-white d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #2d5016 0%, #4a7c23 100%);">
+                    <h5 class="mb-0"><i class="bi bi-flower2 me-2"></i>مخزون العطاره</h5>
+                    <button class="btn btn-light btn-sm" onclick="showAddHerbalModal()" <?php echo $herbalActionsDisabledAttr; ?>>
+                        <i class="bi bi-plus-circle me-1"></i>إضافة
+                    </button>
+                </div>
+                <div class="card-body">
+                    <?php if ($herbalSectionTableError): ?>
+                        <div class="text-center text-muted py-4">يرجى التأكد من إعداد قاعدة البيانات بشكل صحيح.</div>
+                    <?php elseif (empty($herbalStock)): ?>
+                        <div class="text-center text-muted py-4"><i class="bi bi-inbox fs-1 d-block mb-3"></i>لا يوجد مخزون عطاره</div>
+                    <?php else: ?>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>المورد</th>
+                                        <th class="text-center">نوع العطاره</th>
+                                        <th class="text-center">الكمية (كجم)</th>
+                                        <th class="text-center">الإجراءات</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($herbalStock as $stock): ?>
+                                        <tr>
+                                            <td>
+                                                <strong><?php echo htmlspecialchars($stock['supplier_name']); ?></strong>
+                                                <?php if (!empty($stock['supplier_phone'])): ?>
+                                                    <br><small class="text-muted"><?php echo htmlspecialchars($stock['supplier_phone']); ?></small>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td class="text-center"><?php echo htmlspecialchars($stock['herbal_type'] ?? '—'); ?></td>
+                                            <td class="text-center"><strong><?php echo number_format($stock['quantity'], 3); ?></strong></td>
+                                            <td class="text-center">
+                                                <button class="btn btn-sm btn-danger"
+                                                    onclick="openDamageHerbalModal(<?php echo $stock['id']; ?>, 'عطاره', '<?php echo htmlspecialchars($stock['supplier_name'], ENT_QUOTES); ?>', <?php echo $stock['quantity']; ?>)"
+                                                    <?php echo ($stock['quantity'] <= 0 || $herbalSectionTableError) ? 'disabled' : ''; ?>>
+                                                    <i class="bi bi-exclamation-triangle"></i> تالف
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Modal إضافة عطاره -->
+    <div class="modal fade d-none d-md-block" id="addHerbalModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-scrollable modal-lg">
+            <div class="modal-content">
+                <div class="modal-header text-white" style="background: linear-gradient(135deg, #2d5016 0%, #4a7c23 100%);">
+                    <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>إضافة عطاره</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body scrollable-modal-body">
+                    <?php foreach ($herbalStockTypes as $ht): ?>
+                        <div class="card border mb-3">
+                            <div class="card-header py-2 text-white" style="background: linear-gradient(135deg, #2d5016 0%, #4a7c23 100%);">
+                                <h6 class="mb-0"><?php echo htmlspecialchars($ht); ?></h6>
+                            </div>
+                            <div class="card-body">
+                                <form method="POST">
+                                    <input type="hidden" name="action" value="add_single_herbal">
+                                    <input type="hidden" name="herbal_type" value="<?php echo htmlspecialchars($ht, ENT_QUOTES); ?>">
+                                    <input type="hidden" name="submit_token" value="">
+                                    <div class="row g-2">
+                                        <div class="col-md-4">
+                                            <label class="form-label small">المورد <span class="text-danger">*</span></label>
+                                            <select name="supplier_id" class="form-select form-select-sm" required>
+                                                <option value="">اختر المورد</option>
+                                                <?php foreach ($herbalSuppliers as $supplier): ?>
+                                                    <option value="<?php echo $supplier['id']; ?>"><?php echo htmlspecialchars($supplier['name']); ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label small">الكمية (كجم) <span class="text-danger">*</span></label>
+                                            <input type="number" step="0.001" min="0.001" name="quantity" class="form-control form-control-sm" required placeholder="0.000">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label small">ملاحظات</label>
+                                            <input type="text" name="notes" class="form-control form-control-sm" placeholder="اختياري">
+                                        </div>
+                                        <div class="col-md-2 d-flex align-items-end">
+                                            <button type="submit" class="btn btn-sm w-100 text-white" style="background: linear-gradient(135deg, #2d5016 0%, #4a7c23 100%);" <?php echo $herbalActionsDisabledAttr; ?>>
+                                                <i class="bi bi-plus-lg me-1"></i>إضافة
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="card shadow-sm mb-4 d-md-none" id="addHerbalCard" style="display: none;">
+        <div class="card-header text-white" style="background: linear-gradient(135deg, #2d5016 0%, #4a7c23 100%);">
+            <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>إضافة عطاره</h5>
+        </div>
+        <div class="card-body">
+            <?php foreach ($herbalStockTypes as $ht): ?>
+                <div class="border rounded p-3 mb-3">
+                    <h6 class="text-secondary mb-2"><?php echo htmlspecialchars($ht); ?></h6>
+                    <form method="POST">
+                        <input type="hidden" name="action" value="add_single_herbal">
+                        <input type="hidden" name="herbal_type" value="<?php echo htmlspecialchars($ht, ENT_QUOTES); ?>">
+                        <input type="hidden" name="submit_token" value="">
+                        <div class="mb-2">
+                            <label class="form-label small">المورد <span class="text-danger">*</span></label>
+                            <select name="supplier_id" class="form-select form-select-sm" required>
+                                <option value="">اختر المورد</option>
+                                <?php foreach ($herbalSuppliers as $supplier): ?>
+                                    <option value="<?php echo $supplier['id']; ?>"><?php echo htmlspecialchars($supplier['name']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">الكمية (كجم) <span class="text-danger">*</span></label>
+                            <input type="number" step="0.001" min="0.001" name="quantity" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">ملاحظات</label>
+                            <input type="text" name="notes" class="form-control form-control-sm">
+                        </div>
+                        <button type="submit" class="btn btn-sm w-100 text-white" style="background: linear-gradient(135deg, #2d5016 0%, #4a7c23 100%);" <?php echo $herbalActionsDisabledAttr; ?>>
+                            <i class="bi bi-plus-lg me-1"></i>إضافة <?php echo htmlspecialchars($ht); ?>
+                        </button>
+                    </form>
+                </div>
+            <?php endforeach; ?>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('addHerbalCard').style.display='none'">إغلاق</button>
+        </div>
+    </div>
+    <!-- Modal تسجيل تالف عطاره -->
+    <div class="modal fade d-none d-md-block" id="damageHerbalModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title"><i class="bi bi-exclamation-triangle me-2"></i>تسجيل كمية تالفة - عطاره</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="POST">
+                    <input type="hidden" name="action" value="damage_herbal">
+                    <input type="hidden" name="stock_id" id="damage_herbal_stock_id">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">المورد</label>
+                            <input type="text" class="form-control" id="damage_herbal_supplier" readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">الكمية المتاحة</label>
+                            <input type="text" class="form-control" id="damage_herbal_available" readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">الكمية التالفة (كجم) <span class="text-danger">*</span></label>
+                            <input type="number" step="0.001" min="0.001" name="quantity" id="damage_herbal_quantity" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">سبب التلف <span class="text-danger">*</span></label>
+                            <textarea name="reason" id="damage_herbal_reason" class="form-control" rows="3" required></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                        <button type="submit" class="btn btn-danger"><i class="bi bi-exclamation-triangle me-1"></i>تسجيل التالف</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="card shadow-sm mb-4 d-md-none" id="damageHerbalCard" style="display: none;">
+        <div class="card-header bg-danger text-white">
+            <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>تسجيل كمية تالفة - عطاره</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST">
+                <input type="hidden" name="action" value="damage_herbal">
+                <input type="hidden" name="stock_id" id="damage_herbal_stock_id_card">
+                <div class="mb-3">
+                    <label class="form-label">المورد</label>
+                    <input type="text" class="form-control" id="damage_herbal_supplier_card" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">الكمية المتاحة</label>
+                    <input type="text" class="form-control" id="damage_herbal_available_card" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">الكمية التالفة (كجم) <span class="text-danger">*</span></label>
+                    <input type="number" step="0.001" min="0.001" name="quantity" id="damage_herbal_quantity_card" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">سبب التلف <span class="text-danger">*</span></label>
+                    <textarea name="reason" id="damage_herbal_reason_card" class="form-control" rows="3" required></textarea>
+                </div>
+                <button type="button" class="btn btn-secondary me-2" onclick="document.getElementById('damageHerbalCard').style.display='none'">إلغاء</button>
+                <button type="submit" class="btn btn-danger"><i class="bi bi-exclamation-triangle me-1"></i>تسجيل التالف</button>
+            </form>
+        </div>
+    </div>
+    <script>
+    function showAddHerbalModal() {
+        if (typeof closeAllForms === 'function') closeAllForms();
+        if (typeof isMobile === 'function' && isMobile()) {
+            var c = document.getElementById('addHerbalCard'); if (c) { c.style.display = 'block'; if (typeof scrollToElement === 'function') scrollToElement(c); }
+        } else {
+            var m = document.getElementById('addHerbalModal'); if (m) new bootstrap.Modal(m).show();
+        }
+    }
+    function openDamageHerbalModal(id, materialType, supplier, quantity) {
+        var qty = parseFloat(quantity) || 0;
+        if (typeof isMobile === 'function' && isMobile()) {
+            var card = document.getElementById('damageHerbalCard');
+            if (!card) return;
+            var si = document.getElementById('damage_herbal_stock_id_card'); if (si) si.value = id;
+            var su = document.getElementById('damage_herbal_supplier_card'); if (su) su.value = supplier;
+            var av = document.getElementById('damage_herbal_available_card'); if (av) av.value = qty.toFixed(3) + ' كجم';
+            var q = document.getElementById('damage_herbal_quantity_card'); if (q) { q.value = ''; q.max = qty > 0 ? qty.toFixed(3) : ''; }
+            card.style.display = 'block';
+            if (typeof scrollToElement === 'function') scrollToElement(card);
+        } else {
+            var si = document.getElementById('damage_herbal_stock_id'); if (si) si.value = id;
+            var su = document.getElementById('damage_herbal_supplier'); if (su) su.value = supplier;
+            var av = document.getElementById('damage_herbal_available'); if (av) av.value = qty.toFixed(3) + ' كجم';
+            var q = document.getElementById('damage_herbal_quantity'); if (q) { q.value = ''; q.max = qty > 0 ? qty.toFixed(3) : ''; }
+            new bootstrap.Modal(document.getElementById('damageHerbalModal')).show();
+        }
+    }
+    </script>
     <?php
 }
 ?>
