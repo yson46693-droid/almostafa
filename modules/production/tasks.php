@@ -428,7 +428,7 @@ function tasksHandleAction(string $action, array $input, array $context): array
 
                 $columns = ['created_by', 'priority', 'status'];
                 $values = [(int) $currentUser['id'], $priority, 'pending'];
-                $placeholders = ['?', '?', '?', '?'];
+                $placeholders = ['?', '?', '?'];
 
               
                 if ($assignedTo > 0) {
