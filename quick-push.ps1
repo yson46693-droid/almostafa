@@ -1,4 +1,5 @@
 # Script for Git Push
+# Pushes to origin (default: https://github.com/yson46693-droid/almostafa.git)
 # UTF-8 encoding
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
