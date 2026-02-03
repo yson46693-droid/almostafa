@@ -4863,7 +4863,6 @@ function confirmCancelOrderWithDeductedAmount() {
             addLocalCustomerForm.reset();
         });
     }
-    }
     
     // Real-time Search functionality
     const searchInput = document.getElementById('orderSearchInput');
