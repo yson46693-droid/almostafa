@@ -9694,7 +9694,7 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
             </div>
         </div>
     </div>
-    
+     
     <!-- Cards للموبايل - مودالات السمسم والطحينة -->
     <!-- Card إضافة سمسم - للموبايل فقط -->  
     <div class="card shadow-sm mb-4 d-md-none" id="addSesameCard" style="display: none;">
