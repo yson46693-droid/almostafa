@@ -435,7 +435,14 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
         <table class="info-table customer-priority-row" style="margin: 12px 0;">
             <tr>
                 <td>العميل:</td>
-                <td><?php echo !empty($customerName) ? htmlspecialchars($customerName) : '-'; ?></td>
+                <td>
+                    <?php 
+                    echo !empty($customerName) ? htmlspecialchars($customerName) : '-';
+                    if (!empty($task['customer_phone'])) {
+                        echo '<br><span style="font-weight: normal; font-size: 13px;">' . htmlspecialchars($task['customer_phone']) . '</span>';
+                    }
+                    ?>
+                </td>
                 <td>الأولوية:</td>
                 <td><?php echo htmlspecialchars($priorityLabel); ?></td>
             </tr>

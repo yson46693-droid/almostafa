@@ -243,6 +243,17 @@ try {
     error_log('Error checking/adding customer_name column: ' . $e->getMessage());
 }
 
+// التحقق من وجود عمود customer_phone وإضافته إذا لم يكن موجوداً
+try {
+    $customerPhoneColumn = $db->queryOne("SHOW COLUMNS FROM tasks LIKE 'customer_phone'");
+    if (empty($customerPhoneColumn)) {
+        $db->execute("ALTER TABLE tasks ADD COLUMN customer_phone VARCHAR(50) NULL AFTER customer_name");
+        error_log('Added customer_phone column to tasks table');
+    }
+} catch (Exception $e) {
+    error_log('Error checking/adding customer_phone column: ' . $e->getMessage());
+}
+
 /**
  * تحميل بيانات المستخدمين
  */
@@ -275,6 +286,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $priority = in_array($priority, $allowedPriorities, true) ? $priority : 'normal';
         $dueDate = $_POST['due_date'] ?? '';
         $customerName = trim($_POST['customer_name'] ?? '');
+        $customerPhone = trim($_POST['customer_phone'] ?? '');
         $assignees = $_POST['assigned_to'] ?? [];
         
         // الحصول على المنتجات المتعددة
@@ -583,6 +595,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($productId !== null && $productId > 0) {
                     $columns[] = 'product_id';
                     $values[] = $productId;
+                    $placeholders[] = '?';
+                }
+
+                if ($customerName !== '') {
+                    $columns[] = 'customer_name';
+                    $values[] = $customerName;
+                    $placeholders[] = '?';
+                }
+
+                if ($customerPhone !== '') {
+                    $columns[] = 'customer_phone';
+                    $values[] = $customerPhone;
                     $placeholders[] = '?';
                 }
 
@@ -1019,9 +1043,9 @@ try {
         
         if (!empty($adminIds)) {
             $placeholders = implode(',', array_fill(0, count($adminIds), '?'));
-            $recentTasks = $db->query("
+                    $recentTasks = $db->query("
                 SELECT t.id, t.title, t.status, t.priority, t.due_date, t.created_at,
-                       t.quantity, t.unit, t.customer_name, t.notes, t.product_id, t.related_type, t.related_id,
+                       t.quantity, t.unit, t.customer_name, t.customer_phone, t.notes, t.product_id, t.related_type, t.related_id,
                        u.full_name AS assigned_name, t.assigned_to,
                        uCreator.full_name AS creator_name, t.created_by
                 FROM tasks t
@@ -1039,7 +1063,7 @@ try {
         // للمستخدمين الآخرين، عرض المهام التي أنشأوها فقط
         $recentTasks = $db->query("
             SELECT t.id, t.title, t.status, t.priority, t.due_date, t.created_at,
-                   t.quantity, t.unit, t.customer_name, t.notes, t.product_id, t.related_type, t.related_id,
+                   t.quantity, t.unit, t.customer_name, t.customer_phone, t.notes, t.product_id, t.related_type, t.related_id,
                    u.full_name AS assigned_name, t.assigned_to
             FROM tasks t
             LEFT JOIN users u ON t.assigned_to = u.id
@@ -1339,9 +1363,13 @@ try {
                             </div>
                             <div class="form-text small">يمكن تحديد أكثر من عامل باستخدام زر CTRL أو SHIFT.</div>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-2">
                             <label class="form-label">اسم العميل</label>
                             <input type="text" class="form-control" name="customer_name" placeholder="أدخل اسم العميل">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">رقم العميل</label>
+                            <input type="text" class="form-control" name="customer_phone" placeholder="أدخل رقم العميل" dir="ltr">
                         </div>
                         <div class="col-md-5">
                             <label class="form-label">وصف وتفاصيل و ملاحظات الاوردر</label>
@@ -1428,7 +1456,20 @@ try {
                                     <td><strong>#<?php echo (int)$task['id']; ?></strong></td>
                                     <td><?php 
                                         $custName = isset($task['customer_name']) ? trim((string)$task['customer_name']) : '';
-                                        echo $custName !== '' ? htmlspecialchars($custName, ENT_QUOTES, 'UTF-8') : '<span class="text-muted">-</span>';
+                                        $custPhone = isset($task['customer_phone']) ? trim((string)$task['customer_phone']) : '';
+                                        
+                                        if ($custName !== '') {
+                                            echo '<div>' . htmlspecialchars($custName, ENT_QUOTES, 'UTF-8') . '</div>';
+                                            if ($custPhone !== '') {
+                                                echo '<div class="text-muted small" dir="ltr"><i class="bi bi-telephone me-1"></i>' . htmlspecialchars($custPhone, ENT_QUOTES, 'UTF-8') . '</div>';
+                                            }
+                                        } else {
+                                            if ($custPhone !== '') {
+                                                echo '<div dir="ltr"><i class="bi bi-telephone me-1"></i>' . htmlspecialchars($custPhone, ENT_QUOTES, 'UTF-8') . '</div>';
+                                            } else {
+                                                echo '<span class="text-muted">-</span>';
+                                            }
+                                        }
                                     ?></td>
                                     <td>                                        <?php 
                                         // عرض منشئ المهمة إذا كان المحاسب أو المدير
