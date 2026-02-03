@@ -994,10 +994,21 @@ if (!empty($_GET['get_order_receipt']) && isset($_GET['order_id'])) {
 }
 
 // Pagination لجدول آخر المهام
+// Pagination
 $tasksPageNum = isset($_GET['p']) ? max(1, (int)$_GET['p']) : 1;
 $tasksPerPage = 15;
 $totalRecentTasks = 0;
 $totalRecentPages = 1;
+
+// Filter by status
+$statusFilter = isset($_GET['status']) ? $_GET['status'] : '';
+$statusCondition = "";
+$statusParams = [];
+
+if ($statusFilter && $statusFilter !== 'all') {
+    $statusCondition = "AND t.status = ?";
+    $statusParams[] = $statusFilter;
+}
 
 try {
     // جلب عدد المهام الإجمالي (للتقسيم)
@@ -1012,17 +1023,22 @@ try {
         
         if (!empty($adminIds)) {
             $placeholders = implode(',', array_fill(0, count($adminIds), '?'));
+            
+            // دمج معايير التصفية
+            $countParams = array_merge($adminIds, $statusParams);
+            
             $totalRow = $db->queryOne("
                 SELECT COUNT(*) AS total FROM tasks t
-                WHERE t.created_by IN ($placeholders) AND t.status != 'cancelled'
-            ", $adminIds);
+                WHERE t.created_by IN ($placeholders) AND t.status != 'cancelled' $statusCondition
+            ", $countParams);
             $totalRecentTasks = isset($totalRow['total']) ? (int)$totalRow['total'] : 0;
         }
     } else {
+        $countParams = array_merge([$currentUser['id']], $statusParams);
         $totalRow = $db->queryOne("
             SELECT COUNT(*) AS total FROM tasks t
-            WHERE t.created_by = ? AND t.status != 'cancelled'
-        ", [$currentUser['id']]);
+            WHERE t.created_by = ? AND t.status != 'cancelled' $statusCondition
+        ", $countParams);
         $totalRecentTasks = isset($totalRow['total']) ? (int)$totalRow['total'] : 0;
     }
     
@@ -1043,7 +1059,11 @@ try {
         
         if (!empty($adminIds)) {
             $placeholders = implode(',', array_fill(0, count($adminIds), '?'));
-                    $recentTasks = $db->query("
+            
+            // دمج المعايير للاستعلام النهائي
+            $queryParams = array_merge($adminIds, $statusParams, [$tasksPerPage, $tasksOffset]);
+            
+            $recentTasks = $db->query("
                 SELECT t.id, t.title, t.status, t.priority, t.due_date, t.created_at,
                        t.quantity, t.unit, t.customer_name, t.customer_phone, t.notes, t.product_id, t.related_type, t.related_id,
                        u.full_name AS assigned_name, t.assigned_to,
@@ -1053,14 +1073,17 @@ try {
                 LEFT JOIN users uCreator ON t.created_by = uCreator.id
                 WHERE t.created_by IN ($placeholders)
                 AND t.status != 'cancelled'
+                $statusCondition
                 ORDER BY t.created_at DESC, t.id DESC
                 LIMIT ? OFFSET ?
-            ", array_merge($adminIds, [$tasksPerPage, $tasksOffset]));
+            ", $queryParams);
         } else {
             $recentTasks = [];
         }
     } else {
         // للمستخدمين الآخرين، عرض المهام التي أنشأوها فقط
+        $queryParams = array_merge([$currentUser['id']], $statusParams, [$tasksPerPage, $tasksOffset]);
+        
         $recentTasks = $db->query("
             SELECT t.id, t.title, t.status, t.priority, t.due_date, t.created_at,
                    t.quantity, t.unit, t.customer_name, t.customer_phone, t.notes, t.product_id, t.related_type, t.related_id,
@@ -1069,9 +1092,10 @@ try {
             LEFT JOIN users u ON t.assigned_to = u.id
             WHERE t.created_by = ?
             AND t.status != 'cancelled'
+            $statusCondition
             ORDER BY t.created_at DESC, t.id DESC
             LIMIT ? OFFSET ?
-        ", [$currentUser['id'], $tasksPerPage, $tasksOffset]);
+        ", $queryParams);
     }
     
     // استخراج جميع العمال من notes لكل مهمة واستخراج اسم المنتج
@@ -1261,60 +1285,74 @@ try {
 
     <div class="row g-2 mb-3">
         <div class="col-4 col-sm-4 col-md-2">
-            <div class="card border-primary h-100">
-                <div class="card-body text-center py-2 px-2">
-                    <div class="text-muted small mb-1">إجمالي المهام</div>
-                    <div class="fs-5 text-primary fw-semibold"><?php echo $stats['total']; ?></div>
+            <a href="?page=production_tasks" class="text-decoration-none">
+                <div class="card <?php echo $statusFilter === '' || $statusFilter === 'all' ? 'bg-primary text-white' : 'border-primary'; ?> h-100">
+                    <div class="card-body text-center py-2 px-2">
+                        <div class="<?php echo $statusFilter === '' || $statusFilter === 'all' ? 'text-white-50' : 'text-muted'; ?> small mb-1">إجمالي المهام</div>
+                        <div class="fs-5 <?php echo $statusFilter === '' || $statusFilter === 'all' ? 'text-white' : 'text-primary'; ?> fw-semibold"><?php echo $stats['total']; ?></div>
+                    </div>
                 </div>
-            </div>
+            </a>
         </div>
         <div class="col-4 col-sm-4 col-md-2">
-            <div class="card border-warning h-100">
-                <div class="card-body text-center py-2 px-2">
-                    <div class="text-muted small mb-1">معلقة</div>
-                    <div class="fs-5 text-warning fw-semibold"><?php echo $stats['pending']; ?></div>
+            <a href="?page=production_tasks&status=pending" class="text-decoration-none">
+                <div class="card <?php echo $statusFilter === 'pending' ? 'bg-warning text-dark' : 'border-warning'; ?> h-100">
+                    <div class="card-body text-center py-2 px-2">
+                        <div class="<?php echo $statusFilter === 'pending' ? 'text-dark-50' : 'text-muted'; ?> small mb-1">معلقة</div>
+                        <div class="fs-5 <?php echo $statusFilter === 'pending' ? 'text-dark' : 'text-warning'; ?> fw-semibold"><?php echo $stats['pending']; ?></div>
+                    </div>
                 </div>
-            </div>
+            </a>
         </div>
         <div class="col-4 col-sm-4 col-md-2">
-            <div class="card border-info h-100">
-                <div class="card-body text-center py-2 px-2">
-                    <div class="text-muted small mb-1">قيد التنفيذ</div>
-                    <div class="fs-5 text-info fw-semibold"><?php echo $stats['in_progress']; ?></div>
+            <a href="?page=production_tasks&status=in_progress" class="text-decoration-none">
+                <div class="card <?php echo $statusFilter === 'in_progress' ? 'bg-info text-dark' : 'border-info'; ?> h-100">
+                    <div class="card-body text-center py-2 px-2">
+                        <div class="<?php echo $statusFilter === 'in_progress' ? 'text-dark-50' : 'text-muted'; ?> small mb-1">قيد التنفيذ</div>
+                        <div class="fs-5 <?php echo $statusFilter === 'in_progress' ? 'text-dark' : 'text-info'; ?> fw-semibold"><?php echo $stats['in_progress']; ?></div>
+                    </div>
                 </div>
-            </div>
+            </a>
         </div>
         <div class="col-4 col-sm-4 col-md-2">
-            <div class="card border-success h-100">
-                <div class="card-body text-center py-2 px-2">
-                    <div class="text-muted small mb-1">مكتملة</div>
-                    <div class="fs-5 text-success fw-semibold"><?php echo $stats['completed']; ?></div>
+            <a href="?page=production_tasks&status=completed" class="text-decoration-none">
+                <div class="card <?php echo $statusFilter === 'completed' ? 'bg-success text-white' : 'border-success'; ?> h-100">
+                    <div class="card-body text-center py-2 px-2">
+                        <div class="<?php echo $statusFilter === 'completed' ? 'text-white-50' : 'text-muted'; ?> small mb-1">مكتملة</div>
+                        <div class="fs-5 <?php echo $statusFilter === 'completed' ? 'text-white' : 'text-success'; ?> fw-semibold"><?php echo $stats['completed']; ?></div>
+                    </div>
                 </div>
-            </div>
+            </a>
         </div>
         <div class="col-4 col-sm-4 col-md-2">
-            <div class="card border-success h-100">
-                <div class="card-body text-center py-2 px-2">
-                    <div class="text-muted small mb-1">تم التوصيل</div>
-                    <div class="fs-5 text-success fw-semibold"><?php echo $stats['delivered']; ?></div>
+            <a href="?page=production_tasks&status=delivered" class="text-decoration-none">
+                <div class="card <?php echo $statusFilter === 'delivered' ? 'bg-success text-white' : 'border-success'; ?> h-100">
+                    <div class="card-body text-center py-2 px-2">
+                        <div class="<?php echo $statusFilter === 'delivered' ? 'text-white-50' : 'text-muted'; ?> small mb-1">تم التوصيل</div>
+                        <div class="fs-5 <?php echo $statusFilter === 'delivered' ? 'text-white' : 'text-success'; ?> fw-semibold"><?php echo $stats['delivered']; ?></div>
+                    </div>
                 </div>
-            </div>
+            </a>
         </div>
         <div class="col-4 col-sm-4 col-md-2">
-            <div class="card border-secondary h-100">
-                <div class="card-body text-center py-2 px-2">
-                    <div class="text-muted small mb-1">تم الارجاع</div>
-                    <div class="fs-5 text-secondary fw-semibold"><?php echo $stats['returned']; ?></div>
+            <a href="?page=production_tasks&status=returned" class="text-decoration-none">
+                <div class="card <?php echo $statusFilter === 'returned' ? 'bg-secondary text-white' : 'border-secondary'; ?> h-100">
+                    <div class="card-body text-center py-2 px-2">
+                        <div class="<?php echo $statusFilter === 'returned' ? 'text-white-50' : 'text-muted'; ?> small mb-1">تم الارجاع</div>
+                        <div class="fs-5 <?php echo $statusFilter === 'returned' ? 'text-white' : 'text-secondary'; ?> fw-semibold"><?php echo $stats['returned']; ?></div>
+                    </div>
                 </div>
-            </div>
+            </a>
         </div>
         <div class="col-4 col-sm-4 col-md-2">
-            <div class="card border-danger h-100">
-                <div class="card-body text-center py-2 px-2">
-                    <div class="text-muted small mb-1">ملغاة</div>
-                    <div class="fs-5 text-danger fw-semibold"><?php echo $stats['cancelled']; ?></div>
+            <a href="?page=production_tasks&status=cancelled" class="text-decoration-none">
+                <div class="card <?php echo $statusFilter === 'cancelled' ? 'bg-danger text-white' : 'border-danger'; ?> h-100">
+                    <div class="card-body text-center py-2 px-2">
+                        <div class="<?php echo $statusFilter === 'cancelled' ? 'text-white-50' : 'text-muted'; ?> small mb-1">ملغاة</div>
+                        <div class="fs-5 <?php echo $statusFilter === 'cancelled' ? 'text-white' : 'text-danger'; ?> fw-semibold"><?php echo $stats['cancelled']; ?></div>
+                    </div>
                 </div>
-            </div>
+            </a>
         </div>
     </div>
 
