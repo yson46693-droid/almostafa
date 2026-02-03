@@ -5764,6 +5764,18 @@ function openBeeswaxDamageModal(id, supplier, quantity) {
                 <i class="bi bi-tree-fill"></i>البلح
             </a>
         </li>
+        <li class="nav-item">
+            <a class="nav-link <?php echo $section === 'turbines' ? 'active' : ''; ?>" 
+               href="?page=raw_materials_warehouse&section=turbines">
+                <i class="bi bi-cup-hot-fill"></i>التلبينات
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?php echo $section === 'herbal' ? 'active' : ''; ?>" 
+               href="?page=raw_materials_warehouse&section=herbal">
+                <i class="bi bi-flower2"></i>العطاره
+            </a>
+        </li>
     </ul>
 </div>
 
