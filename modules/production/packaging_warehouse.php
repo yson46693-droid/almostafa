@@ -1716,6 +1716,18 @@ if ($usePackagingTable) {
 }
 
 $packagingTypeOptions = getPackagingTypeOptions($db, $usePackagingTable);
+// أنواع حقيقية من الأدوات لضمان تطابق فلتر النوع مع البيانات
+$filterTypeOptions = [];
+foreach ($packagingMaterials as $pm) {
+    $t = trim((string)($pm['type'] ?? $pm['category'] ?? ''));
+    if ($t !== '' && !in_array($t, $filterTypeOptions, true)) {
+        $filterTypeOptions[] = $t;
+    }
+}
+sort($filterTypeOptions, SORT_LOCALE_STRING);
+if (empty($filterTypeOptions)) {
+    $filterTypeOptions = $packagingTypeOptions;
+}
 $nextMaterialCode = generateNextPackagingMaterialCode($db, $usePackagingTable);
 
 // جلب الموردين المتاحين لأدوات التعبئة
@@ -2441,7 +2453,7 @@ $packagingReportGeneratedAt = $packagingReport['generated_at'] ?? date('Y-m-d H:
                 <label class="form-label">فلتر بالنوع</label>
                 <select class="form-select" name="filter_type" id="filter-type-select">
                     <option value="">جميع الأنواع</option>
-                    <?php foreach ($packagingTypeOptions as $typeOpt): ?>
+                    <?php foreach ($filterTypeOptions as $typeOpt): ?>
                         <option value="<?php echo htmlspecialchars($typeOpt, ENT_QUOTES, 'UTF-8'); ?>"
                                 <?php echo $filters['filter_type'] === $typeOpt ? 'selected' : ''; ?>>
                             <?php echo htmlspecialchars($typeOpt, ENT_QUOTES, 'UTF-8'); ?>
@@ -2598,7 +2610,7 @@ $packagingReportGeneratedAt = $packagingReport['generated_at'] ?? date('Y-m-d H:
     }
     if (filterTypeSelect) {
         filterTypeSelect.addEventListener('change', function() {
-            if (searchInput.value.trim() || resultsEl.classList.contains('d-none') === false) showResults();
+            if (!resultsEl.classList.contains('d-none')) showResults();
         });
     }
 })();
