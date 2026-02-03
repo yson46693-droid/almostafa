@@ -2205,6 +2205,14 @@ foreach ($packagingMaterials as $material) {
         continue;
     }
     
+    // فلترة حسب النوع
+    if ($filters['filter_type'] !== '') {
+        $matType = trim((string)($material['type'] ?? $material['category'] ?? ''));
+        if ($matType !== $filters['filter_type']) {
+            continue;
+        }
+    }
+    
     $material['usage'] = $usageData[$materialId] ?? [
         'total_used' => 0,
         'production_count' => 0,
@@ -2504,12 +2512,13 @@ $packagingReportGeneratedAt = $packagingReport['generated_at'] ?? date('Y-m-d H:
     var materialsData = <?php
         $listForJs = [];
         foreach ($packagingMaterials as $m) {
+            $typeVal = trim(isset($m['type']) ? (string)$m['type'] : (isset($m['category']) ? (string)$m['category'] : ''));
             $listForJs[] = [
                 'id' => (int)$m['id'],
                 'name' => isset($m['name']) ? (string)$m['name'] : '',
                 'alias' => isset($m['alias']) ? (string)$m['alias'] : '',
                 'material_id' => isset($m['material_id']) ? (string)$m['material_id'] : '',
-                'type' => isset($m['type']) ? (string)$m['type'] : (isset($m['category']) ? (string)$m['category'] : '')
+                'type' => $typeVal
             ];
         }
         echo json_encode($listForJs, JSON_UNESCAPED_UNICODE);
@@ -2527,7 +2536,8 @@ $packagingReportGeneratedAt = $packagingReport['generated_at'] ?? date('Y-m-d H:
         var q = (searchInput.value || '').trim().toLowerCase();
         var typeFilter = getSelectedType();
         var list = materialsData.filter(function(m) {
-            var matchType = !typeFilter || (m.type || '').trim() === typeFilter;
+            var mType = (m.type || '').trim();
+            var matchType = !typeFilter || mType === typeFilter;
             if (!matchType) return false;
             if (q === '') return true;
             var name = (m.name || '').toLowerCase();
