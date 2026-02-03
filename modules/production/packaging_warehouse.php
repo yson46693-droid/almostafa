@@ -764,7 +764,8 @@ $offset = ($pageNum - 1) * $perPage;
 
 // الفلترة والبحث
 $filters = [
-    'material_id' => isset($_GET['material_id']) ? intval($_GET['material_id']) : 0
+    'material_id' => isset($_GET['material_id']) ? intval($_GET['material_id']) : 0,
+    'filter_type' => isset($_GET['filter_type']) ? trim((string)$_GET['filter_type']) : ''
 ];
 
 // التحقق من وجود جدول packaging_materials
@@ -2433,25 +2434,49 @@ $packagingReportGeneratedAt = $packagingReport['generated_at'] ?? date('Y-m-d H:
 <!-- البحث والفلترة -->
 <div class="card shadow-sm mb-4">
     <div class="card-body">
-        <form method="GET" class="row g-3">
+        <form method="GET" id="packaging-filter-form" class="row g-3">
             <input type="hidden" name="page" value="packaging_warehouse">
-            <div class="col-md-6">
-                <label class="form-label">أداة محددة</label>
-                <select class="form-select" name="material_id">
-                    <option value="0">جميع الأدوات</option>
-                    <?php 
-                    require_once __DIR__ . '/../../includes/path_helper.php';
-                    $selectedMaterialId = $filters['material_id'];
-                    $materialValid = isValidSelectValue($selectedMaterialId, $packagingMaterials, 'id');
-                    foreach ($packagingMaterials as $mat): ?>
-                        <option value="<?php echo $mat['id']; ?>" 
-                                <?php echo $materialValid && $selectedMaterialId == $mat['id'] ? 'selected' : ''; ?>>
-                            <?php echo htmlspecialchars($mat['name']); ?>
+            <input type="hidden" name="material_id" id="filter-material-id" value="<?php echo (int)$filters['material_id']; ?>">
+            <div class="col-md-4">
+                <label class="form-label">فلتر بالنوع</label>
+                <select class="form-select" name="filter_type" id="filter-type-select">
+                    <option value="">جميع الأنواع</option>
+                    <?php foreach ($packagingTypeOptions as $typeOpt): ?>
+                        <option value="<?php echo htmlspecialchars($typeOpt, ENT_QUOTES, 'UTF-8'); ?>"
+                                <?php echo $filters['filter_type'] === $typeOpt ? 'selected' : ''; ?>>
+                            <?php echo htmlspecialchars($typeOpt, ENT_QUOTES, 'UTF-8'); ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-md-6 d-flex align-items-end">
+            <div class="col-md-4">
+                <label class="form-label">أداة محددة</label>
+                <div class="position-relative" id="material-search-wrap">
+                    <input type="text"
+                           class="form-control"
+                           id="material-search-input"
+                           placeholder="ابحث بالاسم أو الكود أو المستعار..."
+                           autocomplete="off"
+                           value="<?php
+                                if ($filters['material_id'] > 0) {
+                                    require_once __DIR__ . '/../../includes/path_helper.php';
+                                    $materialValid = isValidSelectValue($filters['material_id'], $packagingMaterials, 'id');
+                                    if ($materialValid) {
+                                        foreach ($packagingMaterials as $m) {
+                                            if ((int)$m['id'] === (int)$filters['material_id']) {
+                                                echo htmlspecialchars($m['name'], ENT_QUOTES, 'UTF-8');
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            ?>">
+                    <div class="list-group position-absolute top-100 start-0 end-0 mt-1 shadow-sm rounded overflow-auto d-none"
+                         id="material-search-results"
+                         style="max-height: 220px; z-index: 1050;"></div>
+                </div>
+            </div>
+            <div class="col-md-4 d-flex align-items-end">
                 <button type="submit" class="btn btn-primary me-2">
                     <i class="bi bi-search"></i> بحث
                 </button>
@@ -2462,6 +2487,122 @@ $packagingReportGeneratedAt = $packagingReport['generated_at'] ?? date('Y-m-d H:
         </form>
     </div>
 </div>
+<script>
+(function() {
+    var materialsData = <?php
+        $listForJs = [];
+        foreach ($packagingMaterials as $m) {
+            $listForJs[] = [
+                'id' => (int)$m['id'],
+                'name' => isset($m['name']) ? (string)$m['name'] : '',
+                'alias' => isset($m['alias']) ? (string)$m['alias'] : '',
+                'material_id' => isset($m['material_id']) ? (string)$m['material_id'] : '',
+                'type' => isset($m['type']) ? (string)$m['type'] : (isset($m['category']) ? (string)$m['category'] : '')
+            ];
+        }
+        echo json_encode($listForJs, JSON_UNESCAPED_UNICODE);
+    ?>;
+    var filterTypeSelect = document.getElementById('filter-type-select');
+    var searchInput = document.getElementById('material-search-input');
+    var resultsEl = document.getElementById('material-search-results');
+    var hiddenId = document.getElementById('filter-material-id');
+    var wrap = document.getElementById('material-search-wrap');
+
+    function getSelectedType() {
+        return filterTypeSelect ? (filterTypeSelect.value || '').trim() : '';
+    }
+    function filterMaterials() {
+        var q = (searchInput.value || '').trim().toLowerCase();
+        var typeFilter = getSelectedType();
+        var list = materialsData.filter(function(m) {
+            var matchType = !typeFilter || (m.type || '').trim() === typeFilter;
+            if (!matchType) return false;
+            if (q === '') return true;
+            var name = (m.name || '').toLowerCase();
+            var alias = (m.alias || '').toLowerCase();
+            var code = (m.material_id || '').toLowerCase();
+            return name.indexOf(q) !== -1 || alias.indexOf(q) !== -1 || code.indexOf(q) !== -1;
+        });
+        return list;
+    }
+    function showResults() {
+        var list = filterMaterials();
+        var q = (searchInput.value || '').trim();
+        resultsEl.innerHTML = '';
+        var addAllOption = list.length > 0 || q === '';
+        if (addAllOption) {
+            var allItem = document.createElement('button');
+            allItem.type = 'button';
+            allItem.className = 'list-group-item list-group-item-action text-muted';
+            allItem.textContent = 'جميع الأدوات';
+            allItem.addEventListener('click', function() {
+                hiddenId.value = '0';
+                searchInput.value = '';
+                resultsEl.classList.add('d-none');
+                resultsEl.innerHTML = '';
+            });
+            resultsEl.appendChild(allItem);
+        }
+        if (list.length === 0) {
+            if (!addAllOption) {
+                var empty = document.createElement('div');
+                empty.className = 'list-group-item text-muted small';
+                empty.textContent = 'لا توجد نتائج مطابقة';
+                resultsEl.appendChild(empty);
+            }
+        } else {
+            list.forEach(function(m) {
+                var item = document.createElement('button');
+                item.type = 'button';
+                item.className = 'list-group-item list-group-item-action text-start';
+                item.dataset.id = m.id;
+                item.dataset.name = m.name;
+                var typeLabel = (m.type || '—');
+                item.innerHTML = '<span class="fw-semibold">' + escapeHtml(m.name) + '</span>' +
+                    (m.material_id ? ' <span class="text-info small">' + escapeHtml(m.material_id) + '</span>' : '') +
+                    ' <span class="badge bg-secondary ms-1">' + escapeHtml(typeLabel) + '</span>';
+                item.addEventListener('click', function() {
+                    hiddenId.value = m.id;
+                    searchInput.value = m.name;
+                    resultsEl.classList.add('d-none');
+                    resultsEl.innerHTML = '';
+                });
+                resultsEl.appendChild(item);
+            });
+        }
+        resultsEl.classList.remove('d-none');
+    }
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            if ((searchInput.value || '').trim() === '') hiddenId.value = '0';
+            showResults();
+        });
+    }
+    function escapeHtml(s) {
+        var div = document.createElement('div');
+        div.textContent = s;
+        return div.innerHTML;
+    }
+    function hideResults() {
+        setTimeout(function() { resultsEl.classList.add('d-none'); }, 200);
+    }
+    if (searchInput) {
+        searchInput.addEventListener('focus', showResults);
+        searchInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') { searchInput.blur(); hideResults(); }
+        });
+    }
+    if (wrap) {
+        wrap.addEventListener('focusin', function() { });
+        wrap.addEventListener('focusout', function() { hideResults(); });
+    }
+    if (filterTypeSelect) {
+        filterTypeSelect.addEventListener('change', function() {
+            if (searchInput.value.trim() || resultsEl.classList.contains('d-none') === false) showResults();
+        });
+    }
+})();
+</script>
 
 <!-- قائمة أدوات التعبئة -->
 <div class="card shadow-sm">
