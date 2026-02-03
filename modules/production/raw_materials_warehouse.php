@@ -9810,108 +9810,110 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
         </div>
     </div>
     
-    <!-- Modal إضافة بلح -->
+    <!-- Modal إضافة بلح (مقسم إلى أنواع) -->
     <div class="modal fade d-none d-md-block" id="addDateModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-dialog modal-dialog-scrollable modal-lg">
             <div class="modal-content">
                 <div class="modal-header text-white" style="background: linear-gradient(135deg, #8B4513 0%, #A0522D 100%);">
                     <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>إضافة بلح</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <form method="POST">
-                    <input type="hidden" name="action" value="add_single_date">
-                    <input type="hidden" name="submit_token" value="">
-                    <div class="modal-body scrollable-modal-body">
-                        <?php if ($dateSectionTableError): ?>
-                            <div class="alert alert-warning">
-                                لا يمكن إضافة بلح جديد قبل إنشاء جدول المخزون في قاعدة البيانات.
+                <div class="modal-body scrollable-modal-body">
+                    <?php if ($dateSectionTableError): ?>
+                        <div class="alert alert-warning">
+                            لا يمكن إضافة بلح جديد قبل إنشاء جدول المخزون في قاعدة البيانات.
+                        </div>
+                    <?php endif; ?>
+                    <?php foreach ($dateStockTypes as $dt): ?>
+                        <div class="card border mb-3">
+                            <div class="card-header py-2 text-white" style="background: linear-gradient(135deg, #8B4513 0%, #A0522D 100%);">
+                                <h6 class="mb-0"><?php echo htmlspecialchars($dt); ?></h6>
                             </div>
-                        <?php endif; ?>
-                        <div class="mb-3">
-                            <label class="form-label">المورد <span class="text-danger">*</span></label>
-                            <select name="supplier_id" class="form-select" required>
+                            <div class="card-body">
+                                <form method="POST" class="add-date-by-type-form">
+                                    <input type="hidden" name="action" value="add_single_date">
+                                    <input type="hidden" name="date_type" value="<?php echo htmlspecialchars($dt, ENT_QUOTES); ?>">
+                                    <input type="hidden" name="submit_token" value="">
+                                    <div class="row g-2">
+                                        <div class="col-md-4">
+                                            <label class="form-label small">المورد <span class="text-danger">*</span></label>
+                                            <select name="supplier_id" class="form-select form-select-sm" required>
+                                                <option value="">اختر المورد</option>
+                                                <?php foreach ($dateSuppliers as $supplier): ?>
+                                                    <option value="<?php echo $supplier['id']; ?>"><?php echo htmlspecialchars($supplier['name']); ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label small">الكمية (كجم) <span class="text-danger">*</span></label>
+                                            <input type="number" step="0.001" min="0.001" name="quantity" class="form-control form-control-sm" required placeholder="0.000">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label small">ملاحظات</label>
+                                            <input type="text" name="notes" class="form-control form-control-sm" placeholder="اختياري">
+                                        </div>
+                                        <div class="col-md-2 d-flex align-items-end">
+                                            <button type="submit" class="btn btn-sm w-100 text-white" style="background: linear-gradient(135deg, #8B4513 0%, #A0522D 100%);" <?php echo $dateActionsDisabledAttr; ?>>
+                                                <i class="bi bi-plus-lg me-1"></i>إضافة
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Card إضافة بلح للموبايل (مقسم إلى أنواع) -->
+    <div class="card shadow-sm mb-4 d-md-none" id="addDateCard" style="display: none;">
+        <div class="card-header text-white" style="background: linear-gradient(135deg, #8B4513 0%, #A0522D 100%);">
+            <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>إضافة بلح</h5>
+        </div>
+        <div class="card-body">
+            <?php if ($dateSectionTableError): ?>
+                <div class="alert alert-warning">
+                    لا يمكن إضافة بلح جديد قبل إنشاء جدول المخزون في قاعدة البيانات.
+                </div>
+            <?php endif; ?>
+            <?php foreach ($dateStockTypes as $dt): ?>
+                <div class="border rounded p-3 mb-3">
+                    <h6 class="text-secondary mb-2"><?php echo htmlspecialchars($dt); ?></h6>
+                    <form method="POST">
+                        <input type="hidden" name="action" value="add_single_date">
+                        <input type="hidden" name="date_type" value="<?php echo htmlspecialchars($dt, ENT_QUOTES); ?>">
+                        <input type="hidden" name="submit_token" value="">
+                        <div class="mb-2">
+                            <label class="form-label small">المورد <span class="text-danger">*</span></label>
+                            <select name="supplier_id" class="form-select form-select-sm" required>
                                 <option value="">اختر المورد</option>
                                 <?php foreach ($dateSuppliers as $supplier): ?>
                                     <option value="<?php echo $supplier['id']; ?>"><?php echo htmlspecialchars($supplier['name']); ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">نوع البلح <span class="text-danger">*</span></label>
-                            <select name="date_type" class="form-select" required>
-                                <option value="">اختر النوع</option>
-                                <?php foreach ($dateStockTypes as $dt): ?>
-                                    <option value="<?php echo htmlspecialchars($dt, ENT_QUOTES); ?>"><?php echo htmlspecialchars($dt); ?></option>
-                                <?php endforeach; ?>
-                            </select>
+                        <div class="mb-2">
+                            <label class="form-label small">الكمية (كجم) <span class="text-danger">*</span></label>
+                            <input type="number" step="0.001" min="0.001" name="quantity" class="form-control form-control-sm" required>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">الكمية (كجم) <span class="text-danger">*</span></label>
-                            <input type="number" step="0.001" min="0.001" name="quantity" class="form-control" required>
+                        <div class="mb-2">
+                            <label class="form-label small">ملاحظات</label>
+                            <input type="text" name="notes" class="form-control form-control-sm">
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">ملاحظات</label>
-                            <textarea name="notes" class="form-control" rows="3"></textarea>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-                        <button type="submit" class="btn text-white" style="background: linear-gradient(135deg, #8B4513 0%, #A0522D 100%);" <?php echo $dateActionsDisabledAttr; ?>>
-                            <i class="bi bi-check-circle me-1"></i>إضافة
+                        <button type="submit" class="btn btn-sm w-100 text-white" style="background: linear-gradient(135deg, #8B4513 0%, #A0522D 100%);" <?php echo $dateActionsDisabledAttr; ?>>
+                            <i class="bi bi-plus-lg me-1"></i>إضافة <?php echo htmlspecialchars($dt); ?>
                         </button>
-                    </div>
-                </form>
+                    </form>
+                </div>
+            <?php endforeach; ?>
+            <div class="mt-2">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="closeAddDateCard()">إغلاق</button>
             </div>
-        </div>
-    </div>
-    
-    <!-- Card إضافة بلح للموبايل -->
-    <div class="card shadow-sm mb-4 d-md-none" id="addDateCard" style="display: none;">
-        <div class="card-header text-white" style="background: linear-gradient(135deg, #8B4513 0%, #A0522D 100%);">
-            <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>إضافة بلح</h5>
-        </div>
-        <div class="card-body">
-            <form method="POST">
-                <input type="hidden" name="action" value="add_single_date">
-                <input type="hidden" name="submit_token" value="">
-                <?php if ($dateSectionTableError): ?>
-                    <div class="alert alert-warning">
-                        لا يمكن إضافة بلح جديد قبل إنشاء جدول المخزون في قاعدة البيانات.
-                    </div>
-                <?php endif; ?>
-                <div class="mb-3">
-                    <label class="form-label">المورد <span class="text-danger">*</span></label>
-                    <select name="supplier_id" class="form-select" required>
-                        <option value="">اختر المورد</option>
-                        <?php foreach ($dateSuppliers as $supplier): ?>
-                            <option value="<?php echo $supplier['id']; ?>"><?php echo htmlspecialchars($supplier['name']); ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">نوع البلح <span class="text-danger">*</span></label>
-                    <select name="date_type" class="form-select" required>
-                        <option value="">اختر النوع</option>
-                        <?php foreach ($dateStockTypes as $dt): ?>
-                            <option value="<?php echo htmlspecialchars($dt, ENT_QUOTES); ?>"><?php echo htmlspecialchars($dt); ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">الكمية (كجم) <span class="text-danger">*</span></label>
-                    <input type="number" step="0.001" min="0.001" name="quantity" class="form-control" required>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">ملاحظات</label>
-                    <textarea name="notes" class="form-control" rows="3"></textarea>
-                </div>
-                <div class="d-flex justify-content-end gap-2">
-                    <button type="button" class="btn btn-secondary" onclick="closeAddDateCard()">إلغاء</button>
-                    <button type="submit" class="btn text-white" style="background: linear-gradient(135deg, #8B4513 0%, #A0522D 100%);" <?php echo $dateActionsDisabledAttr; ?>>
-                        <i class="bi bi-check-circle me-1"></i>إضافة
-                    </button>
-                </div>
-            </form>
         </div>
     </div>
     
