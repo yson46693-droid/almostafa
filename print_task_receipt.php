@@ -465,7 +465,7 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
                 <tr>
                     <th style="width: 45%;">المنتج</th>
                     <th style="width: 30%; text-align: center;">الكمية</th>
-                    <th style="width: 25%; text-align: center;">الإجمالي(ج.م)</th>
+                    <th style="width: 25%; text-align: center;">اجمالي(ج.م)</th>
                 </tr>
             </thead>
             <tbody>
@@ -514,7 +514,7 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
             <tfoot>
                 <tr style="border-top: 2px solid #000; font-weight: 700; background-color: #f0f0f0;">
                     <td colspan="2" style="text-align: left; padding: 8px 5px;">الإجمالي</td>
-                    <td style="text-align: center; padding: 8px 5px;"><?php echo number_format($grandTotal, 2); ?></td>
+                    <td style="text-align: center; padding: 8px 5px;"><?php echo number_format($grandTotal, 2); ?> ج.م</td>
                 </tr>
             </tfoot>
         </table>
