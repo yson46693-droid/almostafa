@@ -1542,6 +1542,7 @@ try {
                                     <td><strong>#<?php echo (int)$task['id']; ?></strong></td>
                                     <td><?php 
                                         $custName = isset($task['customer_name']) ? trim((string)$task['customer_name']) : '';
+                                        $custPhone = isset($task['customer_phone']) ? trim((string)$task['customer_phone']) : '';
                                         $custPhoneEsc = $custPhone !== '' ? 'tel:' . preg_replace('/[^\d+]/', '', $custPhone) : '';
                                         
                                         if ($custName !== '') {
