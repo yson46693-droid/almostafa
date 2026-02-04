@@ -1264,8 +1264,8 @@ try {
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h2 class="mb-1"><i class="bi bi-list-task me-2"></i>إرسال مهام لقسم الإنتاج</h2>
-            <p class="text-muted mb-0">قم بإنشاء مهام موجهة لعمال الإنتاج مع تتبّع الحالة في صفحة المهام الخاصة بهم.</p>
+            <h2 class="mb-1"><i class="bi bi-list-task me-2"></i> أوردرات لقسم الإنتاج</h2>
+            <p class="text-muted mb-0">قم بإنشاء أوردرات موجهة لعمال الإنتاج مع تتبّع الحالة في صفحة الأوردرات الخاصة بهم.</p>
         </div>
     </div>
 
@@ -1357,13 +1357,13 @@ try {
     </div>
 
     <button class="btn btn-primary mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#createTaskFormCollapse" aria-expanded="false" aria-controls="createTaskFormCollapse">
-        <i class="bi bi-plus-circle me-1"></i>إنشاء مهمة جديدة
+        <i class="bi bi-plus-circle me-1"></i>إنشاء أوردر جديد
     </button>
 
     <div class="collapse" id="createTaskFormCollapse">
         <div class="card shadow-sm">
             <div class="card-header bg-primary text-white">
-                <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>إنشاء مهمة جديدة</h5>
+                <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>إنشاء أوردر جديد</h5>
             </div>
             <div class="card-body">
                 <form method="post" action="">

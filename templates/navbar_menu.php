@@ -285,7 +285,7 @@ switch ($role) {
                 'badge' => null
             ],
             [
-                'title' => isset($lang['menu_tasks']) ? $lang['menu_tasks'] : 'المهام',
+                'title' => isset($lang['menu_tasks']) ? $lang['menu_tasks'] : 'أوردرات',
                 'icon' => 'bi-list-check',
                 'url' => $baseUrl . 'production.php?page=tasks',
                 'active' => (isset($_GET['page']) && $_GET['page'] === 'tasks'),
