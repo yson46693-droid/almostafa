@@ -896,6 +896,7 @@ $search = tasksSafeString($_GET['search'] ?? '');
 $statusFilter = tasksSafeString($_GET['status'] ?? '');
 $priorityFilter = tasksSafeString($_GET['priority'] ?? '');
 $assignedFilter = isset($_GET['assigned']) ? (int) $_GET['assigned'] : 0;
+$overdueFilter = isset($_GET['overdue']) && $_GET['overdue'] === '1';
 
 $whereConditions = [];
 $params = [];
@@ -907,10 +908,15 @@ if ($search !== '') {
     $params[] = $searchParam;
 }
 
+if ($overdueFilter) {
+    $whereConditions[] = "t.status NOT IN ('completed','delivered','returned','cancelled')";
+    $whereConditions[] = 't.due_date < CURDATE()';
+}
+
 if ($statusFilter !== '') {
     $whereConditions[] = 't.status = ?';
     $params[] = $statusFilter;
-} else {
+} elseif (!$overdueFilter) {
     $whereConditions[] = "t.status != 'cancelled'";
 }
 
@@ -1340,70 +1346,92 @@ function tasksHtml(string $value): string
         <?php endif; ?>
     </div>
 
+    <?php
+    $filterBaseUrl = '?page=tasks';
+    if ($search !== '') { $filterBaseUrl .= '&search=' . rawurlencode($search); }
+    if ($priorityFilter !== '') { $filterBaseUrl .= '&priority=' . rawurlencode($priorityFilter); }
+    if ($assignedFilter > 0) { $filterBaseUrl .= '&assigned=' . $assignedFilter; }
+    ?>
     <div class="row g-2 mb-3">
         <div class="col-6 col-md-2">
-            <div class="card border-primary text-center h-100">
-                <div class="card-body p-2">
-                    <h5 class="text-primary mb-0"><?php echo $stats['total']; ?></h5>
-                    <small class="text-muted">إجمالي المهام</small>
+            <a href="<?php echo $filterBaseUrl; ?>" class="text-decoration-none">
+                <div class="card <?php echo $statusFilter === '' && !$overdueFilter ? 'bg-primary text-white' : 'border-primary'; ?> text-center h-100">
+                    <div class="card-body p-2">
+                        <h5 class="<?php echo $statusFilter === '' && !$overdueFilter ? 'text-white' : 'text-primary'; ?> mb-0"><?php echo $stats['total']; ?></h5>
+                        <small class="<?php echo $statusFilter === '' && !$overdueFilter ? 'text-white-50' : 'text-muted'; ?>">إجمالي المهام</small>
+                    </div>
                 </div>
-            </div>
+            </a>
         </div>
         <div class="col-6 col-md-2">
-            <div class="card border-warning text-center h-100">
-                <div class="card-body p-2">
-                    <h5 class="text-warning mb-0"><?php echo $stats['pending']; ?></h5>
-                    <small class="text-muted">معلقة</small>
+            <a href="<?php echo $filterBaseUrl . (strpos($filterBaseUrl, '?') !== false ? '&' : '?'); ?>status=pending" class="text-decoration-none">
+                <div class="card <?php echo $statusFilter === 'pending' ? 'bg-warning text-dark' : 'border-warning'; ?> text-center h-100">
+                    <div class="card-body p-2">
+                        <h5 class="<?php echo $statusFilter === 'pending' ? 'text-dark' : 'text-warning'; ?> mb-0"><?php echo $stats['pending']; ?></h5>
+                        <small class="<?php echo $statusFilter === 'pending' ? 'text-dark-50' : 'text-muted'; ?>">معلقة</small>
+                    </div>
                 </div>
-            </div>
+            </a>
         </div>
         <div class="col-6 col-md-2">
-            <div class="card border-info text-center h-100">
-                <div class="card-body p-2">
-                    <h5 class="text-info mb-0"><?php echo $stats['received']; ?></h5>
-                    <small class="text-muted">مستلمة</small>
+            <a href="<?php echo $filterBaseUrl . (strpos($filterBaseUrl, '?') !== false ? '&' : '?'); ?>status=received" class="text-decoration-none">
+                <div class="card <?php echo $statusFilter === 'received' ? 'bg-info text-white' : 'border-info'; ?> text-center h-100">
+                    <div class="card-body p-2">
+                        <h5 class="<?php echo $statusFilter === 'received' ? 'text-white' : 'text-info'; ?> mb-0"><?php echo $stats['received']; ?></h5>
+                        <small class="<?php echo $statusFilter === 'received' ? 'text-white-50' : 'text-muted'; ?>">مستلمة</small>
+                    </div>
                 </div>
-            </div>
+            </a>
         </div>
         <div class="col-6 col-md-2">
-            <div class="card border-info text-center h-100">
-                <div class="card-body p-2">
-                    <h5 class="text-info mb-0"><?php echo $stats['in_progress']; ?></h5>
-                    <small class="text-muted">قيد التنفيذ</small>
+            <a href="<?php echo $filterBaseUrl . (strpos($filterBaseUrl, '?') !== false ? '&' : '?'); ?>status=in_progress" class="text-decoration-none">
+                <div class="card <?php echo $statusFilter === 'in_progress' ? 'bg-info text-white' : 'border-info'; ?> text-center h-100">
+                    <div class="card-body p-2">
+                        <h5 class="<?php echo $statusFilter === 'in_progress' ? 'text-white' : 'text-info'; ?> mb-0"><?php echo $stats['in_progress']; ?></h5>
+                        <small class="<?php echo $statusFilter === 'in_progress' ? 'text-white-50' : 'text-muted'; ?>">قيد التنفيذ</small>
+                    </div>
                 </div>
-            </div>
+            </a>
         </div>
         <div class="col-6 col-md-2">
-            <div class="card border-success text-center h-100">
-                <div class="card-body p-2">
-                    <h5 class="text-success mb-0"><?php echo $stats['completed']; ?></h5>
-                    <small class="text-muted">مكتملة</small>
+            <a href="<?php echo $filterBaseUrl . (strpos($filterBaseUrl, '?') !== false ? '&' : '?'); ?>status=completed" class="text-decoration-none">
+                <div class="card <?php echo $statusFilter === 'completed' ? 'bg-success text-white' : 'border-success'; ?> text-center h-100">
+                    <div class="card-body p-2">
+                        <h5 class="<?php echo $statusFilter === 'completed' ? 'text-white' : 'text-success'; ?> mb-0"><?php echo $stats['completed']; ?></h5>
+                        <small class="<?php echo $statusFilter === 'completed' ? 'text-white-50' : 'text-muted'; ?>">مكتملة</small>
+                    </div>
                 </div>
-            </div>
+            </a>
         </div>
         <div class="col-6 col-md-2">
-            <div class="card border-success text-center h-100">
-                <div class="card-body p-2">
-                    <h5 class="text-success mb-0"><?php echo $stats['delivered']; ?></h5>
-                    <small class="text-muted">تم التوصيل</small>
+            <a href="<?php echo $filterBaseUrl . (strpos($filterBaseUrl, '?') !== false ? '&' : '?'); ?>status=delivered" class="text-decoration-none">
+                <div class="card <?php echo $statusFilter === 'delivered' ? 'bg-success text-white' : 'border-success'; ?> text-center h-100">
+                    <div class="card-body p-2">
+                        <h5 class="<?php echo $statusFilter === 'delivered' ? 'text-white' : 'text-success'; ?> mb-0"><?php echo $stats['delivered']; ?></h5>
+                        <small class="<?php echo $statusFilter === 'delivered' ? 'text-white-50' : 'text-muted'; ?>">تم التوصيل</small>
+                    </div>
                 </div>
-            </div>
+            </a>
         </div>
         <div class="col-6 col-md-2">
-            <div class="card border-secondary text-center h-100">
-                <div class="card-body p-2">
-                    <h5 class="text-secondary mb-0"><?php echo $stats['returned']; ?></h5>
-                    <small class="text-muted">تم الارجاع</small>
+            <a href="<?php echo $filterBaseUrl . (strpos($filterBaseUrl, '?') !== false ? '&' : '?'); ?>status=returned" class="text-decoration-none">
+                <div class="card <?php echo $statusFilter === 'returned' ? 'bg-secondary text-white' : 'border-secondary'; ?> text-center h-100">
+                    <div class="card-body p-2">
+                        <h5 class="<?php echo $statusFilter === 'returned' ? 'text-white' : 'text-secondary'; ?> mb-0"><?php echo $stats['returned']; ?></h5>
+                        <small class="<?php echo $statusFilter === 'returned' ? 'text-white-50' : 'text-muted'; ?>">تم الارجاع</small>
+                    </div>
                 </div>
-            </div>
+            </a>
         </div>
         <div class="col-6 col-md-2">
-            <div class="card border-danger text-center h-100">
-                <div class="card-body p-2">
-                    <h5 class="text-danger mb-0"><?php echo $stats['overdue']; ?></h5>
-                    <small class="text-muted">متأخرة</small>
+            <a href="<?php echo $filterBaseUrl . (strpos($filterBaseUrl, '?') !== false ? '&' : '?'); ?>overdue=1" class="text-decoration-none">
+                <div class="card <?php echo $overdueFilter ? 'bg-danger text-white' : 'border-danger'; ?> text-center h-100">
+                    <div class="card-body p-2">
+                        <h5 class="<?php echo $overdueFilter ? 'text-white' : 'text-danger'; ?> mb-0"><?php echo $stats['overdue']; ?></h5>
+                        <small class="<?php echo $overdueFilter ? 'text-white-50' : 'text-muted'; ?>">متأخرة</small>
+                    </div>
                 </div>
-            </div>
+            </a>
         </div>
     </div>
 
@@ -1411,6 +1439,7 @@ function tasksHtml(string $value): string
         <div class="card-body p-3">
             <form method="GET" action="" class="row g-2 align-items-end">
                 <input type="hidden" name="page" value="tasks">
+                <?php if ($overdueFilter): ?><input type="hidden" name="overdue" value="1"><?php endif; ?>
                 <div class="col-md-3 col-sm-6">
                     <label class="form-label mb-1">بحث</label>
                     <input type="text" class="form-control form-control-sm" name="search" value="<?php echo tasksHtml($search); ?>" placeholder="عنوان أو وصف">
