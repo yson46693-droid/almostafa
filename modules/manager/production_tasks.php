@@ -1543,15 +1543,26 @@ try {
                                     <td><?php 
                                         $custName = isset($task['customer_name']) ? trim((string)$task['customer_name']) : '';
                                         $custPhone = isset($task['customer_phone']) ? trim((string)$task['customer_phone']) : '';
+                                        $custPhoneEsc = $custPhone !== '' ? 'tel:' . preg_replace('/[^\d+]/', '', $custPhone) : '';
                                         
                                         if ($custName !== '') {
                                             echo '<div>' . htmlspecialchars($custName, ENT_QUOTES, 'UTF-8') . '</div>';
                                             if ($custPhone !== '') {
-                                                echo '<div class="text-muted small" dir="ltr"><i class="bi bi-telephone me-1"></i>' . htmlspecialchars($custPhone, ENT_QUOTES, 'UTF-8') . '</div>';
+                                                echo '<div class="text-muted small d-flex align-items-center gap-1" dir="ltr">';
+                                                echo '<span>' . htmlspecialchars($custPhone, ENT_QUOTES, 'UTF-8') . '</span>';
+                                                if ($custPhoneEsc !== 'tel:') {
+                                                    echo ' <a href="' . htmlspecialchars($custPhoneEsc, ENT_QUOTES, 'UTF-8') . '" class="btn btn-sm btn-outline-success btn-icon-only p-1" title="اتصال بالعميل" aria-label="اتصال"><i class="bi bi-telephone-fill"></i></a>';
+                                                }
+                                                echo '</div>';
                                             }
                                         } else {
                                             if ($custPhone !== '') {
-                                                echo '<div dir="ltr"><i class="bi bi-telephone me-1"></i>' . htmlspecialchars($custPhone, ENT_QUOTES, 'UTF-8') . '</div>';
+                                                echo '<div class="d-flex align-items-center gap-1" dir="ltr">';
+                                                echo '<span>' . htmlspecialchars($custPhone, ENT_QUOTES, 'UTF-8') . '</span>';
+                                                if ($custPhoneEsc !== 'tel:') {
+                                                    echo ' <a href="' . htmlspecialchars($custPhoneEsc, ENT_QUOTES, 'UTF-8') . '" class="btn btn-sm btn-outline-success btn-icon-only p-1" title="اتصال بالعميل" aria-label="اتصال"><i class="bi bi-telephone-fill"></i></a>';
+                                                }
+                                                echo '</div>';
                                             } else {
                                                 echo '<span class="text-muted">-</span>';
                                             }

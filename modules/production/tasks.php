@@ -1417,7 +1417,7 @@ function tasksHtml(string $value): string
                 </div>
                 <div class="col-md-2 col-sm-6">
                     <label class="form-label mb-1">الحالة</label>
-                    <select class="form-select form-select-sm" name="status">
+                    <select class="form-select form-select-sm" name="status" onchange="this.form.submit()">
                         <option value="">الكل</option>
                         <option value="pending" <?php echo $statusFilter === 'pending' ? 'selected' : ''; ?>>معلقة</option>
                         <option value="received" <?php echo $statusFilter === 'received' ? 'selected' : ''; ?>>مستلمة</option>
