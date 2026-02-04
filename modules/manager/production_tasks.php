@@ -1852,8 +1852,7 @@ window.openOrderReceiptModal = function(orderId) {
                     (o.delivery_date ? '<p class="mb-1"><strong>تاريخ التسليم:</strong> ' + o.delivery_date + '</p>' : '') +
                     '</div>' +
                     '<h6 class="mb-2">تفاصيل المنتجات</h6>' +
-                    '<table class="table table-sm table-bordered"><thead><tr><th>المنتج</th><th class="text-end">الكمية</th></tr></thead><tbody>' + rows + '</tbody></table>' +
-                    '<p class="mb-0 mt-2"><strong>الإجمالي:</strong> ' + total.toFixed(2) + ' ر.س</p>' +
+                    '<table class="table table-sm table-bordered"><thead><tr><th>المنتج</th><th class="text-end">الكمية</th></tr></thead><tbody>' + rows + '</tbody><tfoot><tr><td class="text-end fw-bold" colspan="2">الإجمالي: ' + total.toFixed(2) + ' ر.س</td></tr></tfoot></table>' +
                     (o.notes ? '<p class="mt-2 text-muted small mb-0"><strong>ملاحظات:</strong> ' + o.notes + '</p>' : '');
                 bodyEl.style.display = 'block';
             } else {
