@@ -471,11 +471,15 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
             <tbody>
                 <?php 
                 $totalQuantity = 0;
+                $grandTotal = 0;
                 $displayUnit = $unit; // الوحدة الافتراضية من قاعدة البيانات
                 foreach ($products as $product): 
                     $productQty = $product['quantity'] ?? null;
                     $productUnit = !empty($product['unit']) ? $product['unit'] : $unit; // استخدام وحدة المنتج أو الوحدة الافتراضية
                     $productPrice = isset($product['price']) && $product['price'] !== null && $product['price'] !== '' ? (float)$product['price'] : null;
+                    if ($productPrice !== null) {
+                        $grandTotal += $productPrice;
+                    }
                     if ($productQty !== null) {
                         $totalQuantity += $productQty;
                         // استخدام وحدة أول منتج للعرض الإجمالي
@@ -507,6 +511,12 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
                 </tr>
                 <?php endforeach; ?>
             </tbody>
+            <tfoot>
+                <tr style="border-top: 2px solid #000; font-weight: 700; background-color: #f0f0f0;">
+                    <td colspan="2" style="text-align: left; padding: 8px 5px;">الإجمالي</td>
+                    <td style="text-align: center; padding: 8px 5px;"><?php echo number_format($grandTotal, 2); ?></td>
+                </tr>
+            </tfoot>
         </table>
         <?php else: ?>
         <table class="info-table">
