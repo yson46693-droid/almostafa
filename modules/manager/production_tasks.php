@@ -155,6 +155,57 @@ try {
     $productTemplates = [];
 }
 
+// جلب قائمة العملاء المحليين لاستخدامها في نموذج إنشاء الأوردر (دروب داون + بحث لحظي)
+$localCustomersForDropdown = [];
+try {
+    $localCustomersTable = $db->queryOne("SHOW TABLES LIKE 'local_customers'");
+    if (!empty($localCustomersTable)) {
+        $rows = $db->query("
+            SELECT c.id, c.name, c.phone
+            FROM local_customers c
+            WHERE (c.status IS NULL OR c.status = '' OR c.status = 'active')
+            ORDER BY c.name ASC
+            LIMIT 1000
+        ");
+        $customerIds = !empty($rows) ? array_column($rows, 'id') : [];
+        $phonesMap = [];
+        if (!empty($customerIds)) {
+            $placeholders = implode(',', array_fill(0, count($customerIds), '?'));
+            $phonesCheck = $db->queryOne("SHOW TABLES LIKE 'local_customer_phones'");
+            if (!empty($phonesCheck)) {
+                $phonesRows = $db->query(
+                    "SELECT customer_id, phone, is_primary FROM local_customer_phones WHERE customer_id IN ($placeholders) ORDER BY customer_id, is_primary DESC, id ASC",
+                    $customerIds
+                );
+                foreach ($phonesRows as $pr) {
+                    $cid = (int)$pr['customer_id'];
+                    if (!isset($phonesMap[$cid])) {
+                        $phonesMap[$cid] = [];
+                    }
+                    $phonesMap[$cid][] = (string)($pr['phone'] ?? '');
+                }
+            }
+        }
+        foreach ($rows as $r) {
+            $cid = (int)$r['id'];
+            $phones = $phonesMap[$cid] ?? [];
+            if (empty($phones) && !empty(trim((string)($r['phone'] ?? '')))) {
+                $phones = [trim((string)$r['phone'])];
+            }
+            $primaryPhone = $phones[0] ?? trim((string)($r['phone'] ?? '')) ?: '';
+            $localCustomersForDropdown[] = [
+                'id' => $cid,
+                'name' => trim((string)($r['name'] ?? '')),
+                'phone' => $primaryPhone,
+                'phones' => $phones,
+            ];
+        }
+    }
+} catch (Exception $e) {
+    error_log('Error fetching local customers for dropdown: ' . $e->getMessage());
+    $localCustomersForDropdown = [];
+}
+
 /**
  * تأكد من وجود جدول المهام (tasks)
  */
@@ -645,13 +696,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                     $columns[] = 'unit';
                     $values[] = $unit;
-                    $placeholders[] = '?';
-                }
-                
-                // حفظ اسم العميل
-                if (!empty($customerName)) {
-                    $columns[] = 'customer_name';
-                    $values[] = $customerName;
                     $placeholders[] = '?';
                 }
 
@@ -1403,11 +1447,15 @@ try {
                         </div>
                         <div class="col-md-2">
                             <label class="form-label">اسم العميل</label>
-                            <input type="text" class="form-control" name="customer_name" placeholder="أدخل اسم العميل">
+                            <div class="position-relative" id="customerNameComboboxWrap">
+                                <input type="text" class="form-control" name="customer_name" id="customerNameInput" placeholder="بحث أو أدخل اسم العميل" autocomplete="off" aria-autocomplete="list" aria-expanded="false" aria-controls="customerNameDropdown">
+                                <div class="list-group position-absolute w-100 shadow-sm border rounded mt-1 d-none" id="customerNameDropdown" style="max-height: 220px; overflow-y: auto; z-index: 1050;" role="listbox"></div>
+                            </div>
+                            <small class="form-text text-muted">اختر من القائمة أو اكتب اسم عميل جديد</small>
                         </div>
                         <div class="col-md-2">
                             <label class="form-label">رقم العميل</label>
-                            <input type="text" class="form-control" name="customer_phone" placeholder="أدخل رقم العميل" dir="ltr">
+                            <input type="text" class="form-control" name="customer_phone" id="customerPhoneInput" placeholder="أدخل رقم العميل" dir="ltr">
                         </div>
                         <div class="col-md-5">
                             <label class="form-label">وصف وتفاصيل و ملاحظات الاوردر</label>
@@ -1755,6 +1803,8 @@ try {
 </div>
 
 <script>
+var __localCustomersForTask = <?php echo json_encode($localCustomersForDropdown); ?>;
+
 window.openOrderReceiptModal = function(orderId) {
     var modalEl = document.getElementById('orderReceiptModal');
     var loadingEl = document.getElementById('orderReceiptLoading');
@@ -1815,6 +1865,80 @@ document.addEventListener('DOMContentLoaded', function () {
     const productNameInput = document.getElementById('productNameInput');
     const quantityInput = document.getElementById('productQuantityInput');
     const templateSuggestions = document.getElementById('templateSuggestions');
+
+    // دروب داون اسم العميل: قائمة العملاء المحليين + بحث لحظي + تعبئة رقم الهاتف عند الاختيار
+    (function initCustomerNameCombobox() {
+        var localCustomers = (typeof __localCustomersForTask !== 'undefined' && Array.isArray(__localCustomersForTask)) ? __localCustomersForTask : [];
+        var customerNameInput = document.getElementById('customerNameInput');
+        var customerPhoneInput = document.getElementById('customerPhoneInput');
+        var customerNameDropdown = document.getElementById('customerNameDropdown');
+        var customerNameWrap = document.getElementById('customerNameComboboxWrap');
+        if (!customerNameInput || !customerNameDropdown) return;
+
+        function normalizeForMatch(str) {
+            if (typeof str !== 'string') return '';
+            return str.replace(/\s+/g, ' ').trim().toLowerCase();
+        }
+
+        function filterCustomers(query) {
+            var q = normalizeForMatch(query);
+            if (!q) return localCustomers.slice(0, 50);
+            return localCustomers.filter(function(c) {
+                return normalizeForMatch(c.name).indexOf(q) !== -1;
+            }).slice(0, 50);
+        }
+
+        function renderDropdown(items) {
+            customerNameDropdown.innerHTML = '';
+            if (items.length === 0) {
+                customerNameDropdown.classList.add('d-none');
+                return;
+            }
+            items.forEach(function(c) {
+                var phoneText = (c.phone || (c.phones && c.phones[0]) || '').toString();
+                var node = document.createElement('button');
+                node.type = 'button';
+                node.className = 'list-group-item list-group-item-action text-start';
+                node.setAttribute('role', 'option');
+                node.textContent = c.name + (phoneText ? ' — ' + phoneText : '');
+                node.dataset.name = c.name;
+                node.dataset.phone = phoneText;
+                node.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    customerNameInput.value = c.name;
+                    if (customerPhoneInput) customerPhoneInput.value = phoneText;
+                    customerNameDropdown.classList.add('d-none');
+                    customerNameInput.setAttribute('aria-expanded', 'false');
+                });
+                customerNameDropdown.appendChild(node);
+            });
+            customerNameDropdown.classList.remove('d-none');
+            customerNameInput.setAttribute('aria-expanded', 'true');
+        }
+
+        var blurTimer = null;
+        customerNameInput.addEventListener('input', function() {
+            clearTimeout(blurTimer);
+            var query = customerNameInput.value;
+            var filtered = filterCustomers(query);
+            renderDropdown(filtered);
+        });
+        customerNameInput.addEventListener('focus', function() {
+            clearTimeout(blurTimer);
+            var query = customerNameInput.value;
+            var filtered = filterCustomers(query);
+            renderDropdown(filtered);
+        });
+        customerNameInput.addEventListener('blur', function() {
+            blurTimer = setTimeout(function() {
+                customerNameDropdown.classList.add('d-none');
+                customerNameInput.setAttribute('aria-expanded', 'false');
+            }, 200);
+        });
+        customerNameDropdown.addEventListener('mousedown', function(e) {
+            e.preventDefault();
+        });
+    })();
 
     function updateTaskTypeUI() {
         if (!titleInput) {
