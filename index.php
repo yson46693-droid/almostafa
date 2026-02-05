@@ -828,7 +828,7 @@ $lang = $translations;
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous">
     
     <!-- Bootstrap Icons - تحميل مباشر لضمان التحميل الكامل -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet" crossorigin="anonymous">
+    <link href="<?php echo ASSETS_URL; ?>bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
     
     <!-- Custom CSS -->
     <link href="<?php echo ASSETS_URL; ?>css/style.css" rel="preload" as="style" onload="this.onload=null;this.rel='stylesheet'">

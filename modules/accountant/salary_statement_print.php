@@ -62,7 +62,7 @@ if (isset($_GET['month']) && isset($_GET['year'])) {
     <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=5.0,user-scalable=yes">
     <title>كشف حساب المرتب - <?php echo htmlspecialchars($employee['full_name'] ?? $employee['username']); ?></title>
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="<?php echo ASSETS_URL; ?>bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
     <style>
         @media print {
             .no-print {

@@ -301,10 +301,10 @@ if (ob_get_level() > 0) {
     <!-- Performance: Preload Critical Resources - محسّن لـ LCP -->
     <?php if (!$isMobile): ?>
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" as="style" crossorigin="anonymous">
-    <link rel="preload" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" as="style" crossorigin="anonymous">
+    <link rel="preload" href="<?php echo $assetsUrl; ?>bootstrap-icons/bootstrap-icons.css" as="style">
     <?php if ($isChatPage): ?>
     <!-- صفحة الشات: Preload Bootstrap Icons font لضمان التحميل السريع -->
-    <link rel="preload" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/fonts/bootstrap-icons.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+    <link rel="preload" href="<?php echo $assetsUrl; ?>bootstrap-icons/fonts/bootstrap-icons.woff2" as="font" type="font/woff2" crossorigin="anonymous">
     <?php endif; ?>
     <link rel="preload" href="<?php echo $assetsUrl; ?>css/homeline-dashboard.css?v=<?php echo $cacheVersion; ?>" as="style">
     <link rel="preload" href="<?php echo $assetsUrl; ?>css/topbar.css?v=<?php echo $cacheVersion; ?>" as="style">
@@ -319,10 +319,10 @@ if (ob_get_level() > 0) {
     <?php endif; ?>
     <?php else: ?>
     <!-- Mobile: Preload Critical Resources فقط -->
-    <link rel="preload" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" as="style" crossorigin="anonymous">
+    <link rel="preload" href="<?php echo $assetsUrl; ?>bootstrap-icons/bootstrap-icons.css" as="style">
     <?php if ($isChatPage): ?>
     <!-- صفحة الشات: Preload Bootstrap Icons font لضمان التحميل السريع -->
-    <link rel="preload" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/fonts/bootstrap-icons.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+    <link rel="preload" href="<?php echo $assetsUrl; ?>bootstrap-icons/fonts/bootstrap-icons.woff2" as="font" type="font/woff2" crossorigin="anonymous">
     <?php endif; ?>
     <link rel="preload" href="<?php echo $assetsUrl; ?>css/homeline-dashboard.css?v=<?php echo $cacheVersion; ?>" as="style">
     <link rel="preload" href="<?php echo $assetsUrl; ?>css/topbar.css?v=<?php echo $cacheVersion; ?>" as="style">
@@ -346,11 +346,11 @@ if (ob_get_level() > 0) {
     <!-- Bootstrap Icons - تحميل مشروط للموبايل (أقل) -->
     <?php if ($isMobile && !$isChatPage): ?>
     <!-- Mobile: تحميل Bootstrap Icons مع lazy loading (ما عدا صفحة الشات) -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet" media="print" onload="this.media='all'" crossorigin="anonymous">
-    <noscript><link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet" crossorigin="anonymous"></noscript>
+    <link href="<?php echo $assetsUrl; ?>bootstrap-icons/bootstrap-icons.css" rel="stylesheet" media="print" onload="this.media='all'">
+    <noscript><link href="<?php echo $assetsUrl; ?>bootstrap-icons/bootstrap-icons.css" rel="stylesheet"></noscript>
     <?php else: ?>
     <!-- Desktop أو صفحة الشات: تحميل عادي لضمان التحميل الكامل -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet" crossorigin="anonymous">
+    <link href="<?php echo $assetsUrl; ?>bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
     <?php endif; ?>
     
     <!-- CSS Async Loader Script (must be before async CSS) -->

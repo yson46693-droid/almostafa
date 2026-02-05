@@ -165,6 +165,6 @@ try {
         </div>
     </div>
     
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="<?php echo defined('ASSETS_URL') ? ASSETS_URL : '/assets/'; ?>bootstrap-icons/bootstrap-icons.css">
 </body>
 </html>

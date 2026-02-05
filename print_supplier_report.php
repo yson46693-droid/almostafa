@@ -114,7 +114,7 @@ $companyName = COMPANY_NAME;
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>تقرير التوريدات - <?php echo htmlspecialchars($supplier['name']); ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="<?php echo ASSETS_URL; ?>bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
     <style>
         @media print {
             .no-print {

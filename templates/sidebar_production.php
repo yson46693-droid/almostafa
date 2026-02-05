@@ -49,7 +49,7 @@ $baseUrl = getDashboardUrl();
             <li class="nav-item">
                 <a class="nav-link" href="<?php echo $baseUrl; ?>production.php?page=tasks">
                     <i class="bi bi-list-check"></i>
-                    <span><?php echo isset($lang['menu_tasks']) ? $lang['menu_tasks'] : 'المهام'; ?></span>
+                    <span><?php echo isset($lang['menu_tasks']) ? $lang['menu_tasks'] : 'أوردرات'; ?></span>
                 </a>
             </li>
 

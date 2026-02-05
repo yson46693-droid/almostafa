@@ -40,7 +40,7 @@ const PRECACHE_ASSETS = [
 // CDN assets to cache
 const CDN_ASSETS = [
   'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css',
-  'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css',
+  '/assets/bootstrap-icons/bootstrap-icons.css',
   'https://code.jquery.com/jquery-3.7.0.min.js',
   'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js',
   'https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap'
@@ -70,7 +70,7 @@ const CRITICAL_ASSETS = [
   '/assets/js/modal-mobile-fix.js',
   // Fonts - الخطوط الأساسية
   'https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap',
-  'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/fonts/bootstrap-icons.woff2'
+  '/assets/bootstrap-icons/fonts/bootstrap-icons.woff2'
 ];
 
 // Network timeout - محسّن لـ PWA

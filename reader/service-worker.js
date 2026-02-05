@@ -14,8 +14,8 @@ const PRECACHE_ASSETS = [
 ];
 
 const CDN_ASSETS = [
-  'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css',
-  'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/fonts/bootstrap-icons.woff2',
+  '../assets/bootstrap-icons/bootstrap-icons.css',
+  '../assets/bootstrap-icons/fonts/bootstrap-icons.woff2',
   'https://fonts.googleapis.com/css2?family=Tajawal:wght@400;600;700&display=swap'
 ];
 

@@ -977,7 +977,6 @@ $recentTasks = [];
 $statusStyles = [
     'pending' => ['class' => 'warning', 'label' => 'معلقة'],
     'received' => ['class' => 'info', 'label' => 'مستلمة'],
-    'in_progress' => ['class' => 'primary', 'label' => 'قيد التنفيذ'],
     'completed' => ['class' => 'success', 'label' => 'مكتملة'],
     'delivered' => ['class' => 'success', 'label' => 'تم التوصيل'],
     'returned' => ['class' => 'secondary', 'label' => 'تم الارجاع'],

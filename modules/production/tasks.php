@@ -1384,16 +1384,6 @@ function tasksHtml(string $value): string
             </a>
         </div>
         <div class="col-6 col-md-2">
-            <a href="<?php echo $filterBaseUrl . (strpos($filterBaseUrl, '?') !== false ? '&' : '?'); ?>status=in_progress" class="text-decoration-none">
-                <div class="card <?php echo $statusFilter === 'in_progress' ? 'bg-info text-white' : 'border-info'; ?> text-center h-100">
-                    <div class="card-body p-2">
-                        <h5 class="<?php echo $statusFilter === 'in_progress' ? 'text-white' : 'text-info'; ?> mb-0"><?php echo $stats['in_progress']; ?></h5>
-                        <small class="<?php echo $statusFilter === 'in_progress' ? 'text-white-50' : 'text-muted'; ?>">قيد التنفيذ</small>
-                    </div>
-                </div>
-            </a>
-        </div>
-        <div class="col-6 col-md-2">
             <a href="<?php echo $filterBaseUrl . (strpos($filterBaseUrl, '?') !== false ? '&' : '?'); ?>status=completed" class="text-decoration-none">
                 <div class="card <?php echo $statusFilter === 'completed' ? 'bg-success text-white' : 'border-success'; ?> text-center h-100">
                     <div class="card-body p-2">

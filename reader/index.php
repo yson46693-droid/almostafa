@@ -26,7 +26,7 @@ $_SESSION['reader_session_id'] = $_SESSION['reader_session_id'] ?? bin2hex(rando
     <link rel="manifest" href="manifest.php">
     <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
     <link rel="apple-touch-icon" href="assets/icon.svg">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="../assets/bootstrap-icons/bootstrap-icons.css">
     <title>قارئ أرقام التشغيلات</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

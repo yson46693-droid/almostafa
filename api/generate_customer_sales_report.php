@@ -135,7 +135,7 @@ $generatedAt = formatDateTime(date('Y-m-d H:i:s'));
     <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=5.0,user-scalable=yes">
     <title>تقرير مبيعات العميل - <?php echo htmlspecialchars($customer['name']); ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="<?php echo ASSETS_URL; ?>bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
     <style>
         * {
             margin: 0;
