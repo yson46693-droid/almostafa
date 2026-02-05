@@ -1369,7 +1369,6 @@ try {
             <a href="?page=production_tasks&status=in_progress" class="text-decoration-none">
                 <div class="card <?php echo $statusFilter === 'in_progress' ? 'bg-info text-dark' : 'border-info'; ?> h-100">
                     <div class="card-body text-center py-2 px-2">
-                        <div class="<?php echo $statusFilter === 'in_progress' ? 'text-dark-50' : 'text-muted'; ?> small mb-1">قيد التنفيذ</div>
                         <div class="fs-5 <?php echo $statusFilter === 'in_progress' ? 'text-dark' : 'text-info'; ?> fw-semibold"><?php echo $stats['in_progress']; ?></div>
                     </div>
                 </div>

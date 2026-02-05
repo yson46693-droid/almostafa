@@ -125,7 +125,6 @@ if (empty($products) && !empty($productName)) {
 $statusLabels = [
     'pending' => 'معلقة',
     'received' => 'مستلمة',
-    'in_progress' => 'قيد التنفيذ',
     'completed' => 'مكتملة',
     'delivered' => 'تم التوصيل',
     'returned' => 'تم الارجاع',

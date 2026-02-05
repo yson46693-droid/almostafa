@@ -1440,7 +1440,6 @@ function tasksHtml(string $value): string
                         <option value="">الكل</option>
                         <option value="pending" <?php echo $statusFilter === 'pending' ? 'selected' : ''; ?>>معلقة</option>
                         <option value="received" <?php echo $statusFilter === 'received' ? 'selected' : ''; ?>>مستلمة</option>
-                        <option value="in_progress" <?php echo $statusFilter === 'in_progress' ? 'selected' : ''; ?>>قيد التنفيذ</option>
                         <option value="completed" <?php echo $statusFilter === 'completed' ? 'selected' : ''; ?>>مكتملة</option>
                         <option value="delivered" <?php echo $statusFilter === 'delivered' ? 'selected' : ''; ?>>تم التوصيل</option>
                         <option value="returned" <?php echo $statusFilter === 'returned' ? 'selected' : ''; ?>>تم الارجاع</option>
@@ -1532,7 +1531,6 @@ function tasksHtml(string $value): string
                                 $statusLabel = [
                                     'pending' => 'معلقة',
                                     'received' => 'مستلمة',
-                                    'in_progress' => 'قيد التنفيذ',
                                     'completed' => 'مكتملة',
                                     'delivered' => 'تم التوصيل',
                                     'returned' => 'تم الارجاع',
@@ -2278,7 +2276,6 @@ function tasksHtml(string $value): string
         const statusText = {
             'pending': 'معلقة',
             'received': 'مستلمة',
-            'in_progress': 'قيد التنفيذ',
             'completed': 'مكتملة',
             'delivered': 'تم التوصيل',
             'returned': 'تم الارجاع',
