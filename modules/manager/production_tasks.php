@@ -462,6 +462,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $db->beginTransaction();
 
+                // إذا كانت المهمة تحتوي على بيانات عميل غير مسجل في العملاء المحليين، إضافته إلى local_customers
+                if ($customerName !== '') {
+                    $localCustomersTable = $db->queryOne("SHOW TABLES LIKE 'local_customers'");
+                    if (!empty($localCustomersTable)) {
+                        $existingLocal = $db->queryOne("SELECT id FROM local_customers WHERE name = ?", [$customerName]);
+                        if (empty($existingLocal)) {
+                            $db->execute(
+                                "INSERT INTO local_customers (name, phone, address, balance, status, created_by) VALUES (?, ?, NULL, 0, 'active', ?)",
+                                [
+                                    $customerName,
+                                    $customerPhone !== '' ? $customerPhone : null,
+                                    $currentUser['id'] ?? null,
+                                ]
+                            );
+                        }
+                    }
+                }
+
                 $relatedTypeValue = 'manager_' . $taskType;
 
                 if ($title === '') {
