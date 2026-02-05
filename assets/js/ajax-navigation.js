@@ -1419,7 +1419,7 @@
         const transactionsContainer = link.closest('#company-cash-transactions-list') || link.closest('#accountant-financial-transactions-list');
         if (transactionsContainer && link.classList.contains('page-link') && !link.closest('.page-item.disabled')) {
             const href = link.getAttribute('href') || link.href || '';
-            if (href && (href.indexOf('page=company_cash') !== -1 || href.indexOf('page=financial') !== -1)) {
+            if (href && (href.indexOf('page=company_cash') !== -1 || href.indexOf('page=accountant_cash') !== -1 || href.indexOf('page=financial') !== -1)) {
                 event.preventDefault();
                 event.stopPropagation();
                 const sep = href.indexOf('?') >= 0 ? '&' : '?';

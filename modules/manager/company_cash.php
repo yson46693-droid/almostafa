@@ -126,6 +126,9 @@ function ensureFinancialTransactionsTable() {
 ensureAccountantTransactionsTable();
 ensureFinancialTransactionsTable();
 
+// عند تحميل الصفحة من لوحة المحاسب نستخدم accountant_cash في روابط الترقيم والـ AJAX
+$cashPageParam = (strpos($_SERVER['SCRIPT_NAME'] ?? '', 'accountant.php') !== false) ? 'accountant_cash' : 'company_cash';
+
 // توليد رقم مرجعي عشوائي فريد من 6 أرقام
 function generateUniqueReferenceNumber($db) {
     $maxAttempts = 20;
@@ -212,6 +215,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'get_sales_rep_balance') {
  * إرجاع HTML جدول المعاملات المالية مع الترقيم (للاستخدام العادي ولطلبات AJAX)
  */
 function getCompanyCashTransactionsHtml($db) {
+    global $cashPageParam;
     $searchType = isset($_GET['search_type']) && $_GET['search_type'] !== '' ? $_GET['search_type'] : null;
     $searchStatus = isset($_GET['search_status']) && $_GET['search_status'] !== '' ? $_GET['search_status'] : null;
     $searchDateFrom = isset($_GET['search_date_from']) && $_GET['search_date_from'] !== '' ? $_GET['search_date_from'] : null;
@@ -424,7 +428,7 @@ function getCompanyCashTransactionsHtml($db) {
     if ($searchReference !== null) $searchParams['search_reference'] = $searchReference;
     if ($searchCreatedBy !== null) $searchParams['search_created_by'] = $searchCreatedBy;
     if ($searchApprovedBy !== null) $searchParams['search_approved_by'] = $searchApprovedBy;
-    $baseUrl = '?page=company_cash';
+    $baseUrl = '?page=' . (isset($cashPageParam) ? $cashPageParam : 'company_cash');
     $searchQueryString = !empty($searchParams) ? '&' . http_build_query($searchParams) : '';
     ?>
     <nav aria-label="Page navigation" class="mt-3">
@@ -1302,7 +1306,7 @@ $typeColorMap = [
         <div class="collapse mb-4" id="advancedSearchCollapse">
             <div class="card card-body bg-light">
                 <form method="GET" action="" id="advancedSearchForm">
-                    <input type="hidden" name="page" value="company_cash">
+                    <input type="hidden" name="page" value="<?php echo htmlspecialchars($cashPageParam ?? 'company_cash', ENT_QUOTES, 'UTF-8'); ?>">
                     <div class="row g-3">
                         <div class="col-12 col-md-6 col-lg-3">
                             <label for="searchType" class="form-label">نوع الحركة</label>
@@ -1381,7 +1385,7 @@ $typeColorMap = [
                                 <button type="submit" class="btn btn-primary">
                                     <i class="bi bi-search me-1"></i>بحث
                                 </button>
-                                <a href="?page=company_cash" class="btn btn-outline-secondary">
+                                <a href="?page=<?php echo htmlspecialchars($cashPageParam ?? 'company_cash', ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-outline-secondary">
                                     <i class="bi bi-x-circle me-1"></i>إعادة تعيين
                                 </a>
                             </div>
@@ -1698,7 +1702,7 @@ document.addEventListener('DOMContentLoaded', function() {
             var link = e.target.closest('a.page-link');
             if (!link || !link.href || link.closest('.page-item.disabled')) return;
             var href = link.getAttribute('href') || link.href || '';
-            if (href.indexOf('page=company_cash') === -1) return;
+            if (href.indexOf('page=company_cash') === -1 && href.indexOf('page=accountant_cash') === -1) return;
             e.preventDefault();
             e.stopPropagation();
             var ajaxUrl = buildAjaxUrl(href);
@@ -1706,7 +1710,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return false;
         });
         window.addEventListener('popstate', function(e) {
-            if (window.location.search.indexOf('page=company_cash') >= 0) {
+            if (window.location.search.indexOf('page=company_cash') >= 0 || window.location.search.indexOf('page=accountant_cash') >= 0) {
                 var ajaxUrl = buildAjaxUrl(window.location.href);
                 if (ajaxUrl) loadTransactionsList(ajaxUrl, false);
             }
