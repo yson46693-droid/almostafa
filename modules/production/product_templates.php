@@ -1320,12 +1320,13 @@ try {
     error_log('Failed to load honey varieties from suppliers: ' . $e->getMessage());
 }
 
-// جلب المكسرات وأنواعها من مخزن المكسرات — عرض كل الأنواع المسجلة دون اشتراط كمية
+// جلب المكسرات وأنواعها — نفس الأنواع المعروضة في مخزن الخامات + أي أنواع إضافية من DB
+$defaultNutTypes = ['عين جمل', 'بندق', 'لوز', 'فستق', 'كاجو']; // مطابق لـ raw_materials_warehouse
 try {
     $nutsStockExists = $db->queryOne("SHOW TABLES LIKE 'nuts_stock'");
     $mixedNutsExists = $db->queryOne("SHOW TABLES LIKE 'mixed_nuts'");
     
-    $nutVarieties = [];
+    $nutVarieties = $defaultNutTypes;
     
     if (!empty($nutsStockExists)) {
         $nutsTypes = $db->query("
@@ -1361,11 +1362,16 @@ try {
     
     $rawMaterialsData['مكسرات'] = [
         'material_type' => 'nuts',
-        'has_types' => !empty($nutVarieties),
+        'has_types' => true,
         'types' => $nutVarieties
     ];
 } catch (Exception $e) {
     error_log('Failed to load nuts from suppliers: ' . $e->getMessage());
+    $rawMaterialsData['مكسرات'] = [
+        'material_type' => 'nuts',
+        'has_types' => true,
+        'types' => $defaultNutTypes
+    ];
 }
 
 // جلب زيت الزيتون من مخزن زيت الزيتون
