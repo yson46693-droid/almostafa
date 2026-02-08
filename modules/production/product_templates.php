@@ -1351,7 +1351,7 @@ try {
     
     $nutVarieties = [];
     
-    // جلب المكسرات المنفردة المتاحة في المخزن
+    // جلب المكسرات المنفردة المتاحة في المخزن (كمية > 0 ومورد نشط)
     if (!empty($nutsStockExists)) {
         $nutsTypes = $db->query("
             SELECT DISTINCT ns.nut_type,
@@ -1394,20 +1394,47 @@ try {
         foreach ($mixedNuts as $mixed) {
             $mixedName = trim($mixed['batch_name']);
             if ($mixedName !== '' && !in_array($mixedName, $nutVarieties)) {
-                // إضافة "مكسرات مشكلة:" كبادئة للتمييز
                 $nutVarieties[] = $mixedName;
             }
         }
     }
     
-    if (!empty($nutVarieties)) {
-        // المكسرات لها أنواع (لوز، جوز، مكسرات مشكلة، إلخ) - نضيف "مكسرات" كاسم مادة وأنواعها
-        $rawMaterialsData['مكسرات'] = [
-            'material_type' => 'nuts',
-            'has_types' => true,
-            'types' => $nutVarieties
-        ];
+    // إذا لم يُعثر على أنواع (مثلاً لا مخزون أو لا موردين نشطين)، جلب كل الأنواع المسجلة في الجداول لعرضها في القائمة
+    if (empty($nutVarieties)) {
+        if (!empty($nutsStockExists)) {
+            $allNutsTypes = $db->query("
+                SELECT DISTINCT nut_type FROM nuts_stock
+                WHERE nut_type IS NOT NULL AND nut_type != ''
+                ORDER BY nut_type
+            ");
+            foreach ($allNutsTypes as $row) {
+                $nutName = trim($row['nut_type']);
+                if ($nutName !== '' && !in_array($nutName, $nutVarieties)) {
+                    $nutVarieties[] = $nutName;
+                }
+            }
+        }
+        if (!empty($mixedNutsExists)) {
+            $allMixed = $db->query("
+                SELECT DISTINCT batch_name FROM mixed_nuts
+                WHERE batch_name IS NOT NULL AND batch_name != ''
+                ORDER BY batch_name
+            ");
+            foreach ($allMixed as $row) {
+                $mixedName = trim($row['batch_name']);
+                if ($mixedName !== '' && !in_array($mixedName, $nutVarieties)) {
+                    $nutVarieties[] = $mixedName;
+                }
+            }
+        }
     }
+    
+    // المكسرات لها أنواع دائماً - نضيف "مكسرات" كاسم مادة وأنواعها (حتى لو القائمة فارغة ليظهر الحقل)
+    $rawMaterialsData['مكسرات'] = [
+        'material_type' => 'nuts',
+        'has_types' => true,
+        'types' => $nutVarieties
+    ];
 } catch (Exception $e) {
     error_log('Failed to load nuts from suppliers: ' . $e->getMessage());
 }
