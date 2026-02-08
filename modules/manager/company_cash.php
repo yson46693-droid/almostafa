@@ -352,7 +352,6 @@ function getCompanyCashTransactionsHtml($db) {
                     <th>الحالة</th>
                     <th>أنشأه</th>
                     <th>إجراءات</th>
-                    <th>اعتمده</th>
                 </tr>
             </thead>
             <tbody>
@@ -408,7 +407,6 @@ function getCompanyCashTransactionsHtml($db) {
                                     <span class="text-muted small">-</span>
                                 <?php endif; ?>
                             </td>
-                            <td><?php echo htmlspecialchars($trans['approved_by_name'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></td>
                         </tr>
                     <?php endforeach; ?>
                 <?php endif; ?>
