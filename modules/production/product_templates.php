@@ -1655,11 +1655,12 @@ $baseUrl = getRelativeUrl('dashboard/manager.php?page=product_templates');
         </div>
     </div>
 <?php else: ?>
-    <div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
         <h5 class="mb-0">قائمة القوالب (<?php echo count($templates); ?>)</h5>
+        <input type="text" class="form-control template-search-input" id="templateCardsSearchInput" data-target="templateCardsRow" placeholder="ابحث عن قالب بالاسم..." autocomplete="off" style="max-width: 280px;">
     </div>
     
-    <div class="row g-4">
+    <div class="row g-4" id="templateCardsRow">
         <?php foreach ($templates as $template): ?>
             <?php
             $packaging = $template['packaging_details'] ?? [];
@@ -1795,8 +1796,9 @@ $baseUrl = getRelativeUrl('dashboard/manager.php?page=product_templates');
             $statusBadgeClass = $template['status'] === 'active' ? 'bg-success' : 'bg-secondary';
             $statusLabel = $template['status_label'] ?? ($template['status'] === 'active' ? 'نشط' : 'غير نشط');
             $createdAtLabel = $template['created_at_label'] ?? formatDate($template['created_at']);
+            $templateSearchText = $template['product_name'] ?? '';
             ?>
-            <div class="col-lg-4 col-md-6">
+            <div class="col-lg-4 col-md-6 template-list-item" data-search="<?php echo htmlspecialchars($templateSearchText, ENT_QUOTES, 'UTF-8'); ?>">
                 <div class="card shadow-sm h-100 template-card" style="border-top: 4px solid <?php echo $cardAccentColor; ?>; transition: transform 0.2s, box-shadow 0.2s;">
                     <span class="badge template-status-badge <?php echo $statusBadgeClass; ?>"><?php echo $statusLabel; ?></span>
                     <div class="card-body template-card-body text-center">
@@ -2740,7 +2742,7 @@ if (file_exists($specificationsModulePath)) {
     </div>
 </div>
 
-<!-- البحث اللحظي في أدوات التعبئة (كما في صفحة أدوات التعبئة) -->
+<!-- البحث اللحظي في أدوات التعبئة وفي قائمة البطاقات (القوالب) -->
 <script>
 (function() {
     function initPackagingSearch() {
@@ -2761,10 +2763,32 @@ if (file_exists($specificationsModulePath)) {
             });
         });
     }
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initPackagingSearch);
-    } else {
+    function initTemplateCardsSearch() {
+        document.querySelectorAll('.template-search-input').forEach(function(input) {
+            if (input.dataset.templateSearchBound) return;
+            input.dataset.templateSearchBound = '1';
+            var targetId = input.getAttribute('data-target');
+            if (!targetId) return;
+            var container = document.getElementById(targetId);
+            if (!container) return;
+            input.addEventListener('input', function() {
+                var q = (input.value || '').trim().toLowerCase();
+                var items = container.querySelectorAll('.template-list-item');
+                items.forEach(function(item) {
+                    var searchText = (item.getAttribute('data-search') || '').toLowerCase();
+                    item.style.display = (q === '' || searchText.indexOf(q) !== -1) ? '' : 'none';
+                });
+            });
+        });
+    }
+    function initAllSearches() {
         initPackagingSearch();
+        initTemplateCardsSearch();
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initAllSearches);
+    } else {
+        initAllSearches();
     }
 })();
 </script>
