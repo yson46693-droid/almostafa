@@ -1319,15 +1319,7 @@ $typeColorMap = [
                                 <option value="other" <?php echo (isset($_GET['search_type']) && $_GET['search_type'] === 'other') ? 'selected' : ''; ?>>أخرى</option>
                             </select>
                         </div>
-                        <div class="col-12 col-md-6 col-lg-3">
-                            <label for="searchStatus" class="form-label">الحالة</label>
-                            <select class="form-select" id="searchStatus" name="search_status">
-                                <option value="">جميع الحالات</option>
-                                <option value="pending" <?php echo (isset($_GET['search_status']) && $_GET['search_status'] === 'pending') ? 'selected' : ''; ?>>معلق</option>
-                                <option value="approved" <?php echo (isset($_GET['search_status']) && $_GET['search_status'] === 'approved') ? 'selected' : ''; ?>>معتمد</option>
-                                <option value="rejected" <?php echo (isset($_GET['search_status']) && $_GET['search_status'] === 'rejected') ? 'selected' : ''; ?>>مرفوض</option>
-                            </select>
-                        </div>
+                     
                         <div class="col-12 col-md-6 col-lg-3">
                             <label for="searchDateFrom" class="form-label">من تاريخ</label>
                             <input type="date" class="form-control" id="searchDateFrom" name="search_date_from" value="<?php echo htmlspecialchars($_GET['search_date_from'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
@@ -1360,20 +1352,6 @@ $typeColorMap = [
                                 $allUsers = $db->query("SELECT id, full_name, username FROM users WHERE status = 'active' ORDER BY full_name ASC, username ASC") ?: [];
                                 foreach ($allUsers as $user):
                                     $selected = (isset($_GET['search_created_by']) && $_GET['search_created_by'] == $user['id']) ? 'selected' : '';
-                                    $displayName = htmlspecialchars($user['full_name'] ?? $user['username'], ENT_QUOTES, 'UTF-8');
-                                ?>
-                                    <option value="<?php echo $user['id']; ?>" <?php echo $selected; ?>><?php echo $displayName; ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="col-12 col-md-6 col-lg-3">
-                            <label for="searchApprovedBy" class="form-label">اعتمده</label>
-                            <select class="form-select" id="searchApprovedBy" name="search_approved_by">
-                                <option value="">الجميع</option>
-                                <option value="null" <?php echo (isset($_GET['search_approved_by']) && $_GET['search_approved_by'] === 'null') ? 'selected' : ''; ?>>غير معتمد</option>
-                                <?php
-                                foreach ($allUsers as $user):
-                                    $selected = (isset($_GET['search_approved_by']) && $_GET['search_approved_by'] == $user['id']) ? 'selected' : '';
                                     $displayName = htmlspecialchars($user['full_name'] ?? $user['username'], ENT_QUOTES, 'UTF-8');
                                 ?>
                                     <option value="<?php echo $user['id']; ?>" <?php echo $selected; ?>><?php echo $displayName; ?></option>
