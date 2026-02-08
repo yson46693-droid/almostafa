@@ -715,7 +715,7 @@ if ($page === 'financial' && isset($_GET['ajax']) && $_GET['ajax'] === 'transact
             ?>
             <div class="table-responsive">
                 <table class="table table-hover table-striped">
-                    <thead class="table-light"><tr><th>التاريخ</th><th>النوع</th><th>المبلغ</th><th>الوصف</th><th>الرقم المرجعي</th><th>الحالة</th><th>أنشأه</th><th>إجراءات</th><th>اعتمده</th></tr></thead>
+                    <thead class="table-light"><tr><th>التاريخ</th><th>النوع</th><th>المبلغ</th><th>الوصف</th><th>الرقم المرجعي</th><th>أنشأه</th><th>إجراءات</th></tr></thead>
                     <tbody>
                         <?php if (empty($financialTransactions)): ?>
                             <tr><td colspan="9" class="text-center text-muted py-4"><i class="bi bi-inbox me-2"></i>لا توجد حركات مالية حالياً</td></tr>
