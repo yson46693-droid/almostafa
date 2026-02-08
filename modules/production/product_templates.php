@@ -1344,7 +1344,7 @@ try {
     error_log('Failed to load honey varieties from suppliers: ' . $e->getMessage());
 }
 
-// جلب المكسرات وأنواعها من مخزن المكسرات (من الموردين)
+// جلب المكسرات وأنواعها من مخزن المكسرات (من الموردين) — بنفس طريقة العسل: أنواع موجودة فعلياً في المخزن فقط
 try {
     $nutsStockExists = $db->queryOne("SHOW TABLES LIKE 'nuts_stock'");
     $mixedNutsExists = $db->queryOne("SHOW TABLES LIKE 'mixed_nuts'");
@@ -1399,42 +1399,14 @@ try {
         }
     }
     
-    // إذا لم يُعثر على أنواع (مثلاً لا مخزون أو لا موردين نشطين)، جلب كل الأنواع المسجلة في الجداول لعرضها في القائمة
-    if (empty($nutVarieties)) {
-        if (!empty($nutsStockExists)) {
-            $allNutsTypes = $db->query("
-                SELECT DISTINCT nut_type FROM nuts_stock
-                WHERE nut_type IS NOT NULL AND nut_type != ''
-                ORDER BY nut_type
-            ");
-            foreach ($allNutsTypes as $row) {
-                $nutName = trim($row['nut_type']);
-                if ($nutName !== '' && !in_array($nutName, $nutVarieties)) {
-                    $nutVarieties[] = $nutName;
-                }
-            }
-        }
-        if (!empty($mixedNutsExists)) {
-            $allMixed = $db->query("
-                SELECT DISTINCT batch_name FROM mixed_nuts
-                WHERE batch_name IS NOT NULL AND batch_name != ''
-                ORDER BY batch_name
-            ");
-            foreach ($allMixed as $row) {
-                $mixedName = trim($row['batch_name']);
-                if ($mixedName !== '' && !in_array($mixedName, $nutVarieties)) {
-                    $nutVarieties[] = $mixedName;
-                }
-            }
-        }
+    // إضافة "مكسرات" فقط عند وجود أنواع في المخزن (مطابق لطريقة العسل)
+    if (!empty($nutVarieties)) {
+        $rawMaterialsData['مكسرات'] = [
+            'material_type' => 'nuts',
+            'has_types' => true,
+            'types' => $nutVarieties
+        ];
     }
-    
-    // المكسرات لها أنواع دائماً - نضيف "مكسرات" كاسم مادة وأنواعها (حتى لو القائمة فارغة ليظهر الحقل)
-    $rawMaterialsData['مكسرات'] = [
-        'material_type' => 'nuts',
-        'has_types' => true,
-        'types' => $nutVarieties
-    ];
 } catch (Exception $e) {
     error_log('Failed to load nuts from suppliers: ' . $e->getMessage());
 }
@@ -1554,12 +1526,86 @@ try {
     error_log('Failed to load tahini: ' . $e->getMessage());
 }
 
+// جلب التلبينات وأنواعها من مخزن التلبينات (من الموردين) — بنفس طريقة العسل
+try {
+    $turbineStockExists = $db->queryOne("SHOW TABLES LIKE 'turbine_stock'");
+    if (!empty($turbineStockExists)) {
+        $turbineTypesRows = $db->query("
+            SELECT DISTINCT ts.turbine_type,
+                   COUNT(DISTINCT ts.supplier_id) as suppliers_count,
+                   SUM(ts.quantity) as total_quantity
+            FROM turbine_stock ts
+            INNER JOIN suppliers s ON ts.supplier_id = s.id
+            WHERE ts.turbine_type IS NOT NULL 
+            AND ts.turbine_type != '' 
+            AND ts.quantity > 0
+            AND s.status = 'active'
+            GROUP BY ts.turbine_type
+            HAVING total_quantity > 0
+            ORDER BY ts.turbine_type
+        ");
+        $talbinaTypes = [];
+        foreach ($turbineTypesRows as $row) {
+            $t = trim($row['turbine_type']);
+            if ($t !== '' && !in_array($t, $talbinaTypes)) {
+                $talbinaTypes[] = $t;
+            }
+        }
+        if (!empty($talbinaTypes)) {
+            $rawMaterialsData['التلبينات'] = [
+                'material_type' => 'talbina',
+                'has_types' => true,
+                'types' => $talbinaTypes
+            ];
+        }
+    }
+} catch (Exception $e) {
+    error_log('Failed to load talbina types from turbine_stock: ' . $e->getMessage());
+}
+
+// جلب العطاره وأنواعها من مخزن العطاره (من الموردين) — بنفس طريقة العسل
+try {
+    $herbalStockExists = $db->queryOne("SHOW TABLES LIKE 'herbal_stock'");
+    if (!empty($herbalStockExists)) {
+        $herbalTypesRows = $db->query("
+            SELECT DISTINCT hs.herbal_type,
+                   COUNT(DISTINCT hs.supplier_id) as suppliers_count,
+                   SUM(hs.quantity) as total_quantity
+            FROM herbal_stock hs
+            INNER JOIN suppliers s ON hs.supplier_id = s.id
+            WHERE hs.herbal_type IS NOT NULL 
+            AND hs.herbal_type != '' 
+            AND hs.quantity > 0
+            AND s.status = 'active'
+            GROUP BY hs.herbal_type
+            HAVING total_quantity > 0
+            ORDER BY hs.herbal_type
+        ");
+        $attaraTypes = [];
+        foreach ($herbalTypesRows as $row) {
+            $t = trim($row['herbal_type']);
+            if ($t !== '' && !in_array($t, $attaraTypes)) {
+                $attaraTypes[] = $t;
+            }
+        }
+        if (!empty($attaraTypes)) {
+            $rawMaterialsData['العطاره'] = [
+                'material_type' => 'attara',
+                'has_types' => true,
+                'types' => $attaraTypes
+            ];
+        }
+    }
+} catch (Exception $e) {
+    error_log('Failed to load attara types from herbal_stock: ' . $e->getMessage());
+}
+
 // إنشاء قائمة بأسماء المواد فقط للعرض في القائمة المنسدلة
 // المواد الخام الأساسية: عسل، زيت زيتون، شمع عسل، مشتقات، مكسرات، طحينة، تلبينات، عطاره
 $allowedMaterials = ['عسل', 'زيت زيتون', 'شمع عسل', 'مشتقات', 'مكسرات', 'طحينة', 'التلبينات', 'العطاره'];
 
 // إضافة المواد الأساسية إلى $rawMaterialsData إذا لم تكن موجودة
-// هذا يضمن ظهور المواد في القائمة المنسدلة حتى لو كان المخزن فارغًا
+// الأنواع لكل مادة تُجلب من مخزن نفس المادة أعلاه (عسل من honey_stock، مكسرات من nuts_stock/mixed_nuts، تلبينات من turbine_stock، عطاره من herbal_stock، إلخ)
 foreach ($allowedMaterials as $material) {
     if (!isset($rawMaterialsData[$material])) {
         $materialType = 'general';
@@ -1583,13 +1629,8 @@ foreach ($allowedMaterials as $material) {
         
         $hasTypes = false;
         $typesList = [];
-        if ($material === 'التلبينات') {
-            $hasTypes = true;
-            $typesList = ['تلبينة شعير', 'تلبينة'];
-        } elseif ($material === 'العطاره') {
-            $hasTypes = true;
-            $typesList = ['أعشاب', 'بهارات', 'خلطات عطارة'];
-        }
+        // التلبينات والعطاره: الأنواع تُجلب من مخزن كل قسم فقط (turbine_stock, herbal_stock)؛ إن لم تُضاف أعلاه فلا نعرض قائمة أنواع ثابتة
+        // باقي المواد بدون أنواع في القائمة الاحتياطية
         
         $rawMaterialsData[$material] = [
             'material_type' => $materialType,
