@@ -1740,7 +1740,6 @@ try {
                         <select class="form-select" name="status" id="newStatusCard" required>
                             <option value="">-- اختر الحالة --</option>
                             <option value="pending">معلقة</option>
-                            <option value="in_progress">قيد التنفيذ</option>
                             <option value="completed">مكتملة</option>
                             <option value="delivered">تم التوصيل</option>
                             <option value="returned">تم الارجاع</option>
@@ -1785,7 +1784,6 @@ try {
                         <select class="form-select" name="status" id="newStatus" required>
                             <option value="">-- اختر الحالة --</option>
                             <option value="pending">معلقة</option>
-                            <option value="in_progress">قيد التنفيذ</option>
                             <option value="completed">مكتملة</option>
                             <option value="delivered">تم التوصيل</option>
                             <option value="returned">تم الارجاع</option>
@@ -2226,7 +2224,6 @@ window.openChangeStatusModal = function(taskId, currentStatus) {
                                 <select class="form-select" name="status" id="newStatusCard" required>
                                     <option value="">-- اختر الحالة --</option>
                                     <option value="pending">معلقة</option>
-                                    <option value="in_progress">قيد التنفيذ</option>
                                     <option value="completed">مكتملة</option>
                                     <option value="delivered">تم التوصيل</option>
                                     <option value="returned">تم الارجاع</option>
@@ -2290,7 +2287,6 @@ window.openChangeStatusModal = function(taskId, currentStatus) {
         const statusLabels = {
             'pending': 'معلقة',
             'received': 'مستلمة',
-            'in_progress': 'قيد التنفيذ',
             'completed': 'مكتملة',
             'delivered': 'تم التوصيل',
             'returned': 'تم الارجاع',
@@ -2300,7 +2296,6 @@ window.openChangeStatusModal = function(taskId, currentStatus) {
         const statusClasses = {
             'pending': 'warning',
             'received': 'info',
-            'in_progress': 'primary',
             'completed': 'success',
             'delivered': 'success',
             'returned': 'secondary',
@@ -2363,7 +2358,6 @@ window.openChangeStatusModal = function(taskId, currentStatus) {
     const statusLabels = {
         'pending': 'معلقة',
         'received': 'مستلمة',
-        'in_progress': 'قيد التنفيذ',
         'completed': 'مكتملة',
         'delivered': 'تم التوصيل',
         'returned': 'تم الارجاع',
@@ -2373,7 +2367,6 @@ window.openChangeStatusModal = function(taskId, currentStatus) {
     const statusClasses = {
         'pending': 'warning',
         'received': 'info',
-        'in_progress': 'primary',
         'completed': 'success',
         'delivered': 'success',
         'returned': 'secondary',

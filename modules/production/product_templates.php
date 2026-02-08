@@ -2280,9 +2280,11 @@ if (file_exists($specificationsModulePath)) {
                                 لا توجد أدوات تعبئة متاحة. يرجى إضافة أدوات التعبئة أولاً من صفحة مخزن أدوات التعبئة.
                             </div>
                         <?php else: ?>
+                            <input type="text" class="form-control packaging-search-input mb-2" data-target="packagingCheckboxContainer" placeholder="ابحث بالاسم أو الكود أو المستعار..." autocomplete="off">
                             <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;" id="packagingCheckboxContainer">
                                 <?php foreach ($packagingMaterials as $pkg): ?>
-                                    <div class="form-check mb-2">
+                                    <?php $pkgSearchText = trim(($pkg['name'] ?? '') . ' ' . ($pkg['alias'] ?? '') . ' ' . ($pkg['material_id'] ?? '')); ?>
+                                    <div class="form-check mb-2 packaging-list-item" data-search="<?php echo htmlspecialchars($pkgSearchText, ENT_QUOTES, 'UTF-8'); ?>">
                                         <input class="form-check-input" type="checkbox" name="packaging_ids[]" 
                                                value="<?php echo $pkg['id']; ?>" 
                                                id="packaging_<?php echo $pkg['id']; ?>">
@@ -2404,9 +2406,11 @@ if (file_exists($specificationsModulePath)) {
                         لا توجد أدوات تعبئة متاحة. يرجى إضافة أدوات التعبئة أولاً من صفحة مخزن أدوات التعبئة.
                     </div>
                 <?php else: ?>
+                    <input type="text" class="form-control packaging-search-input mb-2" data-target="packagingCheckboxCardContainer" placeholder="ابحث بالاسم أو الكود أو المستعار..." autocomplete="off">
                     <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;" id="packagingCheckboxCardContainer">
                         <?php foreach ($packagingMaterials as $pkg): ?>
-                            <div class="form-check mb-2">
+                            <?php $pkgSearchText = trim(($pkg['name'] ?? '') . ' ' . ($pkg['alias'] ?? '') . ' ' . ($pkg['material_id'] ?? '')); ?>
+                            <div class="form-check mb-2 packaging-list-item" data-search="<?php echo htmlspecialchars($pkgSearchText, ENT_QUOTES, 'UTF-8'); ?>">
                                 <input class="form-check-input" type="checkbox" name="packaging_ids[]"
                                        value="<?php echo $pkg['id']; ?>"
                                        id="packaging_card_<?php echo $pkg['id']; ?>">
@@ -2529,9 +2533,11 @@ if (file_exists($specificationsModulePath)) {
                                 لا توجد أدوات تعبئة متاحة. يرجى إضافة أدوات التعبئة أولاً من صفحة مخزن أدوات التعبئة.
                             </div>
                         <?php else: ?>
+                            <input type="text" class="form-control packaging-search-input mb-2" data-target="editPackagingCheckboxContainer" placeholder="ابحث بالاسم أو الكود أو المستعار..." autocomplete="off">
                             <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;" id="editPackagingCheckboxContainer">
                                 <?php foreach ($packagingMaterials as $pkg): ?>
-                                    <div class="form-check mb-2">
+                                    <?php $pkgSearchText = trim(($pkg['name'] ?? '') . ' ' . ($pkg['alias'] ?? '') . ' ' . ($pkg['material_id'] ?? '')); ?>
+                                    <div class="form-check mb-2 packaging-list-item" data-search="<?php echo htmlspecialchars($pkgSearchText, ENT_QUOTES, 'UTF-8'); ?>">
                                         <input class="form-check-input" type="checkbox" name="packaging_ids[]" 
                                                value="<?php echo $pkg['id']; ?>" 
                                                id="edit_packaging_<?php echo $pkg['id']; ?>">
@@ -2653,9 +2659,11 @@ if (file_exists($specificationsModulePath)) {
                         لا توجد أدوات تعبئة متاحة. يرجى إضافة أدوات التعبئة أولاً من صفحة مخزن أدوات التعبئة.
                     </div>
                 <?php else: ?>
+                    <input type="text" class="form-control packaging-search-input mb-2" data-target="editPackagingCardCheckboxContainer" placeholder="ابحث بالاسم أو الكود أو المستعار..." autocomplete="off">
                     <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;" id="editPackagingCardCheckboxContainer">
                         <?php foreach ($packagingMaterials as $pkg): ?>
-                            <div class="form-check mb-2">
+                            <?php $pkgSearchText = trim(($pkg['name'] ?? '') . ' ' . ($pkg['alias'] ?? '') . ' ' . ($pkg['material_id'] ?? '')); ?>
+                            <div class="form-check mb-2 packaging-list-item" data-search="<?php echo htmlspecialchars($pkgSearchText, ENT_QUOTES, 'UTF-8'); ?>">
                                 <input class="form-check-input" type="checkbox" name="packaging_ids[]" 
                                        value="<?php echo $pkg['id']; ?>" 
                                        id="edit_card_packaging_<?php echo $pkg['id']; ?>">
@@ -2731,6 +2739,35 @@ if (file_exists($specificationsModulePath)) {
         </div>
     </div>
 </div>
+
+<!-- البحث اللحظي في أدوات التعبئة (كما في صفحة أدوات التعبئة) -->
+<script>
+(function() {
+    function initPackagingSearch() {
+        document.querySelectorAll('.packaging-search-input').forEach(function(input) {
+            if (input.dataset.packagingSearchBound) return;
+            input.dataset.packagingSearchBound = '1';
+            var targetId = input.getAttribute('data-target');
+            if (!targetId) return;
+            var container = document.getElementById(targetId);
+            if (!container) return;
+            input.addEventListener('input', function() {
+                var q = (input.value || '').trim().toLowerCase();
+                var items = container.querySelectorAll('.packaging-list-item');
+                items.forEach(function(item) {
+                    var searchText = (item.getAttribute('data-search') || '').toLowerCase();
+                    item.style.display = (q === '' || searchText.indexOf(q) !== -1) ? '' : 'none';
+                });
+            });
+        });
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initPackagingSearch);
+    } else {
+        initPackagingSearch();
+    }
+})();
+</script>
 
 <!-- Modal تفاصيل القالب - للكمبيوتر فقط -->
 <div class="modal fade d-none d-md-block" id="templateDetailsModal" tabindex="-1">
