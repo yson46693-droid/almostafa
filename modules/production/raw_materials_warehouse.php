@@ -4587,6 +4587,102 @@ if (!$isApiMode && $_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
         
+        // تحويل كمية من المكسرات المنفردة وإضافتها لخلطة موجودة
+        elseif ($action === 'add_to_mixed_nuts') {
+            $mixedNutsId = intval($_POST['mixed_nuts_id'] ?? 0);
+            $ingredients = isset($_POST['ingredients']) && is_array($_POST['ingredients']) ? $_POST['ingredients'] : [];
+            
+            if ($mixedNutsId <= 0) {
+                $error = 'يجب اختيار الخلطة المستهدفة';
+            } elseif (empty($ingredients)) {
+                $error = 'يجب إضافة مكونات (نوع مكسرات + كمية) لإضافتها للخلطة';
+            } else {
+                try {
+                    $db->beginTransaction();
+                    
+                    $mix = $db->queryOne("SELECT id, batch_name, supplier_id, total_quantity FROM mixed_nuts WHERE id = ?", [$mixedNutsId]);
+                    if (!$mix) {
+                        throw new Exception('الخلطة المحددة غير موجودة');
+                    }
+                    
+                    $totalAdded = 0;
+                    $validIngredients = [];
+                    
+                    foreach ($ingredients as $ingredient) {
+                        $nutsStockId = intval($ingredient['nuts_stock_id'] ?? 0);
+                        $quantity = floatval($ingredient['quantity'] ?? 0);
+                        
+                        if ($nutsStockId <= 0 || $quantity <= 0) {
+                            continue;
+                        }
+                        
+                        $stock = $db->queryOne("SELECT * FROM nuts_stock WHERE id = ?", [$nutsStockId]);
+                        if (!$stock) {
+                            throw new Exception('نوع المكسرات غير موجود');
+                        }
+                        if ($stock['quantity'] < $quantity) {
+                            throw new Exception('الكمية المتاحة من ' . $stock['nut_type'] . ' غير كافية');
+                        }
+                        
+                        $validIngredients[] = ['nuts_stock_id' => $nutsStockId, 'quantity' => $quantity];
+                        $totalAdded += $quantity;
+                    }
+                    
+                    if (empty($validIngredients)) {
+                        throw new Exception('لا توجد مكونات صحيحة');
+                    }
+                    
+                    foreach ($validIngredients as $ingredient) {
+                        $existing = $db->queryOne(
+                            "SELECT id, quantity FROM mixed_nuts_ingredients WHERE mixed_nuts_id = ? AND nuts_stock_id = ?",
+                            [$mixedNutsId, $ingredient['nuts_stock_id']]
+                        );
+                        
+                        if ($existing) {
+                            $db->execute(
+                                "UPDATE mixed_nuts_ingredients SET quantity = quantity + ? WHERE id = ?",
+                                [$ingredient['quantity'], $existing['id']]
+                            );
+                        } else {
+                            $db->execute(
+                                "INSERT INTO mixed_nuts_ingredients (mixed_nuts_id, nuts_stock_id, quantity) VALUES (?, ?, ?)",
+                                [$mixedNutsId, $ingredient['nuts_stock_id'], $ingredient['quantity']]
+                            );
+                        }
+                        
+                        $db->execute(
+                            "UPDATE nuts_stock SET quantity = quantity - ?, updated_at = NOW() WHERE id = ?",
+                            [$ingredient['quantity'], $ingredient['nuts_stock_id']]
+                        );
+                    }
+                    
+                    $db->execute(
+                        "UPDATE mixed_nuts SET total_quantity = total_quantity + ?, updated_at = NOW() WHERE id = ?",
+                        [$totalAdded, $mixedNutsId]
+                    );
+                    
+                    $db->commit();
+                    
+                    logAudit($currentUser['id'], 'add_to_mixed_nuts', 'mixed_nuts', $mixedNutsId, null, [
+                        'batch_name' => $mix['batch_name'],
+                        'quantity_added' => $totalAdded
+                    ]);
+                    
+                    $redirectUrl = $dashboardUrl . '?page=raw_materials_warehouse&section=nuts&success=' . urlencode('تم إضافة الكمية إلى الخلطة بنجاح') . '&_t=' . time();
+                    preventDuplicateSubmission(
+                        'تم إضافة الكمية إلى الخلطة بنجاح',
+                        ['page' => 'raw_materials_warehouse', 'section' => 'nuts'],
+                        $redirectUrl,
+                        $dashboardSlug
+                    );
+                    
+                } catch (Exception $e) {
+                    $db->rollBack();
+                    $error = $e->getMessage();
+                }
+            }
+        }
+        
         // إنشاء قالب منتج قياسي
         elseif ($action === 'create_unified_template') {
             $productName = trim($_POST['product_name'] ?? $_POST['template_name'] ?? '');
@@ -8026,11 +8122,16 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
         <!-- المكسرات المشكلة -->
         <div class="col-lg-6 mb-4">
             <div class="card shadow-sm">
-                <div class="card-header text-white d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #d4a574 0%, #8b6f47 100%);">
+                <div class="card-header text-white d-flex justify-content-between align-items-center flex-wrap gap-2" style="background: linear-gradient(135deg, #d4a574 0%, #8b6f47 100%);">
                     <h5 class="mb-0"><i class="bi bi-layers-fill me-2"></i>المكسرات المشكلة</h5>
-                    <button class="btn btn-light btn-sm" onclick="showCreateMixedNutsModal()">
-                        <i class="bi bi-plus-circle me-1"></i>إنشاء خلطة
-                    </button>
+                    <div class="d-flex gap-1 flex-wrap">
+                        <button type="button" class="btn btn-light btn-sm" onclick="showCreateMixedNutsModal()">
+                            <i class="bi bi-plus-circle me-1"></i>إنشاء خلطة
+                        </button>
+                        <button type="button" class="btn btn-outline-light btn-sm" onclick="showAddToMixedNutsModal()" <?php echo empty($mixedNuts) ? 'disabled' : ''; ?>>
+                            <i class="bi bi-arrow-down-up me-1"></i>إضافة كمية لخلطة موجودة
+                        </button>
+                    </div>
                 </div>
                 <div class="card-body">
                     <?php if (empty($mixedNuts)): ?>
@@ -8122,6 +8223,7 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
                                 <option value="لوز">لوز</option>
                                 <option value="فستق">فستق</option>
                                 <option value="كاجو">كاجو</option>
+                                
                                 <option value="أخرى">أخرى (يدوياً)</option>
                             </select>
                         </div>
@@ -8204,6 +8306,56 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
                         <button type="submit" class="btn text-white" style="background: linear-gradient(135deg, #d4a574 0%, #8b6f47 100%);">
                             <i class="bi bi-check-circle me-1"></i>إنشاء الخلطة
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal إضافة كمية من المكسرات المنفردة لخلطة موجودة -->
+    <div class="modal fade" id="addToMixedNutsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header text-white" style="background: linear-gradient(135deg, #d4a574 0%, #8b6f47 100%);">
+                    <h5 class="modal-title"><i class="bi bi-arrow-down-up me-2"></i>إضافة كمية لخلطة موجودة</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="POST" id="addToMixedNutsForm">
+                    <input type="hidden" name="action" value="add_to_mixed_nuts">
+                    <input type="hidden" name="submit_token" value="">
+                    <div class="modal-body scrollable-modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">الخلطة المستهدفة <span class="text-danger">*</span></label>
+                            <select name="mixed_nuts_id" class="form-select" required>
+                                <option value="">اختر الخلطة</option>
+                                <?php foreach ($mixedNuts as $mix): ?>
+                                    <option value="<?php echo (int)$mix['id']; ?>">
+                                        <?php echo htmlspecialchars($mix['batch_name']); ?> — <?php echo htmlspecialchars($mix['supplier_name']); ?> (<?php echo number_format($mix['total_quantity'], 3); ?> كجم)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label class="form-label mb-0">المكونات المضافة (من المكسرات المنفردة) <span class="text-danger">*</span></label>
+                                <button type="button" class="btn btn-sm text-white" style="background: linear-gradient(135deg, #d4a574 0%, #8b6f47 100%);" onclick="addIngredientToMix()">
+                                    <i class="bi bi-plus-circle me-1"></i>إضافة مكون
+                                </button>
+                            </div>
+                            <div id="addToIngredientsContainer">
+                                <!-- سيتم إضافة المكونات هنا -->
+                            </div>
+                        </div>
+                        <div class="alert alert-info mb-0">
+                            <i class="bi bi-info-circle me-2"></i>
+                            سيتم خصم الكميات من مخزون المكسرات المنفردة وإضافتها إلى الكمية الحالية للخلطة المحددة.
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                        <button type="submit" class="btn text-white" style="background: linear-gradient(135deg, #d4a574 0%, #8b6f47 100%);">
+                            <i class="bi bi-check-circle me-1"></i>إضافة للخلطة
                         </button>
                     </div>
                 </form>
@@ -8474,6 +8626,93 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
         createMixedNutsModal.addEventListener('shown.bs.modal', function () {
             if (document.getElementById('ingredientsContainer').children.length === 0) {
                 addIngredient();
+            }
+        });
+    }
+    
+    // ===== تحويل كمية لخلطة موجودة =====
+    let ingredientIndexToMix = 0;
+    
+    function showAddToMixedNutsModal() {
+        if (typeof closeAllForms === 'function') {
+            closeAllForms();
+        }
+        const modal = document.getElementById('addToMixedNutsModal');
+        if (modal) {
+            const container = document.getElementById('addToIngredientsContainer');
+            if (container) container.innerHTML = '';
+            ingredientIndexToMix = 0;
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+    
+    function addIngredientToMix() {
+        const container = document.getElementById('addToIngredientsContainer');
+        const nutsStock = <?php echo json_encode($nutsStock); ?>;
+        
+        const ingredientHtml = `
+            <div class="ingredient-row" id="ingredient-to-mix-${ingredientIndexToMix}">
+                <div class="row g-2 align-items-end mb-2">
+                    <div class="col-12 col-lg-6">
+                        <label class="form-label small">نوع المكسرات</label>
+                        <select name="ingredients[${ingredientIndexToMix}][nuts_stock_id]" class="form-select form-select-sm" required onchange="updateAvailableToMix(this, ${ingredientIndexToMix})">
+                            <option value="">اختر النوع</option>
+                            ${nutsStock.map(stock => `
+                                <option value="${stock.id}" data-quantity="${stock.quantity}" data-type="${stock.nut_type}">
+                                    ${stock.nut_type} (${stock.supplier_name}) — متاح: ${parseFloat(stock.quantity).toFixed(3)} كجم
+                                </option>
+                            `).join('')}
+                        </select>
+                    </div>
+                    <div class="col-6 col-lg-4">
+                        <label class="form-label small">الكمية (كجم)</label>
+                        <input type="number" name="ingredients[${ingredientIndexToMix}][quantity]" 
+                               class="form-control form-control-sm" step="0.001" min="0.001" required 
+                               id="quantity-to-mix-${ingredientIndexToMix}">
+                        <div class="form-text text-muted small" id="available-to-mix-${ingredientIndexToMix}"></div>
+                    </div>
+                    <div class="col-6 col-lg-2">
+                        <button type="button" class="btn btn-outline-danger btn-sm remove-ingredient-btn w-100" onclick="removeIngredientToMix(${ingredientIndexToMix})">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        container.insertAdjacentHTML('beforeend', ingredientHtml);
+        container.scrollTop = container.scrollHeight;
+        ingredientIndexToMix++;
+    }
+    
+    function removeIngredientToMix(index) {
+        const el = document.getElementById('ingredient-to-mix-' + index);
+        if (el) el.remove();
+    }
+    
+    function updateAvailableToMix(select, index) {
+        const selectedOption = select.options[select.selectedIndex];
+        const availableQty = selectedOption ? selectedOption.getAttribute('data-quantity') : null;
+        const availableSpan = document.getElementById('available-to-mix-' + index);
+        const quantityInput = document.getElementById('quantity-to-mix-' + index);
+        if (!availableSpan || !quantityInput) return;
+        const availableValue = parseFloat(availableQty);
+        if (!Number.isNaN(availableValue)) {
+            availableSpan.textContent = 'متاح: ' + availableValue.toFixed(3) + ' كجم';
+            quantityInput.max = availableValue.toFixed(3);
+        } else {
+            availableSpan.textContent = '';
+            quantityInput.removeAttribute('max');
+        }
+    }
+    
+    const addToMixedNutsModal = document.getElementById('addToMixedNutsModal');
+    if (addToMixedNutsModal) {
+        addToMixedNutsModal.addEventListener('shown.bs.modal', function () {
+            const container = document.getElementById('addToIngredientsContainer');
+            if (container && container.children.length === 0) {
+                addIngredientToMix();
             }
         });
     }
