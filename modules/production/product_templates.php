@@ -1554,10 +1554,20 @@ foreach ($allowedMaterials as $material) {
             $materialType = 'attara';
         }
         
+        $hasTypes = false;
+        $typesList = [];
+        if ($material === 'التلبينات') {
+            $hasTypes = true;
+            $typesList = ['تلبينة شعير', 'تلبينة'];
+        } elseif ($material === 'العطاره') {
+            $hasTypes = true;
+            $typesList = ['أعشاب', 'بهارات', 'خلطات عطارة'];
+        }
+        
         $rawMaterialsData[$material] = [
             'material_type' => $materialType,
-            'has_types' => false,
-            'types' => []
+            'has_types' => $hasTypes,
+            'types' => $typesList
         ];
     }
 }
