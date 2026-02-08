@@ -1528,8 +1528,8 @@ try {
 }
 
 // إنشاء قائمة بأسماء المواد فقط للعرض في القائمة المنسدلة
-// المواد الخام الأساسية: عسل، زيت زيتون، شمع عسل، مشتقات، مكسرات، طحينة
-$allowedMaterials = ['عسل', 'زيت زيتون', 'شمع عسل', 'مشتقات', 'مكسرات', 'طحينة'];
+// المواد الخام الأساسية: عسل، زيت زيتون، شمع عسل، مشتقات، مكسرات، طحينة، تلبينات، عطاره
+$allowedMaterials = ['عسل', 'زيت زيتون', 'شمع عسل', 'مشتقات', 'مكسرات', 'طحينة', 'التلبينات', 'العطاره'];
 
 // إضافة المواد الأساسية إلى $rawMaterialsData إذا لم تكن موجودة
 // هذا يضمن ظهور المواد في القائمة المنسدلة حتى لو كان المخزن فارغًا
@@ -1548,6 +1548,10 @@ foreach ($allowedMaterials as $material) {
             $materialType = 'derivatives';
         } elseif ($material === 'طحينة') {
             $materialType = 'tahini';
+        } elseif ($material === 'التلبينات') {
+            $materialType = 'talbina';
+        } elseif ($material === 'العطاره') {
+            $materialType = 'attara';
         }
         
         $rawMaterialsData[$material] = [
@@ -2327,7 +2331,7 @@ if (file_exists($specificationsModulePath)) {
                     <div class="mb-3">
                         <label class="form-label">المواد الخام الأساسية</label>
                         <p class="text-muted small mb-2">
-                            أضف جميع المكوّنات المستخدمة في المنتج (مثل العسل، المكسرات، الإضافات...).<br>
+                            أضف جميع المكوّنات المستخدمة في المنتج (مثل العسل، المكسرات، التلبينات، العطاره، الإضافات...).<br>
                             <strong>ملاحظة:</strong> نوع العسل يتم تحديده لاحقاً أثناء إنشاء تشغيلة الإنتاج.
                         </p>
                         <div id="rawMaterialsContainer">
@@ -2453,7 +2457,7 @@ if (file_exists($specificationsModulePath)) {
             <div class="mb-3">
                 <label class="form-label">المواد الخام الأساسية</label>
                 <p class="text-muted small mb-2">
-                    أضف جميع المكوّنات المستخدمة في المنتج (مثل العسل، المكسرات، الإضافات...).<br>
+                    أضف جميع المكوّنات المستخدمة في المنتج (مثل العسل، المكسرات، التلبينات، العطاره، الإضافات...).<br>
                     <strong>ملاحظة:</strong> نوع العسل يتم تحديده لاحقاً أثناء إنشاء تشغيلة الإنتاج.
                 </p>
                 <div id="rawMaterialsCardContainer">
@@ -2581,7 +2585,7 @@ if (file_exists($specificationsModulePath)) {
                     <div class="mb-3">
                         <label class="form-label">المواد الخام الأساسية</label>
                         <p class="text-muted small mb-2">
-                            أضف جميع المكوّنات المستخدمة في المنتج (مثل العسل، المكسرات، الإضافات...).<br>
+                            أضف جميع المكوّنات المستخدمة في المنتج (مثل العسل، المكسرات، التلبينات، العطاره، الإضافات...).<br>
                             <strong>ملاحظة:</strong> نوع العسل يتم تحديده لاحقاً أثناء إنشاء تشغيلة الإنتاج.
                         </p>
                         <div id="editRawMaterialsContainer">
@@ -2707,7 +2711,7 @@ if (file_exists($specificationsModulePath)) {
             <div class="mb-3">
                 <label class="form-label">المواد الخام الأساسية</label>
                 <p class="text-muted small mb-2">
-                    أضف جميع المكوّنات المستخدمة في المنتج (مثل العسل، المكسرات، الإضافات...).<br>
+                    أضف جميع المكوّنات المستخدمة في المنتج (مثل العسل، المكسرات، التلبينات، العطاره، الإضافات...).<br>
                     <strong>ملاحظة:</strong> نوع العسل يتم تحديده لاحقاً أثناء إنشاء تشغيلة الإنتاج.
                 </p>
                 <div id="editRawMaterialsCardContainer">
