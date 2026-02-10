@@ -966,15 +966,8 @@ try {
                 AND status != 'cancelled'
                 GROUP BY status
             ", $adminIds);
-            $totalRow = $db->queryOne("
-                SELECT CAST(COUNT(*) AS UNSIGNED) AS total
-                FROM tasks
-                WHERE created_by IN ($placeholders)
-                AND status != 'cancelled'
-            ", $adminIds);
         } else {
             $counts = [];
-            $totalRow = null;
         }
     } else {
         // للمستخدمين الآخرين، عرض المهام التي أنشأوها فقط
@@ -985,24 +978,17 @@ try {
             AND status != 'cancelled'
             GROUP BY status
         ", [$currentUser['id']]);
-        $totalRow = $db->queryOne("
-            SELECT CAST(COUNT(*) AS UNSIGNED) AS total
-            FROM tasks
-            WHERE created_by = ?
-            AND status != 'cancelled'
-        ", [$currentUser['id']]);
     }
 
-    if (!empty($totalRow)) {
-        $rawTotal = $totalRow['total'] ?? $totalRow['Total'] ?? 0;
-        $stats['total'] = (int) $rawTotal;
-    }
     foreach ($counts as $row) {
         $statusKey = $row['status'] ?? '';
         if (isset($stats[$statusKey])) {
             $stats[$statusKey] = (int)$row['total'];
         }
     }
+    // حساب الإجمالي من مجموع الحالات (أدق من COUNT المنفرد ويتجنب truncation في بعض بيئات MySQL/PHP)
+    $stats['total'] = (int)$stats['pending'] + (int)$stats['received'] + (int)$stats['in_progress']
+        + (int)$stats['completed'] + (int)$stats['delivered'] + (int)$stats['returned'];
 } catch (Exception $e) {
     error_log('Manager task stats error: ' . $e->getMessage());
 }
