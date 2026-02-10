@@ -1155,20 +1155,20 @@ try {
         if (!empty($adminIds)) {
             $placeholders = implode(',', array_fill(0, count($adminIds), '?'));
             
-            // دمج معايير التصفية
-            $countParams = array_merge($adminIds, $statusParams);
+            // دمج معايير التصفية والبحث المتقدم
+            $countParams = array_merge($adminIds, $statusParams, $searchParams);
             
             $totalRow = $db->queryOne("
                 SELECT COUNT(*) AS total FROM tasks t
-                WHERE t.created_by IN ($placeholders) AND t.status != 'cancelled' $statusCondition
+                WHERE t.created_by IN ($placeholders) AND t.status != 'cancelled' $statusCondition $searchConditions
             ", $countParams);
             $totalRecentTasks = isset($totalRow['total']) ? (int)$totalRow['total'] : 0;
         }
     } else {
-        $countParams = array_merge([$currentUser['id']], $statusParams);
+        $countParams = array_merge([$currentUser['id']], $statusParams, $searchParams);
         $totalRow = $db->queryOne("
             SELECT COUNT(*) AS total FROM tasks t
-            WHERE t.created_by = ? AND t.status != 'cancelled' $statusCondition
+            WHERE t.created_by = ? AND t.status != 'cancelled' $statusCondition $searchConditions
         ", $countParams);
         $totalRecentTasks = isset($totalRow['total']) ? (int)$totalRow['total'] : 0;
     }
@@ -1191,8 +1191,8 @@ try {
         if (!empty($adminIds)) {
             $placeholders = implode(',', array_fill(0, count($adminIds), '?'));
             
-            // دمج المعايير للاستعلام النهائي
-            $queryParams = array_merge($adminIds, $statusParams, [$tasksPerPage, $tasksOffset]);
+            // دمج المعايير للاستعلام النهائي (فلتر الحالة + البحث المتقدم + التقسيم)
+            $queryParams = array_merge($adminIds, $statusParams, $searchParams, [$tasksPerPage, $tasksOffset]);
             
             $recentTasks = $db->query("
                 SELECT t.id, t.title, t.status, t.priority, t.due_date, t.created_at,
@@ -1205,6 +1205,7 @@ try {
                 WHERE t.created_by IN ($placeholders)
                 AND t.status != 'cancelled'
                 $statusCondition
+                $searchConditions
                 ORDER BY t.created_at DESC, t.id DESC
                 LIMIT ? OFFSET ?
             ", $queryParams);
@@ -1213,7 +1214,7 @@ try {
         }
     } else {
         // للمستخدمين الآخرين، عرض المهام التي أنشأوها فقط
-        $queryParams = array_merge([$currentUser['id']], $statusParams, [$tasksPerPage, $tasksOffset]);
+        $queryParams = array_merge([$currentUser['id']], $statusParams, $searchParams, [$tasksPerPage, $tasksOffset]);
         
         $recentTasks = $db->query("
             SELECT t.id, t.title, t.status, t.priority, t.due_date, t.created_at,
@@ -1224,6 +1225,7 @@ try {
             WHERE t.created_by = ?
             AND t.status != 'cancelled'
             $statusCondition
+            $searchConditions
             ORDER BY t.created_at DESC, t.id DESC
             LIMIT ? OFFSET ?
         ", $queryParams);
@@ -1374,6 +1376,18 @@ try {
     error_log('Manager recent tasks error: ' . $e->getMessage());
 }
 
+// بناء معاملات الرابط للفلترة والبحث (للاستخدام في التصفح والروابط)
+$recentTasksQueryParams = ['page' => 'production_tasks'];
+if ($statusFilter !== '') $recentTasksQueryParams['status'] = $statusFilter;
+if ($filterTaskId !== '') $recentTasksQueryParams['task_id'] = $filterTaskId;
+if ($filterCustomer !== '') $recentTasksQueryParams['search_customer'] = $filterCustomer;
+if ($filterOrderId !== '') $recentTasksQueryParams['search_order_id'] = $filterOrderId;
+if ($filterTaskType !== '') $recentTasksQueryParams['task_type'] = $filterTaskType;
+if ($filterDueFrom !== '') $recentTasksQueryParams['due_date_from'] = $filterDueFrom;
+if ($filterDueTo !== '') $recentTasksQueryParams['due_date_to'] = $filterDueTo;
+if ($filterSearchText !== '') $recentTasksQueryParams['search_text'] = $filterSearchText;
+$recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP_QUERY_RFC3986);
+
 ?>
 
 <script>
@@ -1420,7 +1434,7 @@ try {
                 <div class="card <?php echo $statusFilter === '' || $statusFilter === 'all' ? 'bg-primary text-white' : 'border-primary'; ?> h-100">
                     <div class="card-body text-center py-2 px-2">
                         <div class="<?php echo $statusFilter === '' || $statusFilter === 'all' ? 'text-white-50' : 'text-muted'; ?> small mb-1">إجمالي المهام</div>
-                        <div class="fs-5 <?php echo $statusFilter === '' || $statusFilter === 'all' ? 'text-white' : 'text-primary'; ?> fw-semibold" style="min-width: 2.5em; display: inline-block;" title="إجمالي: <?php echo (int)$stats['total']; ?>"><?php echo (int)$stats['total']; ?></div>
+                        <div class="fs-5 <?php echo $statusFilter === '' || $statusFilter === 'all' ? 'text-white' : 'text-primary'; ?> fw-semibold" style="min-width: 3em; display: inline-block; overflow: visible;" title="إجمالي: <?php echo (int)$stats['total']; ?>"><?php echo (int)$stats['total']; ?></div>
                     </div>
                 </div>
             </a>
@@ -1597,6 +1611,71 @@ try {
             <span class="text-muted small"><?php echo $totalRecentTasks; ?> <?php echo $totalRecentTasks === 1 ? 'مهمة' : 'مهام'; ?> · صفحة <?php echo $tasksPageNum; ?> من <?php echo $totalRecentPages; ?></span>
         </div>
         <div class="card-body p-0">
+            <!-- بحث وفلترة جدول آخر المهام -->
+            <div class="p-3 border-bottom bg-light">
+                <form method="get" action="" id="recentTasksFilterForm" class="recent-tasks-filter-form">
+                    <input type="hidden" name="page" value="production_tasks">
+                    <?php if ($statusFilter !== ''): ?>
+                    <input type="hidden" name="status" value="<?php echo htmlspecialchars($statusFilter, ENT_QUOTES, 'UTF-8'); ?>">
+                    <?php endif; ?>
+                    <div class="row g-2 align-items-end mb-2">
+                        <div class="col-12 col-md-4 col-lg-3">
+                            <label class="form-label small mb-0">بحث سريع</label>
+                            <input type="text" name="search_text" class="form-control form-control-sm" placeholder="نص في العنوان، الملاحظات، العميل..." value="<?php echo htmlspecialchars($filterSearchText, ENT_QUOTES, 'UTF-8'); ?>">
+                        </div>
+                        <div class="col-auto">
+                            <button type="submit" class="btn btn-primary btn-sm">
+                                <i class="bi bi-search me-1"></i>بحث
+                            </button>
+                        </div>
+                        <div class="col-auto">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#recentTasksAdvancedSearch" aria-expanded="false" aria-controls="recentTasksAdvancedSearch">
+                                <i class="bi bi-funnel me-1"></i>بحث متقدم
+                            </button>
+                        </div>
+                        <?php if ($filterTaskId !== '' || $filterCustomer !== '' || $filterOrderId !== '' || $filterTaskType !== '' || $filterDueFrom !== '' || $filterDueTo !== '' || $filterSearchText !== ''): ?>
+                        <div class="col-auto">
+                            <a href="?<?php echo $statusFilter !== '' ? 'page=production_tasks&status=' . rawurlencode($statusFilter) : 'page=production_tasks'; ?>" class="btn btn-outline-danger btn-sm">إزالة الفلتر</a>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                    <div class="collapse <?php echo ($filterTaskId !== '' || $filterCustomer !== '' || $filterOrderId !== '' || $filterTaskType !== '' || $filterDueFrom !== '' || $filterDueTo !== '') ? 'show' : ''; ?>" id="recentTasksAdvancedSearch">
+                        <div class="row g-2 pt-2 border-top mt-2">
+                            <div class="col-6 col-md-4 col-lg-2">
+                                <label class="form-label small mb-0">رقم الطلب</label>
+                                <input type="text" name="task_id" class="form-control form-control-sm" placeholder="#" value="<?php echo htmlspecialchars($filterTaskId, ENT_QUOTES, 'UTF-8'); ?>">
+                            </div>
+                            <div class="col-6 col-md-4 col-lg-2">
+                                <label class="form-label small mb-0">اسم العميل / هاتف</label>
+                                <input type="text" name="search_customer" class="form-control form-control-sm" placeholder="اسم أو رقم" value="<?php echo htmlspecialchars($filterCustomer, ENT_QUOTES, 'UTF-8'); ?>">
+                            </div>
+                            <div class="col-6 col-md-4 col-lg-2">
+                                <label class="form-label small mb-0">رقم الأوردر</label>
+                                <input type="text" name="search_order_id" class="form-control form-control-sm" placeholder="رقم الأوردر" value="<?php echo htmlspecialchars($filterOrderId, ENT_QUOTES, 'UTF-8'); ?>">
+                            </div>
+                            <div class="col-6 col-md-4 col-lg-2">
+                                <label class="form-label small mb-0">نوع الاوردر</label>
+                                <select name="task_type" class="form-select form-select-sm">
+                                    <option value="">— الكل —</option>
+                                    <option value="shop_order" <?php echo $filterTaskType === 'shop_order' ? 'selected' : ''; ?>>اوردر محل</option>
+                                    <option value="cash_customer" <?php echo $filterTaskType === 'cash_customer' ? 'selected' : ''; ?>>عميل نقدي</option>
+                                    <option value="telegraph" <?php echo $filterTaskType === 'telegraph' ? 'selected' : ''; ?>>تليجراف</option>
+                                    <option value="general" <?php echo $filterTaskType === 'general' ? 'selected' : ''; ?>>مهمة عامة</option>
+                                    <option value="production" <?php echo $filterTaskType === 'production' ? 'selected' : ''; ?>>إنتاج منتج</option>
+                                </select>
+                            </div>
+                            <div class="col-6 col-md-4 col-lg-2">
+                                <label class="form-label small mb-0">تاريخ تسليم من</label>
+                                <input type="date" name="due_date_from" class="form-control form-control-sm" value="<?php echo htmlspecialchars($filterDueFrom, ENT_QUOTES, 'UTF-8'); ?>">
+                            </div>
+                            <div class="col-6 col-md-4 col-lg-2">
+                                <label class="form-label small mb-0">تاريخ تسليم إلى</label>
+                                <input type="date" name="due_date_to" class="form-control form-control-sm" value="<?php echo htmlspecialchars($filterDueTo, ENT_QUOTES, 'UTF-8'); ?>">
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
             <div class="table-responsive dashboard-table-wrapper">
                 <table class="table dashboard-table dashboard-table--no-hover align-middle mb-0">
                     <thead class="table-light">
@@ -1747,10 +1826,15 @@ try {
                 </table>
             </div>
             <?php if ($totalRecentPages > 1): ?>
+                <?php
+                $paginateParams = $recentTasksQueryParams;
+                $paginateBase = $recentTasksQueryString;
+                ?>
                 <nav aria-label="تنقل صفحات المهام" class="p-3 pt-0">
                     <ul class="pagination justify-content-center mb-0">
                         <li class="page-item <?php echo $tasksPageNum <= 1 ? 'disabled' : ''; ?>">
-                            <a class="page-link" href="?page=production_tasks&p=<?php echo max(1, $tasksPageNum - 1); ?>" aria-label="السابق">
+                            <?php $prevParams = $paginateParams; $prevParams['p'] = max(1, $tasksPageNum - 1); ?>
+                            <a class="page-link" href="?<?php echo http_build_query($prevParams, '', '&', PHP_QUERY_RFC3986); ?>" aria-label="السابق">
                                 <i class="bi bi-chevron-right"></i>
                             </a>
                         </li>
@@ -1758,24 +1842,28 @@ try {
                         $startPage = max(1, $tasksPageNum - 2);
                         $endPage = min($totalRecentPages, $tasksPageNum + 2);
                         if ($startPage > 1): ?>
-                            <li class="page-item"><a class="page-link" href="?page=production_tasks&p=1">1</a></li>
+                            <?php $p1 = $paginateParams; $p1['p'] = 1; ?>
+                            <li class="page-item"><a class="page-link" href="?<?php echo http_build_query($p1, '', '&', PHP_QUERY_RFC3986); ?>">1</a></li>
                             <?php if ($startPage > 2): ?>
                                 <li class="page-item disabled"><span class="page-link">...</span></li>
                             <?php endif; ?>
                         <?php endif; ?>
                         <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
+                            <?php $pi = $paginateParams; $pi['p'] = $i; ?>
                             <li class="page-item <?php echo $i == $tasksPageNum ? 'active' : ''; ?>">
-                                <a class="page-link" href="?page=production_tasks&p=<?php echo $i; ?>"><?php echo $i; ?></a>
+                                <a class="page-link" href="?<?php echo http_build_query($pi, '', '&', PHP_QUERY_RFC3986); ?>"><?php echo $i; ?></a>
                             </li>
                         <?php endfor; ?>
                         <?php if ($endPage < $totalRecentPages): ?>
                             <?php if ($endPage < $totalRecentPages - 1): ?>
                                 <li class="page-item disabled"><span class="page-link">...</span></li>
                             <?php endif; ?>
-                            <li class="page-item"><a class="page-link" href="?page=production_tasks&p=<?php echo $totalRecentPages; ?>"><?php echo $totalRecentPages; ?></a></li>
+                            <?php $plast = $paginateParams; $plast['p'] = $totalRecentPages; ?>
+                            <li class="page-item"><a class="page-link" href="?<?php echo http_build_query($plast, '', '&', PHP_QUERY_RFC3986); ?>"><?php echo $totalRecentPages; ?></a></li>
                         <?php endif; ?>
                         <li class="page-item <?php echo $tasksPageNum >= $totalRecentPages ? 'disabled' : ''; ?>">
-                            <a class="page-link" href="?page=production_tasks&p=<?php echo min($totalRecentPages, $tasksPageNum + 1); ?>" aria-label="التالي">
+                            <?php $nextParams = $paginateParams; $nextParams['p'] = min($totalRecentPages, $tasksPageNum + 1); ?>
+                            <a class="page-link" href="?<?php echo http_build_query($nextParams, '', '&', PHP_QUERY_RFC3986); ?>" aria-label="التالي">
                                 <i class="bi bi-chevron-left"></i>
                             </a>
                         </li>
