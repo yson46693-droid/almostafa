@@ -4838,7 +4838,7 @@ function submitLocalCustomerReturn() {
             }
             
             // مسح الكاش وإعادة تحميل الصفحة
-            reloadWithCacheClear();
+            if (typeof reloadWithCacheClear === 'function') reloadWithCacheClear(); else location.reload();
         } else {
             alert('حدث خطأ: ' + (data.message || 'خطأ غير معروف'));
             if (submitBtn) {
@@ -5027,7 +5027,7 @@ function submitLocalCustomerReturn() {
             }
             
             // مسح الكاش وإعادة تحميل الصفحة
-            reloadWithCacheClear();
+            if (typeof reloadWithCacheClear === 'function') reloadWithCacheClear(); else location.reload();
         } else {
             alert('حدث خطأ: ' + (data.message || 'خطأ غير معروف'));
             if (submitBtn) {
@@ -5513,7 +5513,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     // مسح الكاش وإعادة تحميل الصفحة بعد 1.5 ثانية
                     setTimeout(function() {
-                        reloadWithCacheClear();
+                        if (typeof reloadWithCacheClear === 'function') reloadWithCacheClear(); else location.reload();
                     }, 1500);
                 } else {
                     if (messageDiv) {
@@ -5524,7 +5524,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     // مسح الكاش وإعادة تحميل الصفحة بعد 2 ثانية في حالة الفشل
                     setTimeout(function() {
-                        reloadWithCacheClear();
+                        if (typeof reloadWithCacheClear === 'function') reloadWithCacheClear(); else location.reload();
                     }, 2000);
                 }
             })
@@ -5540,7 +5540,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // مسح الكاش وإعادة تحميل الصفحة بعد 2 ثانية في حالة الخطأ
                 setTimeout(function() {
-                    reloadWithCacheClear();
+                    if (typeof reloadWithCacheClear === 'function') reloadWithCacheClear(); else location.reload();
                 }, 2000);
             });
         });
@@ -5643,7 +5643,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     // مسح الكاش وإعادة تحميل الصفحة بعد 2 ثانية
                     setTimeout(function() {
-                        reloadWithCacheClear();
+                        if (typeof reloadWithCacheClear === 'function') reloadWithCacheClear(); else location.reload();
                     }, 2000);
                 } else {
                     if (statusDiv) {
@@ -5794,7 +5794,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     // مسح الكاش وإعادة تحميل الصفحة بعد 2 ثانية
                     setTimeout(function() {
-                        reloadWithCacheClear();
+                        if (typeof reloadWithCacheClear === 'function') reloadWithCacheClear(); else location.reload();
                     }, 2000);
                 } else {
                     if (statusDiv) {

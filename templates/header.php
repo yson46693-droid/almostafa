@@ -3241,6 +3241,12 @@ if (ob_get_level() > 0) {
             console.warn('Redirect to login attempted but blocked:', reason || 'انتهت الجلسة أو حدث خطأ في الاتصال');
         }
         
+        // إعادة تحميل الصفحة مع تجاوز الكاش (متاحة عالمياً للوحدات التي تستدعيها)
+        window.reloadWithCacheClear = function() {
+            const sep = window.location.search ? '&' : '?';
+            window.location.href = window.location.pathname + window.location.search + sep + '_=' + Date.now();
+        };
+        
         // معالج أخطاء JavaScript العامة
         let globalErrorCount = 0;
         let lastGlobalErrorTime = 0;
