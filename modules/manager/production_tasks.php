@@ -967,7 +967,7 @@ try {
                 GROUP BY status
             ", $adminIds);
             $totalRow = $db->queryOne("
-                SELECT COUNT(*) AS total
+                SELECT CAST(COUNT(*) AS UNSIGNED) AS total
                 FROM tasks
                 WHERE created_by IN ($placeholders)
                 AND status != 'cancelled'
@@ -986,15 +986,16 @@ try {
             GROUP BY status
         ", [$currentUser['id']]);
         $totalRow = $db->queryOne("
-            SELECT COUNT(*) AS total
+            SELECT CAST(COUNT(*) AS UNSIGNED) AS total
             FROM tasks
             WHERE created_by = ?
             AND status != 'cancelled'
         ", [$currentUser['id']]);
     }
 
-    if (!empty($totalRow) && isset($totalRow['total'])) {
-        $stats['total'] = (int) $totalRow['total'];
+    if (!empty($totalRow)) {
+        $rawTotal = $totalRow['total'] ?? $totalRow['Total'] ?? 0;
+        $stats['total'] = (int) $rawTotal;
     }
     foreach ($counts as $row) {
         $statusKey = $row['status'] ?? '';
@@ -1365,7 +1366,7 @@ try {
                 <div class="card <?php echo $statusFilter === '' || $statusFilter === 'all' ? 'bg-primary text-white' : 'border-primary'; ?> h-100">
                     <div class="card-body text-center py-2 px-2">
                         <div class="<?php echo $statusFilter === '' || $statusFilter === 'all' ? 'text-white-50' : 'text-muted'; ?> small mb-1">إجمالي المهام</div>
-                        <div class="fs-5 <?php echo $statusFilter === '' || $statusFilter === 'all' ? 'text-white' : 'text-primary'; ?> fw-semibold"><?php echo $stats['total']; ?></div>
+                        <div class="fs-5 <?php echo $statusFilter === '' || $statusFilter === 'all' ? 'text-white' : 'text-primary'; ?> fw-semibold" style="min-width: 2.5em; display: inline-block;" title="إجمالي: <?php echo (int)$stats['total']; ?>"><?php echo (int)$stats['total']; ?></div>
                     </div>
                 </div>
             </a>
