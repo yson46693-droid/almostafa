@@ -65,7 +65,7 @@ try {
     $currentRole = strtolower((string)($currentUser['role'] ?? ''));
     
     // التحقق من الصلاحيات
-    $allowedRoles = ['manager', 'developer', 'accountant'];
+    $allowedRoles = ['manager', 'developer', 'accountant', 'production'];
     if (!in_array($currentRole, $allowedRoles, true)) {
         returnJsonResponse([
             'success' => false,

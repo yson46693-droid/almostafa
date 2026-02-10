@@ -22,9 +22,11 @@ require_once __DIR__ . '/../../includes/path_helper.php';
 require_once __DIR__ . '/../../includes/table_styles.php';
 require_once __DIR__ . '/../../includes/audit_log.php';
 
-requireRole(['manager', 'accountant', 'developer']);
+requireRole(['manager', 'accountant', 'developer', 'production']);
 
 $currentUser = getCurrentUser();
+$isProductionRole = ($currentUser['role'] ?? '') === 'production';
+$redirectRole = $currentUser['role'] ?? 'manager'; // لإعادة التوجيه بعد العمليات (مدير/محاسب/عامل إنتاج)
 $db = db();
 $error = '';
 $success = '';
@@ -137,7 +139,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 null,
                 ['page' => 'company_products'],
                 null,
-                'manager',
+                $redirectRole,
                 $error
             );
         } else {
@@ -191,30 +193,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 preventDuplicateSubmission(
                     'تم إضافة المنتج الخارجي بنجاح.',
                     ['page' => 'company_products'],
-                    null,
-                    'manager'
-                );
+null,
+                $redirectRole
+            );
             } catch (Exception $e) {
                 error_log('create_external_product error: ' . $e->getMessage());
                 preventDuplicateSubmission(
                     null,
                     ['page' => 'company_products'],
-                    null,
-                    'manager',
+                null,
+                $redirectRole,
                     'تعذر إضافة المنتج الخارجي. يرجى المحاولة لاحقاً.'
                 );
             }
         }
     } elseif ($action === 'update_external_product') {
-        // منع المحاسب من التعديل على المنتجات الخارجية
-        if ($currentUser['role'] === 'accountant') {
+        // منع المحاسب وعامل الإنتاج من التعديل على المنتجات الخارجية
+        if ($currentUser['role'] === 'accountant' || $currentUser['role'] === 'production') {
             $error = 'ليس لديك صلاحية لتعديل المنتجات الخارجية.';
             // في حالة عدم وجود صلاحية، إعادة التوجيه مع رسالة الخطأ
             preventDuplicateSubmission(
                 null,
                 ['page' => 'company_products'],
                 null,
-                'manager',
+                $redirectRole,
                 $error
             );
         } else {
@@ -232,8 +234,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 preventDuplicateSubmission(
                     null,
                     ['page' => 'company_products'],
-                    null,
-                    'manager',
+                null,
+                $redirectRole,
                     $error
                 );
             } else {
@@ -284,31 +286,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     preventDuplicateSubmission(
                         'تم تحديث المنتج الخارجي بنجاح.',
                         ['page' => 'company_products'],
-                        null,
-                        'manager'
-                    );
+null,
+                $redirectRole
+            );
                 } catch (Exception $e) {
                     error_log('update_external_product error: ' . $e->getMessage());
                     preventDuplicateSubmission(
                         null,
                         ['page' => 'company_products'],
-                        null,
-                        'manager',
+                null,
+                $redirectRole,
                         'تعذر تحديث المنتج الخارجي. يرجى المحاولة لاحقاً.'
                     );
                 }
             }
         }
     } elseif ($action === 'delete_external_product') {
-        // منع المحاسب من الحذف على المنتجات الخارجية
-        if ($currentUser['role'] === 'accountant') {
+        // منع المحاسب وعامل الإنتاج من الحذف على المنتجات الخارجية
+        if ($currentUser['role'] === 'accountant' || $currentUser['role'] === 'production') {
             $error = 'ليس لديك صلاحية لحذف المنتجات الخارجية.';
             // في حالة عدم وجود صلاحية، إعادة التوجيه مع رسالة الخطأ
             preventDuplicateSubmission(
                 null,
                 ['page' => 'company_products'],
                 null,
-                'manager',
+                $redirectRole,
                 $error
             );
         } else {
@@ -320,8 +322,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 preventDuplicateSubmission(
                     null,
                     ['page' => 'company_products'],
-                    null,
-                    'manager',
+                null,
+                $redirectRole,
                     $error
                 );
             } else {
@@ -337,22 +339,82 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     preventDuplicateSubmission(
                         'تم حذف المنتج الخارجي بنجاح.',
                         ['page' => 'company_products'],
-                        null,
-                        'manager'
-                    );
+null,
+                $redirectRole
+            );
                 } catch (Exception $e) {
                     error_log('delete_external_product error: ' . $e->getMessage());
                     preventDuplicateSubmission(
                         null,
                         ['page' => 'company_products'],
-                        null,
-                        'manager',
+                null,
+                $redirectRole,
                         'تعذر حذف المنتج الخارجي. يرجى المحاولة لاحقاً.'
                     );
                 }
             }
         }
+    } elseif ($action === 'add_quantity_external_product') {
+        // إضافة كمية لمنتج خارجي (متاح لعامل الإنتاج والمدير والمحاسب)
+        $productId = intval($_POST['product_id'] ?? 0);
+        $quantityToAdd = max(0, floatval($_POST['quantity_to_add'] ?? 0));
+        if ($productId <= 0 || $quantityToAdd <= 0) {
+            $error = 'بيانات غير صحيحة. أدخل كمية صحيحة.';
+            preventDuplicateSubmission(null, ['page' => 'company_products'], null, $redirectRole, $error);
+        } else {
+            try {
+                $row = $db->queryOne("SELECT id, quantity FROM products WHERE id = ? AND product_type = 'external' AND status = 'active'", [$productId]);
+                if (!$row) {
+                    $error = 'المنتج غير موجود.';
+                    preventDuplicateSubmission(null, ['page' => 'company_products'], null, $redirectRole, $error);
+                } else {
+                    $newQuantity = floatval($row['quantity'] ?? 0) + $quantityToAdd;
+                    $db->execute("UPDATE products SET quantity = ? WHERE id = ?", [$newQuantity, $productId]);
+                    logAudit($currentUser['id'], 'add_quantity_external_product', 'product', $productId, null, [
+                        'quantity_added' => $quantityToAdd,
+                        'new_quantity' => $newQuantity
+                    ]);
+                    preventDuplicateSubmission('تم إضافة الكمية بنجاح.', ['page' => 'company_products'], null, $redirectRole);
+                }
+            } catch (Exception $e) {
+                error_log('add_quantity_external_product error: ' . $e->getMessage());
+                preventDuplicateSubmission(null, ['page' => 'company_products'], null, $redirectRole, 'تعذر إضافة الكمية.');
+            }
+        }
+    } elseif ($action === 'add_quantity_factory_product') {
+        // إضافة كمية لمنتج مصنع (تشغيلة) - متاح لعامل الإنتاج والمدير والمحاسب
+        $batchId = intval($_POST['batch_id'] ?? 0);
+        $quantityToAdd = max(0, floatval($_POST['quantity_to_add'] ?? 0));
+        if ($batchId <= 0 || $quantityToAdd <= 0) {
+            $error = 'بيانات غير صحيحة. أدخل كمية صحيحة.';
+            preventDuplicateSubmission(null, ['page' => 'company_products'], null, $redirectRole, $error);
+        } else {
+            try {
+                $row = $db->queryOne("SELECT id, quantity_produced FROM finished_products WHERE id = ?", [$batchId]);
+                if (!$row) {
+                    $error = 'التشغيلة غير موجودة.';
+                    preventDuplicateSubmission(null, ['page' => 'company_products'], null, $redirectRole, $error);
+                } else {
+                    $currentQty = floatval($row['quantity_produced'] ?? 0);
+                    $newQuantity = $currentQty + $quantityToAdd;
+                    $db->execute("UPDATE finished_products SET quantity_produced = ? WHERE id = ?", [$newQuantity, $batchId]);
+                    logAudit($currentUser['id'], 'add_quantity_factory_product', 'finished_product', $batchId, null, [
+                        'quantity_added' => $quantityToAdd,
+                        'new_quantity' => $newQuantity
+                    ]);
+                    preventDuplicateSubmission('تم إضافة الكمية بنجاح.', ['page' => 'company_products'], null, $redirectRole);
+                }
+            } catch (Exception $e) {
+                error_log('add_quantity_factory_product error: ' . $e->getMessage());
+                preventDuplicateSubmission(null, ['page' => 'company_products'], null, $redirectRole, 'تعذر إضافة الكمية.');
+            }
+        }
     } elseif ($action === 'update_factory_product_category') {
+        // منع عامل الإنتاج من تعديل الصنف
+        if ($currentUser['role'] === 'production') {
+            $error = 'ليس لديك صلاحية لتعديل صنف المنتج.';
+            preventDuplicateSubmission(null, ['page' => 'company_products'], null, $redirectRole, $error);
+        }
         $batchId = intval($_POST['batch_id'] ?? 0);
         $categoryId = intval($_POST['category_id'] ?? 0);
         $customCategory = trim($_POST['custom_category'] ?? '');
@@ -363,7 +425,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 null,
                 ['page' => 'company_products'],
                 null,
-                'manager',
+                $redirectRole,
                 $error
             );
         } else {
@@ -410,21 +472,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 preventDuplicateSubmission(
                     'تم تحديث صنف المنتج بنجاح.',
                     ['page' => 'company_products'],
-                    null,
-                    'manager'
-                );
+null,
+                $redirectRole
+            );
             } catch (Exception $e) {
                 error_log('update_factory_product_category error: ' . $e->getMessage());
                 preventDuplicateSubmission(
                     null,
                     ['page' => 'company_products'],
-                    null,
-                    'manager',
+                null,
+                $redirectRole,
                     'تعذر تحديث صنف المنتج. يرجى المحاولة لاحقاً.'
                 );
             }
         }
     } elseif ($action === 'update_factory_product_price') {
+        // منع عامل الإنتاج من تعديل السعر
+        if ($currentUser['role'] === 'production') {
+            $error = 'ليس لديك صلاحية لتعديل سعر المنتج.';
+            preventDuplicateSubmission(null, ['page' => 'company_products'], null, $redirectRole, $error);
+        }
         // تعديل سعر منتج المصنع (متاح للمدير والمحاسب)
         $batchId = intval($_POST['batch_id'] ?? 0);
         $unitPrice = max(0, floatval($_POST['unit_price'] ?? 0));
@@ -435,7 +502,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 null,
                 ['page' => 'company_products'],
                 null,
-                'manager',
+                $redirectRole,
                 $error
             );
         } else {
@@ -450,16 +517,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 preventDuplicateSubmission(
                     'تم تحديث سعر المنتج بنجاح.',
                     ['page' => 'company_products'],
-                    null,
-                    'manager'
-                );
+null,
+                $redirectRole
+            );
             } catch (Exception $e) {
                 error_log('update_factory_product_price error: ' . $e->getMessage());
                 preventDuplicateSubmission(
                     null,
                     ['page' => 'company_products'],
-                    null,
-                    'manager',
+                null,
+                $redirectRole,
                     'تعذر تحديث السعر. يرجى المحاولة لاحقاً.'
                 );
             }
@@ -479,7 +546,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 null,
                 ['page' => 'company_products'],
                 null,
-                'manager',
+                $redirectRole,
                 $error
             );
         } else {
@@ -584,16 +651,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 preventDuplicateSubmission(
                     'تم إضافة منتج المصنع بنجاح. رقم الباركود: ' . $batchNumber,
                     ['page' => 'company_products'],
-                    null,
-                    'manager'
-                );
+null,
+                $redirectRole
+            );
             } catch (Exception $e) {
                 error_log('create_factory_product error: ' . $e->getMessage());
                 preventDuplicateSubmission(
                     null,
                     ['page' => 'company_products'],
-                    null,
-                    'manager',
+                null,
+                $redirectRole,
                     'تعذر إضافة منتج المصنع. يرجى المحاولة لاحقاً: ' . $e->getMessage()
                 );
             }
@@ -1771,6 +1838,7 @@ foreach ($factoryProducts as $product) {
                                             data-quantity="<?php echo htmlspecialchars($quantity); ?>">
                                         <i class="bi bi-printer me-1"></i>طباعة الباركود
                                     </button>
+                                    <?php if (!$isProductionRole): ?>
                                     <button type="button" 
                                             class="btn-view js-edit-factory-category" 
                                             style="border: none; cursor: pointer; flex: 1; min-width: calc(50% - 5px); background: #ffc107; color: #000; padding: 10px 16px; border-radius: 10px; font-weight: bold; font-size: 13px;"
@@ -1786,6 +1854,15 @@ foreach ($factoryProducts as $product) {
                                             data-product="<?php echo htmlspecialchars($productName); ?>"
                                             data-unit-price="<?php echo htmlspecialchars($unitPrice); ?>">
                                         <i class="bi bi-currency-dollar me-1"></i>تعديل السعر
+                                    </button>
+                                    <?php endif; ?>
+                                    <button type="button" 
+                                            class="btn-view js-add-quantity-factory" 
+                                            style="border: none; cursor: pointer; flex: 1; min-width: calc(50% - 5px); background: #6f42c1; color: #fff; padding: 10px 16px; border-radius: 10px; font-weight: bold; font-size: 13px;"
+                                            data-batch-id="<?php echo $batchId; ?>"
+                                            data-product="<?php echo htmlspecialchars($productName); ?>"
+                                            data-quantity="<?php echo htmlspecialchars($availableQuantity); ?>">
+                                        <i class="bi bi-plus-circle me-1"></i>إضافة كمية
                                     </button>
                                 </div>
                             <?php else: ?>
@@ -1987,8 +2064,8 @@ foreach ($factoryProducts as $product) {
                             <div class="product-detail-row"><span>سعر الوحدة:</span> <span><?php echo formatCurrency($unitPrice); ?></span></div>
                             <div class="product-detail-row"><span>الإجمالي:</span> <span><strong class="text-success"><?php echo formatCurrency($totalValue); ?></strong></span></div>
                             
-                            <?php if ($currentUser['role'] !== 'accountant'): ?>
                             <div class="product-actions" style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
+                            <?php if ($currentUser['role'] !== 'accountant' && !$isProductionRole): ?>
                                 <button type="button" 
                                         class="btn btn-outline-primary js-edit-external" 
                                         style="flex: 1; min-width: calc(50% - 5px); border-radius: 10px; padding: 10px 16px; font-weight: bold; font-size: 13px;"
@@ -2007,8 +2084,16 @@ foreach ($factoryProducts as $product) {
                                         data-name="<?php echo htmlspecialchars($product['name'], ENT_QUOTES); ?>">
                                     <i class="bi bi-trash me-1"></i>حذف
                                 </button>
-                            </div>
                             <?php endif; ?>
+                                <button type="button" 
+                                        class="btn btn-outline-secondary js-add-quantity-external" 
+                                        style="flex: 1; min-width: calc(50% - 5px); border-radius: 10px; padding: 10px 16px; font-weight: bold; font-size: 13px;"
+                                        data-product-id="<?php echo $product['id']; ?>"
+                                        data-product-name="<?php echo htmlspecialchars($product['name'], ENT_QUOTES); ?>"
+                                        data-quantity="<?php echo $product['quantity']; ?>">
+                                    <i class="bi bi-plus-circle me-1"></i>إضافة كمية
+                                </button>
+                            </div>
                         </div>
                     <?php endforeach; ?>
                 </div>
@@ -2212,6 +2297,74 @@ foreach ($factoryProducts as $product) {
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
                     <button type="submit" class="btn btn-info text-white">حفظ السعر</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal إضافة كمية لمنتج مصنع -->
+<div class="modal fade d-none d-md-block" id="addQuantityFactoryModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-secondary text-white">
+                <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>إضافة كمية لمنتج المصنع</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" id="addQuantityFactoryForm">
+                <input type="hidden" name="action" value="add_quantity_factory_product">
+                <input type="hidden" name="batch_id" id="add_quantity_factory_batch_id">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">المنتج</label>
+                        <input type="text" class="form-control" id="add_quantity_factory_product_name" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">الكمية الحالية</label>
+                        <input type="text" class="form-control" id="add_quantity_factory_current_qty" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">الكمية المضافة <span class="text-danger">*</span></label>
+                        <input type="number" step="0.01" min="0.01" class="form-control" name="quantity_to_add" id="add_quantity_factory_to_add" required placeholder="أدخل الكمية">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-secondary text-white">إضافة</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal إضافة كمية لمنتج خارجي -->
+<div class="modal fade d-none d-md-block" id="addQuantityExternalModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-secondary text-white">
+                <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>إضافة كمية للمنتج الخارجي</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" id="addQuantityExternalForm">
+                <input type="hidden" name="action" value="add_quantity_external_product">
+                <input type="hidden" name="product_id" id="add_quantity_external_product_id">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">المنتج</label>
+                        <input type="text" class="form-control" id="add_quantity_external_product_name" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">الكمية الحالية</label>
+                        <input type="text" class="form-control" id="add_quantity_external_current_qty" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">الكمية المضافة <span class="text-danger">*</span></label>
+                        <input type="number" step="0.01" min="0.01" class="form-control" name="quantity_to_add" id="add_quantity_external_to_add" required placeholder="أدخل الكمية">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-secondary text-white">إضافة</button>
                 </div>
             </form>
         </div>
@@ -2553,7 +2706,9 @@ function closeAllForms() {
         'batchDetailsModal',
         'printBarcodesModal',
         'editFactoryProductCategoryModal',
-        'editFactoryProductPriceModal'
+        'editFactoryProductPriceModal',
+        'addQuantityFactoryModal',
+        'addQuantityExternalModal'
     ];
     modals.forEach(function(modalId) {
         const modal = document.getElementById(modalId);
@@ -3853,6 +4008,11 @@ function initEditExternalButtons() {
                     </div>
                 `;
             
+            const isProductionRole = <?php echo json_encode($isProductionRole); ?>;
+            const editButtonsHTML = !isProductionRole ? `
+                        <button type="button" class="btn-view js-edit-factory-category" style="border: none; cursor: pointer; flex: 1; min-width: calc(50% - 5px); background: #ffc107; color: #000; padding: 10px 16px; border-radius: 10px; font-weight: bold; font-size: 13px;" data-batch-id="${product.id || 0}" data-product="${escapeHtml(productName)}" data-category="${escapeHtml(category)}"><i class="bi bi-pencil me-1"></i>تعديل الصنف</button>
+                        <button type="button" class="btn-view js-edit-factory-price" style="border: none; cursor: pointer; flex: 1; min-width: calc(50% - 5px); background: #17a2b8; color: #fff; padding: 10px 16px; border-radius: 10px; font-weight: bold; font-size: 13px;" data-batch-id="${product.id || 0}" data-product="${escapeHtml(productName)}" data-unit-price="${product.unit_price != null ? product.unit_price : ''}"><i class="bi bi-currency-dollar me-1"></i>تعديل السعر</button>
+            ` : '';
             const actionsHTML = batchNumber && batchNumber !== '—'
                 ? `
                     <div class="product-actions" style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
@@ -3872,22 +4032,8 @@ function initEditExternalButtons() {
                                 data-quantity="${escapeHtml(quantity)}">
                             <i class="bi bi-printer me-1"></i>طباعة الباركود
                         </button>
-                        <button type="button" 
-                                class="btn-view js-edit-factory-category" 
-                                style="border: none; cursor: pointer; flex: 1; min-width: calc(50% - 5px); background: #ffc107; color: #000; padding: 10px 16px; border-radius: 10px; font-weight: bold; font-size: 13px;"
-                                data-batch-id="${product.id || 0}"
-                                data-product="${escapeHtml(productName)}"
-                                data-category="${escapeHtml(category)}">
-                            <i class="bi bi-pencil me-1"></i>تعديل الصنف
-                        </button>
-                        <button type="button" 
-                                class="btn-view js-edit-factory-price" 
-                                style="border: none; cursor: pointer; flex: 1; min-width: calc(50% - 5px); background: #17a2b8; color: #fff; padding: 10px 16px; border-radius: 10px; font-weight: bold; font-size: 13px;"
-                                data-batch-id="${product.id || 0}"
-                                data-product="${escapeHtml(productName)}"
-                                data-unit-price="${product.unit_price != null ? product.unit_price : ''}">
-                            <i class="bi bi-currency-dollar me-1"></i>تعديل السعر
-                        </button>
+                        ${editButtonsHTML}
+                        <button type="button" class="btn-view js-add-quantity-factory" style="border: none; cursor: pointer; flex: 1; min-width: calc(50% - 5px); background: #6f42c1; color: #fff; padding: 10px 16px; border-radius: 10px; font-weight: bold; font-size: 13px;" data-batch-id="${product.id || 0}" data-product="${escapeHtml(productName)}" data-quantity="${quantity}"><i class="bi bi-plus-circle me-1"></i>إضافة كمية</button>
                     </div>
                 `
                 : `
@@ -3947,31 +4093,17 @@ function initEditExternalButtons() {
             const totalValue = parseFloat(product.total_value || 0);
             const category = product.category || '—';
             
-            const canEditExternal = <?php echo json_encode($currentUser['role'] !== 'accountant'); ?>;
-            const actionsHTML = canEditExternal
-                ? `
+            const canEditExternal = <?php echo json_encode($currentUser['role'] !== 'accountant' && !$isProductionRole); ?>;
+            const editDeleteHTML = canEditExternal ? `
+                        <button type="button" class="btn btn-outline-primary js-edit-external" style="flex: 1; min-width: calc(50% - 5px); border-radius: 10px; padding: 10px 16px; font-weight: bold; font-size: 13px;" data-id="${product.id}" data-name="${escapeHtml(productName)}" data-quantity="${product.quantity}" data-unit="${escapeHtml(unit)}" data-price="${product.unit_price}" data-category="${escapeHtml(category)}"><i class="bi bi-pencil me-1"></i>تعديل</button>
+                        <button type="button" class="btn btn-outline-danger js-delete-external" style="flex: 1; min-width: calc(50% - 5px); border-radius: 10px; padding: 10px 16px; font-weight: bold; font-size: 13px;" data-id="${product.id}" data-name="${escapeHtml(productName)}"><i class="bi bi-trash me-1"></i>حذف</button>
+            ` : '';
+            const actionsHTML = `
                     <div class="product-actions" style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
-                        <button type="button" 
-                                class="btn btn-outline-primary js-edit-external" 
-                                style="flex: 1; min-width: calc(50% - 5px); border-radius: 10px; padding: 10px 16px; font-weight: bold; font-size: 13px;"
-                                data-id="${product.id}"
-                                data-name="${escapeHtml(productName)}"
-                                data-quantity="${product.quantity}"
-                                data-unit="${escapeHtml(unit)}"
-                                data-price="${product.unit_price}"
-                                data-category="${escapeHtml(category)}">
-                            <i class="bi bi-pencil me-1"></i>تعديل
-                        </button>
-                        <button type="button" 
-                                class="btn btn-outline-danger js-delete-external" 
-                                style="flex: 1; min-width: calc(50% - 5px); border-radius: 10px; padding: 10px 16px; font-weight: bold; font-size: 13px;"
-                                data-id="${product.id}"
-                                data-name="${escapeHtml(productName)}">
-                            <i class="bi bi-trash me-1"></i>حذف
-                        </button>
+                        ${editDeleteHTML}
+                        <button type="button" class="btn btn-outline-secondary js-add-quantity-external" style="flex: 1; min-width: calc(50% - 5px); border-radius: 10px; padding: 10px 16px; font-weight: bold; font-size: 13px;" data-product-id="${product.id}" data-product-name="${escapeHtml(productName)}" data-quantity="${product.quantity}"><i class="bi bi-plus-circle me-1"></i>إضافة كمية</button>
                     </div>
-                `
-                : '';
+                `;
             
             return `
                 <div class="product-card">
@@ -4376,6 +4508,44 @@ function initEditExternalButtons() {
                 productNameEl.value = productName || '';
                 unitPriceEl.value = unitPrice;
                 const modal = new bootstrap.Modal(document.getElementById('editFactoryProductPriceModal'));
+                modal.show();
+            }
+        }
+        // معالجة زر إضافة كمية لمنتج مصنع
+        const addQtyFactoryBtn = e.target.closest('.js-add-quantity-factory');
+        if (addQtyFactoryBtn) {
+            const batchId = addQtyFactoryBtn.getAttribute('data-batch-id');
+            const productName = addQtyFactoryBtn.getAttribute('data-product');
+            const currentQty = addQtyFactoryBtn.getAttribute('data-quantity') || '0';
+            const batchIdEl = document.getElementById('add_quantity_factory_batch_id');
+            const productNameEl = document.getElementById('add_quantity_factory_product_name');
+            const currentQtyEl = document.getElementById('add_quantity_factory_current_qty');
+            const toAddEl = document.getElementById('add_quantity_factory_to_add');
+            if (batchId && batchIdEl && productNameEl && currentQtyEl && toAddEl) {
+                batchIdEl.value = batchId;
+                productNameEl.value = productName || '';
+                currentQtyEl.value = currentQty;
+                toAddEl.value = '';
+                const modal = new bootstrap.Modal(document.getElementById('addQuantityFactoryModal'));
+                modal.show();
+            }
+        }
+        // معالجة زر إضافة كمية لمنتج خارجي
+        const addQtyExternalBtn = e.target.closest('.js-add-quantity-external');
+        if (addQtyExternalBtn) {
+            const productId = addQtyExternalBtn.getAttribute('data-product-id');
+            const productName = addQtyExternalBtn.getAttribute('data-product-name');
+            const currentQty = addQtyExternalBtn.getAttribute('data-quantity') || '0';
+            const productIdEl = document.getElementById('add_quantity_external_product_id');
+            const productNameEl = document.getElementById('add_quantity_external_product_name');
+            const currentQtyEl = document.getElementById('add_quantity_external_current_qty');
+            const toAddEl = document.getElementById('add_quantity_external_to_add');
+            if (productId && productIdEl && productNameEl && currentQtyEl && toAddEl) {
+                productIdEl.value = productId;
+                productNameEl.value = productName || '';
+                currentQtyEl.value = currentQty;
+                toAddEl.value = '';
+                const modal = new bootstrap.Modal(document.getElementById('addQuantityExternalModal'));
                 modal.show();
             }
         }

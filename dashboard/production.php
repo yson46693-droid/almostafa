@@ -1189,6 +1189,17 @@ if ($isAjaxNavigation) {
                 }
                 ?>
                 
+            <?php elseif ($page === 'company_products'): ?>
+                <!-- صفحة منتجات الشركة (عامل الإنتاج: إضافة منتجات وإضافة كمية فقط) -->
+                <?php 
+                $modulePath = __DIR__ . '/../modules/manager/company_products.php';
+                if (file_exists($modulePath)) {
+                    include $modulePath;
+                } else {
+                    echo '<div class="alert alert-warning">صفحة منتجات الشركة غير متاحة حالياً</div>';
+                }
+                ?>
+                
             <?php elseif ($page === 'batch_reader'): ?>
                 <!-- صفحة قارئ أرقام التشغيلات -->
                 <div class="container-fluid p-0" style="height: 100vh; overflow: hidden;">

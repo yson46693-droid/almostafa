@@ -722,6 +722,13 @@ switch ($role) {
                 'badge' => null
             ],
             [
+                'title' => 'منتجات الشركة',
+                'icon' => 'bi-box-seam',
+                'url' => $baseUrl . 'production.php?page=company_products',
+                'active' => ($currentPage === 'production.php' && $currentPageParam === 'company_products'),
+                'badge' => null
+            ],
+            [
                 'title' => 'تشوين المنتجات',
                 'icon' => 'bi-arrow-left-right',
                 'url' => $baseUrl . 'production.php?page=product_storage',
