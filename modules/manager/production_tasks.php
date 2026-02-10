@@ -1365,15 +1365,7 @@ try {
                 </div>
             </a>
         </div>
-        <div class="col-4 col-sm-4 col-md-2">
-            <a href="?page=production_tasks&status=in_progress" class="text-decoration-none">
-                <div class="card <?php echo $statusFilter === 'in_progress' ? 'bg-info text-dark' : 'border-info'; ?> h-100">
-                    <div class="card-body text-center py-2 px-2">
-                        <div class="fs-5 <?php echo $statusFilter === 'in_progress' ? 'text-dark' : 'text-info'; ?> fw-semibold"><?php echo $stats['in_progress']; ?></div>
-                    </div>
-                </div>
-            </a>
-        </div>
+        
         <div class="col-4 col-sm-4 col-md-2">
             <a href="?page=production_tasks&status=completed" class="text-decoration-none">
                 <div class="card <?php echo $statusFilter === 'completed' ? 'bg-success text-white' : 'border-success'; ?> h-100">
