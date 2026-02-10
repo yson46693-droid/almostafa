@@ -424,6 +424,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 );
             }
         }
+    } elseif ($action === 'update_factory_product_price') {
+        // تعديل سعر منتج المصنع (متاح للمدير والمحاسب)
+        $batchId = intval($_POST['batch_id'] ?? 0);
+        $unitPrice = max(0, floatval($_POST['unit_price'] ?? 0));
+
+        if ($batchId <= 0) {
+            $error = 'بيانات غير صحيحة.';
+            preventDuplicateSubmission(
+                null,
+                ['page' => 'company_products'],
+                null,
+                'manager',
+                $error
+            );
+        } else {
+            try {
+                $db->execute(
+                    "UPDATE finished_products SET unit_price = ? WHERE id = ?",
+                    [$unitPrice, $batchId]
+                );
+                logAudit($currentUser['id'], 'update_factory_product_price', 'finished_product', $batchId, null, [
+                    'unit_price' => $unitPrice
+                ]);
+                preventDuplicateSubmission(
+                    'تم تحديث سعر المنتج بنجاح.',
+                    ['page' => 'company_products'],
+                    null,
+                    'manager'
+                );
+            } catch (Exception $e) {
+                error_log('update_factory_product_price error: ' . $e->getMessage());
+                preventDuplicateSubmission(
+                    null,
+                    ['page' => 'company_products'],
+                    null,
+                    'manager',
+                    'تعذر تحديث السعر. يرجى المحاولة لاحقاً.'
+                );
+            }
+        }
     } elseif ($action === 'create_factory_product') {
         $productName = trim($_POST['product_name'] ?? '');
         $categoryId = intval($_POST['category_id'] ?? 0);
@@ -733,6 +773,7 @@ try {
         SELECT 
             id,
             name,
+            COALESCE(category, '') as category,
             quantity,
             COALESCE(unit, 'قطعة') as unit,
             unit_price,
@@ -1716,7 +1757,7 @@ foreach ($factoryProducts as $product) {
                                 <div class="product-actions" style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
                                     <button type="button" 
                                             class="btn-view js-batch-details" 
-                                            style="border: none; cursor: pointer; flex: 1; min-width: calc(33.33% - 7px); background: #0c2c80; color: white; padding: 10px 16px; border-radius: 10px; font-weight: bold; font-size: 13px;"
+                                            style="border: none; cursor: pointer; flex: 1; min-width: calc(50% - 5px); background: #0c2c80; color: white; padding: 10px 16px; border-radius: 10px; font-weight: bold; font-size: 13px;"
                                             data-batch="<?php echo htmlspecialchars($batchNumber); ?>"
                                             data-product="<?php echo htmlspecialchars($productName); ?>"
                                             data-view-url="<?php echo htmlspecialchars($viewUrl); ?>">
@@ -1724,7 +1765,7 @@ foreach ($factoryProducts as $product) {
                                     </button>
                                     <button type="button" 
                                             class="btn-view js-print-barcode" 
-                                            style="border: none; cursor: pointer; flex: 1; min-width: calc(33.33% - 7px); background: #28a745; color: white; padding: 10px 16px; border-radius: 10px; font-weight: bold; font-size: 13px;"
+                                            style="border: none; cursor: pointer; flex: 1; min-width: calc(50% - 5px); background: #28a745; color: white; padding: 10px 16px; border-radius: 10px; font-weight: bold; font-size: 13px;"
                                             data-batch="<?php echo htmlspecialchars($batchNumber); ?>"
                                             data-product="<?php echo htmlspecialchars($productName); ?>"
                                             data-quantity="<?php echo htmlspecialchars($quantity); ?>">
@@ -1732,11 +1773,19 @@ foreach ($factoryProducts as $product) {
                                     </button>
                                     <button type="button" 
                                             class="btn-view js-edit-factory-category" 
-                                            style="border: none; cursor: pointer; flex: 1; min-width: calc(33.33% - 7px); background: #ffc107; color: #000; padding: 10px 16px; border-radius: 10px; font-weight: bold; font-size: 13px;"
+                                            style="border: none; cursor: pointer; flex: 1; min-width: calc(50% - 5px); background: #ffc107; color: #000; padding: 10px 16px; border-radius: 10px; font-weight: bold; font-size: 13px;"
                                             data-batch-id="<?php echo $batchId; ?>"
                                             data-product="<?php echo htmlspecialchars($productName); ?>"
                                             data-category="<?php echo htmlspecialchars($category); ?>">
                                         <i class="bi bi-pencil me-1"></i>تعديل الصنف
+                                    </button>
+                                    <button type="button" 
+                                            class="btn-view js-edit-factory-price" 
+                                            style="border: none; cursor: pointer; flex: 1; min-width: calc(50% - 5px); background: #17a2b8; color: #fff; padding: 10px 16px; border-radius: 10px; font-weight: bold; font-size: 13px;"
+                                            data-batch-id="<?php echo $batchId; ?>"
+                                            data-product="<?php echo htmlspecialchars($productName); ?>"
+                                            data-unit-price="<?php echo htmlspecialchars($unitPrice); ?>">
+                                        <i class="bi bi-currency-dollar me-1"></i>تعديل السعر
                                     </button>
                                 </div>
                             <?php else: ?>
@@ -1932,6 +1981,8 @@ foreach ($factoryProducts as $product) {
                             <div class="product-name"><?php echo $productName; ?></div>
                             <div style="color: #94a3b8; font-size: 13px; margin-bottom: 10px;">منتج خارجي</div>
 
+                            <?php $extCategory = htmlspecialchars($product['category'] ?? '—'); ?>
+                            <div class="product-detail-row"><span>الصنف:</span> <span><?php echo $extCategory; ?></span></div>
                             <div class="product-detail-row"><span>الكمية:</span> <span><strong><?php echo $quantity; ?> <?php echo $unit; ?></strong></span></div>
                             <div class="product-detail-row"><span>سعر الوحدة:</span> <span><?php echo formatCurrency($unitPrice); ?></span></div>
                             <div class="product-detail-row"><span>الإجمالي:</span> <span><strong class="text-success"><?php echo formatCurrency($totalValue); ?></strong></span></div>
@@ -2131,6 +2182,36 @@ foreach ($factoryProducts as $product) {
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
                     <button type="submit" class="btn btn-warning">حفظ التغييرات</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal تعديل سعر منتج المصنع (للمدير والمحاسب) -->
+<div class="modal fade d-none d-md-block" id="editFactoryProductPriceModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="bi bi-currency-dollar me-2"></i>تعديل سعر منتج المصنع</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" id="editFactoryPriceForm">
+                <input type="hidden" name="action" value="update_factory_product_price">
+                <input type="hidden" name="batch_id" id="edit_factory_price_batch_id">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">اسم المنتج</label>
+                        <input type="text" class="form-control" id="edit_factory_price_product_name" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">سعر الوحدة <span class="text-danger">*</span></label>
+                        <input type="number" step="0.01" min="0" class="form-control" name="unit_price" id="edit_factory_price_unit_price" required placeholder="أدخل سعر الوحدة">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-info text-white">حفظ السعر</button>
                 </div>
             </form>
         </div>
@@ -2470,7 +2551,9 @@ function closeAllForms() {
         'editExternalProductModal', 
         'deleteExternalProductModal',
         'batchDetailsModal',
-        'printBarcodesModal'
+        'printBarcodesModal',
+        'editFactoryProductCategoryModal',
+        'editFactoryProductPriceModal'
     ];
     modals.forEach(function(modalId) {
         const modal = document.getElementById(modalId);
@@ -3629,6 +3712,7 @@ function initEditExternalButtons() {
     
     // عناصر البحث والفلترة للمنتجات الخارجية
     const externalSearchInput = document.getElementById('externalSearchInput');
+    const externalCategoryFilter = document.getElementById('externalCategoryFilter');
     const externalMinPrice = document.getElementById('externalMinPrice');
     const externalMaxPrice = document.getElementById('externalMaxPrice');
     const externalMinQuantity = document.getElementById('externalMinQuantity');
@@ -3790,11 +3874,19 @@ function initEditExternalButtons() {
                         </button>
                         <button type="button" 
                                 class="btn-view js-edit-factory-category" 
-                                style="border: none; cursor: pointer; flex: 1; min-width: calc(33.33% - 7px); background: #ffc107; color: #000; padding: 10px 16px; border-radius: 10px; font-weight: bold; font-size: 13px;"
+                                style="border: none; cursor: pointer; flex: 1; min-width: calc(50% - 5px); background: #ffc107; color: #000; padding: 10px 16px; border-radius: 10px; font-weight: bold; font-size: 13px;"
                                 data-batch-id="${product.id || 0}"
                                 data-product="${escapeHtml(productName)}"
                                 data-category="${escapeHtml(category)}">
                             <i class="bi bi-pencil me-1"></i>تعديل الصنف
+                        </button>
+                        <button type="button" 
+                                class="btn-view js-edit-factory-price" 
+                                style="border: none; cursor: pointer; flex: 1; min-width: calc(50% - 5px); background: #17a2b8; color: #fff; padding: 10px 16px; border-radius: 10px; font-weight: bold; font-size: 13px;"
+                                data-batch-id="${product.id || 0}"
+                                data-product="${escapeHtml(productName)}"
+                                data-unit-price="${product.unit_price != null ? product.unit_price : ''}">
+                            <i class="bi bi-currency-dollar me-1"></i>تعديل السعر
                         </button>
                     </div>
                 `
@@ -4267,6 +4359,23 @@ function initEditExternalButtons() {
                 
                 // فتح النموذج
                 const modal = new bootstrap.Modal(document.getElementById('editFactoryProductCategoryModal'));
+                modal.show();
+            }
+        }
+        // معالجة زر تعديل سعر منتج المصنع (للمدير والمحاسب)
+        const editPriceBtn = e.target.closest('.js-edit-factory-price');
+        if (editPriceBtn) {
+            const batchId = editPriceBtn.getAttribute('data-batch-id');
+            const productName = editPriceBtn.getAttribute('data-product');
+            const unitPrice = editPriceBtn.getAttribute('data-unit-price') || '0';
+            const batchIdEl = document.getElementById('edit_factory_price_batch_id');
+            const productNameEl = document.getElementById('edit_factory_price_product_name');
+            const unitPriceEl = document.getElementById('edit_factory_price_unit_price');
+            if (batchId && batchIdEl && productNameEl && unitPriceEl) {
+                batchIdEl.value = batchId;
+                productNameEl.value = productName || '';
+                unitPriceEl.value = unitPrice;
+                const modal = new bootstrap.Modal(document.getElementById('editFactoryProductPriceModal'));
                 modal.show();
             }
         }
