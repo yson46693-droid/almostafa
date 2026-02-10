@@ -2536,25 +2536,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 <!-- Error -->
                 <div class="alert alert-danger d-none" id="purchaseHistoryError"></div>
 
-                <!-- Purchase History Table -->
+                <!-- Purchase History Table - سطر لكل فاتورة -->
                 <div id="purchaseHistoryTable" class="d-none">
                     <div class="table-responsive">
                         <table class="table table-hover table-bordered">
                             <thead class="table-light">
                                 <tr>
-                                    <th style="width: 50px;">
-                                        <input type="checkbox" id="selectAllItems" onchange="toggleAllItems()">
-                                    </th>
                                     <th>رقم الفاتورة</th>
-                                    <th>رقم التشغيلة</th>
-                                    <th>اسم المنتج</th>
-                                    <th>الكمية المشتراة</th>
-                                    <th>الكمية المرتجعة</th>
-                                    <th>المتاح للإرجاع</th>
-                                    <th>سعر الوحدة</th>
                                     <th>السعر الإجمالي</th>
                                     <th>تاريخ الشراء</th>
-                                    <th style="width: 100px;">إجراءات</th>
+                                    <th style="width: 140px;">إجراءات</th>
                                 </tr>
                             </thead>
                             <tbody id="purchaseHistoryTableBody">
@@ -2568,9 +2559,50 @@ document.addEventListener('DOMContentLoaded', function () {
                     <i class="bi bi-printer me-1"></i>طباعة كشف الحساب
                 </button>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-                <button type="button" class="btn btn-success" id="createReturnBtn" onclick="openCreateReturnModal()" style="display: none;">
+                <button type="button" class="btn btn-success" id="createReturnBtn" onclick="openCreateReturnModal()" style="display: inline-block;">
                     <i class="bi bi-arrow-return-left me-1"></i>إنشاء مرتجع
                 </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal عرض تفاصيل فاتورة العميل (عادي) -->
+<div class="modal fade" id="customerInvoiceDetailsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-receipt-detailed me-2"></i>
+                    تفاصيل الفاتورة - <span id="customerInvoiceDetailsNumber">-</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <span class="text-muted">التاريخ: </span><strong id="customerInvoiceDetailsDate">-</strong>
+                    <span class="ms-3 text-muted">الإجمالي: </span><strong id="customerInvoiceDetailsTotal">0.00 ج.م</strong>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-light">
+                            <tr>
+                                <th>اسم المنتج</th>
+                                <th>رقم التشغيلة</th>
+                                <th>الكمية</th>
+                                <th>سعر الوحدة</th>
+                                <th>الإجمالي</th>
+                            </tr>
+                        </thead>
+                        <tbody id="customerInvoiceDetailsTableBody">
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-3">
+                    <button type="button" class="btn btn-success btn-sm" id="customerInvoiceDetailsReturnBtn" onclick="openCreateReturnFromInvoiceDetails()">
+                        <i class="bi bi-arrow-return-left me-1"></i>إنشاء مرتجع من هذه الفاتورة
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -2943,130 +2975,130 @@ function printCustomerStatement() {
     window.open(printUrl, '_blank');
 }
 
+// تجميع سجل المشتريات حسب الفاتورة (سطر واحد لكل فاتورة)
+function groupPurchaseHistoryByInvoice(history) {
+    if (!history || !history.length) return [];
+    var byInvoice = {};
+    history.forEach(function(item) {
+        var key = item.invoice_id;
+        if (!byInvoice[key]) {
+            byInvoice[key] = {
+                invoice_id: item.invoice_id,
+                invoice_number: item.invoice_number || '-',
+                invoice_date: item.invoice_date || '-',
+                total_amount: 0,
+                items: []
+            };
+        }
+        byInvoice[key].total_amount += parseFloat(item.total_price || 0);
+        byInvoice[key].items.push(item);
+    });
+    return Object.values(byInvoice).sort(function(a, b) {
+        var d1 = (a.invoice_date || '').replace(/-/g, '');
+        var d2 = (b.invoice_date || '').replace(/-/g, '');
+        return d2.localeCompare(d1) || (b.invoice_id - a.invoice_id);
+    });
+}
+
+var currentDetailInvoiceNumber = null;
+
+function showCustomerInvoiceDetailsModal(invoiceNumber) {
+    if (!purchaseHistoryData || !purchaseHistoryData.length) return;
+    var items = purchaseHistoryData.filter(function(item) {
+        return (item.invoice_number || '') === (invoiceNumber || '');
+    });
+    if (!items.length) {
+        alert('لم يتم العثور على تفاصيل الفاتورة');
+        return;
+    }
+    var first = items[0];
+    var total = items.reduce(function(sum, it) { return sum + parseFloat(it.total_price || 0); }, 0);
+    var date = first.invoice_date || '-';
+    document.getElementById('customerInvoiceDetailsNumber').textContent = invoiceNumber;
+    document.getElementById('customerInvoiceDetailsDate').textContent = date;
+    document.getElementById('customerInvoiceDetailsTotal').textContent = total.toFixed(2) + ' ج.م';
+    var tbody = document.getElementById('customerInvoiceDetailsTableBody');
+    tbody.innerHTML = '';
+    items.forEach(function(item) {
+        var safeName = (item.product_name || '-').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        var batch = item.batch_numbers ? (Array.isArray(item.batch_numbers) ? item.batch_numbers.join(', ') : String(item.batch_numbers)) : '-';
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td>' + safeName + '</td><td>' + batch + '</td><td>' + parseFloat(item.quantity || 0).toFixed(2) + '</td><td>' + parseFloat(item.unit_price || 0).toFixed(2) + ' ج.م</td><td>' + parseFloat(item.total_price || 0).toFixed(2) + ' ج.م</td>';
+        tbody.appendChild(tr);
+    });
+    currentDetailInvoiceNumber = invoiceNumber;
+    var modalEl = document.getElementById('customerInvoiceDetailsModal');
+    if (modalEl && typeof bootstrap !== 'undefined') {
+        var m = new bootstrap.Modal(modalEl);
+        m.show();
+    }
+}
+
+function openCreateReturnFromInvoiceDetails() {
+    if (!currentDetailInvoiceNumber || !purchaseHistoryData || !purchaseHistoryData.length) return;
+    var items = purchaseHistoryData.filter(function(item) {
+        return (item.invoice_number || '') === currentDetailInvoiceNumber && item.can_return && parseFloat(item.available_to_return || 0) > 0;
+    });
+    if (!items.length) {
+        alert('لا توجد كميات متاحة للإرجاع من هذه الفاتورة');
+        return;
+    }
+    selectedItemsForReturn = items.map(function(item) {
+        return {
+            invoice_id: item.invoice_id,
+            invoice_number: item.invoice_number,
+            invoice_item_id: item.invoice_item_id,
+            product_id: item.product_id,
+            product_name: item.product_name,
+            unit_price: parseFloat(item.unit_price || 0),
+            batch_number_ids: item.batch_number_ids || [],
+            batch_numbers: item.batch_numbers || [],
+            available_to_return: parseFloat(item.available_to_return || 0)
+        };
+    });
+    var detailModal = document.getElementById('customerInvoiceDetailsModal');
+    if (detailModal && bootstrap.Modal.getInstance(detailModal)) bootstrap.Modal.getInstance(detailModal).hide();
+    openCreateReturnModal();
+}
+
 function displayPurchaseHistory(history) {
-    const tableBody = document.getElementById('purchaseHistoryTableBody');
-    
+    var tableBody = document.getElementById('purchaseHistoryTableBody');
     if (!tableBody) {
         console.error('purchaseHistoryTableBody element not found');
         return;
     }
-    
     tableBody.innerHTML = '';
-    
     if (!history || history.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="11" class="text-center text-muted py-4"><i class="bi bi-info-circle me-2"></i>لا توجد منتجات متاحة للإرجاع من مشتريات هذا العميل</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-4"><i class="bi bi-info-circle me-2"></i>لا توجد مشتريات مسجلة لهذا العميل</td></tr>';
         return;
     }
-    
-    history.forEach(function(item) {
-        if (!item.can_return) {
-            return; // Skip items that can't be returned
-        }
-        
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>
-                <input type="checkbox" class="item-checkbox" 
-                       data-invoice-id="${item.invoice_id}"
-                       data-invoice-item-id="${item.invoice_item_id}"
-                       data-product-id="${item.product_id}"
-                       data-product-name="${item.product_name}"
-                       data-unit-price="${item.unit_price}"
-                       data-batch-number-ids='${JSON.stringify(item.batch_number_ids || [])}'
-                       data-batch-numbers='${JSON.stringify(item.batch_numbers || [])}'
-                       onchange="updateSelectedItems()">
-            </td>
-            <td>${item.invoice_number || '-'}</td>
-            <td>${Array.isArray(item.batch_numbers) ? item.batch_numbers.join(', ') : (item.batch_numbers || '-')}</td>
-            <td>${item.product_name || '-'}</td>
-            <td>${parseFloat(item.quantity || 0).toFixed(2)}</td>
-            <td>${parseFloat(item.returned_quantity || 0).toFixed(2)}</td>
-            <td><strong>${parseFloat(item.available_to_return || 0).toFixed(2)}</strong></td>
-            <td>${parseFloat(item.unit_price || 0).toFixed(2)} ج.م</td>
-            <td>${parseFloat(item.total_price || 0).toFixed(2)} ج.م</td>
-            <td>${item.invoice_date || '-'}</td>
-            <td>
-                <button class="btn btn-sm btn-primary" 
-                        onclick="selectItemForReturn(${item.invoice_item_id}, ${item.product_id})"
-                        title="إرجاع جزئي">
-                    <i class="bi bi-arrow-return-left"></i>
-                </button>
-            </td>
-        `;
-        tableBody.appendChild(row);
-    });
+    var invoices = groupPurchaseHistoryByInvoice(history);
+    try {
+        invoices.forEach(function(inv) {
+            var safeNum = (inv.invoice_number || '-').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            var row = document.createElement('tr');
+            row.innerHTML = '<td>' + safeNum + '</td><td>' + parseFloat(inv.total_amount || 0).toFixed(2) + ' ج.م</td><td>' + (inv.invoice_date || '-') + '</td><td><button type="button" class="btn btn-sm btn-outline-primary" onclick="showCustomerInvoiceDetailsModal(\'' + String(inv.invoice_number || '').replace(/'/g, "\\'") + '\')" title="عرض الفاتورة"><i class="bi bi-eye me-1"></i>عرض الفاتورة</button></td>';
+            tableBody.appendChild(row);
+        });
+    } catch (error) {
+        console.error('Error displaying purchase history:', error);
+        tableBody.innerHTML = '<tr><td colspan="4" class="text-center text-danger py-4"><i class="bi bi-exclamation-triangle-fill me-2"></i>حدث خطأ أثناء عرض البيانات</td></tr>';
+    }
 }
 
-function toggleAllItems() {
-    const selectAll = document.getElementById('selectAllItems');
-    const checkboxes = document.querySelectorAll('.item-checkbox');
-    
-    checkboxes.forEach(function(checkbox) {
-        checkbox.checked = selectAll.checked;
-    });
-    
-    updateSelectedItems();
-}
-
+function toggleAllItems() {}
 function updateSelectedItems() {
-    const checkboxes = document.querySelectorAll('.item-checkbox:checked');
     selectedItemsForReturn = [];
-    
-    checkboxes.forEach(function(checkbox) {
-        const row = checkbox.closest('tr');
-        const available = parseFloat(row.querySelector('td:nth-child(7)').textContent.trim());
-        const invoiceNumber = row.querySelector('td:nth-child(2)').textContent.trim();
-        
-        // Get invoice_item_id to find latest data from purchaseHistoryData
-        const invoiceItemId = parseInt(checkbox.dataset.invoiceItemId);
-        
-        // Try to get latest available quantity from purchaseHistoryData
-        let latestAvailable = available;
-        if (purchaseHistoryData && purchaseHistoryData.length > 0) {
-            const historyItem = purchaseHistoryData.find(function(h) {
-                return h.invoice_item_id === invoiceItemId;
-            });
-            if (historyItem) {
-                latestAvailable = parseFloat(historyItem.available_to_return) || 0;
-            }
-        }
-        
-        if (latestAvailable > 0) {
-            selectedItemsForReturn.push({
-                invoice_id: parseInt(checkbox.dataset.invoiceId),
-                invoice_number: invoiceNumber,
-                invoice_item_id: invoiceItemId,
-                product_id: parseInt(checkbox.dataset.productId),
-                product_name: checkbox.dataset.productName,
-                unit_price: parseFloat(checkbox.dataset.unitPrice),
-                batch_number_ids: JSON.parse(checkbox.dataset.batchNumberIds || '[]'),
-                batch_numbers: JSON.parse(checkbox.dataset.batchNumbers || '[]'),
-                available_to_return: latestAvailable
-            });
-        }
-    });
-    
-    const createBtn = document.getElementById('createReturnBtn');
-    if (selectedItemsForReturn.length > 0) {
-        createBtn.style.display = 'block';
-    } else {
-        createBtn.style.display = 'none';
-    }
+    var createBtn = document.getElementById('createReturnBtn');
+    if (createBtn) createBtn.style.display = 'inline-block';
 }
-
 function selectItemForReturn(invoiceItemId, productId) {
-    // Select this specific item
-    const checkbox = document.querySelector(`.item-checkbox[data-invoice-item-id="${invoiceItemId}"][data-product-id="${productId}"]`);
-    if (checkbox) {
-        checkbox.checked = true;
-        updateSelectedItems();
-        openCreateReturnModal();
-    }
+    openCreateReturnModal();
 }
 
 function openCreateReturnModal() {
     if (selectedItemsForReturn.length === 0) {
-        alert('يرجى تحديد منتج واحد على الأقل للإرجاع');
+        alert('يرجى النقر على "عرض الفاتورة" للفاتورة المطلوبة ثم "إنشاء مرتجع من هذه الفاتورة" من داخل تفاصيل الفاتورة.');
         return;
     }
     

@@ -2532,25 +2532,16 @@ window.LOCAL_CUSTOMERS_CONFIG = { currentRole: <?php echo json_encode($currentRo
                 <!-- Error -->
                 <div class="alert alert-danger d-none" id="localPurchaseHistoryError"></div>
 
-                <!-- Purchase History Table -->
+                <!-- Purchase History Table - سطر لكل فاتورة -->
                 <div id="localPurchaseHistoryTable" class="d-none">
                     <div class="table-responsive">
                         <table class="table table-hover table-bordered">
                             <thead class="table-light">
                                 <tr>
-                                    <th style="width: 50px;">
-                                        <input type="checkbox" id="localSelectAllItems" onchange="localToggleAllItems()">
-                                    </th>
                                     <th>رقم الفاتورة</th>
-                                    <th>رقم التشغيلة</th>
-                                    <th>اسم المنتج</th>
-                                    <th>الكمية المشتراة</th>
-                                    <th>الكمية المرتجعة</th>
-                                    <th>المتاح للإرجاع</th>
-                                    <th>سعر الوحدة</th>
                                     <th>السعر الإجمالي</th>
                                     <th>تاريخ الشراء</th>
-                                    <th style="width: 100px;">إجراءات</th>
+                                    <th style="width: 140px;">إجراءات</th>
                                 </tr>
                             </thead>
                             <tbody id="localPurchaseHistoryTableBody">
@@ -2563,7 +2554,7 @@ window.LOCAL_CUSTOMERS_CONFIG = { currentRole: <?php echo json_encode($currentRo
                 <button type="button" class="btn btn-primary" id="printLocalCustomerStatementBtn" onclick="printLocalCustomerStatement()" style="display: none;">
                     <i class="bi bi-printer me-1"></i>طباعة كشف الحساب
                 </button>
-                <button type="button" class="btn btn-success" id="localCustomerReturnBtn" onclick="openLocalCustomerReturnModal()" style="display: none;">
+                <button type="button" class="btn btn-success" id="localCustomerReturnBtn" onclick="openLocalCustomerReturnModal()" style="display: inline-block;">
                     <i class="bi bi-arrow-return-left me-1"></i>إرجاع منتجات
                 </button>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
@@ -2635,25 +2626,16 @@ window.LOCAL_CUSTOMERS_CONFIG = { currentRole: <?php echo json_encode($currentRo
         <!-- Error -->
         <div class="alert alert-danger d-none" id="localPurchaseHistoryCardError"></div>
 
-        <!-- Purchase History Table -->
+        <!-- Purchase History Table - سطر لكل فاتورة -->
         <div id="localPurchaseHistoryCardTable" class="d-none">
             <div class="table-responsive">
                 <table class="table table-hover table-bordered">
                     <thead class="table-light">
                         <tr>
-                            <th style="width: 50px;">
-                                <input type="checkbox" id="localSelectAllItemsCard" onchange="localToggleAllItems()">
-                            </th>
                             <th>رقم الفاتورة</th>
-                            <th>رقم التشغيلة</th>
-                            <th>اسم المنتج</th>
-                            <th>الكمية المشتراة</th>
-                            <th>الكمية المرتجعة</th>
-                            <th>المتاح للإرجاع</th>
-                            <th>سعر الوحدة</th>
                             <th>السعر الإجمالي</th>
                             <th>تاريخ الشراء</th>
-                            <th style="width: 100px;">إجراءات</th>
+                            <th style="width: 140px;">إجراءات</th>
                         </tr>
                     </thead>
                     <tbody id="localPurchaseHistoryCardTableBody">
@@ -2666,10 +2648,51 @@ window.LOCAL_CUSTOMERS_CONFIG = { currentRole: <?php echo json_encode($currentRo
             <button type="button" class="btn btn-primary" id="printLocalCustomerStatementCardBtn" onclick="printLocalCustomerStatement()" style="display: none;">
                 <i class="bi bi-printer me-1"></i>طباعة كشف الحساب
             </button>
-            <button type="button" class="btn btn-success" id="localCustomerReturnCardBtn" onclick="openLocalCustomerReturnModal()" style="display: none;">
+            <button type="button" class="btn btn-success" id="localCustomerReturnCardBtn" onclick="openLocalCustomerReturnModal()" style="display: inline-block;">
                 <i class="bi bi-arrow-return-left me-1"></i>إرجاع منتجات
             </button>
             <button type="button" class="btn btn-secondary" onclick="closeLocalCustomerPurchaseHistoryCard()">إغلاق</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal عرض تفاصيل فاتورة العميل المحلي -->
+<div class="modal fade" id="localInvoiceDetailsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-receipt-detailed me-2"></i>
+                    تفاصيل الفاتورة - <span id="localInvoiceDetailsNumber">-</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <span class="text-muted">التاريخ: </span><strong id="localInvoiceDetailsDate">-</strong>
+                    <span class="ms-3 text-muted">الإجمالي: </span><strong id="localInvoiceDetailsTotal">0.00 ج.م</strong>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-light">
+                            <tr>
+                                <th>اسم المنتج</th>
+                                <th>رقم التشغيلة</th>
+                                <th>الكمية</th>
+                                <th>سعر الوحدة</th>
+                                <th>الإجمالي</th>
+                            </tr>
+                        </thead>
+                        <tbody id="localInvoiceDetailsTableBody">
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-3">
+                    <button type="button" class="btn btn-success btn-sm" id="localInvoiceDetailsReturnBtn" onclick="localOpenReturnForInvoiceFromDetails()">
+                        <i class="bi bi-arrow-return-left me-1"></i>إرجاع من هذه الفاتورة
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -5226,7 +5249,82 @@ function loadLocalCustomerPurchaseHistory() {
 // تعيين الدالة على window لضمان إمكانية استدعائها من أي مكان
 window.loadLocalCustomerPurchaseHistory = loadLocalCustomerPurchaseHistory;
 
-// دالة عرض سجل المشتريات
+// تجميع سجل المشتريات حسب الفاتورة (سطر واحد لكل فاتورة)
+function groupLocalPurchaseHistoryByInvoice(history) {
+    if (!history || !history.length) return [];
+    const byInvoice = {};
+    history.forEach(function(item) {
+        const key = item.invoice_id;
+        if (!byInvoice[key]) {
+            byInvoice[key] = {
+                invoice_id: item.invoice_id,
+                invoice_number: item.invoice_number || '-',
+                invoice_date: item.invoice_date || '-',
+                total_amount: 0,
+                items: []
+            };
+        }
+        byInvoice[key].total_amount += parseFloat(item.total_price || 0);
+        byInvoice[key].items.push(item);
+    });
+    return Object.values(byInvoice).sort(function(a, b) {
+        const d1 = (a.invoice_date || '').replace(/-/g, '');
+        const d2 = (b.invoice_date || '').replace(/-/g, '');
+        return d2.localeCompare(d1) || (b.invoice_id - a.invoice_id);
+    });
+}
+
+// عرض تفاصيل فاتورة العميل المحلي في modal
+var currentLocalDetailInvoiceNumber = null;
+function showLocalInvoiceDetailsModal(invoiceNumber) {
+    if (!localPurchaseHistoryData || !localPurchaseHistoryData.length) return;
+    const items = localPurchaseHistoryData.filter(function(item) {
+        return (item.invoice_number || '') === (invoiceNumber || '');
+    });
+    if (!items.length) {
+        alert('لم يتم العثور على تفاصيل الفاتورة');
+        return;
+    }
+    const first = items[0];
+    const total = items.reduce(function(sum, it) { return sum + parseFloat(it.total_price || 0); }, 0);
+    const date = first.invoice_date || '-';
+    document.getElementById('localInvoiceDetailsNumber').textContent = invoiceNumber;
+    document.getElementById('localInvoiceDetailsDate').textContent = date;
+    document.getElementById('localInvoiceDetailsTotal').textContent = total.toFixed(2) + ' ج.م';
+    const tbody = document.getElementById('localInvoiceDetailsTableBody');
+    tbody.innerHTML = '';
+    items.forEach(function(item) {
+        const safeName = (item.product_name || '-').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const batch = item.batch_numbers ? (Array.isArray(item.batch_numbers) ? item.batch_numbers.join(', ') : String(item.batch_numbers)) : '-';
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td>' + safeName + '</td><td>' + batch + '</td><td>' + parseFloat(item.quantity || 0).toFixed(2) + '</td><td>' + parseFloat(item.unit_price || 0).toFixed(2) + ' ج.م</td><td>' + parseFloat(item.total_price || 0).toFixed(2) + ' ج.م</td>';
+        tbody.appendChild(tr);
+    });
+    currentLocalDetailInvoiceNumber = invoiceNumber;
+    var returnBtn = document.getElementById('localInvoiceDetailsReturnBtn');
+    if (returnBtn) returnBtn.style.display = 'inline-block';
+    var modalEl = document.getElementById('localInvoiceDetailsModal');
+    if (modalEl && typeof bootstrap !== 'undefined') {
+        var m = new bootstrap.Modal(modalEl);
+        m.show();
+    }
+}
+window.showLocalInvoiceDetailsModal = showLocalInvoiceDetailsModal;
+
+function localOpenReturnForInvoiceFromDetails() {
+    if (currentLocalDetailInvoiceNumber) {
+        var detailModal = document.getElementById('localInvoiceDetailsModal');
+        if (detailModal && bootstrap.Modal.getInstance(detailModal)) bootstrap.Modal.getInstance(detailModal).hide();
+        var returnInvoiceInput = document.getElementById('localReturnInvoiceNumber');
+        if (returnInvoiceInput) {
+            returnInvoiceInput.value = currentLocalDetailInvoiceNumber;
+            loadLocalReturnInvoiceByNumber();
+        }
+        openLocalCustomerReturnModal();
+    }
+}
+
+// دالة عرض سجل المشتريات (سطر واحد لكل فاتورة)
 function displayLocalPurchaseHistory(history) {
     const isMobileDevice = typeof isMobile === 'function' ? isMobile() : window.innerWidth <= 768;
     const tableBody = isMobileDevice
@@ -5248,146 +5346,37 @@ function displayLocalPurchaseHistory(history) {
     tableBody.innerHTML = '';
     
     if (!history || history.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="11" class="text-center text-muted py-4"><i class="bi bi-info-circle me-2"></i>لا توجد مشتريات مسجلة لهذا العميل</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-4"><i class="bi bi-info-circle me-2"></i>لا توجد مشتريات مسجلة لهذا العميل</td></tr>';
         console.log('No purchase history found for customer ID:', currentLocalCustomerId);
         return;
     }
     
-    console.log('Displaying', history.length, 'purchase history items');
+    const invoices = groupLocalPurchaseHistoryByInvoice(history);
+    console.log('Displaying', invoices.length, 'invoices');
     
     try {
-        history.forEach(function(item, index) {
-            try {
-                const row = document.createElement('tr');
-                
-                // التحقق من البيانات المطلوبة
-                if (!item.invoice_id || !item.invoice_item_id) {
-                    console.warn('Invalid item data at index', index, ':', item);
-                    return;
-                }
-                
-                // تنظيف البيانات لتجنب مشاكل XSS
-                const safeProductName = (item.product_name || '-').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                const safeInvoiceNumber = (item.invoice_number || '-').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                const safeBatchNumbers = item.batch_numbers 
-                    ? (Array.isArray(item.batch_numbers) ? item.batch_numbers.join(', ') : String(item.batch_numbers))
-                    : '-';
-                
-                row.innerHTML = `
-                    <td>
-                        ${item.can_return ? `<input type="checkbox" class="local-item-checkbox" 
-                               data-invoice-id="${item.invoice_id}"
-                               data-invoice-item-id="${item.invoice_item_id}"
-                               data-product-id="${item.product_id || ''}"
-                               data-product-name="${safeProductName.replace(/"/g, '&quot;')}"
-                               data-unit-price="${parseFloat(item.unit_price || 0)}"
-                               data-batch-number-ids='${JSON.stringify(item.batch_number_ids || [])}'
-                               data-batch-numbers='${JSON.stringify(item.batch_numbers || [])}'
-                               onchange="localUpdateSelectedItems()">` : '-'}
-                    </td>
-                    <td>${safeInvoiceNumber}</td>
-                    <td>${safeBatchNumbers}</td>
-                    <td>${safeProductName}</td>
-                    <td>${parseFloat(item.quantity || 0).toFixed(2)}</td>
-                    <td>${parseFloat(item.returned_quantity || 0).toFixed(2)}</td>
-                    <td><strong>${parseFloat(item.available_to_return || 0).toFixed(2)}</strong></td>
-                    <td>${parseFloat(item.unit_price || 0).toFixed(2)} ج.م</td>
-                    <td>${parseFloat(item.total_price || 0).toFixed(2)} ج.م</td>
-                    <td>${item.invoice_date || '-'}</td>
-                    <td>
-                        ${item.can_return ? `<button class="btn btn-sm btn-primary" 
-                                onclick="localSelectItemForReturn(${item.invoice_item_id}, ${item.product_id || 0})"
-                                title="إرجاع جزئي">
-                            <i class="bi bi-arrow-return-left"></i>
-                        </button>` : '<span class="text-muted small">-</span>'}
-                    </td>
-                `;
-                tableBody.appendChild(row);
-            } catch (itemError) {
-                console.error('Error displaying item at index', index, ':', itemError, item);
-                // إضافة صف خطأ للعنصر الفاشل
-                const errorRow = document.createElement('tr');
-                errorRow.innerHTML = `<td colspan="11" class="text-center text-danger py-2"><small>خطأ في عرض العنصر #${index + 1}</small></td>`;
-                tableBody.appendChild(errorRow);
-            }
+        invoices.forEach(function(inv) {
+            const safeNum = (inv.invoice_number || '-').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const row = document.createElement('tr');
+            row.innerHTML = '<td>' + safeNum + '</td><td>' + parseFloat(inv.total_amount || 0).toFixed(2) + ' ج.م</td><td>' + (inv.invoice_date || '-') + '</td><td><button type="button" class="btn btn-sm btn-outline-primary" onclick="showLocalInvoiceDetailsModal(\'' + String(inv.invoice_number || '').replace(/'/g, "\\'") + '\')" title="عرض الفاتورة"><i class="bi bi-eye me-1"></i>عرض الفاتورة</button></td>';
+            tableBody.appendChild(row);
         });
-        
-        console.log('Successfully displayed', history.length, 'items');
     } catch (error) {
         console.error('Error displaying purchase history:', error);
-        tableBody.innerHTML = '<tr><td colspan="11" class="text-center text-danger py-4"><i class="bi bi-exclamation-triangle-fill me-2"></i>حدث خطأ أثناء عرض البيانات: ' + error.message + '</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="4" class="text-center text-danger py-4"><i class="bi bi-exclamation-triangle-fill me-2"></i>حدث خطأ أثناء عرض البيانات</td></tr>';
     }
 }
 
-// دوال مساعدة
-function localToggleAllItems() {
-    const isMobileDevice = typeof isMobile === 'function' ? isMobile() : window.innerWidth <= 768;
-    const selectAll = isMobileDevice
-        ? document.getElementById('localSelectAllItemsCard')
-        : document.getElementById('localSelectAllItems');
-    const checkboxes = document.querySelectorAll('.local-item-checkbox');
-    
-    if (selectAll) {
-        checkboxes.forEach(function(checkbox) {
-            checkbox.checked = selectAll.checked;
-        });
-    }
-    
-    localUpdateSelectedItems();
-}
-
+// دوال مساعدة (محفوظة للتوافق - الإرجاع يتم من خلال modal إدخال رقم الفاتورة أو من تفاصيل الفاتورة)
+function localToggleAllItems() {}
 function localUpdateSelectedItems() {
-    const checkboxes = document.querySelectorAll('.local-item-checkbox:checked');
     localSelectedItemsForReturn = [];
-    
-    checkboxes.forEach(function(checkbox) {
-        const row = checkbox.closest('tr');
-        const available = parseFloat(row.querySelector('td:nth-child(7)').textContent.trim());
-        const invoiceNumber = row.querySelector('td:nth-child(2)').textContent.trim();
-        
-        const invoiceItemId = parseInt(checkbox.dataset.invoiceItemId);
-        let latestAvailable = available;
-        
-        if (localPurchaseHistoryData && localPurchaseHistoryData.length > 0) {
-            const historyItem = localPurchaseHistoryData.find(function(h) {
-                return h.invoice_item_id === invoiceItemId;
-            });
-            if (historyItem) {
-                latestAvailable = parseFloat(historyItem.available_to_return) || 0;
-            }
-        }
-        
-        if (latestAvailable > 0) {
-            localSelectedItemsForReturn.push({
-                invoice_id: parseInt(checkbox.dataset.invoiceId),
-                invoice_number: invoiceNumber,
-                invoice_item_id: invoiceItemId,
-                product_id: parseInt(checkbox.dataset.productId),
-                product_name: checkbox.dataset.productName,
-                unit_price: parseFloat(checkbox.dataset.unitPrice),
-                batch_number_ids: JSON.parse(checkbox.dataset.batchNumberIds || '[]'),
-                batch_numbers: JSON.parse(checkbox.dataset.batchNumbers || '[]'),
-                available_to_return: latestAvailable
-            });
-        }
-    });
-    
     const isMobileDevice = typeof isMobile === 'function' ? isMobile() : window.innerWidth <= 768;
-    const returnBtn = isMobileDevice
-        ? document.getElementById('localCustomerReturnCardBtn')
-        : document.getElementById('localCustomerReturnBtn');
-    if (returnBtn) {
-        returnBtn.style.display = localSelectedItemsForReturn.length > 0 ? 'inline-block' : 'none';
-    }
+    const returnBtn = isMobileDevice ? document.getElementById('localCustomerReturnCardBtn') : document.getElementById('localCustomerReturnBtn');
+    if (returnBtn) returnBtn.style.display = 'inline-block';
 }
-
 function localSelectItemForReturn(invoiceItemId, productId) {
-    const checkbox = document.querySelector(`.local-item-checkbox[data-invoice-item-id="${invoiceItemId}"][data-product-id="${productId}"]`);
-    if (checkbox) {
-        checkbox.checked = true;
-        localUpdateSelectedItems();
-        openLocalCustomerReturnModal();
-    }
+    openLocalCustomerReturnModal();
 }
 
 // إعادة تعيين المتغيرات عند إغلاق الـ modal

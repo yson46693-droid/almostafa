@@ -122,9 +122,57 @@ function ensureFinancialTransactionsTable() {
     }
 }
 
+// التأكد من وجود جدول عهدة الأموال وسجلات الاسترجاع
+function ensureCompanyCustodyTables() {
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+    try {
+        $db = db();
+        if (empty($db->queryOne("SHOW TABLES LIKE 'company_custody'"))) {
+            $db->execute("
+                CREATE TABLE IF NOT EXISTS `company_custody` (
+                  `id` int(11) NOT NULL AUTO_INCREMENT,
+                  `person_name` varchar(255) NOT NULL COMMENT 'اسم صاحب العهدة',
+                  `amount` decimal(15,2) NOT NULL COMMENT 'المبلغ الأصلي',
+                  `source` enum('from_safe','from_management') NOT NULL COMMENT 'من الخزنة أو من الإدارة',
+                  `remaining_amount` decimal(15,2) NOT NULL COMMENT 'المبلغ المتبقي',
+                  `expense_transaction_id` int(11) DEFAULT NULL COMMENT 'معرف مصروف الخزنة عند العهدة من الخزنة',
+                  `notes` text DEFAULT NULL,
+                  `created_by` int(11) NOT NULL,
+                  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  `updated_at` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+                  PRIMARY KEY (`id`),
+                  KEY `source` (`source`),
+                  KEY `created_by` (`created_by`),
+                  KEY `expense_transaction_id` (`expense_transaction_id`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='عهدة الأموال'
+            ");
+        }
+        if (empty($db->queryOne("SHOW TABLES LIKE 'custody_retrievals'"))) {
+            $db->execute("
+                CREATE TABLE IF NOT EXISTS `custody_retrievals` (
+                  `id` int(11) NOT NULL AUTO_INCREMENT,
+                  `custody_id` int(11) NOT NULL,
+                  `amount` decimal(15,2) NOT NULL COMMENT 'المبلغ المسترجع',
+                  `income_transaction_id` int(11) DEFAULT NULL COMMENT 'إيراد في الخزنة عند استرجاع عهدة من الخزنة',
+                  `created_by` int(11) NOT NULL,
+                  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  PRIMARY KEY (`id`),
+                  KEY `custody_id` (`custody_id`),
+                  KEY `created_by` (`created_by`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='استرجاع عهدة'
+            ");
+        }
+    } catch (Throwable $e) {
+        error_log('Error creating company_custody tables: ' . $e->getMessage());
+    }
+}
+
 // التأكد من وجود الجداول
 ensureAccountantTransactionsTable();
 ensureFinancialTransactionsTable();
+ensureCompanyCustodyTables();
 
 // عند تحميل الصفحة من لوحة المحاسب نستخدم accountant_cash في روابط الترقيم والـ AJAX
 $cashPageParam = (strpos($_SERVER['SCRIPT_NAME'] ?? '', 'accountant.php') !== false) ? 'accountant_cash' : 'company_cash';
@@ -799,6 +847,146 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         exit;
     }
+
+    // عهدة الأموال - إضافة
+    if ($action === 'add_custody') {
+        $personName = trim($_POST['custody_person_name'] ?? '');
+        $amount = isset($_POST['custody_amount']) ? (float) str_replace(',', '', $_POST['custody_amount']) : 0;
+        $source = isset($_POST['custody_source']) && $_POST['custody_source'] === 'from_management' ? 'from_management' : 'from_safe';
+        $notes = trim($_POST['custody_notes'] ?? '');
+
+        if ($personName === '') {
+            $_SESSION['financial_error'] = 'يرجى إدخال اسم صاحب العهدة.';
+        } elseif ($amount <= 0) {
+            $_SESSION['financial_error'] = 'يرجى إدخال مبلغ صحيح أكبر من الصفر.';
+        } else {
+            try {
+                $expenseTransactionId = null;
+                if ($source === 'from_safe') {
+                    $treasurySummary = $db->queryOne("
+                        SELECT
+                        (SELECT COALESCE(SUM(CASE WHEN type = 'income' AND status = 'approved' THEN amount ELSE 0 END), 0) FROM financial_transactions) +
+                        (SELECT COALESCE(SUM(CASE WHEN transaction_type IN ('collection_from_sales_rep', 'income') AND status = 'approved' THEN amount ELSE 0 END), 0) FROM accountant_transactions) AS approved_income,
+                        (SELECT COALESCE(SUM(CASE WHEN type = 'expense' AND status = 'approved' THEN amount ELSE 0 END), 0) FROM financial_transactions) +
+                        (SELECT COALESCE(SUM(CASE WHEN transaction_type = 'expense' AND status = 'approved' AND (description NOT LIKE '%سلفة%' AND description NOT LIKE '%سلف%') AND description NOT LIKE '%تسوية رصيد دائن ل%' THEN amount ELSE 0 END), 0) FROM accountant_transactions) AS approved_expense,
+                        (SELECT COALESCE(SUM(CASE WHEN type = 'payment' AND status = 'approved' THEN amount ELSE 0 END), 0) FROM financial_transactions) +
+                        (SELECT COALESCE(SUM(CASE WHEN transaction_type = 'payment' AND status = 'approved' AND (description NOT LIKE '%تسوية راتب%' OR description IS NULL) THEN amount ELSE 0 END), 0) FROM accountant_transactions) AS approved_payment
+                    ");
+                    $totalSalaries = 0.0;
+                    if (!empty($db->queryOne("SHOW TABLES LIKE 'salaries'"))) {
+                        $sr = $db->queryOne("SELECT COALESCE(SUM(total_amount), 0) as t FROM salaries WHERE status IN ('approved', 'paid')");
+                        $totalSalaries = (float)($sr['t'] ?? 0);
+                    }
+                    $adjResult = $db->queryOne("SELECT COALESCE(SUM(amount), 0) as t FROM accountant_transactions WHERE status = 'approved' AND ((transaction_type = 'payment' AND description LIKE '%تسوية راتب%') OR (transaction_type = 'expense' AND (description LIKE '%سلفة%' OR description LIKE '%سلف%')))");
+                    $settResult = $db->queryOne("SELECT COALESCE(SUM(amount), 0) as t FROM accountant_transactions WHERE transaction_type = 'expense' AND status = 'approved' AND (description LIKE '%تسوية رصيد دائن لعميل محلي%' OR description LIKE '%تسوية رصيد دائن لعميل مندوب%')");
+                    $mgmtResult = $db->queryOne("SELECT COALESCE(SUM(amount), 0) as t FROM accountant_transactions WHERE transaction_type = 'income' AND status = 'approved' AND description LIKE '%تحصيل للإدارة%'");
+                    $totalAdj = (float)($adjResult['t'] ?? 0);
+                    $totalSett = (float)($settResult['t'] ?? 0);
+                    $totalMgmt = (float)($mgmtResult['t'] ?? 0);
+                    $netBalance = ($treasurySummary['approved_income'] ?? 0) - ($treasurySummary['approved_expense'] ?? 0) - ($treasurySummary['approved_payment'] ?? 0) - $totalSalaries - $totalAdj - $totalSett - $totalMgmt;
+                    if ($amount > $netBalance) {
+                        $_SESSION['financial_error'] = 'رصيد الخزنة غير كافٍ. الصافي: ' . formatCurrency($netBalance);
+                        $redirectTarget = $_SERVER['REQUEST_URI'] ?? '';
+                        if (!headers_sent()) header('Location: ' . $redirectTarget); else echo '<script>window.location.href = ' . json_encode($redirectTarget) . ';</script>';
+                        exit;
+                    }
+                    $ref = generateUniqueReferenceNumber($db);
+                    $desc = 'عهدة أموال (من الخزنة) - ' . $personName;
+                    $db->execute(
+                        "INSERT INTO accountant_transactions (transaction_type, amount, sales_rep_id, description, reference_number, status, approved_by, created_by, approved_at) VALUES ('expense', ?, NULL, ?, ?, 'approved', ?, ?, NOW())",
+                        [$amount, $desc, $ref, $currentUser['id'], $currentUser['id']]
+                    );
+                    $expenseTransactionId = $db->getLastInsertId();
+                }
+                $db->execute(
+                    "INSERT INTO company_custody (person_name, amount, source, remaining_amount, expense_transaction_id, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    [$personName, $amount, $source, $amount, $expenseTransactionId, $notes ?: null, $currentUser['id']]
+                );
+                logAudit($currentUser['id'], 'custody_add', 'company_custody', $db->getLastInsertId(), null, ['person_name' => $personName, 'amount' => $amount, 'source' => $source]);
+                $_SESSION['financial_success'] = 'تم تسجيل العهدة لـ ' . htmlspecialchars($personName) . ' بنجاح.';
+            } catch (Throwable $e) {
+                error_log('Add custody failed: ' . $e->getMessage());
+                $_SESSION['financial_error'] = 'حدث خطأ: ' . $e->getMessage();
+            }
+        }
+        $redirectTarget = $_SERVER['REQUEST_URI'] ?? '';
+        if (!headers_sent()) header('Location: ' . $redirectTarget); else echo '<script>window.location.href = ' . json_encode($redirectTarget) . ';</script>';
+        exit;
+    }
+
+    // عهدة الأموال - تعديل المبلغ (للمدير والمحاسب فقط، ويُسمح إذا لم يكن هناك استرجاع)
+    if ($action === 'edit_custody') {
+        $custodyId = isset($_POST['custody_id']) ? (int) $_POST['custody_id'] : 0;
+        $newAmount = isset($_POST['custody_edit_amount']) ? (float) str_replace(',', '', $_POST['custody_edit_amount']) : 0;
+        $userRole = strtolower($currentUser['role'] ?? '');
+        if (!in_array($userRole, ['manager', 'accountant', 'developer'], true)) {
+            $_SESSION['financial_error'] = 'غير مصرح بتعديل العهدة.';
+        } elseif ($custodyId <= 0 || $newAmount <= 0) {
+            $_SESSION['financial_error'] = 'بيانات غير صحيحة.';
+        } else {
+            $row = $db->queryOne("SELECT id, person_name, amount, remaining_amount, source, expense_transaction_id FROM company_custody WHERE id = ?", [$custodyId]);
+            if (empty($row)) {
+                $_SESSION['financial_error'] = 'سجل العهدة غير موجود.';
+            } elseif ((float)$row['remaining_amount'] !== (float)$row['amount']) {
+                $_SESSION['financial_error'] = 'لا يمكن تعديل المبلغ بعد وجود استرجاع. المتبقي: ' . formatCurrency($row['remaining_amount']);
+            } else {
+                try {
+                    $oldAmount = (float) $row['amount'];
+                    if ($row['source'] === 'from_safe' && $row['expense_transaction_id']) {
+                        $db->execute("UPDATE accountant_transactions SET amount = ?, description = ? WHERE id = ?", [$newAmount, 'عهدة أموال (من الخزنة) - ' . $row['person_name'], $row['expense_transaction_id']]);
+                    }
+                    $db->execute("UPDATE company_custody SET amount = ?, remaining_amount = ?, updated_at = NOW() WHERE id = ?", [$newAmount, $newAmount, $custodyId]);
+                    logAudit($currentUser['id'], 'custody_edit', 'company_custody', $custodyId, null, ['old_amount' => $oldAmount, 'new_amount' => $newAmount]);
+                    $_SESSION['financial_success'] = 'تم تعديل مبلغ العهدة بنجاح.';
+                } catch (Throwable $e) {
+                    $_SESSION['financial_error'] = 'حدث خطأ: ' . $e->getMessage();
+                }
+            }
+        }
+        $redirectTarget = $_SERVER['REQUEST_URI'] ?? '';
+        if (!headers_sent()) header('Location: ' . $redirectTarget); else echo '<script>window.location.href = ' . json_encode($redirectTarget) . ';</script>';
+        exit;
+    }
+
+    // عهدة الأموال - استرجاع (كامل أو جزء)
+    if ($action === 'retrieve_custody') {
+        $custodyId = isset($_POST['custody_id']) ? (int) $_POST['custody_id'] : 0;
+        $retrieveAmount = isset($_POST['retrieve_amount']) ? (float) str_replace(',', '', $_POST['retrieve_amount']) : 0;
+        if ($custodyId <= 0 || $retrieveAmount <= 0) {
+            $_SESSION['financial_error'] = 'بيانات غير صحيحة.';
+        } else {
+            $row = $db->queryOne("SELECT id, person_name, amount, remaining_amount, source, expense_transaction_id FROM company_custody WHERE id = ?", [$custodyId]);
+            if (empty($row)) {
+                $_SESSION['financial_error'] = 'سجل العهدة غير موجود.';
+            } elseif ($retrieveAmount > (float) $row['remaining_amount']) {
+                $_SESSION['financial_error'] = 'مبلغ الاسترجاع أكبر من المتبقي (' . formatCurrency($row['remaining_amount']) . ').';
+            } else {
+                try {
+                    $incomeTransactionId = null;
+                    if ($row['source'] === 'from_safe') {
+                        $ref = generateUniqueReferenceNumber($db);
+                        $desc = 'استرجاع عهدة أموال (من الخزنة) - ' . $row['person_name'];
+                        $db->execute(
+                            "INSERT INTO accountant_transactions (transaction_type, amount, sales_rep_id, description, reference_number, status, approved_by, created_by, approved_at) VALUES ('income', ?, NULL, ?, ?, 'approved', ?, ?, NOW())",
+                            [$retrieveAmount, $desc, $ref, $currentUser['id'], $currentUser['id']]
+                        );
+                        $incomeTransactionId = $db->getLastInsertId();
+                    }
+                    $newRemaining = (float) $row['remaining_amount'] - $retrieveAmount;
+                    $db->execute("INSERT INTO custody_retrievals (custody_id, amount, income_transaction_id, created_by) VALUES (?, ?, ?, ?)", [$custodyId, $retrieveAmount, $incomeTransactionId, $currentUser['id']]);
+                    $db->execute("UPDATE company_custody SET remaining_amount = ? WHERE id = ?", [$newRemaining, $custodyId]);
+                    logAudit($currentUser['id'], 'custody_retrieve', 'company_custody', $custodyId, null, ['amount' => $retrieveAmount]);
+                    $_SESSION['financial_success'] = 'تم استرجاع ' . formatCurrency($retrieveAmount) . ' من عهدة ' . htmlspecialchars($row['person_name']) . ' بنجاح.';
+                } catch (Throwable $e) {
+                    error_log('Retrieve custody failed: ' . $e->getMessage());
+                    $_SESSION['financial_error'] = 'حدث خطأ: ' . $e->getMessage();
+                }
+            }
+        }
+        $redirectTarget = $_SERVER['REQUEST_URI'] ?? '';
+        if (!headers_sent()) header('Location: ' . $redirectTarget); else echo '<script>window.location.href = ' . json_encode($redirectTarget) . ';</script>';
+        exit;
+    }
 }
 
 require_once __DIR__ . '/../../includes/lang/' . getCurrentLanguage() . '.php';
@@ -1225,6 +1413,56 @@ $typeColorMap = [
                     </div>
                 </div>
             </div>
+
+            <!-- عهدة الأموال -->
+            <div class="col-12 col-lg-12 col-xxl-12">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-light fw-bold">
+                        <i class="bi bi-person-badge me-2 text-info"></i>عهدة الأموال
+                    </div>
+                    <div class="card-body">
+                        <form method="POST" class="row g-3">
+                            <input type="hidden" name="action" value="add_custody">
+                            <div class="col-12">
+                                <label for="custodyPersonName" class="form-label">اسم صاحب العهدة <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="custodyPersonName" name="custody_person_name" required placeholder="أدخل الاسم يدوياً" value="">
+                            </div>
+                            <div class="col-12">
+                                <label for="custodyAmount" class="form-label">المبلغ <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <span class="input-group-text">ج.م</span>
+                                    <input type="number" step="0.01" min="0.01" class="form-control" id="custodyAmount" name="custody_amount" required placeholder="0.00">
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">مصدر العهدة</label>
+                                <div class="d-flex gap-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="custody_source" id="custodyFromSafe" value="from_safe" checked>
+                                        <label class="form-check-label" for="custodyFromSafe">من الخزنة</label>
+                                        <small class="text-muted d-block">يُخصم من صافي رصيد الخزنة</small>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="custody_source" id="custodyFromManagement" value="from_management">
+                                        <label class="form-check-label" for="custodyFromManagement">من الإدارة</label>
+                                        <small class="text-muted d-block">لا يُخصم من رصيد الخزنة</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <label for="custodyNotes" class="form-label">ملاحظات</label>
+                                <textarea class="form-control" id="custodyNotes" name="custody_notes" rows="2" placeholder="اختياري"></textarea>
+                            </div>
+                            <div class="col-12 d-flex justify-content-end gap-2">
+                                <button type="reset" class="btn btn-outline-secondary">تفريغ</button>
+                                <button type="submit" class="btn btn-info text-white">
+                                    <i class="bi bi-plus-circle me-1"></i>تسجيل العهدة
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
             
             <!-- إنشاء تقرير تفصيلي -->
             <div class="col-12 col-lg-12 col-xxl-12">
@@ -1290,6 +1528,187 @@ $typeColorMap = [
         </div>
     </div>
 </div>
+
+<?php
+$custodyList = [];
+$custodyTableExists = $db->queryOne("SHOW TABLES LIKE 'company_custody'");
+if (!empty($custodyTableExists)) {
+    $custodyList = $db->query("
+        SELECT c.id, c.person_name, c.amount, c.source, c.remaining_amount, c.created_at, u.full_name as created_by_name
+        FROM company_custody c
+        LEFT JOIN users u ON c.created_by = u.id
+        ORDER BY c.created_at DESC
+    ") ?: [];
+}
+$userRoleForCustody = strtolower($currentUser['role'] ?? '');
+$canEditCustody = in_array($userRoleForCustody, ['manager', 'accountant', 'developer'], true);
+?>
+
+<!-- عهدة الأموال - سجل السجلات -->
+<div class="card shadow-sm mt-4">
+    <div class="card-header bg-light fw-bold">
+        <span><i class="bi bi-person-badge me-2 text-info"></i>سجل عهدة الأموال</span>
+    </div>
+    <div class="card-body">
+        <?php if (empty($custodyList)): ?>
+            <p class="text-muted text-center py-4 mb-0"><i class="bi bi-inbox me-2"></i>لا توجد سجلات عهدة حالياً</p>
+        <?php else: ?>
+            <div class="table-responsive">
+                <table class="table table-hover table-striped align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>اسم صاحب العهدة</th>
+                            <th>المبلغ الأصلي</th>
+                            <th>المصدر</th>
+                            <th>المبلغ المتبقي</th>
+                            <th>التاريخ</th>
+                            <th>أنشأه</th>
+                            <th>إجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($custodyList as $c): ?>
+                            <?php
+                            $remaining = (float) $c['remaining_amount'];
+                            $original = (float) $c['amount'];
+                            $canEditThis = $canEditCustody && ($remaining === $original);
+                            $sourceLabel = ($c['source'] ?? '') === 'from_management' ? 'من الإدارة' : 'من الخزنة';
+                            $sourceBadge = ($c['source'] ?? '') === 'from_management' ? 'bg-secondary' : 'bg-primary';
+                            ?>
+                            <tr>
+                                <td><?php echo htmlspecialchars($c['person_name'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td><?php echo formatCurrency($c['amount']); ?></td>
+                                <td><span class="badge <?php echo $sourceBadge; ?>"><?php echo $sourceLabel; ?></span></td>
+                                <td class="fw-bold"><?php echo formatCurrency($c['remaining_amount']); ?></td>
+                                <td><?php echo formatDateTime($c['created_at']); ?></td>
+                                <td><?php echo htmlspecialchars($c['created_by_name'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td>
+                                    <?php if ($canEditThis): ?>
+                                        <button type="button" class="btn btn-sm btn-outline-warning me-1" data-bs-toggle="modal" data-bs-target="#editCustodyModal" data-custody-id="<?php echo (int)$c['id']; ?>" data-custody-name="<?php echo htmlspecialchars($c['person_name'], ENT_QUOTES, 'UTF-8'); ?>" data-custody-amount="<?php echo htmlspecialchars($c['amount'], ENT_QUOTES, 'UTF-8'); ?>" title="تعديل المبلغ">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                    <?php endif; ?>
+                                    <?php if ($remaining > 0): ?>
+                                        <button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#retrieveCustodyModal" data-custody-id="<?php echo (int)$c['id']; ?>" data-custody-name="<?php echo htmlspecialchars($c['person_name'], ENT_QUOTES, 'UTF-8'); ?>" data-custody-remaining="<?php echo htmlspecialchars($c['remaining_amount'], ENT_QUOTES, 'UTF-8'); ?>" title="استرجاع">
+                                            <i class="bi bi-arrow-return-left"></i>
+                                        </button>
+                                    <?php else: ?>
+                                        <span class="text-muted small">مسترد بالكامل</span>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+    </div>
+</div>
+
+<!-- مودال تعديل مبلغ العهدة -->
+<div class="modal fade" id="editCustodyModal" tabindex="-1" aria-labelledby="editCustodyModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" id="editCustodyForm">
+                <input type="hidden" name="action" value="edit_custody">
+                <input type="hidden" name="custody_id" id="editCustodyId" value="">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editCustodyModalLabel">تعديل مبلغ العهدة</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small mb-2">صاحب العهدة: <strong id="editCustodyNameDisplay"></strong></p>
+                    <div class="mb-3">
+                        <label for="custodyEditAmount" class="form-label">المبلغ الجديد <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text">ج.م</span>
+                            <input type="number" step="0.01" min="0.01" class="form-control" id="custodyEditAmount" name="custody_edit_amount" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-warning">حفظ التعديل</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- مودال استرجاع عهدة -->
+<div class="modal fade" id="retrieveCustodyModal" tabindex="-1" aria-labelledby="retrieveCustodyModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" id="retrieveCustodyForm">
+                <input type="hidden" name="action" value="retrieve_custody">
+                <input type="hidden" name="custody_id" id="retrieveCustodyId" value="">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="retrieveCustodyModalLabel">استرجاع عهدة</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small mb-2">صاحب العهدة: <strong id="retrieveCustodyNameDisplay"></strong></p>
+                    <p class="small mb-2">المبلغ المتبقي: <strong id="retrieveCustodyRemainingDisplay" class="text-success"></strong></p>
+                    <div class="mb-3">
+                        <label for="retrieveAmount" class="form-label">مبلغ الاسترجاع <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text">ج.م</span>
+                            <input type="number" step="0.01" min="0.01" class="form-control" id="retrieveAmount" name="retrieve_amount" required>
+                        </div>
+                        <small class="text-muted">يمكن استرجاع كامل المبلغ أو جزء منه</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-success">استرجاع</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var editModal = document.getElementById('editCustodyModal');
+    if (editModal) {
+        editModal.addEventListener('show.bs.modal', function(e) {
+            var btn = e.relatedTarget;
+            if (btn) {
+                document.getElementById('editCustodyId').value = btn.getAttribute('data-custody-id') || '';
+                document.getElementById('editCustodyNameDisplay').textContent = btn.getAttribute('data-custody-name') || '';
+                var amount = btn.getAttribute('data-custody-amount') || '0';
+                document.getElementById('custodyEditAmount').value = amount;
+            }
+        });
+    }
+    var retrieveModal = document.getElementById('retrieveCustodyModal');
+    if (retrieveModal) {
+        retrieveModal.addEventListener('show.bs.modal', function(e) {
+            var btn = e.relatedTarget;
+            if (btn) {
+                document.getElementById('retrieveCustodyId').value = btn.getAttribute('data-custody-id') || '';
+                document.getElementById('retrieveCustodyNameDisplay').textContent = btn.getAttribute('data-custody-name') || '';
+                var remaining = parseFloat(btn.getAttribute('data-custody-remaining') || 0);
+                document.getElementById('retrieveCustodyRemainingDisplay').textContent = remaining.toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ج.م';
+                document.getElementById('retrieveAmount').setAttribute('max', remaining);
+                document.getElementById('retrieveAmount').value = remaining;
+            }
+        });
+    }
+    var retrieveForm = document.getElementById('retrieveCustodyForm');
+    if (retrieveForm) {
+        retrieveForm.addEventListener('submit', function(e) {
+            var maxVal = parseFloat(document.getElementById('retrieveAmount').getAttribute('max') || 0);
+            var val = parseFloat(document.getElementById('retrieveAmount').value || 0);
+            if (val <= 0 || val > maxVal) {
+                e.preventDefault();
+                alert('مبلغ الاسترجاع يجب أن يكون بين 0.01 و ' + maxVal.toLocaleString('ar-EG', { minimumFractionDigits: 2 }) + ' ج.م');
+                return false;
+            }
+        });
+    }
+});
+</script>
 
 <!-- جدول الحركات المالية -->
 <div class="card shadow-sm mt-4">
