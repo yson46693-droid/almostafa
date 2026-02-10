@@ -996,7 +996,7 @@ if ($customerOrdersExists) {
 $taskSql = "SELECT t.id, t.title, t.description, t.assigned_to, t.created_by, t.priority, t.status,
     t.due_date, t.completed_at, t.received_at, t.started_at, t.related_type, t.related_id,
     t.product_id, t.template_id, t.quantity, t.unit, t.notes, t.created_at, t.updated_at,
-    t.product_name
+    t.product_name, t.task_type
     " . $customerDisplaySelect . ",
     uAssign.full_name AS assigned_to_name,
     uCreate.full_name AS created_by_name,
@@ -1502,6 +1502,7 @@ function tasksHtml(string $value): string
                                 <th>الكمية</th>
                                 <th>اسم العميل</th>
                                 <th>الاوردر</th>
+                                <th>نوع الاوردر</th>
                                 <th>الحالة</th>
                                 <th>تاريخ التسليم</th>
                                 <th style="width: 180px;">الإجراءات</th>
@@ -1582,6 +1583,14 @@ function tasksHtml(string $value): string
                                         <?php else: ?>
                                             <span class="text-muted">-</span>
                                         <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?php
+                                        $relatedType = isset($task['related_type']) ? (string)$task['related_type'] : '';
+                                        $displayType = (strpos($relatedType, 'manager_') === 0) ? substr($relatedType, 8) : ($task['task_type'] ?? 'general');
+                                        $orderTypeLabels = ['shop_order' => 'اوردر محل', 'cash_customer' => 'عميل نقدي', 'telegraph' => 'تليجراف', 'general' => 'مهمة عامة', 'production' => 'إنتاج منتج'];
+                                        echo tasksHtml($orderTypeLabels[$displayType] ?? $displayType);
+                                        ?>
                                     </td>
                                     <td><span class="badge bg-<?php echo $statusClass; ?>"><?php echo tasksHtml($statusLabel); ?></span></td>
                                     <td>

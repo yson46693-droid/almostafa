@@ -1126,7 +1126,7 @@ try {
             
             $recentTasks = $db->query("
                 SELECT t.id, t.title, t.status, t.priority, t.due_date, t.created_at,
-                       t.quantity, t.unit, t.customer_name, t.customer_phone, t.notes, t.product_id, t.related_type, t.related_id,
+                       t.quantity, t.unit, t.customer_name, t.customer_phone, t.notes, t.product_id, t.related_type, t.related_id, t.task_type,
                        u.full_name AS assigned_name, t.assigned_to,
                        uCreator.full_name AS creator_name, t.created_by
                 FROM tasks t
@@ -1147,7 +1147,7 @@ try {
         
         $recentTasks = $db->query("
             SELECT t.id, t.title, t.status, t.priority, t.due_date, t.created_at,
-                   t.quantity, t.unit, t.customer_name, t.customer_phone, t.notes, t.product_id, t.related_type, t.related_id,
+                   t.quantity, t.unit, t.customer_name, t.customer_phone, t.notes, t.product_id, t.related_type, t.related_id, t.task_type,
                    u.full_name AS assigned_name, t.assigned_to
             FROM tasks t
             LEFT JOIN users u ON t.assigned_to = u.id
@@ -1534,6 +1534,7 @@ try {
                             <th>رقم الطلب</th>
                             <th>اسم العميل</th>
                             <th>الاوردر</th>
+                            <th>نوع الاوردر</th>
                             <th>الحاله</th>
                             <th>تاريخ التسليم</th>
                             <th>إجراءات</th>
@@ -1542,7 +1543,7 @@ try {
                     <tbody>
                         <?php if (empty($recentTasks)): ?>
                             <tr>
-                                <td colspan="6" class="text-center text-muted py-4">لم يتم إنشاء مهام بعد.</td>
+                                <td colspan="7" class="text-center text-muted py-4">لم يتم إنشاء مهام بعد.</td>
                             </tr>
                         <?php else: ?>
                             <?php foreach ($recentTasks as $index => $task): ?>
@@ -1612,6 +1613,14 @@ try {
                                                 <i class="bi bi-receipt me-1"></i>عرض الأوردر
                                             </button>
                                         <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?php
+                                        $relatedType = $task['related_type'] ?? '';
+                                        $displayType = (strpos($relatedType, 'manager_') === 0) ? substr($relatedType, 8) : ($task['task_type'] ?? 'general');
+                                        $orderTypeLabels = ['shop_order' => 'اوردر محل', 'cash_customer' => 'عميل نقدي', 'telegraph' => 'تليجراف', 'general' => 'مهمة عامة', 'production' => 'إنتاج منتج'];
+                                        echo htmlspecialchars($orderTypeLabels[$displayType] ?? $displayType);
+                                        ?>
                                     </td>
                                     <td>
                                         <?php
