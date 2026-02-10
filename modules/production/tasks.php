@@ -54,13 +54,13 @@ try {
         $db->execute("ALTER TABLE tasks ADD COLUMN customer_name VARCHAR(255) NULL DEFAULT NULL AFTER unit");
         error_log('Added customer_name column to tasks table in production/tasks.php');
     }
-    // توسيع عمود status ليشمل "تم التوصيل" و "تم الارجاع" (ضروري لعرض واحتساب الحالات)
+    // توسيع عمود status ليشمل "تم التوصيل" و "تم الارجاع" و "مع المندوب"
     $statusColumn = $db->queryOne("SHOW COLUMNS FROM tasks LIKE 'status'");
     if (!empty($statusColumn['Type'])) {
         $typeStr = (string) $statusColumn['Type'];
-        if (stripos($typeStr, 'delivered') === false || stripos($typeStr, 'returned') === false) {
-            $db->execute("ALTER TABLE tasks MODIFY COLUMN status ENUM('pending','received','in_progress','completed','delivered','returned','cancelled') DEFAULT 'pending'");
-            error_log('Extended tasks.status ENUM with delivered, returned in production/tasks.php');
+        if (stripos($typeStr, 'with_delegate') === false) {
+            $db->execute("ALTER TABLE tasks MODIFY COLUMN status ENUM('pending','received','in_progress','completed','with_delegate','delivered','returned','cancelled') DEFAULT 'pending'");
+            error_log('Extended tasks.status ENUM with with_delegate in production/tasks.php');
         }
     }
 } catch (Exception $e) {
@@ -640,12 +640,20 @@ function tasksHandleAction(string $action, array $input, array $context): array
                 }
 
                 if (in_array($action, ['deliver_task', 'return_task'], true)) {
-                    // تم التوصيل / تم الارجاع: مسموح للمدير أو لأي عامل إنتاج عندما تكون المهمة مكتملة
+                    // تم التوصيل / تم الارجاع: مسموح للمدير أو لأي عامل إنتاج عندما تكون المهمة مكتملة أو مع المندوب
+                    if (!$isManager && !$isProduction) {
+                        throw new RuntimeException('غير مصرح لك بتنفيذ هذا الإجراء');
+                    }
+                    $currentStatus = $task['status'] ?? '';
+                    if ($currentStatus !== 'completed' && $currentStatus !== 'with_delegate') {
+                        throw new RuntimeException('يمكن تطبيق تم التوصيل أو تم الارجاع على المهام المكتملة أو المعطاة للمندوب فقط');
+                    }
+                } elseif ($action === 'with_delegate_task') {
                     if (!$isManager && !$isProduction) {
                         throw new RuntimeException('غير مصرح لك بتنفيذ هذا الإجراء');
                     }
                     if (($task['status'] ?? '') !== 'completed') {
-                        throw new RuntimeException('يمكن تطبيق تم التوصيل أو تم الارجاع على المهام المكتملة فقط');
+                        throw new RuntimeException('يمكن تطبيق مع المندوب على المهام المكتملة فقط');
                     }
                 } else {
                     if (!$isProduction) {
@@ -660,6 +668,7 @@ function tasksHandleAction(string $action, array $input, array $context): array
                     'receive_task' => ['status' => 'received', 'column' => 'received_at'],
                     'start_task' => ['status' => 'in_progress', 'column' => 'started_at'],
                     'complete_task' => ['status' => 'completed', 'column' => 'completed_at'],
+                    'with_delegate_task' => ['status' => 'with_delegate', 'column' => 'completed_at'],
                     'deliver_task' => ['status' => 'delivered', 'column' => 'completed_at'],
                     'return_task' => ['status' => 'returned', 'column' => 'completed_at'],
                 ];
@@ -712,7 +721,7 @@ function tasksHandleAction(string $action, array $input, array $context): array
 
                 $taskId = isset($input['task_id']) ? (int) $input['task_id'] : 0;
                 $status = $input['status'] ?? 'pending';
-                $validStatuses = ['pending', 'received', 'in_progress', 'completed', 'delivered', 'returned', 'cancelled'];
+                $validStatuses = ['pending', 'received', 'in_progress', 'completed', 'with_delegate', 'delivered', 'returned', 'cancelled'];
 
                 if ($taskId <= 0 || !in_array($status, $validStatuses, true)) {
                     throw new RuntimeException('بيانات غير صحيحة لتحديث المهمة');
@@ -721,7 +730,7 @@ function tasksHandleAction(string $action, array $input, array $context): array
                 $setParts = ['status = ?'];
                 $values = [$status];
 
-                $setParts[] = in_array($status, ['completed', 'delivered', 'returned'], true) ? 'completed_at = NOW()' : 'completed_at = NULL';
+                $setParts[] = in_array($status, ['completed', 'with_delegate', 'delivered', 'returned'], true) ? 'completed_at = NOW()' : 'completed_at = NULL';
                 $setParts[] = $status === 'received' ? 'received_at = NOW()' : 'received_at = NULL';
                 $setParts[] = $status === 'in_progress' ? 'started_at = NOW()' : 'started_at = NULL';
 
@@ -909,7 +918,7 @@ if ($search !== '') {
 }
 
 if ($overdueFilter) {
-    $whereConditions[] = "t.status NOT IN ('completed','delivered','returned','cancelled')";
+    $whereConditions[] = "t.status NOT IN ('completed','with_delegate','delivered','returned','cancelled')";
     $whereConditions[] = 't.due_date < CURDATE()';
 }
 
@@ -1309,9 +1318,10 @@ $stats = [
     'received' => $buildStatsQuery("status = 'received'"),
     'in_progress' => $buildStatsQuery("status = 'in_progress'"),
     'completed' => $buildStatsQuery("status = 'completed'"),
+    'with_delegate' => $buildStatsQuery("status = 'with_delegate'"),
     'delivered' => $buildStatsQuery("status = 'delivered'"),
     'returned' => $buildStatsQuery("status = 'returned'"),
-    'overdue' => $buildStatsQuery("status NOT IN ('completed','delivered','returned') AND due_date < CURDATE()")
+    'overdue' => $buildStatsQuery("status NOT IN ('completed','with_delegate','delivered','returned') AND due_date < CURDATE()")
 ];
 
 $tasksJson = tasksSafeJsonEncode($tasks);
@@ -1394,6 +1404,16 @@ function tasksHtml(string $value): string
             </a>
         </div>
         <div class="col-6 col-md-2">
+            <a href="<?php echo $filterBaseUrl . (strpos($filterBaseUrl, '?') !== false ? '&' : '?'); ?>status=with_delegate" class="text-decoration-none">
+                <div class="card <?php echo $statusFilter === 'with_delegate' ? 'bg-info text-white' : 'border-info'; ?> text-center h-100">
+                    <div class="card-body p-2">
+                        <h5 class="<?php echo $statusFilter === 'with_delegate' ? 'text-white' : 'text-info'; ?> mb-0"><?php echo $stats['with_delegate']; ?></h5>
+                        <small class="<?php echo $statusFilter === 'with_delegate' ? 'text-white-50' : 'text-muted'; ?>">مع المندوب</small>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-6 col-md-2">
             <a href="<?php echo $filterBaseUrl . (strpos($filterBaseUrl, '?') !== false ? '&' : '?'); ?>status=delivered" class="text-decoration-none">
                 <div class="card <?php echo $statusFilter === 'delivered' ? 'bg-success text-white' : 'border-success'; ?> text-center h-100">
                     <div class="card-body p-2">
@@ -1441,6 +1461,7 @@ function tasksHtml(string $value): string
                         <option value="pending" <?php echo $statusFilter === 'pending' ? 'selected' : ''; ?>>معلقة</option>
                         <option value="received" <?php echo $statusFilter === 'received' ? 'selected' : ''; ?>>مستلمة</option>
                         <option value="completed" <?php echo $statusFilter === 'completed' ? 'selected' : ''; ?>>مكتملة</option>
+                        <option value="with_delegate" <?php echo $statusFilter === 'with_delegate' ? 'selected' : ''; ?>>مع المندوب</option>
                         <option value="delivered" <?php echo $statusFilter === 'delivered' ? 'selected' : ''; ?>>تم التوصيل</option>
                         <option value="returned" <?php echo $statusFilter === 'returned' ? 'selected' : ''; ?>>تم الارجاع</option>
                         <option value="cancelled" <?php echo $statusFilter === 'cancelled' ? 'selected' : ''; ?>>ملغاة</option>
@@ -1524,6 +1545,7 @@ function tasksHtml(string $value): string
                                     'received' => 'info',
                                     'in_progress' => 'primary',
                                     'completed' => 'success',
+                                    'with_delegate' => 'info',
                                     'delivered' => 'success',
                                     'returned' => 'secondary',
                                     'cancelled' => 'secondary',
@@ -1533,6 +1555,7 @@ function tasksHtml(string $value): string
                                     'pending' => 'معلقة',
                                     'received' => 'مستلمة',
                                     'completed' => 'مكتملة',
+                                    'with_delegate' => 'مع المندوب',
                                     'delivered' => 'تم التوصيل',
                                     'returned' => 'تم الارجاع',
                                     'cancelled' => 'ملغاة'
@@ -1545,7 +1568,7 @@ function tasksHtml(string $value): string
                                     'low' => 'منخفضة'
                                 ][$task['priority']] ?? tasksSafeString($task['priority']);
 
-                                $overdue = !in_array($task['status'], ['completed', 'delivered', 'returned', 'cancelled'], true)
+                                $overdue = !in_array($task['status'], ['completed', 'with_delegate', 'delivered', 'returned', 'cancelled'], true)
                                     && !empty($task['due_date'])
                                     && strtotime((string) $task['due_date']) < time();
                                 ?>
@@ -1644,8 +1667,15 @@ function tasksHtml(string $value): string
                                                     </button>
                                                 <?php endif; ?>
                                                 <?php
-                                                // بعد مكتملة: أزرار تم التوصيل و تم الارجاع (أي عامل إنتاج أو مدير)
-                                                $canDeliverReturn = ($isManager || $isProduction) && ($task['status'] ?? '') === 'completed';
+                                                // بعد مكتملة أو مع المندوب: زر مع المندوب (فقط من مكتملة)، ثم تم التوصيل و تم الارجاع
+                                                $canWithDelegate = ($isManager || $isProduction) && ($task['status'] ?? '') === 'completed';
+                                                $canDeliverReturn = ($isManager || $isProduction) && in_array($task['status'] ?? '', ['completed', 'with_delegate'], true);
+                                                if ($canWithDelegate):
+                                                ?>
+                                                    <button type="button" class="btn btn-outline-info btn-sm" onclick="submitTaskAction('with_delegate_task', <?php echo (int) $task['id']; ?>)">
+                                                        <i class="bi bi-person-badge me-1"></i>مع المندوب
+                                                    </button>
+                                                <?php endif;
                                                 if ($canDeliverReturn):
                                                 ?>
                                                     <button type="button" class="btn btn-outline-success btn-sm" onclick="submitTaskAction('deliver_task', <?php echo (int) $task['id']; ?>)">
@@ -2286,6 +2316,7 @@ function tasksHtml(string $value): string
             'pending': 'معلقة',
             'received': 'مستلمة',
             'completed': 'مكتملة',
+            'with_delegate': 'مع المندوب',
             'delivered': 'تم التوصيل',
             'returned': 'تم الارجاع',
             'cancelled': 'ملغاة'
@@ -2310,6 +2341,7 @@ function tasksHtml(string $value): string
             : task.status === 'received' ? 'info'
             : task.status === 'in_progress' ? 'primary'
             : task.status === 'completed' ? 'success'
+            : task.status === 'with_delegate' ? 'info'
             : task.status === 'delivered' ? 'success'
             : task.status === 'returned' ? 'secondary'
             : 'secondary';

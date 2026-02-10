@@ -126,6 +126,7 @@ $statusLabels = [
     'pending' => 'معلقة',
     'received' => 'مستلمة',
     'completed' => 'مكتملة',
+    'with_delegate' => 'مع المندوب',
     'delivered' => 'تم التوصيل',
     'returned' => 'تم الارجاع',
     'cancelled' => 'ملغاة'

@@ -788,7 +788,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($taskId <= 0) {
             $error = 'معرف المهمة غير صحيح.';
-        } elseif (!in_array($newStatus, ['pending', 'received', 'in_progress', 'completed', 'delivered', 'returned', 'cancelled'], true)) {
+        } elseif (!in_array($newStatus, ['pending', 'received', 'in_progress', 'completed', 'with_delegate', 'delivered', 'returned', 'cancelled'], true)) {
             $error = 'حالة المهمة غير صحيحة.';
         } else {
             try {
@@ -817,7 +817,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $updateValues = [$newStatus];
                 
                 // إضافة timestamps حسب الحالة
-                if (in_array($newStatus, ['completed', 'delivered', 'returned'], true)) {
+                if (in_array($newStatus, ['completed', 'with_delegate', 'delivered', 'returned'], true)) {
                     $updateFields[] = 'completed_at = NOW()';
                 } elseif ($newStatus === 'in_progress') {
                     $updateFields[] = 'started_at = NOW()';
@@ -939,6 +939,7 @@ $statsTemplate = [
     'received' => 0,
     'in_progress' => 0,
     'completed' => 0,
+    'with_delegate' => 0,
     'delivered' => 0,
     'returned' => 0,
     'cancelled' => 0
@@ -988,7 +989,7 @@ try {
     }
     // حساب الإجمالي من مجموع الحالات (أدق من COUNT المنفرد ويتجنب truncation في بعض بيئات MySQL/PHP)
     $stats['total'] = (int)$stats['pending'] + (int)$stats['received'] + (int)$stats['in_progress']
-        + (int)$stats['completed'] + (int)$stats['delivered'] + (int)$stats['returned'];
+        + (int)$stats['completed'] + (int)$stats['with_delegate'] + (int)$stats['delivered'] + (int)$stats['returned'];
 } catch (Exception $e) {
     error_log('Manager task stats error: ' . $e->getMessage());
 }
@@ -998,6 +999,7 @@ $statusStyles = [
     'pending' => ['class' => 'warning', 'label' => 'معلقة'],
     'received' => ['class' => 'info', 'label' => 'مستلمة'],
     'completed' => ['class' => 'success', 'label' => 'مكتملة'],
+    'with_delegate' => ['class' => 'info', 'label' => 'مع المندوب'],
     'delivered' => ['class' => 'success', 'label' => 'تم التوصيل'],
     'returned' => ['class' => 'secondary', 'label' => 'تم الارجاع'],
     'cancelled' => ['class' => 'danger', 'label' => 'ملغاة']
@@ -1447,6 +1449,16 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
             </a>
         </div>
         <div class="col-4 col-sm-4 col-md-2">
+            <a href="?page=production_tasks&status=with_delegate" class="text-decoration-none">
+                <div class="card <?php echo $statusFilter === 'with_delegate' ? 'bg-info text-white' : 'border-info'; ?> h-100">
+                    <div class="card-body text-center py-2 px-2">
+                        <div class="<?php echo $statusFilter === 'with_delegate' ? 'text-white-50' : 'text-muted'; ?> small mb-1">مع المندوب</div>
+                        <div class="fs-5 <?php echo $statusFilter === 'with_delegate' ? 'text-white' : 'text-info'; ?> fw-semibold"><?php echo $stats['with_delegate']; ?></div>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-4 col-sm-4 col-md-2">
             <a href="?page=production_tasks&status=delivered" class="text-decoration-none">
                 <div class="card <?php echo $statusFilter === 'delivered' ? 'bg-success text-white' : 'border-success'; ?> h-100">
                     <div class="card-body text-center py-2 px-2">
@@ -1886,6 +1898,7 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                             <option value="">-- اختر الحالة --</option>
                             <option value="pending">معلقة</option>
                             <option value="completed">مكتملة</option>
+                            <option value="with_delegate">مع المندوب</option>
                             <option value="delivered">تم التوصيل</option>
                             <option value="returned">تم الارجاع</option>
                             <option value="cancelled">ملغاة</option>
@@ -1930,6 +1943,7 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                             <option value="">-- اختر الحالة --</option>
                             <option value="pending">معلقة</option>
                             <option value="completed">مكتملة</option>
+                            <option value="with_delegate">مع المندوب</option>
                             <option value="delivered">تم التوصيل</option>
                             <option value="returned">تم الارجاع</option>
                             <option value="cancelled">ملغاة</option>
@@ -2370,6 +2384,7 @@ window.openChangeStatusModal = function(taskId, currentStatus) {
                                     <option value="">-- اختر الحالة --</option>
                                     <option value="pending">معلقة</option>
                                     <option value="completed">مكتملة</option>
+                                    <option value="with_delegate">مع المندوب</option>
                                     <option value="delivered">تم التوصيل</option>
                                     <option value="returned">تم الارجاع</option>
                                     <option value="cancelled">ملغاة</option>
@@ -2433,6 +2448,7 @@ window.openChangeStatusModal = function(taskId, currentStatus) {
             'pending': 'معلقة',
             'received': 'مستلمة',
             'completed': 'مكتملة',
+            'with_delegate': 'مع المندوب',
             'delivered': 'تم التوصيل',
             'returned': 'تم الارجاع',
             'cancelled': 'ملغاة'
@@ -2442,6 +2458,7 @@ window.openChangeStatusModal = function(taskId, currentStatus) {
             'pending': 'warning',
             'received': 'info',
             'completed': 'success',
+            'with_delegate': 'info',
             'delivered': 'success',
             'returned': 'secondary',
             'cancelled': 'danger'
@@ -2504,6 +2521,7 @@ window.openChangeStatusModal = function(taskId, currentStatus) {
         'pending': 'معلقة',
         'received': 'مستلمة',
         'completed': 'مكتملة',
+        'with_delegate': 'مع المندوب',
         'delivered': 'تم التوصيل',
         'returned': 'تم الارجاع',
         'cancelled': 'ملغاة'
@@ -2513,6 +2531,7 @@ window.openChangeStatusModal = function(taskId, currentStatus) {
         'pending': 'warning',
         'received': 'info',
         'completed': 'success',
+        'with_delegate': 'info',
         'delivered': 'success',
         'returned': 'secondary',
         'cancelled': 'danger'
