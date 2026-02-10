@@ -422,7 +422,7 @@ if (!defined('NOTIFICATION_POLL_INTERVAL')) {
 if (!defined('NOTIFICATION_AUTO_REFRESH_ENABLED')) {
     define('NOTIFICATION_AUTO_REFRESH_ENABLED', true);
 }
-
+define('TASKS_RETENTION_MAX_ROWS', 99999); // أو أي عدد تريده
 // إعدادات Telegram Bot
 // للحصول على Bot Token: تحدث مع @BotFather في Telegram
 // للحصول على Chat ID: أرسل رسالة للبوت ثم افتح: https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates
