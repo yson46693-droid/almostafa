@@ -1078,13 +1078,67 @@ $totalRecentTasks = 0;
 $totalRecentPages = 1;
 
 // Filter by status
-$statusFilter = isset($_GET['status']) ? $_GET['status'] : '';
+$statusFilter = isset($_GET['status']) ? trim((string)$_GET['status']) : '';
 $statusCondition = "";
 $statusParams = [];
 
 if ($statusFilter && $statusFilter !== 'all') {
     $statusCondition = "AND t.status = ?";
     $statusParams[] = $statusFilter;
+}
+
+// البحث المتقدم والفلترة لجدول آخر المهام
+$filterTaskId = isset($_GET['task_id']) ? trim((string)$_GET['task_id']) : '';
+$filterCustomer = isset($_GET['search_customer']) ? trim((string)$_GET['search_customer']) : '';
+$filterOrderId = isset($_GET['search_order_id']) ? trim((string)$_GET['search_order_id']) : '';
+$filterTaskType = isset($_GET['task_type']) ? trim((string)$_GET['task_type']) : '';
+$filterDueFrom = isset($_GET['due_date_from']) ? trim((string)$_GET['due_date_from']) : '';
+$filterDueTo = isset($_GET['due_date_to']) ? trim((string)$_GET['due_date_to']) : '';
+$filterSearchText = isset($_GET['search_text']) ? trim((string)$_GET['search_text']) : '';
+
+$searchConditions = '';
+$searchParams = [];
+
+if ($filterTaskId !== '') {
+    $taskIdInt = (int) $filterTaskId;
+    if ($taskIdInt > 0) {
+        $searchConditions .= " AND t.id = ?";
+        $searchParams[] = $taskIdInt;
+    }
+}
+if ($filterCustomer !== '') {
+    $searchConditions .= " AND (t.customer_name LIKE ? OR t.customer_phone LIKE ?)";
+    $customerLike = '%' . $filterCustomer . '%';
+    $searchParams[] = $customerLike;
+    $searchParams[] = $customerLike;
+}
+if ($filterOrderId !== '') {
+    $orderIdInt = (int) $filterOrderId;
+    if ($orderIdInt > 0) {
+        $searchConditions .= " AND t.related_type = 'customer_order' AND t.related_id = ?";
+        $searchParams[] = $orderIdInt;
+    }
+}
+if ($filterTaskType !== '') {
+    $searchConditions .= " AND (t.task_type = ? OR t.related_type = CONCAT('manager_', ?))";
+    $searchParams[] = $filterTaskType;
+    $searchParams[] = $filterTaskType;
+}
+if ($filterDueFrom !== '') {
+    $searchConditions .= " AND t.due_date >= ?";
+    $searchParams[] = $filterDueFrom;
+}
+if ($filterDueTo !== '') {
+    $searchConditions .= " AND t.due_date <= ?";
+    $searchParams[] = $filterDueTo;
+}
+if ($filterSearchText !== '') {
+    $searchConditions .= " AND (t.title LIKE ? OR t.notes LIKE ? OR t.customer_name LIKE ? OR t.customer_phone LIKE ?)";
+    $textLike = '%' . $filterSearchText . '%';
+    $searchParams[] = $textLike;
+    $searchParams[] = $textLike;
+    $searchParams[] = $textLike;
+    $searchParams[] = $textLike;
 }
 
 try {
