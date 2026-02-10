@@ -966,8 +966,15 @@ try {
                 AND status != 'cancelled'
                 GROUP BY status
             ", $adminIds);
+            $totalRow = $db->queryOne("
+                SELECT COUNT(*) AS total
+                FROM tasks
+                WHERE created_by IN ($placeholders)
+                AND status != 'cancelled'
+            ", $adminIds);
         } else {
             $counts = [];
+            $totalRow = null;
         }
     } else {
         // للمستخدمين الآخرين، عرض المهام التي أنشأوها فقط
@@ -978,14 +985,22 @@ try {
             AND status != 'cancelled'
             GROUP BY status
         ", [$currentUser['id']]);
+        $totalRow = $db->queryOne("
+            SELECT COUNT(*) AS total
+            FROM tasks
+            WHERE created_by = ?
+            AND status != 'cancelled'
+        ", [$currentUser['id']]);
     }
 
+    if (!empty($totalRow) && isset($totalRow['total'])) {
+        $stats['total'] = (int) $totalRow['total'];
+    }
     foreach ($counts as $row) {
         $statusKey = $row['status'] ?? '';
         if (isset($stats[$statusKey])) {
             $stats[$statusKey] = (int)$row['total'];
         }
-        $stats['total'] += (int)$row['total'];
     }
 } catch (Exception $e) {
     error_log('Manager task stats error: ' . $e->getMessage());
