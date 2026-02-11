@@ -153,7 +153,7 @@ $singleReceipt = count($receipts) === 1;
 
 ?>
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar" dir="rtl" class="<?php echo $singleReceipt ? '' : 'multi-receipt'; ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -166,10 +166,12 @@ $singleReceipt = count($receipts) === 1;
             box-sizing: border-box;
         }
         
-        @page {
-            size: 80mm auto;
-            margin: 5mm;
-        }
+        <?php if ($singleReceipt): ?>
+        @page { size: 80mm auto; margin: 5mm; }
+        <?php else: ?>
+        /* عدة إيصالات: ورقة A4 لكل إيصال لضمان خروج كل واحد في ورقة منفصلة */
+        @page { size: A4; margin: 10mm; }
+        <?php endif; ?>
         
         @media print {
             .no-print {
@@ -186,7 +188,22 @@ $singleReceipt = count($receipts) === 1;
                 padding: 0;
                 margin: 0;
             }
-            /* إجبار كل إيصال في ورقة منفصلة */
+            /* إجبار كل إيصال في ورقة منفصلة: ارتفاع الصفحة = ورقة واحدة */
+            body.multi-receipt .receipt-sheet {
+                height: 277mm !important;
+                min-height: 277mm !important;
+                max-height: 277mm !important;
+                page-break-after: always !important;
+                break-after: page !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+                overflow: hidden !important;
+                display: block !important;
+            }
+            body.multi-receipt .receipt-sheet .receipt-sheet-inner {
+                max-width: 80mm;
+                margin: 0 auto;
+            }
             .receipt-sheet {
                 page-break-after: always !important;
                 break-after: page !important;
@@ -196,6 +213,14 @@ $singleReceipt = count($receipts) === 1;
             .receipt-sheet:not(:first-child) {
                 page-break-before: always !important;
                 break-before: page !important;
+            }
+            .page-break-before {
+                page-break-after: avoid !important;
+                height: 0 !important;
+                overflow: hidden !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                border: none !important;
             }
         }
         
@@ -440,12 +465,26 @@ $singleReceipt = count($receipts) === 1;
         .btn-back:hover {
             background: #545b62;
         }
+        .btn-open-separate {
+            background: #28a745;
+            color: white;
+            margin: 5px;
+        }
+        .btn-open-separate:hover {
+            background: #218838;
+            color: white;
+        }
     </style>
 </head>
 <body>
     <div class="receipt-container">
         <div class="no-print">
             <button class="btn-print" onclick="window.print()"><?php echo $singleReceipt ? 'طباعة' : 'طباعة الكل (' . count($receipts) . ')'; ?></button>
+            <?php if (!$singleReceipt): ?>
+            <button type="button" class="btn-open-separate" onclick="openEachReceiptInNewTab()" title="يفتح كل إيصال في تبويب منفصل ثم اطبع كل تبويب لوحده (Ctrl+P)">
+                فتح كل إيصال في تبويب (لطباعة ورقة لكل إيصال)
+            </button>
+            <?php endif; ?>
             <?php
             if (function_exists('getDashboardUrl')) {
                 $backUrl = getDashboardUrl('production') . '?page=tasks';
@@ -459,6 +498,9 @@ $singleReceipt = count($receipts) === 1;
         </div>
         <?php
         foreach ($receipts as $idx => $r):
+            if ($idx > 0) {
+                echo '<div class="page-break-before" style="page-break-before: always; break-before: page;"></div>';
+            }
             $task = $r['task'];
             $taskNumber = $r['taskNumber'];
             $taskTypeLabel = $r['taskTypeLabel'];
@@ -471,6 +513,7 @@ $singleReceipt = count($receipts) === 1;
             $dueDate = $task['due_date'] ?? null;
         ?>
         <div class="receipt-sheet">
+        <div class="receipt-sheet-inner">
         <div class="task-number">
             رقم الاوردر: <?php echo htmlspecialchars($taskNumber); ?>
         </div>
@@ -576,16 +619,24 @@ $singleReceipt = count($receipts) === 1;
         </div>
         <?php endif; ?>
         </div>
+        </div>
         <?php endforeach; ?>
     </div>
     
     <script>
-        // طباعة تلقائية عند فتح الصفحة مع معامل print
+        var receiptIdsForTabs = [<?php echo implode(',', array_map(function($r) { return (int)$r['taskNumber']; }, $receipts)); ?>];
+        function openEachReceiptInNewTab() {
+            var base = window.location.pathname;
+            if (receiptIdsForTabs.length === 0) return;
+            receiptIdsForTabs.forEach(function(id, i) {
+                setTimeout(function() {
+                    window.open(base + '?id=' + id, '_blank', 'noopener');
+                }, i * 400);
+            });
+        }
         window.onload = function() {
             if (window.location.search.includes('print=1')) {
-                setTimeout(function() {
-                    window.print();
-                }, 500);
+                setTimeout(function() { window.print(); }, 500);
             }
         };
     </script>
