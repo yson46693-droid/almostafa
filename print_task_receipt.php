@@ -186,6 +186,17 @@ $singleReceipt = count($receipts) === 1;
                 padding: 0;
                 margin: 0;
             }
+            /* إجبار كل إيصال في ورقة منفصلة */
+            .receipt-sheet {
+                page-break-after: always !important;
+                break-after: page !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+            }
+            .receipt-sheet:not(:first-child) {
+                page-break-before: always !important;
+                break-before: page !important;
+            }
         }
         
         body {
@@ -385,11 +396,16 @@ $singleReceipt = count($receipts) === 1;
             border-top: 2px dashed #999;
             margin: 12px 0;
         }
+        /* فصل كل إيصال في ورقة منفصلة عند الطباعة */
         .receipt-sheet {
             page-break-after: always;
+            break-after: page;
+            page-break-inside: avoid;
+            break-inside: avoid;
         }
-        .receipt-sheet:last-child {
-            page-break-after: auto;
+        .receipt-sheet:not(:first-child) {
+            page-break-before: always;
+            break-before: page;
         }
         
         .no-print {
