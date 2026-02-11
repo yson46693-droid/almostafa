@@ -376,8 +376,11 @@ $backUrl = '?page=attendance_management&month=' . urlencode($selectedMonth);
     
     <!-- سجلات المستخدم -->
     <div class="card shadow-sm">
-        <div class="card-header bg-primary text-white">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center flex-wrap gap-2">
             <h5 class="mb-0">سجلات الحضور - <?php echo htmlspecialchars($selectedUser['full_name'] ?? $selectedUser['username']); ?></h5>
+            <a href="<?php echo htmlspecialchars(getRelativeUrl('print_attendance_report.php?user_id=' . (int)$selectedUserId . '&month=' . urlencode($selectedMonth))); ?>" target="_blank" class="btn btn-light btn-sm" title="طباعة تقرير سجلات الحضور والانصراف لهذا الشهر">
+                <i class="bi bi-printer me-1"></i>طباعة تقرير
+            </a>
         </div>
         <div class="card-body">
             <div class="table-responsive dashboard-table-wrapper">
@@ -520,6 +523,9 @@ $backUrl = '?page=attendance_management&month=' . urlencode($selectedMonth);
                                     <td data-label="الإجراءات">
                                         <a href="?page=attendance_management&month=<?php echo urlencode($selectedMonth); ?>&user_id=<?php echo $userId; ?>" class="btn btn-sm btn-info">
                                             <i class="bi bi-eye"></i> عرض التفاصيل
+                                        </a>
+                                        <a href="<?php echo htmlspecialchars(getRelativeUrl('print_attendance_report.php?user_id=' . (int)$userId . '&month=' . urlencode($selectedMonth))); ?>" target="_blank" class="btn btn-sm btn-outline-secondary" title="طباعة تقرير الحضور لهذا الشهر">
+                                            <i class="bi bi-printer"></i> طباعة تقرير
                                         </a>
                                     </td>
                                 </tr>
