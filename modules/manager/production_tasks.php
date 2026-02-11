@@ -2632,17 +2632,16 @@ window.closeChangeStatusCard = function() {
     if (printBtn) {
         printBtn.addEventListener('click', function() {
             var checked = document.querySelectorAll('.task-print-checkbox:checked');
-            var urls = [];
+            var ids = [];
             checked.forEach(function(cb) {
-                var url = cb.getAttribute('data-print-url');
-                if (url) urls.push(url);
+                var id = cb.value;
+                if (id) ids.push(id);
             });
-            if (urls.length === 0) return;
-            urls.forEach(function(url, i) {
-                setTimeout(function() {
-                    window.open(url, '_blank', 'noopener,noreferrer');
-                }, i * 300);
-            });
+            if (ids.length === 0) return;
+            var firstUrl = document.querySelector('.task-print-checkbox') && document.querySelector('.task-print-checkbox').getAttribute('data-print-url');
+            var path = firstUrl ? firstUrl.split('?')[0] : 'print_task_receipt.php';
+            var url = path + '?ids=' + ids.join(',');
+            window.open(url, '_blank', 'noopener,noreferrer');
         });
     }
     updateSelection();

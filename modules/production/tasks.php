@@ -2521,17 +2521,16 @@ function tasksHtml(string $value): string
     if (printBtn) {
         printBtn.addEventListener('click', function() {
             const checked = document.querySelectorAll('.task-print-checkbox:checked');
-            const urls = [];
+            const ids = [];
             checked.forEach(function(cb) {
-                const url = cb.getAttribute('data-print-url');
-                if (url) urls.push(url);
+                const id = cb.value;
+                if (id) ids.push(id);
             });
-            if (urls.length === 0) return;
-            urls.forEach(function(url, i) {
-                setTimeout(function() {
-                    window.open(url, '_blank', 'noopener,noreferrer');
-                }, i * 300);
-            });
+            if (ids.length === 0) return;
+            const firstUrl = document.querySelector('.task-print-checkbox') && document.querySelector('.task-print-checkbox').getAttribute('data-print-url');
+            const path = firstUrl ? firstUrl.split('?')[0] : 'print_task_receipt.php';
+            const url = path + '?ids=' + ids.join(',');
+            window.open(url, '_blank', 'noopener,noreferrer');
         });
     }
     updateSelection();

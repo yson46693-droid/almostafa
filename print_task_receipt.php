@@ -12,62 +12,23 @@ require_once __DIR__ . '/includes/path_helper.php';
 
 requireRole(['production', 'accountant', 'manager']);
 
-$taskId = isset($_GET['id']) ? intval($_GET['id']) : 0;
-
-if ($taskId <= 0) {
+// دعم طباعة إيصال واحد (id=) أو عدة إيصالات (ids=1,2,3)
+$taskIds = [];
+if (!empty($_GET['ids'])) {
+    $taskIds = array_filter(array_map('intval', explode(',', (string) $_GET['ids'])));
+}
+if (empty($taskIds) && isset($_GET['id'])) {
+    $id = intval($_GET['id']);
+    if ($id > 0) {
+        $taskIds = [$id];
+    }
+}
+if (empty($taskIds)) {
     die('رقم المهمة غير صحيح');
 }
 
 $db = db();
 $currentUser = getCurrentUser();
-
-// جلب بيانات المهمة
-$task = $db->queryOne(
-    "SELECT t.*,
-            uAssign.full_name AS assigned_to_name,
-            uCreate.full_name AS created_by_name,
-            p.name AS product_name_from_db
-     FROM tasks t
-     LEFT JOIN users uAssign ON t.assigned_to = uAssign.id
-     LEFT JOIN users uCreate ON t.created_by = uCreate.id
-     LEFT JOIN products p ON t.product_id = p.id
-     WHERE t.id = ?",
-    [$taskId]
-);
-
-if (!$task) {
-    die('المهمة غير موجودة');
-}
-
-// تحديث عداد عدد مرات طباعة إيصال الأوردر
-try {
-    $db->execute("UPDATE tasks SET receipt_print_count = COALESCE(receipt_print_count, 0) + 1 WHERE id = ?", [$taskId]);
-} catch (Exception $e) {
-    error_log('print_task_receipt: failed to increment receipt_print_count: ' . $e->getMessage());
-}
-
-$companyName = COMPANY_NAME;
-$taskNumber = $taskId;
-$taskTitle = $task['title'] ?? 'مهمة إنتاج';
-$productName = $task['product_name'] ?? $task['product_name_from_db'] ?? '';
-$quantity = isset($task['quantity']) && $task['quantity'] !== null ? (float) $task['quantity'] : 0;
-$unit = !empty($task['unit']) ? $task['unit'] : 'قطعة'; // الوحدة من قاعدة البيانات
-$customerName = !empty($task['customer_name']) ? $task['customer_name'] : '';
-$description = $task['description'] ?? '';
-$notes = $task['notes'] ?? '';
-$priority = $task['priority'] ?? 'normal';
-$status = $task['status'] ?? 'pending';
-$assignedTo = $task['assigned_to_name'] ?? 'غير محدد';
-$createdBy = $task['created_by_name'] ?? 'غير محدد';
-$createdAt = $task['created_at'] ?? date('Y-m-d H:i:s');
-$dueDate = $task['due_date'] ?? null;
-$relatedType = $task['related_type'] ?? '';
-$taskType = $task['task_type'] ?? 'general';
-
-// استخراج نوع المهمة من related_type إذا كانت تبدأ بـ manager_
-if (strpos($relatedType, 'manager_') === 0) {
-    $taskType = substr($relatedType, 8);
-}
 
 $taskTypeLabels = [
     'shop_order' => 'اوردر محل',
@@ -78,57 +39,6 @@ $taskTypeLabels = [
     'quality' => 'مهمة جودة',
     'maintenance' => 'صيانة'
 ];
-$taskTypeLabel = $taskTypeLabels[$taskType] ?? $taskType;
-
-// استخراج المنتجات المتعددة من notes
-$products = [];
-if (!empty($notes)) {
-    // محاولة استخراج JSON من notes
-    if (preg_match('/\[PRODUCTS_JSON\]:(.+?)(?=\n|$)/', $notes, $matches)) {
-        $productsJson = trim($matches[1]);
-        $decodedProducts = json_decode($productsJson, true);
-        if (is_array($decodedProducts) && !empty($decodedProducts)) {
-            $products = $decodedProducts;
-        }
-    }
-    
-    // إذا لم نجد JSON، حاول استخراج من الصيغة النصية
-    if (empty($products)) {
-        $lines = explode("\n", $notes);
-        foreach ($lines as $line) {
-            $line = trim($line);
-            if (preg_match('/المنتج:\s*(.+?)(?:\s*-\s*الكمية:\s*([0-9.]+))?/i', $line, $matches)) {
-                $productName = trim($matches[1]);
-                $productQuantity = isset($matches[2]) ? (float)$matches[2] : null;
-                if (!empty($productName)) {
-                    $products[] = [
-                        'name' => $productName,
-                        'quantity' => $productQuantity
-                    ];
-                }
-            }
-        }
-    }
-}
-
-// إذا لم نجد منتجات متعددة، استخدم المنتج الواحد (للتوافق مع الكود القديم)
-if (empty($products) && !empty($productName)) {
-    $products[] = [
-        'name' => $productName,
-        'quantity' => $quantity > 0 ? $quantity : null,
-        'unit' => $unit // إضافة الوحدة من قاعدة البيانات
-    ];
-} else {
-    // إضافة الوحدة للمنتجات المتعددة إذا لم تكن موجودة
-    foreach ($products as &$product) {
-        if (!isset($product['unit']) || empty($product['unit'])) {
-            $product['unit'] = $unit; // استخدام الوحدة من قاعدة البيانات كقيمة افتراضية
-        }
-    }
-    unset($product); // إزالة المرجع
-}
-
-// تسميات الحالة والأولوية
 $statusLabels = [
     'pending' => 'معلقة',
     'received' => 'مستلمة',
@@ -138,7 +48,6 @@ $statusLabels = [
     'returned' => 'تم الارجاع',
     'cancelled' => 'ملغاة'
 ];
-
 $priorityLabels = [
     'urgent' => 'عاجلة',
     'high' => 'عالية',
@@ -146,8 +55,101 @@ $priorityLabels = [
     'low' => 'منخفضة'
 ];
 
-$statusLabel = $statusLabels[$status] ?? $status;
-$priorityLabel = $priorityLabels[$priority] ?? $priority;
+$receipts = [];
+foreach ($taskIds as $taskId) {
+    if ($taskId <= 0) continue;
+    $task = $db->queryOne(
+        "SELECT t.*,
+                uAssign.full_name AS assigned_to_name,
+                uCreate.full_name AS created_by_name,
+                p.name AS product_name_from_db
+         FROM tasks t
+         LEFT JOIN users uAssign ON t.assigned_to = uAssign.id
+         LEFT JOIN users uCreate ON t.created_by = uCreate.id
+         LEFT JOIN products p ON t.product_id = p.id
+         WHERE t.id = ?",
+        [$taskId]
+    );
+    if (!$task) continue;
+
+    try {
+        $db->execute("UPDATE tasks SET receipt_print_count = COALESCE(receipt_print_count, 0) + 1 WHERE id = ?", [$taskId]);
+    } catch (Exception $e) {
+        error_log('print_task_receipt: failed to increment receipt_print_count: ' . $e->getMessage());
+    }
+
+    $notes = $task['notes'] ?? '';
+    $productName = $task['product_name'] ?? $task['product_name_from_db'] ?? '';
+    $quantity = isset($task['quantity']) && $task['quantity'] !== null ? (float) $task['quantity'] : 0;
+    $unit = !empty($task['unit']) ? $task['unit'] : 'قطعة';
+    $relatedType = $task['related_type'] ?? '';
+    $taskType = $task['task_type'] ?? 'general';
+    if (strpos($relatedType, 'manager_') === 0) {
+        $taskType = substr($relatedType, 8);
+    }
+
+    $products = [];
+    if (!empty($notes)) {
+        if (preg_match('/\[PRODUCTS_JSON\]:(.+?)(?=\n|$)/', $notes, $matches)) {
+            $productsJson = trim($matches[1]);
+            $decodedProducts = json_decode($productsJson, true);
+            if (is_array($decodedProducts) && !empty($decodedProducts)) {
+                $products = $decodedProducts;
+            }
+        }
+        if (empty($products)) {
+            $lines = explode("\n", $notes);
+            foreach ($lines as $line) {
+                $line = trim($line);
+                if (preg_match('/المنتج:\s*(.+?)(?:\s*-\s*الكمية:\s*([0-9.]+))?/i', $line, $m)) {
+                    $pn = trim($m[1]);
+                    $pq = isset($m[2]) ? (float)$m[2] : null;
+                    if ($pn !== '') {
+                        $products[] = ['name' => $pn, 'quantity' => $pq];
+                    }
+                }
+            }
+        }
+    }
+    if (empty($products) && $productName !== '') {
+        $products[] = ['name' => $productName, 'quantity' => $quantity > 0 ? $quantity : null, 'unit' => $unit];
+    } else {
+        foreach ($products as &$p) {
+            if (!isset($p['unit']) || $p['unit'] === '') {
+                $p['unit'] = $unit;
+            }
+        }
+        unset($p);
+    }
+
+    $displayNotes = '';
+    if (!empty($notes)) {
+        $displayNotes = preg_replace('/\[ASSIGNED_WORKERS_IDS\]:\s*[0-9,]+/', '', $notes);
+        $displayNotes = preg_replace('/\[PRODUCTS_JSON\]:[^\n]*/', '', $displayNotes);
+        $displayNotes = preg_replace('/المنتج:\s*[^\n]+/', '', $displayNotes);
+        $displayNotes = preg_replace('/الكمية:\s*[0-9.]+/', '', $displayNotes);
+        $displayNotes = preg_replace('/\n\s*\n\s*\n+/', "\n\n", $displayNotes);
+        $displayNotes = trim($displayNotes);
+    }
+
+    $receipts[] = [
+        'task' => $task,
+        'taskNumber' => $taskId,
+        'taskTypeLabel' => $taskTypeLabels[$taskType] ?? $taskType,
+        'priorityLabel' => $priorityLabels[$task['priority'] ?? 'normal'] ?? $task['priority'] ?? 'normal',
+        'statusLabel' => $statusLabels[$task['status'] ?? 'pending'] ?? $task['status'] ?? 'pending',
+        'products' => $products,
+        'unit' => $unit,
+        'displayNotes' => $displayNotes,
+    ];
+}
+
+if (empty($receipts)) {
+    die('لا توجد مهام صالحة للطباعة');
+}
+
+$companyName = COMPANY_NAME;
+$singleReceipt = count($receipts) === 1;
 
 ?>
 <!DOCTYPE html>
@@ -155,7 +157,7 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>إيصال مهمة - <?php echo htmlspecialchars($taskNumber); ?></title>
+    <title><?php echo $singleReceipt ? 'إيصال مهمة - ' . (int)$receipts[0]['taskNumber'] : 'طباعة إيصالات (' . count($receipts) . ')'; ?></title>
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         * {
@@ -383,6 +385,12 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
             border-top: 2px dashed #999;
             margin: 12px 0;
         }
+        .receipt-sheet {
+            page-break-after: always;
+        }
+        .receipt-sheet:last-child {
+            page-break-after: auto;
+        }
         
         .no-print {
             text-align: center;
@@ -421,9 +429,8 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
 <body>
     <div class="receipt-container">
         <div class="no-print">
-            <button class="btn-print" onclick="window.print()">طباعة</button>
+            <button class="btn-print" onclick="window.print()"><?php echo $singleReceipt ? 'طباعة' : 'طباعة الكل (' . count($receipts) . ')'; ?></button>
             <?php
-            // استخدام getDashboardUrl إذا كان متاحاً
             if (function_exists('getDashboardUrl')) {
                 $backUrl = getDashboardUrl('production') . '?page=tasks';
             } else {
@@ -434,7 +441,20 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
                 رجوع
             </a>
         </div>
-        
+        <?php
+        foreach ($receipts as $idx => $r):
+            $task = $r['task'];
+            $taskNumber = $r['taskNumber'];
+            $taskTypeLabel = $r['taskTypeLabel'];
+            $priorityLabel = $r['priorityLabel'];
+            $products = $r['products'];
+            $unit = $r['unit'];
+            $displayNotes = $r['displayNotes'];
+            $customerName = !empty($task['customer_name']) ? $task['customer_name'] : '';
+            $createdAt = $task['created_at'] ?? date('Y-m-d H:i:s');
+            $dueDate = $task['due_date'] ?? null;
+        ?>
+        <div class="receipt-sheet">
         <div class="task-number">
             رقم الاوردر: <?php echo htmlspecialchars($taskNumber); ?>
         </div>
@@ -444,7 +464,7 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
                 <td>العميل:</td>
                 <td>
                     <?php 
-                    echo !empty($customerName) ? htmlspecialchars($customerName) : '-';
+                    echo $customerName !== '' ? htmlspecialchars($customerName) : '-';
                     if (!empty($task['customer_phone'])) {
                         echo '<br><span style="font-weight: normal; font-size: 13px;">' . htmlspecialchars($task['customer_phone']) . '</span>';
                     }
@@ -477,22 +497,13 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
             </thead>
             <tbody>
                 <?php 
-                $totalQuantity = 0;
                 $grandTotal = 0;
-                $displayUnit = $unit; // الوحدة الافتراضية من قاعدة البيانات
                 foreach ($products as $product): 
                     $productQty = $product['quantity'] ?? null;
-                    $productUnit = !empty($product['unit']) ? $product['unit'] : $unit; // استخدام وحدة المنتج أو الوحدة الافتراضية
+                    $productUnit = !empty($product['unit']) ? $product['unit'] : $unit;
                     $productPrice = isset($product['price']) && $product['price'] !== null && $product['price'] !== '' ? (float)$product['price'] : null;
                     if ($productPrice !== null) {
                         $grandTotal += $productPrice;
-                    }
-                    if ($productQty !== null) {
-                        $totalQuantity += $productQty;
-                        // استخدام وحدة أول منتج للعرض الإجمالي
-                        if ($displayUnit === $unit) {
-                            $displayUnit = $productUnit;
-                        }
                     }
                 ?>
                 <tr>
@@ -533,30 +544,23 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
             </tr>
         </table>
         <?php endif; ?>
-                <?php if (!empty($notes)): ?>
+        <?php if ($displayNotes !== ''): ?>
         <div class="section-title">ملاحظات</div>
         <div class="task-details">
             <div style="font-size: 14px; line-height: 1.8; padding: 4px 0; font-weight: 500; color: #000;">
-                <?php 
-                // إزالة معلومات العمال من الملاحظات للعرض
-                $displayNotes = preg_replace('/\[ASSIGNED_WORKERS_IDS\]:\s*[0-9,]+/', '', $notes);
-                // إزالة JSON المنتجات
-                $displayNotes = preg_replace('/\[PRODUCTS_JSON\]:[^\n]*/', '', $displayNotes);
-                // إزالة معلومات المنتج النصية القديمة
-                $displayNotes = preg_replace('/المنتج:\s*[^\n]+/', '', $displayNotes);
-                $displayNotes = preg_replace('/الكمية:\s*[0-9.]+/', '', $displayNotes);
-                // إزالة الأسطر الفارغة المتعددة
-                $displayNotes = preg_replace('/\n\s*\n\s*\n+/', "\n\n", $displayNotes);
-                $displayNotes = trim($displayNotes);
-                if (!empty($displayNotes)) {
-                    echo nl2br(htmlspecialchars($displayNotes)); 
-                } else {
-                    echo '<span style="color: #666; font-weight: 500;">لا توجد ملاحظات</span>';
-                }
-                ?>
+                <?php echo nl2br(htmlspecialchars($displayNotes)); ?>
+            </div>
+        </div>
+        <?php else: ?>
+        <div class="section-title">ملاحظات</div>
+        <div class="task-details">
+            <div style="font-size: 14px; line-height: 1.8; padding: 4px 0; font-weight: 500; color: #000;">
+                <span style="color: #666; font-weight: 500;">لا توجد ملاحظات</span>
             </div>
         </div>
         <?php endif; ?>
+        </div>
+        <?php endforeach; ?>
     </div>
     
     <script>
