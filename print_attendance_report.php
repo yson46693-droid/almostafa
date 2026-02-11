@@ -120,52 +120,53 @@ $companyName = defined('COMPANY_NAME') ? COMPANY_NAME : 'النظام';
         }
         .summary-cards {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-            gap: 12px;
-            margin-bottom: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 6px;
+            margin-bottom: 12px;
         }
         .summary-card {
-            padding: 12px;
+            padding: 6px 8px;
             background: #f8f9fa;
-            border-radius: 8px;
+            border-radius: 6px;
             text-align: center;
             border: 1px solid #dee2e6;
         }
         .summary-card .value {
-            font-size: 18px;
+            font-size: 13px;
             font-weight: 700;
             color: #0d6efd;
         }
         .summary-card .label {
-            font-size: 12px;
+            font-size: 10px;
             color: #666;
-            margin-top: 4px;
+            margin-top: 2px;
         }
         table.report-table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 10px;
-            font-size: 13px;
+            margin-top: 8px;
+            font-size: 11px;
         }
         table.report-table th,
         table.report-table td {
             border: 1px solid #dee2e6;
-            padding: 8px 10px;
+            padding: 4px 6px;
             text-align: right;
         }
         table.report-table th {
             background: #0d6efd;
             color: #fff;
             font-weight: 600;
+            font-size: 11px;
         }
         table.report-table tr:nth-child(even) {
             background: #f8f9fa;
         }
         table.report-table .badge {
             display: inline-block;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 12px;
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-size: 10px;
         }
         .badge-success { background: #198754; color: #fff; }
         .badge-warning { background: #ffc107; color: #000; }
@@ -241,13 +242,12 @@ $companyName = defined('COMPANY_NAME') ? COMPANY_NAME : 'النظام';
                     <th>التأخير</th>
                     <th>سبب التأخير</th>
                     <th>ساعات العمل</th>
-                    <th>الحالة</th>
                 </tr>
             </thead>
             <tbody>
                 <?php if (empty($records)): ?>
                     <tr>
-                        <td colspan="8" style="text-align: center; color: #666;">لا توجد سجلات لهذا الشهر</td>
+                        <td colspan="7" style="text-align: center; color: #666;">لا توجد سجلات لهذا الشهر</td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($records as $i => $record): ?>
@@ -265,7 +265,6 @@ $companyName = defined('COMPANY_NAME') ? COMPANY_NAME : 'النظام';
                             </td>
                             <td><?php echo !empty($record['delay_reason']) && ($record['delay_minutes'] ?? 0) > 0 ? htmlspecialchars($record['delay_reason']) : '-'; ?></td>
                             <td><?php echo isset($record['work_hours']) && $record['work_hours'] > 0 ? formatHours($record['work_hours']) : '-'; ?></td>
-                            <td><?php echo $record['check_out_time'] ? 'مكتمل' : 'قيد العمل'; ?></td>
                         </tr>
                     <?php endforeach; ?>
                 <?php endif; ?>
