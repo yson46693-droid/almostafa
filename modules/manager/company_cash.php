@@ -850,13 +850,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // عهدة الأموال - إضافة
     if ($action === 'add_custody') {
-        $personName = trim($_POST['custody_person_name'] ?? '');
+        $custodyUserId = isset($_POST['custody_user_id']) ? (int) $_POST['custody_user_id'] : 0;
         $amount = isset($_POST['custody_amount']) ? (float) str_replace(',', '', $_POST['custody_amount']) : 0;
         $source = isset($_POST['custody_source']) && $_POST['custody_source'] === 'from_management' ? 'from_management' : 'from_safe';
         $notes = trim($_POST['custody_notes'] ?? '');
 
+        $personName = '';
+        if ($custodyUserId > 0) {
+            $custodyUser = $db->queryOne("SELECT id, full_name, username FROM users WHERE id = ? AND status = 'active' AND role IN ('accountant', 'production', 'sales')", [$custodyUserId]);
+            $personName = $custodyUser ? trim($custodyUser['full_name'] ?? $custodyUser['username'] ?? '') : '';
+        }
+
         if ($personName === '') {
-            $_SESSION['financial_error'] = 'يرجى إدخال اسم صاحب العهدة.';
+            $_SESSION['financial_error'] = 'يرجى اختيار صاحب العهدة من القائمة.';
         } elseif ($amount <= 0) {
             $_SESSION['financial_error'] = 'يرجى إدخال مبلغ صحيح أكبر من الصفر.';
         } else {
@@ -1415,6 +1421,10 @@ $typeColorMap = [
             </div>
 
             <!-- عهدة الأموال -->
+            <?php
+            $custodyUsers = $db->query("SELECT id, full_name, username, role FROM users WHERE status = 'active' AND role IN ('accountant', 'production', 'sales') ORDER BY full_name ASC, username ASC") ?: [];
+            $roleLabels = ['accountant' => 'محاسب', 'production' => 'عامل إنتاج', 'sales' => 'مندوب مبيعات'];
+            ?>
             <div class="col-12 col-lg-12 col-xxl-12">
                 <div class="card shadow-sm h-100">
                     <div class="card-header bg-light fw-bold">
@@ -1424,8 +1434,17 @@ $typeColorMap = [
                         <form method="POST" class="row g-3">
                             <input type="hidden" name="action" value="add_custody">
                             <div class="col-12">
-                                <label for="custodyPersonName" class="form-label">اسم صاحب العهدة <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" id="custodyPersonName" name="custody_person_name" required placeholder="أدخل الاسم يدوياً" value="">
+                                <label for="custodyUserId" class="form-label">صاحب العهدة <span class="text-danger">*</span></label>
+                                <select class="form-select" id="custodyUserId" name="custody_user_id" required>
+                                    <option value="">-- اختر من القائمة --</option>
+                                    <?php foreach ($custodyUsers as $cu): ?>
+                                        <option value="<?php echo (int)$cu['id']; ?>">
+                                            <?php echo htmlspecialchars($cu['full_name'] ?: $cu['username'], ENT_QUOTES, 'UTF-8'); ?>
+                                            <?php echo ' (' . ($roleLabels[$cu['role']] ?? $cu['role']) . ')'; ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <small class="text-muted">محاسب - عامل إنتاج - مندوب مبيعات</small>
                             </div>
                             <div class="col-12">
                                 <label for="custodyAmount" class="form-label">المبلغ <span class="text-danger">*</span></label>
@@ -1584,12 +1603,12 @@ $canEditCustody = in_array($userRoleForCustody, ['manager', 'accountant', 'devel
                                 <td><?php echo htmlspecialchars($c['created_by_name'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td>
                                     <?php if ($canEditThis): ?>
-                                        <button type="button" class="btn btn-sm btn-outline-warning me-1" data-bs-toggle="modal" data-bs-target="#editCustodyModal" data-custody-id="<?php echo (int)$c['id']; ?>" data-custody-name="<?php echo htmlspecialchars($c['person_name'], ENT_QUOTES, 'UTF-8'); ?>" data-custody-amount="<?php echo htmlspecialchars($c['amount'], ENT_QUOTES, 'UTF-8'); ?>" title="تعديل المبلغ">
+                                        <button type="button" class="btn btn-sm btn-outline-warning me-1 custody-edit-btn" data-custody-id="<?php echo (int)$c['id']; ?>" data-custody-name="<?php echo htmlspecialchars($c['person_name'], ENT_QUOTES, 'UTF-8'); ?>" data-custody-amount="<?php echo htmlspecialchars($c['amount'], ENT_QUOTES, 'UTF-8'); ?>" title="تعديل المبلغ">
                                             <i class="bi bi-pencil"></i>
                                         </button>
                                     <?php endif; ?>
                                     <?php if ($remaining > 0): ?>
-                                        <button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#retrieveCustodyModal" data-custody-id="<?php echo (int)$c['id']; ?>" data-custody-name="<?php echo htmlspecialchars($c['person_name'], ENT_QUOTES, 'UTF-8'); ?>" data-custody-remaining="<?php echo htmlspecialchars($c['remaining_amount'], ENT_QUOTES, 'UTF-8'); ?>" title="استرجاع">
+                                        <button type="button" class="btn btn-sm btn-outline-success custody-retrieve-btn" data-custody-id="<?php echo (int)$c['id']; ?>" data-custody-name="<?php echo htmlspecialchars($c['person_name'], ENT_QUOTES, 'UTF-8'); ?>" data-custody-remaining="<?php echo htmlspecialchars($c['remaining_amount'], ENT_QUOTES, 'UTF-8'); ?>" title="استرجاع">
                                             <i class="bi bi-arrow-return-left"></i>
                                         </button>
                                     <?php else: ?>
@@ -1605,101 +1624,133 @@ $canEditCustody = in_array($userRoleForCustody, ['manager', 'accountant', 'devel
     </div>
 </div>
 
-<!-- مودال تعديل مبلغ العهدة -->
-<div class="modal fade" id="editCustodyModal" tabindex="-1" aria-labelledby="editCustodyModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="POST" id="editCustodyForm">
-                <input type="hidden" name="action" value="edit_custody">
-                <input type="hidden" name="custody_id" id="editCustodyId" value="">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="editCustodyModalLabel">تعديل مبلغ العهدة</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
-                </div>
-                <div class="modal-body">
-                    <p class="text-muted small mb-2">صاحب العهدة: <strong id="editCustodyNameDisplay"></strong></p>
-                    <div class="mb-3">
-                        <label for="custodyEditAmount" class="form-label">المبلغ الجديد <span class="text-danger">*</span></label>
-                        <div class="input-group">
-                            <span class="input-group-text">ج.م</span>
-                            <input type="number" step="0.01" min="0.01" class="form-control" id="custodyEditAmount" name="custody_edit_amount" required>
-                        </div>
+<!-- بطاقة تعديل مبلغ العهدة -->
+<div class="card shadow-sm mt-3" id="editCustodyCard">
+    <div class="card-header bg-light fw-bold">
+        <i class="bi bi-pencil-square me-2 text-warning"></i>تعديل مبلغ العهدة
+    </div>
+    <div class="card-body">
+        <form method="POST" id="editCustodyForm">
+            <input type="hidden" name="action" value="edit_custody">
+            <input type="hidden" name="custody_id" id="editCustodyId" value="">
+            <p class="text-muted small mb-2">صاحب العهدة: <strong id="editCustodyNameDisplay">—</strong></p>
+            <div class="row g-3 align-items-end">
+                <div class="col-12 col-md-6 col-lg-4">
+                    <label for="custodyEditAmount" class="form-label">المبلغ الجديد <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <span class="input-group-text">ج.م</span>
+                        <input type="number" step="0.01" min="0.01" class="form-control" id="custodyEditAmount" name="custody_edit_amount" placeholder="0.00">
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-                    <button type="submit" class="btn btn-warning">حفظ التعديل</button>
+                <div class="col-12 col-md-6 col-lg-4">
+                    <button type="submit" class="btn btn-warning" id="editCustodySubmitBtn" disabled>
+                        <i class="bi bi-check2 me-1"></i>حفظ التعديل
+                    </button>
                 </div>
-            </form>
-        </div>
+            </div>
+            <small class="text-muted d-block mt-2">اختر سجلاً من الجدول أعلاه واضغط <span class="badge bg-warning text-dark">تعديل</span> لملء النموذج.</small>
+        </form>
     </div>
 </div>
 
-<!-- مودال استرجاع عهدة -->
-<div class="modal fade" id="retrieveCustodyModal" tabindex="-1" aria-labelledby="retrieveCustodyModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="POST" id="retrieveCustodyForm">
-                <input type="hidden" name="action" value="retrieve_custody">
-                <input type="hidden" name="custody_id" id="retrieveCustodyId" value="">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="retrieveCustodyModalLabel">استرجاع عهدة</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
-                </div>
-                <div class="modal-body">
-                    <p class="text-muted small mb-2">صاحب العهدة: <strong id="retrieveCustodyNameDisplay"></strong></p>
-                    <p class="small mb-2">المبلغ المتبقي: <strong id="retrieveCustodyRemainingDisplay" class="text-success"></strong></p>
-                    <div class="mb-3">
-                        <label for="retrieveAmount" class="form-label">مبلغ الاسترجاع <span class="text-danger">*</span></label>
-                        <div class="input-group">
-                            <span class="input-group-text">ج.م</span>
-                            <input type="number" step="0.01" min="0.01" class="form-control" id="retrieveAmount" name="retrieve_amount" required>
-                        </div>
-                        <small class="text-muted">يمكن استرجاع كامل المبلغ أو جزء منه</small>
+<!-- بطاقة استرجاع عهدة -->
+<div class="card shadow-sm mt-3" id="retrieveCustodyCard">
+    <div class="card-header bg-light fw-bold">
+        <i class="bi bi-arrow-return-left me-2 text-success"></i>استرجاع عهدة
+    </div>
+    <div class="card-body">
+        <form method="POST" id="retrieveCustodyForm">
+            <input type="hidden" name="action" value="retrieve_custody">
+            <input type="hidden" name="custody_id" id="retrieveCustodyId" value="">
+            <p class="text-muted small mb-1">صاحب العهدة: <strong id="retrieveCustodyNameDisplay">—</strong></p>
+            <p class="small mb-2">المبلغ المتبقي: <strong id="retrieveCustodyRemainingDisplay" class="text-success">—</strong></p>
+            <div class="row g-3 align-items-end">
+                <div class="col-12 col-md-6 col-lg-4">
+                    <label for="retrieveAmount" class="form-label">مبلغ الاسترجاع <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <span class="input-group-text">ج.م</span>
+                        <input type="number" step="0.01" min="0.01" class="form-control" id="retrieveAmount" name="retrieve_amount" placeholder="0.00">
                     </div>
+                    <small class="text-muted">كامل المبلغ أو جزء منه</small>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-                    <button type="submit" class="btn btn-success">استرجاع</button>
+                <div class="col-12 col-md-6 col-lg-4">
+                    <button type="submit" class="btn btn-success" id="retrieveCustodySubmitBtn" disabled>
+                        <i class="bi bi-arrow-return-left me-1"></i>استرجاع
+                    </button>
                 </div>
-            </form>
-        </div>
+            </div>
+            <small class="text-muted d-block mt-2">اختر سجلاً من الجدول أعلاه واضغط <span class="badge bg-success">استرجاع</span> لملء النموذج.</small>
+        </form>
     </div>
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    var editModal = document.getElementById('editCustodyModal');
-    if (editModal) {
-        editModal.addEventListener('show.bs.modal', function(e) {
-            var btn = e.relatedTarget;
-            if (btn) {
-                document.getElementById('editCustodyId').value = btn.getAttribute('data-custody-id') || '';
-                document.getElementById('editCustodyNameDisplay').textContent = btn.getAttribute('data-custody-name') || '';
-                var amount = btn.getAttribute('data-custody-amount') || '0';
-                document.getElementById('custodyEditAmount').value = amount;
-            }
-        });
+    var editCard = document.getElementById('editCustodyCard');
+    var retrieveCard = document.getElementById('retrieveCustodyCard');
+    var editCustodyId = document.getElementById('editCustodyId');
+    var editCustodyNameDisplay = document.getElementById('editCustodyNameDisplay');
+    var custodyEditAmount = document.getElementById('custodyEditAmount');
+    var editCustodySubmitBtn = document.getElementById('editCustodySubmitBtn');
+    var retrieveCustodyId = document.getElementById('retrieveCustodyId');
+    var retrieveCustodyNameDisplay = document.getElementById('retrieveCustodyNameDisplay');
+    var retrieveCustodyRemainingDisplay = document.getElementById('retrieveCustodyRemainingDisplay');
+    var retrieveAmount = document.getElementById('retrieveAmount');
+    var retrieveCustodySubmitBtn = document.getElementById('retrieveCustodySubmitBtn');
+
+    function scrollToCard(el) {
+        if (el && el.scrollIntoView) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
     }
-    var retrieveModal = document.getElementById('retrieveCustodyModal');
-    if (retrieveModal) {
-        retrieveModal.addEventListener('show.bs.modal', function(e) {
-            var btn = e.relatedTarget;
-            if (btn) {
-                document.getElementById('retrieveCustodyId').value = btn.getAttribute('data-custody-id') || '';
-                document.getElementById('retrieveCustodyNameDisplay').textContent = btn.getAttribute('data-custody-name') || '';
-                var remaining = parseFloat(btn.getAttribute('data-custody-remaining') || 0);
-                document.getElementById('retrieveCustodyRemainingDisplay').textContent = remaining.toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ج.م';
-                document.getElementById('retrieveAmount').setAttribute('max', remaining);
-                document.getElementById('retrieveAmount').value = remaining;
+
+    document.querySelectorAll('.custody-edit-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var id = this.getAttribute('data-custody-id') || '';
+            var name = this.getAttribute('data-custody-name') || '—';
+            var amount = this.getAttribute('data-custody-amount') || '0';
+            if (editCustodyId) editCustodyId.value = id;
+            if (editCustodyNameDisplay) editCustodyNameDisplay.textContent = name;
+            if (custodyEditAmount) { custodyEditAmount.value = amount; custodyEditAmount.required = true; }
+            if (editCustodySubmitBtn) editCustodySubmitBtn.disabled = false;
+            scrollToCard(editCard);
+        });
+    });
+
+    document.querySelectorAll('.custody-retrieve-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var id = this.getAttribute('data-custody-id') || '';
+            var name = this.getAttribute('data-custody-name') || '—';
+            var remaining = parseFloat(this.getAttribute('data-custody-remaining') || 0);
+            if (retrieveCustodyId) retrieveCustodyId.value = id;
+            if (retrieveCustodyNameDisplay) retrieveCustodyNameDisplay.textContent = name;
+            if (retrieveCustodyRemainingDisplay) retrieveCustodyRemainingDisplay.textContent = remaining.toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ج.م';
+            if (retrieveAmount) { retrieveAmount.setAttribute('max', remaining); retrieveAmount.value = remaining; retrieveAmount.required = true; }
+            if (retrieveCustodySubmitBtn) retrieveCustodySubmitBtn.disabled = false;
+            scrollToCard(retrieveCard);
+        });
+    });
+
+    var editForm = document.getElementById('editCustodyForm');
+    if (editForm) {
+        editForm.addEventListener('submit', function(e) {
+            if (!editCustodyId || !editCustodyId.value || !custodyEditAmount || parseFloat(custodyEditAmount.value) <= 0) {
+                e.preventDefault();
+                alert('يرجى اختيار سجل عهدة من الجدول أولاً ثم تعديل المبلغ.');
+                return false;
             }
         });
     }
     var retrieveForm = document.getElementById('retrieveCustodyForm');
     if (retrieveForm) {
         retrieveForm.addEventListener('submit', function(e) {
-            var maxVal = parseFloat(document.getElementById('retrieveAmount').getAttribute('max') || 0);
-            var val = parseFloat(document.getElementById('retrieveAmount').value || 0);
+            if (!retrieveCustodyId || !retrieveCustodyId.value) {
+                e.preventDefault();
+                alert('يرجى اختيار سجل عهدة من الجدول أولاً.');
+                return false;
+            }
+            var maxVal = parseFloat(retrieveAmount ? retrieveAmount.getAttribute('max') : 0) || 0;
+            var val = parseFloat(retrieveAmount ? retrieveAmount.value : 0) || 0;
             if (val <= 0 || val > maxVal) {
                 e.preventDefault();
                 alert('مبلغ الاسترجاع يجب أن يكون بين 0.01 و ' + maxVal.toLocaleString('ar-EG', { minimumFractionDigits: 2 }) + ' ج.م');
