@@ -956,14 +956,83 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $dueDate = trim($_POST['due_date'] ?? '') ?: null;
                     $customerName = trim($_POST['customer_name'] ?? '') ?: null;
                     $customerPhone = trim($_POST['customer_phone'] ?? '') ?: null;
+                    $details = trim($_POST['details'] ?? '') ?: null;
+                    $assignees = isset($_POST['assigned_to']) && is_array($_POST['assigned_to'])
+                        ? array_filter(array_map('intval', $_POST['assigned_to']))
+                        : [];
+                    $products = [];
+                    if (isset($_POST['products']) && is_array($_POST['products'])) {
+                        foreach ($_POST['products'] as $p) {
+                            $name = trim($p['name'] ?? '');
+                            if ($name === '') continue;
+                            $qty = isset($p['quantity']) && $p['quantity'] !== '' ? (float)str_replace(',', '.', $p['quantity']) : null;
+                            $unit = in_array(trim($p['unit'] ?? 'قطعة'), ['قطعة','كرتونة','عبوة','شرينك','جرام','كيلو'], true) ? trim($p['unit']) : 'قطعة';
+                            $price = isset($p['price']) && $p['price'] !== '' ? (float)str_replace(',', '.', $p['price']) : null;
+                            $products[] = ['name' => $name, 'quantity' => $qty, 'unit' => $unit, 'price' => $price];
+                        }
+                    }
+                    $notesParts = [];
+                    if ($details) $notesParts[] = $details;
+                    if (!empty($products)) {
+                        $notesParts[] = '[PRODUCTS_JSON]:' . json_encode($products, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                        $lines = [];
+                        foreach ($products as $p) {
+                            $lines[] = 'المنتج: ' . $p['name'] . ($p['quantity'] !== null ? ' - الكمية: ' . $p['quantity'] : '');
+                        }
+                        $notesParts[] = implode("\n", $lines);
+                    }
+                    $assigneeNames = [];
+                    foreach ($assignees as $aid) {
+                        $u = $db->queryOne("SELECT full_name FROM users WHERE id = ?", [$aid]);
+                        if ($u) $assigneeNames[] = $u['full_name'];
+                    }
+                    if (count($assignees) > 1) {
+                        $notesParts[] = 'العمال المخصصون: ' . implode(', ', $assigneeNames) . "\n[ASSIGNED_WORKERS_IDS]:" . implode(',', $assignees);
+                    } elseif (count($assignees) === 1) {
+                        $notesParts[] = 'العامل المخصص: ' . ($assigneeNames[0] ?? '') . "\n[ASSIGNED_WORKERS_IDS]:" . $assignees[0];
+                    }
+                    $notesValue = !empty($notesParts) ? implode("\n\n", $notesParts) : null;
+                    $firstProduct = !empty($products) ? $products[0] : null;
+                    $productName = $firstProduct['name'] ?? null;
+                    $quantity = $firstProduct['quantity'] ?? null;
+                    $unit = $firstProduct['unit'] ?? 'قطعة';
+                    if (!empty($products)) {
+                        $q = 0;
+                        foreach ($products as $p) {
+                            if ($p['quantity'] !== null) $q += $p['quantity'];
+                        }
+                        $quantity = $q > 0 ? $q : null;
+                    }
+                    $templateId = null;
+                    $productId = null;
+                    if ($productName) {
+                        $tn = trim($productName);
+                        $t = $db->queryOne("SELECT id FROM unified_product_templates WHERE (product_name = ? OR CONCAT('قالب #', id) = ?) AND status = 'active' LIMIT 1", [$tn, $tn]);
+                        if ($t) $templateId = (int)$t['id'];
+                        if (!$templateId) {
+                            $t = $db->queryOne("SELECT id FROM product_templates WHERE (product_name = ? OR CONCAT('قالب #', id) = ?) AND status = 'active' LIMIT 1", [$tn, $tn]);
+                            if ($t) $templateId = (int)$t['id'];
+                        }
+                        if (!$templateId) {
+                            $p = $db->queryOne("SELECT id FROM products WHERE name = ? AND status = 'active' LIMIT 1", [$tn]);
+                            if ($p) $productId = (int)$p['id'];
+                        }
+                    }
+                    $firstAssignee = !empty($assignees) ? (int)$assignees[0] : 0;
                     $relatedType = 'manager_' . $taskType;
                     $db->execute(
-                        "UPDATE tasks SET task_type = ?, related_type = ?, priority = ?, due_date = ?, customer_name = ?, customer_phone = ? WHERE id = ?",
-                        [$taskType, $relatedType, $priority, $dueDate, $customerName, $customerPhone, $taskId]
+                        "UPDATE tasks SET task_type = ?, related_type = ?, priority = ?, due_date = ?, customer_name = ?, customer_phone = ?,
+                         notes = ?, product_name = ?, quantity = ?, unit = ?, template_id = ?, product_id = ?, assigned_to = ?
+                         WHERE id = ?",
+                        [
+                            $taskType, $relatedType, $priority, $dueDate, $customerName, $customerPhone,
+                            $notesValue, $productName, $quantity, $unit, $templateId, $productId ?: null, $firstAssignee ?: null,
+                            $taskId
+                        ]
                     );
                     $successMessage = 'تم تعديل الأوردر بنجاح.';
                     $userRole = ($currentUser['role'] ?? '') === 'accountant' ? 'accountant' : 'manager';
-                    preventDuplicateSubmission($successMessage, ['page' => 'production_tasks'], null, $userRole);
+                    preventDuplicateSubmission($successMessage, ['page' => 'production_tasks', '_refresh' => time()], null, $userRole);
                     exit;
                 }
             } catch (Exception $e) {
@@ -977,9 +1046,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get_task_for_edit' && ($isAccountant || $isManager)) {
     $taskId = isset($_GET['task_id']) ? intval($_GET['task_id']) : 0;
     if ($taskId > 0) {
-        $task = $db->queryOne("SELECT id, task_type, related_type, priority, due_date, customer_name, customer_phone FROM tasks WHERE id = ?", [$taskId]);
+        $task = $db->queryOne("SELECT id, task_type, related_type, priority, due_date, customer_name, customer_phone, notes FROM tasks WHERE id = ?", [$taskId]);
         if ($task) {
             $displayType = (strpos($task['related_type'] ?? '', 'manager_') === 0) ? substr($task['related_type'], 8) : ($task['task_type'] ?? 'shop_order');
+            $notes = $task['notes'] ?? '';
+            $products = [];
+            $assignees = [];
+            $details = $notes;
+            if (preg_match('/\[PRODUCTS_JSON\]:(.+?)(?=\n|$)/s', $notes, $m)) {
+                $decoded = json_decode(trim($m[1]), true);
+                if (is_array($decoded)) {
+                    $products = $decoded;
+                }
+            }
+            if (preg_match('/\[ASSIGNED_WORKERS_IDS\]:\s*([0-9,]+)/', $notes, $m)) {
+                $assignees = array_filter(array_map('intval', explode(',', $m[1])));
+            }
+            $details = preg_replace('/\[PRODUCTS_JSON\]:[^\n]*/', '', $notes);
+            $details = preg_replace('/\[ASSIGNED_WORKERS_IDS\]:\s*[0-9,]+/', '', $details);
+            $details = preg_replace('/العمال المخصصون:.*$/m', '', $details);
+            $details = preg_replace('/العامل المخصص:.*$/m', '', $details);
+            $details = preg_replace('/المنتج:\s*[^\n]+/m', '', $details);
+            $details = preg_replace('/الكمية:\s*[0-9.]+/m', '', $details);
+            $details = preg_replace('/\n\s*\n\s*\n+/', "\n\n", trim($details));
             header('Content-Type: application/json; charset=UTF-8');
             echo json_encode([
                 'success' => true,
@@ -989,7 +1078,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['act
                     'priority' => $task['priority'] ?? 'normal',
                     'due_date' => $task['due_date'] ?? '',
                     'customer_name' => $task['customer_name'] ?? '',
-                    'customer_phone' => $task['customer_phone'] ?? ''
+                    'customer_phone' => $task['customer_phone'] ?? '',
+                    'details' => $details,
+                    'products' => $products,
+                    'assignees' => $assignees
                 ]
             ]);
             exit;
@@ -1680,6 +1772,80 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
         </div>
     </div>
 
+    <div class="collapse mb-3" id="editTaskFormCollapse">
+        <div class="card shadow-sm">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0"><i class="bi bi-pencil-square me-2"></i>تعديل الاوردر</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" action="" id="editTaskForm">
+                    <input type="hidden" name="action" value="update_task">
+                    <input type="hidden" name="task_id" id="editTaskId">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">نوع الاوردر</label>
+                            <select class="form-select" name="task_type" id="editTaskType" required>
+                                <option value="shop_order">اوردر محل</option>
+                                <option value="cash_customer">عميل نقدي</option>
+                                <option value="telegraph">تليجراف</option>
+                                <option value="shipping_company">شركة شحن</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">الأولوية</label>
+                            <select class="form-select" name="priority" id="editPriority">
+                                <option value="low">منخفضة</option>
+                                <option value="normal" selected>عادية</option>
+                                <option value="high">مرتفعة</option>
+                                <option value="urgent">عاجلة</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">تاريخ الاستحقاق</label>
+                            <input type="date" class="form-control" name="due_date" id="editDueDate">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">اختر العمال المستهدفين</label>
+                            <div style="max-height: 120px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 0.375rem;">
+                                <select class="form-select form-select-sm border-0" name="assigned_to[]" multiple required style="max-height: 100px;" id="editAssignedTo">
+                                    <?php foreach ($productionUsers as $worker): ?>
+                                        <option value="<?php echo (int)$worker['id']; ?>"><?php echo htmlspecialchars($worker['full_name']); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="form-text small">يمكن تحديد أكثر من عامل باستخدام زر CTRL أو SHIFT.</div>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">اسم العميل</label>
+                            <div class="position-relative">
+                                <input type="text" class="form-control" name="customer_name" id="editCustomerName" placeholder="بحث أو أدخل اسم العميل">
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">رقم العميل</label>
+                            <input type="text" class="form-control" name="customer_phone" id="editCustomerPhone" placeholder="أدخل رقم العميل" dir="ltr">
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label">وصف وتفاصيل و ملاحظات الاوردر</label>
+                            <textarea class="form-control" name="details" id="editDetails" rows="3" placeholder="أدخل التفاصيل والتعليمات اللازمة للعمال."></textarea>
+                        </div>
+                        <div class="col-12" id="editProductsSection">
+                            <label class="form-label fw-bold">المنتجات والكميات</label>
+                            <div id="editProductsContainer"></div>
+                            <button type="button" class="btn btn-outline-primary btn-sm mt-2" id="editAddProductBtn">
+                                <i class="bi bi-plus-circle me-1"></i>إضافة منتج آخر
+                            </button>
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-end mt-4 gap-2">
+                        <button type="button" class="btn btn-outline-secondary" onclick="closeEditTaskCard()"><i class="bi bi-x-circle me-1"></i>إلغاء</button>
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-check-circle me-1"></i>حفظ التعديلات</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <div class="card shadow-sm mt-4">
         <div class="card-header bg-light d-flex justify-content-between align-items-center flex-wrap gap-2">
             <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>آخر المهام التي تم إرسالها</h5>
@@ -2076,60 +2242,6 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
     </div>
 </div>
 
-<!-- مودال تعديل الأوردر -->
-<div class="modal fade" id="editTaskModal" tabindex="-1" aria-labelledby="editTaskModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header bg-secondary text-white">
-                <h5 class="modal-title" id="editTaskModalLabel"><i class="bi bi-pencil-square me-2"></i>تعديل الاوردر</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
-            </div>
-            <form method="POST" id="editTaskForm" action="">
-                <input type="hidden" name="action" value="update_task">
-                <input type="hidden" name="task_id" id="editTaskId">
-                <div class="modal-body">
-                    <div class="row g-2">
-                        <div class="col-12">
-                            <label class="form-label">نوع الاوردر</label>
-                            <select class="form-select" name="task_type" id="editTaskType" required>
-                                <option value="shop_order">اوردر محل</option>
-                                <option value="cash_customer">عميل نقدي</option>
-                                <option value="telegraph">تليجراف</option>
-                                <option value="shipping_company">شركة شحن</option>
-                            </select>
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label">الأولوية</label>
-                            <select class="form-select" name="priority" id="editPriority">
-                                <option value="low">منخفضة</option>
-                                <option value="normal" selected>عادية</option>
-                                <option value="high">مرتفعة</option>
-                                <option value="urgent">عاجلة</option>
-                            </select>
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label">تاريخ التسليم</label>
-                            <input type="date" class="form-control" name="due_date" id="editDueDate">
-                        </div>
-                        <div class="col-12">
-                            <label class="form-label">اسم العميل</label>
-                            <input type="text" class="form-control" name="customer_name" id="editCustomerName" placeholder="اسم العميل">
-                        </div>
-                        <div class="col-12">
-                            <label class="form-label">رقم العميل</label>
-                            <input type="text" class="form-control" name="customer_phone" id="editCustomerPhone" placeholder="رقم الهاتف" dir="ltr">
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle me-1"></i>إلغاء</button>
-                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-circle me-1"></i>حفظ التعديلات</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
 <!-- مودال إيصال الأوردر -->
 <div class="modal fade" id="orderReceiptModal" tabindex="-1" aria-labelledby="orderReceiptModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-scrollable">
@@ -2155,10 +2267,58 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
 <script>
 var __localCustomersForTask = <?php echo json_encode($localCustomersForDropdown); ?>;
 
+var editProductIndex = 0;
+function buildEditProductRow(idx, product) {
+    var p = product || { name: '', quantity: '', unit: 'قطعة', price: '' };
+    var unitVal = p.unit || 'قطعة';
+    var opts = ['كرتونة','عبوة','كيلو','جرام','شرينك','قطعة'].map(function(u) {
+        return '<option value="' + u + '"' + (u === unitVal ? ' selected' : '') + '>' + u + '</option>';
+    }).join('');
+    return '<div class="product-row mb-3 p-3 border rounded edit-product-row" data-edit-product-index="' + idx + '">' +
+        '<div class="row g-2">' +
+        '<div class="col-md-4"><label class="form-label small">اسم المنتج</label>' +
+        '<input type="text" class="form-control" name="products[' + idx + '][name]" placeholder="اسم المنتج أو القالب" list="templateSuggestions" value="' + (p.name || '').replace(/"/g, '&quot;') + '"></div>' +
+        '<div class="col-md-2"><label class="form-label small">الكمية</label>' +
+        '<input type="number" class="form-control" name="products[' + idx + '][quantity]" step="0.01" min="0" placeholder="120" value="' + (p.quantity !== null && p.quantity !== '' ? p.quantity : '') + '"></div>' +
+        '<div class="col-md-2"><label class="form-label small">الوحدة</label>' +
+        '<select class="form-select form-select-sm" name="products[' + idx + '][unit]">' + opts + '</select></div>' +
+        '<div class="col-md-2"><label class="form-label small">السعر</label>' +
+        '<input type="number" class="form-control" name="products[' + idx + '][price]" step="0.01" min="0" placeholder="0.00" value="' + (p.price !== null && p.price !== '' ? p.price : '') + '"></div>' +
+        '<div class="col-md-2 d-flex align-items-end">' +
+        '<button type="button" class="btn btn-danger btn-sm w-100 edit-remove-product-btn"><i class="bi bi-trash"></i></button></div></div></div>';
+}
+function addEditProductRow(product) {
+    var container = document.getElementById('editProductsContainer');
+    if (!container) return;
+    var row = document.createElement('div');
+    row.innerHTML = buildEditProductRow(editProductIndex, product);
+    row = row.firstElementChild;
+    container.appendChild(row);
+    row.querySelector('.edit-remove-product-btn').addEventListener('click', function() {
+        var rows = container.querySelectorAll('.edit-product-row');
+        if (rows.length > 1) row.remove();
+    });
+    editProductIndex++;
+}
+window.closeEditTaskCard = function() {
+    var collapse = document.getElementById('editTaskFormCollapse');
+    if (collapse) {
+        var bs = bootstrap.Collapse.getInstance(collapse);
+        if (bs) bs.hide();
+    }
+};
 window.openEditTaskModal = function(taskId) {
-    var modalEl = document.getElementById('editTaskModal');
-    if (!modalEl) return;
+    var createCollapse = document.getElementById('createTaskFormCollapse');
+    var editCollapse = document.getElementById('editTaskFormCollapse');
+    if (!editCollapse) return;
+    if (createCollapse) {
+        var createBs = bootstrap.Collapse.getInstance(createCollapse);
+        if (createBs) createBs.hide();
+    }
     document.getElementById('editTaskId').value = taskId;
+    var container = document.getElementById('editProductsContainer');
+    if (container) container.innerHTML = '';
+    editProductIndex = 0;
     var url = new URL(window.location.href);
     url.searchParams.set('action', 'get_task_for_edit');
     url.searchParams.set('task_id', String(taskId));
@@ -2172,11 +2332,29 @@ window.openEditTaskModal = function(taskId) {
                 document.getElementById('editDueDate').value = t.due_date || '';
                 document.getElementById('editCustomerName').value = t.customer_name || '';
                 document.getElementById('editCustomerPhone').value = t.customer_phone || '';
+                document.getElementById('editDetails').value = t.details || '';
+                var assignSelect = document.getElementById('editAssignedTo');
+                if (assignSelect) {
+                    for (var i = 0; i < assignSelect.options.length; i++) {
+                        assignSelect.options[i].selected = (t.assignees || []).indexOf(parseInt(assignSelect.options[i].value, 10)) >= 0;
+                    }
+                }
+                var products = t.products || [];
+                if (products.length === 0) products = [{}];
+                products.forEach(function(p) { addEditProductRow(p); });
             }
         })
-        .catch(function() {});
-    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        .catch(function() { addEditProductRow({}); });
+    var editBs = bootstrap.Collapse.getInstance(editCollapse) || new bootstrap.Collapse(editCollapse, { toggle: false });
+    editBs.show();
+    setTimeout(function() { editCollapse.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
 };
+document.addEventListener('DOMContentLoaded', function() {
+    var editAddBtn = document.getElementById('editAddProductBtn');
+    if (editAddBtn) {
+        editAddBtn.addEventListener('click', function() { addEditProductRow({}); });
+    }
+});
 
 window.openOrderReceiptModal = function(orderId) {
     var modalEl = document.getElementById('orderReceiptModal');
