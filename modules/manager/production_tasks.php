@@ -937,7 +937,67 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = 'تعذر إلغاء المهمة: ' . $cancelError->getMessage();
             }
         }
+    } elseif ($action === 'update_task') {
+        $taskId = intval($_POST['task_id'] ?? 0);
+        if ($taskId <= 0) {
+            $error = 'معرف المهمة غير صحيح.';
+        } elseif (!($isAccountant || $isManager)) {
+            $error = 'غير مصرح بتعديل المهمة.';
+        } else {
+            try {
+                $task = $db->queryOne("SELECT id FROM tasks WHERE id = ? LIMIT 1", [$taskId]);
+                if (!$task) {
+                    $error = 'المهمة غير موجودة.';
+                } else {
+                    $taskType = $_POST['task_type'] ?? 'shop_order';
+                    $taskType = in_array($taskType, $allowedTypes, true) ? $taskType : 'shop_order';
+                    $priority = $_POST['priority'] ?? 'normal';
+                    $priority = in_array($priority, $allowedPriorities, true) ? $priority : 'normal';
+                    $dueDate = trim($_POST['due_date'] ?? '') ?: null;
+                    $customerName = trim($_POST['customer_name'] ?? '') ?: null;
+                    $customerPhone = trim($_POST['customer_phone'] ?? '') ?: null;
+                    $relatedType = 'manager_' . $taskType;
+                    $db->execute(
+                        "UPDATE tasks SET task_type = ?, related_type = ?, priority = ?, due_date = ?, customer_name = ?, customer_phone = ? WHERE id = ?",
+                        [$taskType, $relatedType, $priority, $dueDate, $customerName, $customerPhone, $taskId]
+                    );
+                    $successMessage = 'تم تعديل الأوردر بنجاح.';
+                    $userRole = ($currentUser['role'] ?? '') === 'accountant' ? 'accountant' : 'manager';
+                    preventDuplicateSubmission($successMessage, ['page' => 'production_tasks'], null, $userRole);
+                    exit;
+                }
+            } catch (Exception $e) {
+                $error = 'تعذر تعديل المهمة: ' . $e->getMessage();
+            }
+        }
     }
+}
+
+// جلب بيانات المهمة للتعديل (AJAX)
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get_task_for_edit' && ($isAccountant || $isManager)) {
+    $taskId = isset($_GET['task_id']) ? intval($_GET['task_id']) : 0;
+    if ($taskId > 0) {
+        $task = $db->queryOne("SELECT id, task_type, related_type, priority, due_date, customer_name, customer_phone FROM tasks WHERE id = ?", [$taskId]);
+        if ($task) {
+            $displayType = (strpos($task['related_type'] ?? '', 'manager_') === 0) ? substr($task['related_type'], 8) : ($task['task_type'] ?? 'shop_order');
+            header('Content-Type: application/json; charset=UTF-8');
+            echo json_encode([
+                'success' => true,
+                'task' => [
+                    'id' => (int)$task['id'],
+                    'task_type' => $displayType,
+                    'priority' => $task['priority'] ?? 'normal',
+                    'due_date' => $task['due_date'] ?? '',
+                    'customer_name' => $task['customer_name'] ?? '',
+                    'customer_phone' => $task['customer_phone'] ?? ''
+                ]
+            ]);
+            exit;
+        }
+    }
+    header('Content-Type: application/json; charset=UTF-8');
+    echo json_encode(['success' => false]);
+    exit;
 }
 
 // قراءة رسائل النجاح/الخطأ من session بعد redirect
@@ -1835,29 +1895,38 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                                         }
                                         ?>
                                     </td>
-                                    <td class="text-nowrap">
-                                        <div class="d-inline-flex gap-1 align-items-center">
-                                            <?php if ($canPrintTasks): ?>
+                                    <td>
+                                        <div class="d-flex flex-column gap-1">
+                                            <div class="d-flex gap-1 flex-wrap">
+                                                <?php if ($canPrintTasks): ?>
                                                 <a href="<?php echo getRelativeUrl('print_task_receipt.php?id=' . (int) $task['id']); ?>" target="_blank" class="btn btn-outline-primary btn-sm btn-icon-only" title="طباعة الاوردر">
                                                     <i class="bi bi-printer"></i>
                                                 </a>
-                                            <?php endif; ?>
-                                            <?php if ($isAccountant || $isManager): ?>
+                                                <?php endif; ?>
+                                                <?php if ($isAccountant || $isManager): ?>
                                                 <button type="button" class="btn btn-outline-info btn-sm btn-icon-only" onclick="openChangeStatusModal(<?php echo (int)$task['id']; ?>, '<?php echo htmlspecialchars($task['status'], ENT_QUOTES, 'UTF-8'); ?>')" title="تغيير حالة الطلب">
                                                     <i class="bi bi-gear"></i>
                                                 </button>
-                                            <?php endif; ?>
-                                            <?php if (in_array($task['status'] ?? '', ['completed', 'delivered', 'returned'], true)): ?>
-                                                <span class="text-muted small">—</span>
-                                            <?php else: ?>
+                                                <?php endif; ?>
+                                            </div>
+                                            <div class="d-flex gap-1 flex-wrap">
+                                                <?php if ($isAccountant || $isManager): ?>
+                                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="openEditTaskModal(<?php echo (int)$task['id']; ?>)" title="تعديل الاوردر">
+                                                    <i class="bi bi-pencil-square me-1"></i>تعديل
+                                                </button>
+                                                <?php endif; ?>
+                                                <?php if (in_array($task['status'] ?? '', ['completed', 'delivered', 'returned'], true)): ?>
+                                                <span class="text-muted small align-self-center">—</span>
+                                                <?php else: ?>
                                                 <form method="post" class="d-inline" onsubmit="return confirm('هل أنت متأكد من حذف هذه المهمة؟ سيتم حذفها نهائياً ولن تظهر في الجدول.');">
                                                     <input type="hidden" name="action" value="cancel_task">
                                                     <input type="hidden" name="task_id" value="<?php echo (int)$task['id']; ?>">
-                                                    <button type="submit" class="btn btn-outline-danger btn-sm btn-icon-only">
+                                                    <button type="submit" class="btn btn-outline-danger btn-sm" title="حذف المهمة">
                                                         <i class="bi bi-trash"></i>
                                                     </button>
                                                 </form>
-                                            <?php endif; ?>
+                                                <?php endif; ?>
+                                            </div>
                                         </div>
                                     </td>
                                 </tr>
@@ -2007,6 +2076,60 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
     </div>
 </div>
 
+<!-- مودال تعديل الأوردر -->
+<div class="modal fade" id="editTaskModal" tabindex="-1" aria-labelledby="editTaskModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-secondary text-white">
+                <h5 class="modal-title" id="editTaskModalLabel"><i class="bi bi-pencil-square me-2"></i>تعديل الاوردر</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <form method="POST" id="editTaskForm" action="">
+                <input type="hidden" name="action" value="update_task">
+                <input type="hidden" name="task_id" id="editTaskId">
+                <div class="modal-body">
+                    <div class="row g-2">
+                        <div class="col-12">
+                            <label class="form-label">نوع الاوردر</label>
+                            <select class="form-select" name="task_type" id="editTaskType" required>
+                                <option value="shop_order">اوردر محل</option>
+                                <option value="cash_customer">عميل نقدي</option>
+                                <option value="telegraph">تليجراف</option>
+                                <option value="shipping_company">شركة شحن</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">الأولوية</label>
+                            <select class="form-select" name="priority" id="editPriority">
+                                <option value="low">منخفضة</option>
+                                <option value="normal" selected>عادية</option>
+                                <option value="high">مرتفعة</option>
+                                <option value="urgent">عاجلة</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">تاريخ التسليم</label>
+                            <input type="date" class="form-control" name="due_date" id="editDueDate">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">اسم العميل</label>
+                            <input type="text" class="form-control" name="customer_name" id="editCustomerName" placeholder="اسم العميل">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">رقم العميل</label>
+                            <input type="text" class="form-control" name="customer_phone" id="editCustomerPhone" placeholder="رقم الهاتف" dir="ltr">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle me-1"></i>إلغاء</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-circle me-1"></i>حفظ التعديلات</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- مودال إيصال الأوردر -->
 <div class="modal fade" id="orderReceiptModal" tabindex="-1" aria-labelledby="orderReceiptModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-scrollable">
@@ -2031,6 +2154,29 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
 
 <script>
 var __localCustomersForTask = <?php echo json_encode($localCustomersForDropdown); ?>;
+
+window.openEditTaskModal = function(taskId) {
+    var modalEl = document.getElementById('editTaskModal');
+    if (!modalEl) return;
+    document.getElementById('editTaskId').value = taskId;
+    var url = new URL(window.location.href);
+    url.searchParams.set('action', 'get_task_for_edit');
+    url.searchParams.set('task_id', String(taskId));
+    fetch(url.toString())
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success && data.task) {
+                var t = data.task;
+                document.getElementById('editTaskType').value = t.task_type || 'shop_order';
+                document.getElementById('editPriority').value = t.priority || 'normal';
+                document.getElementById('editDueDate').value = t.due_date || '';
+                document.getElementById('editCustomerName').value = t.customer_name || '';
+                document.getElementById('editCustomerPhone').value = t.customer_phone || '';
+            }
+        })
+        .catch(function() {});
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+};
 
 window.openOrderReceiptModal = function(orderId) {
     var modalEl = document.getElementById('orderReceiptModal');
