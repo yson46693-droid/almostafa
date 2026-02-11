@@ -54,6 +54,12 @@ try {
         $db->execute("ALTER TABLE tasks ADD COLUMN customer_name VARCHAR(255) NULL DEFAULT NULL AFTER unit");
         error_log('Added customer_name column to tasks table in production/tasks.php');
     }
+    // التحقق من وجود عمود receipt_print_count لتتبع عدد مرات طباعة إيصال الأوردر
+    $receiptPrintCountColumn = $db->queryOne("SHOW COLUMNS FROM tasks LIKE 'receipt_print_count'");
+    if (empty($receiptPrintCountColumn)) {
+        $db->execute("ALTER TABLE tasks ADD COLUMN receipt_print_count INT UNSIGNED NOT NULL DEFAULT 0 AFTER notes");
+        error_log('Added receipt_print_count column to tasks table in production/tasks.php');
+    }
     // توسيع عمود status ليشمل "تم التوصيل" و "تم الارجاع" و "مع المندوب"
     $statusColumn = $db->queryOne("SHOW COLUMNS FROM tasks LIKE 'status'");
     if (!empty($statusColumn['Type'])) {
@@ -1005,7 +1011,7 @@ if ($customerOrdersExists) {
 $taskSql = "SELECT t.id, t.title, t.description, t.assigned_to, t.created_by, t.priority, t.status,
     t.due_date, t.completed_at, t.received_at, t.started_at, t.related_type, t.related_id,
     t.product_id, t.template_id, t.quantity, t.unit, t.notes, t.created_at, t.updated_at,
-    t.product_name, t.task_type
+    t.product_name, t.task_type, COALESCE(t.receipt_print_count, 0) AS receipt_print_count
     " . $customerDisplaySelect . ",
     uAssign.full_name AS assigned_to_name,
     uCreate.full_name AS created_by_name,
@@ -1504,8 +1510,13 @@ function tasksHtml(string $value): string
     </div>
 
     <div class="card">
-        <div class="card-header bg-transparent border-bottom">
+        <div class="card-header bg-transparent border-bottom d-flex flex-wrap align-items-center justify-content-between gap-2">
             <h6 class="mb-0"><i class="bi bi-list-task me-2"></i>آخر المهام التي تم إرسالها</h6>
+            <?php if (($isManager || $isProduction) && !empty($tasks)): ?>
+            <button type="button" class="btn btn-outline-primary btn-sm" id="printSelectedReceiptsBtn" title="طباعة إيصالات الأوردرات المحددة" disabled>
+                <i class="bi bi-printer me-1"></i>طباعة المحدد (<span id="selectedCount">0</span>)
+            </button>
+            <?php endif; ?>
         </div>
         <div class="card-body p-0">
             <?php if (empty($tasks)): ?>
@@ -1518,6 +1529,11 @@ function tasksHtml(string $value): string
                     <table class="table dashboard-table dashboard-table--no-hover align-middle mb-0">
                         <thead class="table-light">
                             <tr>
+                                <?php if ($isManager || $isProduction): ?>
+                                <th style="width: 40px;">
+                                    <input type="checkbox" class="form-check-input" id="selectAllTasks" title="تحديد الكل">
+                                </th>
+                                <?php endif; ?>
                                 <th style="width: 60px;">#</th>
                                 <th>المنتج</th>
                                 <th>الكمية</th>
@@ -1573,7 +1589,20 @@ function tasksHtml(string $value): string
                                     && strtotime((string) $task['due_date']) < time();
                                 ?>
                                 <tr class="<?php echo $overdue ? 'table-danger' : ''; ?>" data-task-id="<?php echo (int) $task['id']; ?>">
-                                    <td><?php echo (int) $task['id']; ?></td>
+                                    <?php if ($isManager || $isProduction): ?>
+                                    <td>
+                                        <input type="checkbox" class="form-check-input task-print-checkbox" value="<?php echo (int) $task['id']; ?>" data-print-url="<?php echo htmlspecialchars(getRelativeUrl('print_task_receipt.php?id=' . (int) $task['id']), ENT_QUOTES, 'UTF-8'); ?>">
+                                    </td>
+                                    <?php endif; ?>
+                                    <td>
+                                        <?php 
+                                        $printCount = (int) ($task['receipt_print_count'] ?? 0);
+                                        if ($printCount > 0): 
+                                        ?>
+                                        <span class="badge bg-info mb-1" title="عدد مرات طباعة إيصال الأوردر" style="font-size: 0.7rem;">طُبع <?php echo $printCount; ?> <?php echo $printCount === 1 ? 'مرّة' : 'مرات'; ?></span>
+                                        <?php endif; ?>
+                                        <?php echo (int) $task['id']; ?>
+                                    </td>
                                     <td><?php 
                                         $productName = $task['product_name'] ?? '';
                                         if (!empty($productName) && trim($productName) !== '') {
@@ -2458,6 +2487,54 @@ function tasksHtml(string $value): string
     if (quantityInput) {
         quantityInput.addEventListener('input', updateProductionTitle);
     }
+})();
+</script>
+
+<!-- تحديد أوردرات متعددة للطباعة -->
+<script>
+(function() {
+    'use strict';
+    const selectAll = document.getElementById('selectAllTasks');
+    const checkboxes = document.querySelectorAll('.task-print-checkbox');
+    const printBtn = document.getElementById('printSelectedReceiptsBtn');
+    const selectedCountEl = document.getElementById('selectedCount');
+
+    function updateSelection() {
+        const checked = document.querySelectorAll('.task-print-checkbox:checked');
+        const n = checked.length;
+        if (selectedCountEl) selectedCountEl.textContent = n;
+        if (printBtn) printBtn.disabled = n === 0;
+        if (selectAll) selectAll.checked = checkboxes.length > 0 && checked.length === checkboxes.length;
+        if (selectAll) selectAll.indeterminate = checked.length > 0 && checked.length < checkboxes.length;
+    }
+
+    if (selectAll) {
+        selectAll.addEventListener('change', function() {
+            checkboxes.forEach(function(cb) { cb.checked = selectAll.checked; });
+            updateSelection();
+        });
+    }
+    checkboxes.forEach(function(cb) {
+        cb.addEventListener('change', updateSelection);
+    });
+
+    if (printBtn) {
+        printBtn.addEventListener('click', function() {
+            const checked = document.querySelectorAll('.task-print-checkbox:checked');
+            const urls = [];
+            checked.forEach(function(cb) {
+                const url = cb.getAttribute('data-print-url');
+                if (url) urls.push(url);
+            });
+            if (urls.length === 0) return;
+            urls.forEach(function(url, i) {
+                setTimeout(function() {
+                    window.open(url, '_blank', 'noopener,noreferrer');
+                }, i * 300);
+            });
+        });
+    }
+    updateSelection();
 })();
 </script>
 

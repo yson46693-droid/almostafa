@@ -39,6 +39,13 @@ if (!$task) {
     die('المهمة غير موجودة');
 }
 
+// تحديث عداد عدد مرات طباعة إيصال الأوردر
+try {
+    $db->execute("UPDATE tasks SET receipt_print_count = COALESCE(receipt_print_count, 0) + 1 WHERE id = ?", [$taskId]);
+} catch (Exception $e) {
+    error_log('print_task_receipt: failed to increment receipt_print_count: ' . $e->getMessage());
+}
+
 $companyName = COMPANY_NAME;
 $taskNumber = $taskId;
 $taskTitle = $task['title'] ?? 'مهمة إنتاج';

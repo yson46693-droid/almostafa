@@ -123,6 +123,8 @@ $tasksRetentionLimit = getTasksRetentionLimit();
 // تحديد نوع المستخدم
 $isAccountant = ($currentUser['role'] ?? '') === 'accountant';
 $isManager = ($currentUser['role'] ?? '') === 'manager';
+$isDeveloper = ($currentUser['role'] ?? '') === 'developer';
+$canPrintTasks = $isAccountant || $isManager || $isDeveloper;
 
 // جلب القوالب (templates) لعرضها في القائمة المنسدلة
 $productTemplates = [];
@@ -303,6 +305,17 @@ try {
     }
 } catch (Exception $e) {
     error_log('Error checking/adding customer_phone column: ' . $e->getMessage());
+}
+
+// التحقق من وجود عمود receipt_print_count لتتبع عدد مرات طباعة إيصال الأوردر
+try {
+    $receiptPrintCountColumn = $db->queryOne("SHOW COLUMNS FROM tasks LIKE 'receipt_print_count'");
+    if (empty($receiptPrintCountColumn)) {
+        $db->execute("ALTER TABLE tasks ADD COLUMN receipt_print_count INT UNSIGNED NOT NULL DEFAULT 0 AFTER notes");
+        error_log('Added receipt_print_count column to tasks table');
+    }
+} catch (Exception $e) {
+    error_log('Error checking/adding receipt_print_count column: ' . $e->getMessage());
 }
 
 /**
@@ -1185,6 +1198,7 @@ try {
             $recentTasks = $db->query("
                 SELECT t.id, t.title, t.status, t.priority, t.due_date, t.created_at,
                        t.quantity, t.unit, t.customer_name, t.customer_phone, t.notes, t.product_id, t.related_type, t.related_id, t.task_type,
+                       COALESCE(t.receipt_print_count, 0) AS receipt_print_count,
                        u.full_name AS assigned_name, t.assigned_to,
                        uCreator.full_name AS creator_name, t.created_by
                 FROM tasks t
@@ -1207,6 +1221,7 @@ try {
         $recentTasks = $db->query("
             SELECT t.id, t.title, t.status, t.priority, t.due_date, t.created_at,
                    t.quantity, t.unit, t.customer_name, t.customer_phone, t.notes, t.product_id, t.related_type, t.related_id, t.task_type,
+                   COALESCE(t.receipt_print_count, 0) AS receipt_print_count,
                    u.full_name AS assigned_name, t.assigned_to
             FROM tasks t
             LEFT JOIN users u ON t.assigned_to = u.id
@@ -1606,7 +1621,14 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
     <div class="card shadow-sm mt-4">
         <div class="card-header bg-light d-flex justify-content-between align-items-center flex-wrap gap-2">
             <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>آخر المهام التي تم إرسالها</h5>
-            <span class="text-muted small"><?php echo $totalRecentTasks; ?> <?php echo $totalRecentTasks === 1 ? 'مهمة' : 'مهام'; ?> · صفحة <?php echo $tasksPageNum; ?> من <?php echo $totalRecentPages; ?></span>
+            <div class="d-flex align-items-center gap-2">
+                <?php if ($canPrintTasks && !empty($recentTasks)): ?>
+                <button type="button" class="btn btn-outline-primary btn-sm" id="printSelectedReceiptsBtn" title="طباعة إيصالات الأوردرات المحددة" disabled>
+                    <i class="bi bi-printer me-1"></i>طباعة المحدد (<span id="selectedCount">0</span>)
+                </button>
+                <?php endif; ?>
+                <span class="text-muted small"><?php echo $totalRecentTasks; ?> <?php echo $totalRecentTasks === 1 ? 'مهمة' : 'مهام'; ?> · صفحة <?php echo $tasksPageNum; ?> من <?php echo $totalRecentPages; ?></span>
+            </div>
         </div>
         <div class="card-body p-0">
             <!-- بحث وفلترة جدول آخر المهام -->
@@ -1678,6 +1700,11 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                 <table class="table dashboard-table dashboard-table--no-hover align-middle mb-0">
                     <thead class="table-light">
                         <tr>
+                            <?php if ($canPrintTasks): ?>
+                            <th style="width: 40px;">
+                                <input type="checkbox" class="form-check-input" id="selectAllTasks" title="تحديد الكل">
+                            </th>
+                            <?php endif; ?>
                             <th>رقم الطلب</th>
                             <th>اسم العميل</th>
                             <th>الاوردر</th>
@@ -1690,12 +1717,25 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                     <tbody>
                         <?php if (empty($recentTasks)): ?>
                             <tr>
-                                <td colspan="7" class="text-center text-muted py-4">لم يتم إنشاء مهام بعد.</td>
+                                <td colspan="<?php echo $canPrintTasks ? 8 : 7; ?>" class="text-center text-muted py-4">لم يتم إنشاء مهام بعد.</td>
                             </tr>
                         <?php else: ?>
                             <?php foreach ($recentTasks as $index => $task): ?>
                                 <tr>
-                                    <td><strong>#<?php echo (int)$task['id']; ?></strong></td>
+                                    <?php if ($canPrintTasks): ?>
+                                    <td>
+                                        <input type="checkbox" class="form-check-input task-print-checkbox" value="<?php echo (int)$task['id']; ?>" data-print-url="<?php echo htmlspecialchars(getRelativeUrl('print_task_receipt.php?id=' . (int)$task['id']), ENT_QUOTES, 'UTF-8'); ?>">
+                                    </td>
+                                    <?php endif; ?>
+                                    <td>
+                                        <?php 
+                                        $printCount = (int) ($task['receipt_print_count'] ?? 0);
+                                        if ($printCount > 0): 
+                                        ?>
+                                        <span class="badge bg-info mb-1" title="عدد مرات طباعة إيصال الأوردر" style="font-size: 0.7rem;">طُبع <?php echo $printCount; ?> <?php echo $printCount === 1 ? 'مرّة' : 'مرات'; ?></span>
+                                        <?php endif; ?>
+                                        <strong>#<?php echo (int)$task['id']; ?></strong>
+                                    </td>
                                     <td><?php 
                                         $custName = isset($task['customer_name']) ? trim((string)$task['customer_name']) : '';
                                         $custPhone = isset($task['customer_phone']) ? trim((string)$task['customer_phone']) : '';
@@ -1794,7 +1834,7 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                                     </td>
                                     <td class="text-nowrap">
                                         <div class="d-inline-flex gap-1 align-items-center">
-                                            <?php if ($isAccountant || $isManager || $isAdmin || $isProduction || $isDeveloper): ?>
+                                            <?php if ($canPrintTasks): ?>
                                                 <a href="<?php echo getRelativeUrl('print_task_receipt.php?id=' . (int) $task['id']); ?>" target="_blank" class="btn btn-outline-primary btn-sm btn-icon-only" title="طباعة الاوردر">
                                                     <i class="bi bi-printer"></i>
                                                 </a>
@@ -2559,6 +2599,54 @@ window.closeChangeStatusCard = function() {
     const collapse = bootstrap.Collapse.getInstance(collapseEl) || new bootstrap.Collapse(collapseEl, { toggle: false });
     collapse.hide();
 };
+
+// تحديد أوردرات متعددة للطباعة
+(function() {
+    var selectAll = document.getElementById('selectAllTasks');
+    var checkboxes = document.querySelectorAll('.task-print-checkbox');
+    var printBtn = document.getElementById('printSelectedReceiptsBtn');
+    var selectedCountEl = document.getElementById('selectedCount');
+    if (!checkboxes.length) return;
+
+    function updateSelection() {
+        var checked = document.querySelectorAll('.task-print-checkbox:checked');
+        var n = checked.length;
+        if (selectedCountEl) selectedCountEl.textContent = n;
+        if (printBtn) printBtn.disabled = n === 0;
+        if (selectAll) {
+            selectAll.checked = checkboxes.length > 0 && checked.length === checkboxes.length;
+            selectAll.indeterminate = checked.length > 0 && checked.length < checkboxes.length;
+        }
+    }
+
+    if (selectAll) {
+        selectAll.addEventListener('change', function() {
+            checkboxes.forEach(function(cb) { cb.checked = selectAll.checked; });
+            updateSelection();
+        });
+    }
+    checkboxes.forEach(function(cb) {
+        cb.addEventListener('change', updateSelection);
+    });
+
+    if (printBtn) {
+        printBtn.addEventListener('click', function() {
+            var checked = document.querySelectorAll('.task-print-checkbox:checked');
+            var urls = [];
+            checked.forEach(function(cb) {
+                var url = cb.getAttribute('data-print-url');
+                if (url) urls.push(url);
+            });
+            if (urls.length === 0) return;
+            urls.forEach(function(url, i) {
+                setTimeout(function() {
+                    window.open(url, '_blank', 'noopener,noreferrer');
+                }, i * 300);
+            });
+        });
+    }
+    updateSelection();
+})();
 
 // لا حاجة لإعادة التحميل التلقائي - preventDuplicateSubmission يتولى ذلك
 </script>
