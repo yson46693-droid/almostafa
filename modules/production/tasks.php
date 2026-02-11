@@ -1640,7 +1640,7 @@ function tasksHtml(string $value): string
                                         <?php
                                         $relatedType = isset($task['related_type']) ? (string)$task['related_type'] : '';
                                         $displayType = (strpos($relatedType, 'manager_') === 0) ? substr($relatedType, 8) : ($task['task_type'] ?? 'general');
-                                        $orderTypeLabels = ['shop_order' => 'اوردر محل', 'cash_customer' => 'عميل نقدي', 'telegraph' => 'تليجراف', 'general' => 'مهمة عامة', 'production' => 'إنتاج منتج'];
+                                        $orderTypeLabels = ['shop_order' => 'اوردر محل', 'cash_customer' => 'عميل نقدي', 'telegraph' => 'تليجراف', 'shipping_company' => 'شركة شحن', 'general' => 'مهمة عامة', 'production' => 'إنتاج منتج'];
                                         echo tasksHtml($orderTypeLabels[$displayType] ?? $displayType);
                                         ?>
                                     </td>

@@ -34,6 +34,7 @@ $taskTypeLabels = [
     'shop_order' => 'اوردر محل',
     'cash_customer' => 'عميل نقدي',
     'telegraph' => 'تليجراف',
+    'shipping_company' => 'شركة شحن',
     'general' => 'مهمة عامة',
     'production' => 'إنتاج منتج',
     'quality' => 'مهمة جودة',

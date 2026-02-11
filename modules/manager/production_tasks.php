@@ -334,7 +334,7 @@ try {
     error_log('Manager task page users query error: ' . $e->getMessage());
 }
 
-$allowedTypes = ['shop_order', 'cash_customer', 'telegraph'];
+$allowedTypes = ['shop_order', 'cash_customer', 'telegraph', 'shipping_company'];
 $allowedPriorities = ['low', 'normal', 'high', 'urgent'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -499,7 +499,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $typeLabels = [
                         'shop_order' => 'اوردر محل',
                         'cash_customer' => 'عميل نقدي',
-                        'telegraph' => 'تليجراف'
+                        'telegraph' => 'تليجراف',
+                        'shipping_company' => 'شركة شحن'
                     ];
                     $title = $typeLabels[$taskType] ?? 'مهمة جديدة';
                 }
@@ -1524,6 +1525,7 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                                 <option value="shop_order">اوردر محل</option>
                                 <option value="cash_customer">عميل نقدي</option>
                                 <option value="telegraph">تليجراف</option>
+                                <option value="shipping_company">شركة شحن</option>
                             </select>
                         </div>
                         <div class="col-md-4">
@@ -1680,6 +1682,7 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                                     <option value="shop_order" <?php echo $filterTaskType === 'shop_order' ? 'selected' : ''; ?>>اوردر محل</option>
                                     <option value="cash_customer" <?php echo $filterTaskType === 'cash_customer' ? 'selected' : ''; ?>>عميل نقدي</option>
                                     <option value="telegraph" <?php echo $filterTaskType === 'telegraph' ? 'selected' : ''; ?>>تليجراف</option>
+                                    <option value="shipping_company" <?php echo $filterTaskType === 'shipping_company' ? 'selected' : ''; ?>>شركة شحن</option>
                                     <option value="general" <?php echo $filterTaskType === 'general' ? 'selected' : ''; ?>>مهمة عامة</option>
                                     <option value="production" <?php echo $filterTaskType === 'production' ? 'selected' : ''; ?>>إنتاج منتج</option>
                                 </select>
@@ -1805,7 +1808,7 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                                         <?php
                                         $relatedType = $task['related_type'] ?? '';
                                         $displayType = (strpos($relatedType, 'manager_') === 0) ? substr($relatedType, 8) : ($task['task_type'] ?? 'general');
-                                        $orderTypeLabels = ['shop_order' => 'اوردر محل', 'cash_customer' => 'عميل نقدي', 'telegraph' => 'تليجراف', 'general' => 'مهمة عامة', 'production' => 'إنتاج منتج'];
+                                        $orderTypeLabels = ['shop_order' => 'اوردر محل', 'cash_customer' => 'عميل نقدي', 'telegraph' => 'تليجراف', 'shipping_company' => 'شركة شحن', 'general' => 'مهمة عامة', 'production' => 'إنتاج منتج'];
                                         echo htmlspecialchars($orderTypeLabels[$displayType] ?? $displayType);
                                         ?>
                                     </td>
