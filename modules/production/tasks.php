@@ -1599,7 +1599,7 @@ function tasksHtml(string $value): string
                                         $printCount = (int) ($task['receipt_print_count'] ?? 0);
                                         if ($printCount > 0): 
                                         ?>
-                                        <span class="badge bg-info mb-1" title="عدد مرات طباعة إيصال الأوردر" style="font-size: 0.7rem;">طُبع <?php echo $printCount; ?> <?php echo $printCount === 1 ? 'مرّة' : 'مرات'; ?></span>
+                                        <span class="badge bg-info mb-1" title="عدد مرات طباعة إيصال الاوردر" style="font-size: 0.7rem;"> <?php echo $printCount; ?> <?php echo $printCount === 1 ? '' : ''; ?></span>
                                         <?php endif; ?>
                                         <?php echo (int) $task['id']; ?>
                                     </td>
