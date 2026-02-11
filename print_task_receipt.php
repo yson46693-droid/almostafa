@@ -480,11 +480,6 @@ $singleReceipt = count($receipts) === 1;
     <div class="receipt-container">
         <div class="no-print">
             <button class="btn-print" onclick="window.print()"><?php echo $singleReceipt ? 'طباعة' : 'طباعة الكل (' . count($receipts) . ')'; ?></button>
-            <?php if (!$singleReceipt): ?>
-            <button type="button" class="btn-open-separate" onclick="openEachReceiptInNewTab()" title="يفتح كل إيصال في تبويب منفصل ثم اطبع كل تبويب لوحده (Ctrl+P)">
-                فتح كل إيصال في تبويب (لطباعة ورقة لكل إيصال)
-            </button>
-            <?php endif; ?>
             <?php
             if (function_exists('getDashboardUrl')) {
                 $backUrl = getDashboardUrl('production') . '?page=tasks';
