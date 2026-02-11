@@ -1046,29 +1046,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get_task_for_edit' && ($isAccountant || $isManager)) {
     $taskId = isset($_GET['task_id']) ? intval($_GET['task_id']) : 0;
     if ($taskId > 0) {
-        $task = $db->queryOne("SELECT id, task_type, related_type, priority, due_date, customer_name, customer_phone, notes FROM tasks WHERE id = ?", [$taskId]);
+        $task = $db->queryOne("SELECT id, task_type, related_type, priority, due_date, customer_name, customer_phone, notes, description, product_name, quantity, unit FROM tasks WHERE id = ?", [$taskId]);
         if ($task) {
             $displayType = (strpos($task['related_type'] ?? '', 'manager_') === 0) ? substr($task['related_type'], 8) : ($task['task_type'] ?? 'shop_order');
             $notes = $task['notes'] ?? '';
             $products = [];
             $assignees = [];
-            $details = $notes;
-            if (preg_match('/\[PRODUCTS_JSON\]:(.+?)(?=\n|$)/s', $notes, $m)) {
+            // استخراج المنتجات من [PRODUCTS_JSON]
+            if (preg_match('/\[PRODUCTS_JSON\]:\s*(.+?)(?=\n\n|\[ASSIGNED_WORKERS_IDS\]|$)/s', $notes, $m)) {
                 $decoded = json_decode(trim($m[1]), true);
                 if (is_array($decoded)) {
-                    $products = $decoded;
+                    foreach ($decoded as $p) {
+                        $products[] = [
+                            'name' => $p['name'] ?? '',
+                            'quantity' => isset($p['quantity']) ? $p['quantity'] : null,
+                            'unit' => $p['unit'] ?? 'قطعة',
+                            'price' => isset($p['price']) && $p['price'] !== '' ? $p['price'] : null
+                        ];
+                    }
                 }
             }
+            // إذا لم نجد JSON، استخراج من النص "المنتج: X - الكمية: Y"
+            if (empty($products) && preg_match_all('/المنتج:\s*(.+?)(?:\s*-\s*الكمية:\s*([0-9.]+))?/u', $notes, $matches, PREG_SET_ORDER)) {
+                foreach ($matches as $m) {
+                    $products[] = [
+                        'name' => trim($m[1]),
+                        'quantity' => isset($m[2]) ? (float)$m[2] : null,
+                        'unit' => $task['unit'] ?? 'قطعة',
+                        'price' => null
+                    ];
+                }
+            }
+            // إذا لم نجد منتجات، استخدام الحقول من الجدول
+            if (empty($products) && !empty(trim($task['product_name'] ?? ''))) {
+                $products[] = [
+                    'name' => $task['product_name'],
+                    'quantity' => $task['quantity'] ?? null,
+                    'unit' => $task['unit'] ?? 'قطعة',
+                    'price' => null
+                ];
+            }
+            // استخراج العمال المخصصين
             if (preg_match('/\[ASSIGNED_WORKERS_IDS\]:\s*([0-9,]+)/', $notes, $m)) {
                 $assignees = array_filter(array_map('intval', explode(',', $m[1])));
             }
-            $details = preg_replace('/\[PRODUCTS_JSON\]:[^\n]*/', '', $notes);
-            $details = preg_replace('/\[ASSIGNED_WORKERS_IDS\]:\s*[0-9,]+/', '', $details);
-            $details = preg_replace('/العمال المخصصون:.*$/m', '', $details);
-            $details = preg_replace('/العامل المخصص:.*$/m', '', $details);
-            $details = preg_replace('/المنتج:\s*[^\n]+/m', '', $details);
-            $details = preg_replace('/الكمية:\s*[0-9.]+/m', '', $details);
-            $details = preg_replace('/\n\s*\n\s*\n+/', "\n\n", trim($details));
+            // استخراج التفاصيل (الوصف) - استخدام description أولاً
+            $details = trim($task['description'] ?? '');
+            if ($details === '') {
+                $details = $notes;
+                $details = preg_replace('/\[PRODUCTS_JSON\]:[\s\S]*?(?=\n\n|\[ASSIGNED_WORKERS_IDS\]|$)/', '', $details);
+                $details = preg_replace('/\[ASSIGNED_WORKERS_IDS\]:\s*[0-9,]+/', '', $details);
+                $details = preg_replace('/العمال المخصصون:[^\n]*/', '', $details);
+                $details = preg_replace('/العامل المخصص:[^\n]*/', '', $details);
+                $details = preg_replace('/المنتج:\s*[^\n]+/m', '', $details);
+                $details = preg_replace('/\n\s*\n\s*\n+/', "\n\n", trim($details));
+            }
             header('Content-Type: application/json; charset=UTF-8');
             echo json_encode([
                 'success' => true,
@@ -1081,9 +1113,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['act
                     'customer_phone' => $task['customer_phone'] ?? '',
                     'details' => $details,
                     'products' => $products,
-                    'assignees' => $assignees
+                    'assignees' => array_values($assignees)
                 ]
-            ]);
+            ], JSON_UNESCAPED_UNICODE);
             exit;
         }
     }
@@ -1807,7 +1839,7 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                         <div class="col-md-3">
                             <label class="form-label">اختر العمال المستهدفين</label>
                             <div style="max-height: 120px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 0.375rem;">
-                                <select class="form-select form-select-sm border-0" name="assigned_to[]" multiple required style="max-height: 100px;" id="editAssignedTo">
+                                <select class="form-select form-select-sm border-0" name="assigned_to[]" multiple style="max-height: 100px;" id="editAssignedTo">
                                     <?php foreach ($productionUsers as $worker): ?>
                                         <option value="<?php echo (int)$worker['id']; ?>"><?php echo htmlspecialchars($worker['full_name']); ?></option>
                                     <?php endforeach; ?>
@@ -1961,7 +1993,7 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                                         $printCount = (int) ($task['receipt_print_count'] ?? 0);
                                         if ($printCount > 0): 
                                         ?>
-                                        <span class="badge bg-info mb-1" title="عدد مرات طباعة إيصال الأوردر" style="font-size: 0.7rem;">طُبع <?php echo $printCount; ?> <?php echo $printCount === 1 ? 'مرّة' : 'مرات'; ?></span>
+                                        <span class="badge bg-info mb-1" title="عدد مرات طباعة إيصال الأوردر" style="font-size: 0.7rem;"> <?php echo $printCount; ?> <?php echo $printCount === 1 ? '' : ''; ?></span>
                                         <?php endif; ?>
                                         <strong>#<?php echo (int)$task['id']; ?></strong>
                                     </td>
@@ -2270,20 +2302,23 @@ var __localCustomersForTask = <?php echo json_encode($localCustomersForDropdown)
 var editProductIndex = 0;
 function buildEditProductRow(idx, product) {
     var p = product || { name: '', quantity: '', unit: 'قطعة', price: '' };
-    var unitVal = p.unit || 'قطعة';
+    var unitVal = String(p.unit || 'قطعة').trim();
     var opts = ['كرتونة','عبوة','كيلو','جرام','شرينك','قطعة'].map(function(u) {
         return '<option value="' + u + '"' + (u === unitVal ? ' selected' : '') + '>' + u + '</option>';
     }).join('');
+    var qtyVal = (p.quantity !== null && p.quantity !== undefined && p.quantity !== '') ? String(p.quantity) : '';
+    var priceVal = (p.price !== null && p.price !== undefined && p.price !== '') ? String(p.price) : '';
+    var nameVal = String(p.name || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     return '<div class="product-row mb-3 p-3 border rounded edit-product-row" data-edit-product-index="' + idx + '">' +
         '<div class="row g-2">' +
         '<div class="col-md-4"><label class="form-label small">اسم المنتج</label>' +
-        '<input type="text" class="form-control" name="products[' + idx + '][name]" placeholder="اسم المنتج أو القالب" list="templateSuggestions" value="' + (p.name || '').replace(/"/g, '&quot;') + '"></div>' +
+        '<input type="text" class="form-control" name="products[' + idx + '][name]" placeholder="اسم المنتج أو القالب" list="templateSuggestions" value="' + nameVal + '"></div>' +
         '<div class="col-md-2"><label class="form-label small">الكمية</label>' +
-        '<input type="number" class="form-control" name="products[' + idx + '][quantity]" step="0.01" min="0" placeholder="120" value="' + (p.quantity !== null && p.quantity !== '' ? p.quantity : '') + '"></div>' +
+        '<input type="number" class="form-control" name="products[' + idx + '][quantity]" step="0.01" min="0" placeholder="120" value="' + qtyVal + '"></div>' +
         '<div class="col-md-2"><label class="form-label small">الوحدة</label>' +
         '<select class="form-select form-select-sm" name="products[' + idx + '][unit]">' + opts + '</select></div>' +
         '<div class="col-md-2"><label class="form-label small">السعر</label>' +
-        '<input type="number" class="form-control" name="products[' + idx + '][price]" step="0.01" min="0" placeholder="0.00" value="' + (p.price !== null && p.price !== '' ? p.price : '') + '"></div>' +
+        '<input type="number" class="form-control" name="products[' + idx + '][price]" step="0.01" min="0" placeholder="0.00" value="' + priceVal + '"></div>' +
         '<div class="col-md-2 d-flex align-items-end">' +
         '<button type="button" class="btn btn-danger btn-sm w-100 edit-remove-product-btn"><i class="bi bi-trash"></i></button></div></div></div>';
 }
@@ -2335,13 +2370,17 @@ window.openEditTaskModal = function(taskId) {
                 document.getElementById('editDetails').value = t.details || '';
                 var assignSelect = document.getElementById('editAssignedTo');
                 if (assignSelect) {
+                    var assigneeIds = (t.assignees || []).map(function(a) { return parseInt(a, 10); });
                     for (var i = 0; i < assignSelect.options.length; i++) {
-                        assignSelect.options[i].selected = (t.assignees || []).indexOf(parseInt(assignSelect.options[i].value, 10)) >= 0;
+                        assignSelect.options[i].selected = assigneeIds.indexOf(parseInt(assignSelect.options[i].value, 10)) >= 0;
                     }
                 }
-                var products = t.products || [];
+                var products = Array.isArray(t.products) ? t.products : [];
                 if (products.length === 0) products = [{}];
-                products.forEach(function(p) { addEditProductRow(p); });
+                products.forEach(function(p) {
+                    var row = { name: p.name || '', quantity: p.quantity, unit: p.unit || 'قطعة', price: p.price };
+                    addEditProductRow(row);
+                });
             }
         })
         .catch(function() { addEditProductRow({}); });
