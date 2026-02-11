@@ -1624,10 +1624,11 @@ $canEditCustody = in_array($userRoleForCustody, ['manager', 'accountant', 'devel
     </div>
 </div>
 
-<!-- بطاقة تعديل مبلغ العهدة -->
-<div class="card shadow-sm mt-3" id="editCustodyCard">
-    <div class="card-header bg-light fw-bold">
-        <i class="bi bi-pencil-square me-2 text-warning"></i>تعديل مبلغ العهدة
+<!-- بطاقة تعديل مبلغ العهدة (تظهر عند الضغط على تعديل) -->
+<div class="card shadow-sm mt-3 d-none" id="editCustodyCard">
+    <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-pencil-square me-2 text-warning"></i>تعديل مبلغ العهدة</span>
+        <button type="button" class="btn btn-sm btn-outline-secondary custody-card-close" data-card="edit" aria-label="إغلاق"><i class="bi bi-x-lg"></i></button>
     </div>
     <div class="card-body">
         <form method="POST" id="editCustodyForm">
@@ -1643,20 +1644,20 @@ $canEditCustody = in_array($userRoleForCustody, ['manager', 'accountant', 'devel
                     </div>
                 </div>
                 <div class="col-12 col-md-6 col-lg-4">
-                    <button type="submit" class="btn btn-warning" id="editCustodySubmitBtn" disabled>
+                    <button type="submit" class="btn btn-warning" id="editCustodySubmitBtn">
                         <i class="bi bi-check2 me-1"></i>حفظ التعديل
                     </button>
                 </div>
             </div>
-            <small class="text-muted d-block mt-2">اختر سجلاً من الجدول أعلاه واضغط <span class="badge bg-warning text-dark">تعديل</span> لملء النموذج.</small>
         </form>
     </div>
 </div>
 
-<!-- بطاقة استرجاع عهدة -->
-<div class="card shadow-sm mt-3" id="retrieveCustodyCard">
-    <div class="card-header bg-light fw-bold">
-        <i class="bi bi-arrow-return-left me-2 text-success"></i>استرجاع عهدة
+<!-- بطاقة استرجاع عهدة (تظهر عند الضغط على استرجاع) -->
+<div class="card shadow-sm mt-3 d-none" id="retrieveCustodyCard">
+    <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-arrow-return-left me-2 text-success"></i>استرجاع عهدة</span>
+        <button type="button" class="btn btn-sm btn-outline-secondary custody-card-close" data-card="retrieve" aria-label="إغلاق"><i class="bi bi-x-lg"></i></button>
     </div>
     <div class="card-body">
         <form method="POST" id="retrieveCustodyForm">
@@ -1674,12 +1675,11 @@ $canEditCustody = in_array($userRoleForCustody, ['manager', 'accountant', 'devel
                     <small class="text-muted">كامل المبلغ أو جزء منه</small>
                 </div>
                 <div class="col-12 col-md-6 col-lg-4">
-                    <button type="submit" class="btn btn-success" id="retrieveCustodySubmitBtn" disabled>
+                    <button type="submit" class="btn btn-success" id="retrieveCustodySubmitBtn">
                         <i class="bi bi-arrow-return-left me-1"></i>استرجاع
                     </button>
                 </div>
             </div>
-            <small class="text-muted d-block mt-2">اختر سجلاً من الجدول أعلاه واضغط <span class="badge bg-success">استرجاع</span> لملء النموذج.</small>
         </form>
     </div>
 </div>
@@ -1704,6 +1704,21 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    function showEditCard() {
+        if (retrieveCard) retrieveCard.classList.add('d-none');
+        if (editCard) { editCard.classList.remove('d-none'); scrollToCard(editCard); }
+    }
+    function showRetrieveCard() {
+        if (editCard) editCard.classList.add('d-none');
+        if (retrieveCard) { retrieveCard.classList.remove('d-none'); scrollToCard(retrieveCard); }
+    }
+    function closeEditCard() {
+        if (editCard) editCard.classList.add('d-none');
+    }
+    function closeRetrieveCard() {
+        if (retrieveCard) retrieveCard.classList.add('d-none');
+    }
+
     document.querySelectorAll('.custody-edit-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
             var id = this.getAttribute('data-custody-id') || '';
@@ -1713,7 +1728,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (editCustodyNameDisplay) editCustodyNameDisplay.textContent = name;
             if (custodyEditAmount) { custodyEditAmount.value = amount; custodyEditAmount.required = true; }
             if (editCustodySubmitBtn) editCustodySubmitBtn.disabled = false;
-            scrollToCard(editCard);
+            showEditCard();
         });
     });
 
@@ -1727,7 +1742,15 @@ document.addEventListener('DOMContentLoaded', function() {
             if (retrieveCustodyRemainingDisplay) retrieveCustodyRemainingDisplay.textContent = remaining.toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ج.م';
             if (retrieveAmount) { retrieveAmount.setAttribute('max', remaining); retrieveAmount.value = remaining; retrieveAmount.required = true; }
             if (retrieveCustodySubmitBtn) retrieveCustodySubmitBtn.disabled = false;
-            scrollToCard(retrieveCard);
+            showRetrieveCard();
+        });
+    });
+
+    document.querySelectorAll('.custody-card-close').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var card = this.getAttribute('data-card');
+            if (card === 'edit') closeEditCard();
+            else if (card === 'retrieve') closeRetrieveCard();
         });
     });
 
