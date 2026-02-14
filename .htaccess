@@ -39,6 +39,11 @@ RewriteCond %{REQUEST_URI} ^/[^/]+/assets/icons/ [OR]
 RewriteCond %{REQUEST_URI} ^/assets/icons/
 RewriteRule ^ - [L]
 
+# توجيه طلب dashboard/driver.php إلى index.php عند عدم وجود الملف (لتجنب 404 بعد تسجيل دخول السائق)
+RewriteCond %{REQUEST_URI} dashboard/driver\.php [NC]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule .* index.php?dashboard_include=driver [L,QSA]
+
 # استثناء ملفات PHP المهمة من إعادة التوجيه
 RewriteCond %{REQUEST_URI} logout\.php$ [OR]
 RewriteCond %{REQUEST_URI} index\.php$ [OR]

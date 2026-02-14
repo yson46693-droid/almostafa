@@ -145,6 +145,12 @@ require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/path_helper.php';
 
+// توجيه لوحة السائق عند طلب dashboard/driver.php والملف غير موجود (تجنب 404)
+if (!empty($_GET['dashboard_include']) && $_GET['dashboard_include'] === 'driver') {
+    require_once __DIR__ . '/dashboard/driver.php';
+    exit;
+}
+
 // ============================================
 // تحميل باقي التحسينات الأمنية (بعد db.php و auth.php)
 // ============================================
