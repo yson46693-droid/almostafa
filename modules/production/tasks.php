@@ -1794,20 +1794,6 @@ function tasksHtml(string $value): string
                                     ?></td>
                                     <?php if (!$isDriver): ?>
                                     <td>
-                                        <?php 
-                                        $hasOrder = !empty($task['related_type']) && (string)$task['related_type'] === 'customer_order' && !empty($task['related_id']);
-                                        $orderId = $hasOrder ? (int)$task['related_id'] : 0;
-                                        if ($orderId > 0): 
-                                        ?>
-                                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="openOrderReceiptModal(<?php echo $orderId; ?>)" title="عرض تفاصيل الأوردر">
-                                                <i class="bi bi-receipt me-1"></i><?php echo tasksHtml($task['related_id']); ?>
-                                            </button>
-                                        <?php else: ?>
-                                            <span class="text-muted">-</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <?php endif; ?>
-                                    <td>
                                         <?php
                                         $relatedType = isset($task['related_type']) ? (string)$task['related_type'] : '';
                                         $displayType = (strpos($relatedType, 'manager_') === 0) ? substr($relatedType, 8) : ($task['task_type'] ?? 'general');
