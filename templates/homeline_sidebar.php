@@ -232,7 +232,7 @@ switch ($role) {
                 'badge' => null
             ],
             [
-                'title' => 'التحكم في محافظ المستخدمين',
+                'title' => 'محافظ المستخدمين',
                 'icon' => 'bi-wallet',
                 'url' => $baseUrl . 'manager.php?page=user_wallets_control',
                 'active' => ($currentPage === 'manager.php' && $currentPageParam === 'user_wallets_control'),
@@ -331,7 +331,7 @@ switch ($role) {
                 'badge' => null
             ],
             [
-                'title' => 'التحكم في محافظ المستخدمين',
+                'title' => 'محافظ المستخدمين',
                 'icon' => 'bi-wallet',
                 'url' => $baseUrl . 'accountant.php?page=user_wallets_control',
                 'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'user_wallets_control'),
