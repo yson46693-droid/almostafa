@@ -665,7 +665,7 @@ function tasksHandleAction(string $action, array $input, array $context): array
                         throw new RuntimeException('يمكن تطبيق تم التوصيل أو تم الارجاع على المهام المكتملة أو المعطاة للمندوب فقط');
                     }
                 } elseif ($action === 'with_delegate_task') {
-                    if (!$isManager && !$isProduction) {
+                    if (!$isManager && !$isProduction && !$isDriver) {
                         throw new RuntimeException('غير مصرح لك بتنفيذ هذا الإجراء');
                     }
                     if (($task['status'] ?? '') !== 'completed') {
@@ -731,16 +731,21 @@ function tasksHandleAction(string $action, array $input, array $context): array
                 break;
 
             case 'change_status':
-                if (!$isManager) {
-                    throw new RuntimeException('غير مصرح لك بتغيير حالة المهمة');
-                }
-
                 $taskId = isset($input['task_id']) ? (int) $input['task_id'] : 0;
                 $status = $input['status'] ?? 'pending';
                 $validStatuses = ['pending', 'received', 'in_progress', 'completed', 'with_delegate', 'delivered', 'returned', 'cancelled'];
 
                 if ($taskId <= 0 || !in_array($status, $validStatuses, true)) {
                     throw new RuntimeException('بيانات غير صحيحة لتحديث المهمة');
+                }
+
+                if ($isDriver) {
+                    $driverAllowedStatuses = ['with_delegate', 'delivered', 'returned'];
+                    if (!in_array($status, $driverAllowedStatuses, true)) {
+                        throw new RuntimeException('غير مصرح لك بتغيير حالة المهمة إلى هذه الحالة');
+                    }
+                } elseif (!$isManager) {
+                    throw new RuntimeException('غير مصرح لك بتغيير حالة المهمة');
                 }
 
                 $setParts = ['status = ?'];

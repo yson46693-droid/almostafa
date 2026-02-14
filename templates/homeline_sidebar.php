@@ -972,6 +972,7 @@ if (empty($menuItems)) {
             <?php
             $profileFullName = trim($currentUser['full_name'] ?? '') ?: '—';
             $profileUsername = trim($currentUser['username'] ?? '') ?: '—';
+            $profileUserId = isset($currentUser['id']) ? (int) $currentUser['id'] : 0;
             ?>
             <div class="sidebar-profile-info mb-2">
                 <div class="sidebar-profile-row" title="<?php echo htmlspecialchars($profileFullName); ?>">
@@ -983,6 +984,11 @@ if (empty($menuItems)) {
                     <span class="sidebar-profile-row-icon"><i class="bi bi-at" aria-hidden="true"></i></span>
                     <span class="sidebar-profile-row-label">اسم المستخدم</span>
                     <span class="sidebar-profile-row-value sidebar-profile-username"><?php echo htmlspecialchars($profileUsername); ?></span>
+                </div>
+                <div class="sidebar-profile-row" title="<?php echo $profileUserId; ?>">
+                    <span class="sidebar-profile-row-icon"><i class="bi bi-hash" aria-hidden="true"></i></span>
+                    <span class="sidebar-profile-row-label">المعرّف</span>
+                    <span class="sidebar-profile-row-value sidebar-profile-userid"><?php echo $profileUserId; ?></span>
                 </div>
             </div>
             <a href="<?php echo getRelativeUrl('logout.php'); ?>" class="btn btn-danger btn-sm w-100 d-flex align-items-center justify-content-center gap-2 homeline-sidebar-logout-btn" data-no-splash="true">
