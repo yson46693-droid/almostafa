@@ -1694,10 +1694,12 @@ function tasksHtml(string $value): string
                                 </th>
                                 <?php endif; ?>
                                 <th style="width: 60px;">#</th>
-                                <th>المنتج</th>
+                                <?php if (!$isDriver): ?>
                                 <th>الكمية</th>
                                 <th>اسم العميل</th>
-                                <th>الاوردر</th>
+                                <?php else: ?>
+                                <th>اسم العميل</th>
+                                <?php endif; ?>
                                 <th>نوع الاوردر</th>
                                 <th>الحالة</th>
                                 <th>تاريخ التسليم</th>
@@ -1760,16 +1762,9 @@ function tasksHtml(string $value): string
                                         ?>
                                         <span class="badge bg-info mb-1" title="عدد مرات طباعة إيصال الاوردر" style="font-size: 0.7rem;"> <?php echo $printCount; ?> <?php echo $printCount === 1 ? '' : ''; ?></span>
                                         <?php endif; ?>
-                                        <?php echo (int) $task['id']; ?>
+                                        <strong><?php echo (int) $task['id']; ?></strong>
                                     </td>
-                                    <td><?php 
-                                        $productName = $task['product_name'] ?? '';
-                                        if (!empty($productName) && trim($productName) !== '') {
-                                            echo tasksHtml(trim($productName));
-                                        } else {
-                                            echo '<span class="text-muted">-</span>';
-                                        }
-                                    ?></td>
+                                    <?php if (!$isDriver): ?>
                                     <td><?php 
                                         if (isset($task['quantity']) && $task['quantity'] !== null) {
                                             $unit = !empty($task['unit']) ? $task['unit'] : 'قطعة';
@@ -1778,10 +1773,12 @@ function tasksHtml(string $value): string
                                             echo '<span class="text-muted">-</span>';
                                         }
                                     ?></td>
+                                    <?php endif; ?>
                                     <td><?php 
                                         $customerDisplay = isset($task['customer_display']) ? trim((string)$task['customer_display']) : '';
                                         echo $customerDisplay !== '' ? tasksHtml($customerDisplay) : '<span class="text-muted">-</span>';
                                     ?></td>
+                                    <?php if (!$isDriver): ?>
                                     <td>
                                         <?php 
                                         $hasOrder = !empty($task['related_type']) && (string)$task['related_type'] === 'customer_order' && !empty($task['related_id']);
@@ -1795,6 +1792,7 @@ function tasksHtml(string $value): string
                                             <span class="text-muted">-</span>
                                         <?php endif; ?>
                                     </td>
+                                    <?php endif; ?>
                                     <td>
                                         <?php
                                         $relatedType = isset($task['related_type']) ? (string)$task['related_type'] : '';
@@ -1865,6 +1863,20 @@ function tasksHtml(string $value): string
                                                     </button>
                                                 <?php endif;
                                                 if ($canDeliverReturn):
+                                                ?>
+                                                    <button type="button" class="btn btn-outline-success btn-sm" onclick="submitTaskAction('deliver_task', <?php echo (int) $task['id']; ?>)">
+                                                        <i class="bi bi-truck me-1"></i>تم التوصيل
+                                                    </button>
+                                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="submitTaskAction('return_task', <?php echo (int) $task['id']; ?>)">
+                                                        <i class="bi bi-arrow-return-left me-1"></i>تم الارجاع
+                                                    </button>
+                                                <?php endif; ?>
+                                            <?php endif; ?>
+
+                                            <?php if ($isDriver): ?>
+                                                <?php
+                                                $canDeliverReturnDriver = in_array($task['status'] ?? '', ['completed', 'with_delegate'], true);
+                                                if ($canDeliverReturnDriver):
                                                 ?>
                                                     <button type="button" class="btn btn-outline-success btn-sm" onclick="submitTaskAction('deliver_task', <?php echo (int) $task['id']; ?>)">
                                                         <i class="bi bi-truck me-1"></i>تم التوصيل
