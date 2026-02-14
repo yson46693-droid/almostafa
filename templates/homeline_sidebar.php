@@ -120,7 +120,7 @@ switch ($role) {
                 'badge' => null
             ],
             [
-                'title' => ' تسجيل مهام الإنتاج',
+                'title' => 'تسجيل الاوردرات',
                 'icon' => 'bi-list-task',
                 'url' => $baseUrl . 'manager.php?page=production_tasks',
                 'active' => ($currentPage === 'manager.php' && $currentPageParam === 'production_tasks'),
@@ -352,7 +352,7 @@ switch ($role) {
                 'badge' => null
             ],
             [
-                'title' => 'إرسال مهام الإنتاج',
+                'title' => 'الاوردرات',
                 'icon' => 'bi-send-check',
                 'url' => $baseUrl . 'accountant.php?page=production_tasks',
                 'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'production_tasks'),
@@ -821,7 +821,7 @@ switch ($role) {
                 'badge' => null
             ],
             [
-                'title' => 'مهام الإنتاج',
+                'title' => 'الاوردرات',
                 'icon' => 'bi-list-task',
                 'url' => $baseUrl . 'driver.php?page=tasks',
                 'active' => ($currentPage === 'driver.php' && $currentPageParam === 'tasks'),
