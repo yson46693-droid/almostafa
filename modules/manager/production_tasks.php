@@ -3,10 +3,11 @@
  * صفحة إرسال المهام لقسم الإنتاج
  */
 
-// تعيين ترميز UTF-8
-if (!headers_sent()) {
+$isGetTaskForEdit = ($_SERVER['REQUEST_METHOD'] ?? '') === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get_task_for_edit' && isset($_GET['task_id']);
+
+// عدم إرسال headers للـ HTML عند طلب AJAX (get_task_for_edit) للحفاظ على إرجاع JSON نظيف
+if (!$isGetTaskForEdit && !headers_sent()) {
     header('Content-Type: text/html; charset=UTF-8');
-    // إضافة headers لمنع cache لضمان عرض البيانات المحدثة
     header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0, private');
     header('Pragma: no-cache');
     header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');

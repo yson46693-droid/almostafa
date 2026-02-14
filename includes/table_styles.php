@@ -13,6 +13,7 @@ $isAjaxRequest = (
         isset($_SERVER['HTTP_ACCEPT']) &&
         stripos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false
     )
+    || ($_SERVER['REQUEST_METHOD'] ?? '') === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get_task_for_edit'
 );
 
 // Skip output if headers already sent
