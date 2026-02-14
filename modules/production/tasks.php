@@ -621,6 +621,7 @@ function tasksHandleAction(string $action, array $input, array $context): array
             case 'receive_task':
             case 'start_task':
             case 'complete_task':
+            case 'with_delegate_task':
             case 'deliver_task':
             case 'return_task':
                 $taskId = isset($input['task_id']) ? (int) $input['task_id'] : 0;
@@ -654,7 +655,9 @@ function tasksHandleAction(string $action, array $input, array $context): array
 
                 if (in_array($action, ['deliver_task', 'return_task'], true)) {
                     // تم التوصيل / تم الارجاع: مسموح للمدير أو عامل إنتاج أو السائق عندما تكون المهمة مكتملة أو مع المندوب
-                    if (!$isManager && !$isProduction && !$isDriver) {
+                    if ($isDriver) {
+                        // السائق مصرح له دائماً بتنفيذ تم التوصيل وتم الارجاع (بدون شرط المهمة المخصصة لعامل إنتاج)
+                    } elseif (!$isManager && !$isProduction) {
                         throw new RuntimeException('غير مصرح لك بتنفيذ هذا الإجراء');
                     }
                     $currentStatus = $task['status'] ?? '';
@@ -940,9 +943,7 @@ $offset = ($pageNum - 1) * $perPage;
 
 $search = tasksSafeString($_GET['search'] ?? '');
 $statusFilter = tasksSafeString($_GET['status'] ?? '');
-if ($isDriver) {
-    $statusFilter = 'with_delegate';
-}
+// السائق: لا نفرض حالة معينة حتى تعمل الفلترة ضمن (مكتملة، مع المندوب، تم التوصيل، تم الارجاع)
 $priorityFilter = tasksSafeString($_GET['priority'] ?? '');
 $assignedFilter = isset($_GET['assigned']) ? (int) $_GET['assigned'] : 0;
 $overdueFilter = isset($_GET['overdue']) && $_GET['overdue'] === '1';
@@ -980,9 +981,15 @@ if ($overdueFilter) {
     $whereConditions[] = 't.due_date < CURDATE()';
 }
 
-// السائق يرى كل الأوردرات: مكتملة، مع المندوب، تم التوصيل، تم الارجاع
+// السائق يرى كل الأوردرات: مكتملة، مع المندوب، تم التوصيل، تم الارجاع — والفلترة تعمل ضمنها
 if ($isDriver) {
-    $whereConditions[] = "t.status IN ('completed', 'with_delegate', 'delivered', 'returned')";
+    $driverAllowedStatuses = ['completed', 'with_delegate', 'delivered', 'returned'];
+    if ($statusFilter !== '' && in_array($statusFilter, $driverAllowedStatuses, true)) {
+        $whereConditions[] = 't.status = ?';
+        $params[] = $statusFilter;
+    } else {
+        $whereConditions[] = "t.status IN ('completed', 'with_delegate', 'delivered', 'returned')";
+    }
 } elseif ($statusFilter !== '') {
     $whereConditions[] = 't.status = ?';
     $params[] = $statusFilter;
@@ -2189,6 +2196,10 @@ function tasksHtml(string $value): string
     const quantityInput = document.getElementById('quantity');
     const titleInput = document.getElementById('task_title');
     const taskActionForm = document.getElementById('taskActionForm');
+    // التأكد من إرسال النموذج إلى الرابط الحالي (مع page=tasks) حتى يعمل عند السائق/عميل الإنتاج
+    if (taskActionForm) {
+        taskActionForm.action = window.location.href || '';
+    }
 
     function hideLoader() {
         // تم حذف pageLoader
