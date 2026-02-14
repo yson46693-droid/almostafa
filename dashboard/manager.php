@@ -2010,6 +2010,17 @@ if ($isAjaxNavigation) {
                 }
                 ?>
                 
+            <?php elseif ($page === 'vehicle_maintenance'): ?>
+                <!-- صفحة صيانات السيارة -->
+                <?php 
+                $modulePath = __DIR__ . '/../modules/driver/vehicle_maintenance.php';
+                if (file_exists($modulePath)) {
+                    include $modulePath;
+                } else {
+                    echo '<div class="alert alert-warning">صفحة صيانات السيارة غير متاحة حالياً</div>';
+                }
+                ?>
+                
             <?php elseif ($page === 'vehicle_inventory'): ?>
                 <!-- صفحة مخزون السيارات -->
                 <?php 

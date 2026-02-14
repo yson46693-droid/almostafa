@@ -2541,6 +2541,22 @@ if ($isAjaxNavigation) {
                 }
                 ?>
                 
+            <?php elseif ($page === 'vehicle_maintenance'): ?>
+                <!-- صفحة صيانات السيارة -->
+                <?php 
+                $modulePath = __DIR__ . '/../modules/driver/vehicle_maintenance.php';
+                if (file_exists($modulePath)) {
+                    try {
+                        include $modulePath;
+                    } catch (Throwable $e) {
+                        error_log('Accountant vehicle maintenance module error: ' . $e->getMessage());
+                        echo '<div class="alert alert-danger">حدث خطأ أثناء تحميل صفحة صيانات السيارة: ' . htmlspecialchars($e->getMessage()) . '</div>';
+                    }
+                } else {
+                    echo '<div class="alert alert-warning">صفحة صيانات السيارة غير متاحة حالياً</div>';
+                }
+                ?>
+                
             <?php elseif ($page === 'production_reports'): ?>
                 <!-- صفحة التقارير -->
                 <?php 

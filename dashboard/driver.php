@@ -67,6 +67,15 @@ $pageDescription = 'لوحة تحكم السائق - الحضور والانصر
                     echo '<div class="alert alert-warning">صفحة محفظة المستخدم غير متاحة حالياً</div>';
                 }
                 ?>
+            <?php elseif ($page === 'vehicle_maintenance'): ?>
+                <?php
+                $modulePath = __DIR__ . '/../modules/driver/vehicle_maintenance.php';
+                if (file_exists($modulePath)) {
+                    include $modulePath;
+                } else {
+                    echo '<div class="alert alert-warning">صفحة صيانات السيارة غير متاحة حالياً</div>';
+                }
+                ?>
             <?php elseif ($page === 'tasks'): ?>
                 <?php
                 $modulePath = __DIR__ . '/../modules/production/tasks.php';

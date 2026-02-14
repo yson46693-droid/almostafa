@@ -256,7 +256,7 @@ if (isset($_GET['error'])) {
 
 // الحصول على السيارات
 $vehicles = getVehicles(['status' => 'active']);
-$salesReps = $db->query("SELECT id, username, full_name FROM users WHERE role = 'sales' AND status = 'active' ORDER BY username");
+$salesReps = $db->query("SELECT id, username, full_name, role FROM users WHERE role IN ('sales', 'driver') AND status = 'active' ORDER BY role, username");
 
 // سيارة محددة للعرض/التعديل
 $selectedVehicle = null;

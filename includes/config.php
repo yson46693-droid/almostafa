@@ -929,6 +929,48 @@ if (ENABLE_DAILY_ATTENDANCE_PHOTOS_CLEANUP) {
     }
 }
 
+// تنظيف صور صيانات السيارة (أكثر من 3 أشهر)
+$maintenanceCleanupFlagFile = PRIVATE_STORAGE_PATH . '/logs/vehicle_maintenance_photos_cleanup_last_run.txt';
+$todayForMaintenance = date('Y-m-d');
+$shouldRunMaintenanceCleanup = false;
+if (file_exists($maintenanceCleanupFlagFile)) {
+    $lastRun = trim(@file_get_contents($maintenanceCleanupFlagFile));
+    if ($lastRun !== $todayForMaintenance) {
+        $shouldRunMaintenanceCleanup = true;
+    }
+} else {
+    $shouldRunMaintenanceCleanup = true;
+}
+if ($shouldRunMaintenanceCleanup) {
+    try {
+        $logsDir = dirname($maintenanceCleanupFlagFile);
+        if (!is_dir($logsDir)) {
+            @mkdir($logsDir, 0755, true);
+        }
+        @file_put_contents($maintenanceCleanupFlagFile, $todayForMaintenance, LOCK_EX);
+        if (!function_exists('cleanupOldVehicleMaintenancePhotos')) {
+            require_once __DIR__ . '/vehicle_maintenance.php';
+        }
+        if (function_exists('cleanupOldVehicleMaintenancePhotos')) {
+            $stats = cleanupOldVehicleMaintenancePhotos(90);
+            if ($stats['deleted_files'] > 0) {
+                error_log(sprintf(
+                    "Vehicle maintenance photos cleanup (90 days): %d files deleted, %d folders deleted, %.2f MB freed, %d errors",
+                    $stats['deleted_files'],
+                    $stats['deleted_folders'],
+                    $stats['total_size_freed'] / (1024 * 1024),
+                    $stats['errors']
+                ));
+            }
+        }
+    } catch (Throwable $e) {
+        error_log('Vehicle maintenance photos cleanup error: ' . $e->getMessage());
+        if (file_exists($maintenanceCleanupFlagFile)) {
+            @unlink($maintenanceCleanupFlagFile);
+        }
+    }
+}
+
 /**
  * تشغيل إرسال التذكيرات اليومية مرة واحدة كل يوم
  * يتم تشغيله مع أول زائر لأي صفحة من صفحات الموقع

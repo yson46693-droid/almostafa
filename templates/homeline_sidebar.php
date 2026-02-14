@@ -275,6 +275,13 @@ switch ($role) {
                 'badge' => null
             ],
             [
+                'title' => 'صيانات السيارة',
+                'icon' => 'bi-wrench-adjustable',
+                'url' => $baseUrl . 'manager.php?page=vehicle_maintenance',
+                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'vehicle_maintenance'),
+                'badge' => null
+            ],
+            [
                 'title' => isset($lang['menu_reports']) ? $lang['menu_reports'] : 'التقارير',
                 'icon' => 'bi-file-earmark-text',
                 'url' => $baseUrl . 'manager.php?page=reports',
@@ -468,6 +475,13 @@ switch ($role) {
                 'icon' => 'bi-car-front',
                 'url' => $baseUrl . 'accountant.php?page=vehicles',
                 'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'vehicles'),
+                'badge' => null
+            ],
+            [
+                'title' => 'صيانات السيارة',
+                'icon' => 'bi-wrench-adjustable',
+                'url' => $baseUrl . 'accountant.php?page=vehicle_maintenance',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'vehicle_maintenance'),
                 'badge' => null
             ],
             [
@@ -818,6 +832,13 @@ switch ($role) {
                 'icon' => 'bi-wallet',
                 'url' => $baseUrl . 'driver.php?page=user_wallet',
                 'active' => ($currentPage === 'driver.php' && $currentPageParam === 'user_wallet'),
+                'badge' => null
+            ],
+            [
+                'title' => 'صيانات السيارة',
+                'icon' => 'bi-wrench-adjustable',
+                'url' => $baseUrl . 'driver.php?page=vehicle_maintenance',
+                'active' => ($currentPage === 'driver.php' && $currentPageParam === 'vehicle_maintenance'),
                 'badge' => null
             ],
         ];
