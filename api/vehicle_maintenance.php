@@ -73,7 +73,8 @@ $result = saveVehicleMaintenance(
     $type,
     $kmReading,
     $relativePath,
-    $notes ?: null
+    $notes ?: null,
+    $absPath
 );
 
 echo json_encode([

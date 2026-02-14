@@ -109,14 +109,20 @@ function getMaintenancePhotoAbsolutePath($relativePath) {
     $relativePath = ltrim(str_replace(['\\', '..'], ['/', ''], $relativePath), '/');
     $uploadsRoot = realpath(__DIR__ . '/../uploads');
     if ($uploadsRoot === false) {
-        $uploadsRoot = __DIR__ . '/../uploads';
+        $uploadsRoot = rtrim(__DIR__ . '/../uploads', DIRECTORY_SEPARATOR);
     }
     $fullPath = $uploadsRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relativePath);
-    $realFullPath = realpath($fullPath);
-    if ($realFullPath === false || strpos($realFullPath, $uploadsRoot) !== 0) {
-        return null;
+    $realFullPath = @realpath($fullPath);
+    if ($realFullPath !== false && is_file($realFullPath)) {
+        $base = realpath($uploadsRoot) ?: str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $uploadsRoot);
+        if (strpos($realFullPath, $base) === 0) {
+            return $realFullPath;
+        }
     }
-    return $realFullPath;
+    if (is_file($fullPath)) {
+        return $fullPath;
+    }
+    return null;
 }
 
 /**
@@ -135,9 +141,10 @@ function getDriverVehicle($driverId) {
 
 /**
  * حفظ سجل صيانة جديد
+ * @param string|null $photoAbsolutePath مسار الملف المطلق (إن وُجد) لاستخدامه في إرسال تليجرام
  * @return array ['success' => bool, 'message' => string, 'id' => int|null]
  */
-function saveVehicleMaintenance($vehicleId, $driverId, $type, $kmReading, $photoPath, $notes = null) {
+function saveVehicleMaintenance($vehicleId, $driverId, $type, $kmReading, $photoPath, $notes = null, $photoAbsolutePath = null) {
     ensureVehicleMaintenanceTable();
     $db = db();
 
@@ -166,8 +173,8 @@ function saveVehicleMaintenance($vehicleId, $driverId, $type, $kmReading, $photo
     );
     $id = $db->getLastInsertId();
 
-    // إرسال تنبيه تليجرام
-    $sendResult = sendMaintenanceToTelegram($id, $vehicleId, $driverId, $type, $maintenanceDate, $kmReading, $kmDiff, $photoPath, $notes);
+    // إرسال تنبيه تليجرام (مع الصورة إن وُجدت)
+    $sendResult = sendMaintenanceToTelegram($id, $vehicleId, $driverId, $type, $maintenanceDate, $kmReading, $kmDiff, $photoPath, $notes, $photoAbsolutePath);
 
     return [
         'success' => true,
@@ -179,14 +186,18 @@ function saveVehicleMaintenance($vehicleId, $driverId, $type, $kmReading, $photo
 }
 
 /**
- * إرسال تنبيه الصيانة إلى تليجرام
+ * إرسال تنبيه الصيانة إلى تليجرام (مع الصورة إن وُجدت)
+ * @param string|null $photoAbsolutePath مسار الملف المطلق للصورة (يُفضّل تمريره من الـ API)
  */
-function sendMaintenanceToTelegram($maintenanceId, $vehicleId, $driverId, $type, $maintenanceDate, $kmReading, $kmDiff, $photoPath, $notes = null) {
+function sendMaintenanceToTelegram($maintenanceId, $vehicleId, $driverId, $type, $maintenanceDate, $kmReading, $kmDiff, $photoPath, $notes = null, $photoAbsolutePath = null) {
     if (!function_exists('isTelegramConfigured') || !isTelegramConfigured()) {
         return false;
     }
     require_once __DIR__ . '/simple_telegram.php';
     require_once __DIR__ . '/path_helper.php';
+    if (!function_exists('formatDate')) {
+        require_once __DIR__ . '/config.php';
+    }
 
     $db = db();
     $vehicle = $db->queryOne("SELECT vehicle_number FROM vehicles WHERE id = ?", [$vehicleId]);
@@ -215,9 +226,16 @@ function sendMaintenanceToTelegram($maintenanceId, $vehicleId, $driverId, $type,
         $caption .= "📝 <b>ملاحظات:</b> " . htmlspecialchars($notes) . "\n";
     }
 
-    $absolutePath = getMaintenancePhotoAbsolutePath($photoPath);
+    // استخدام المسار المطلق إن وُجد (من الـ API بعد حفظ الصورة)
+    $absolutePath = $photoAbsolutePath;
+    if (!$absolutePath || !file_exists($absolutePath)) {
+        $absolutePath = getMaintenancePhotoAbsolutePath($photoPath);
+    }
     if ($absolutePath && file_exists($absolutePath)) {
-        return sendTelegramPhoto($absolutePath, $caption, null, false);
+        $sent = sendTelegramPhoto($absolutePath, $caption, null, false);
+        if ($sent) {
+            return true;
+        }
     }
     return sendTelegramMessage($caption);
 }

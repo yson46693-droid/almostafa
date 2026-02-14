@@ -232,7 +232,7 @@ $apiBase = getRelativeUrl('api/vehicle_maintenance.php');
                                     <td><?php echo isset($r['km_diff']) && $r['km_diff'] !== null ? number_format($r['km_diff']) . ' كم' : '-'; ?></td>
                                     <td>
                                         <?php if (!empty($r['photo_path'])): ?>
-                                            <?php $photoUrl = getRelativeUrl('uploads/' . str_replace('\\', '/', $r['photo_path'])); ?>
+                                            <?php $photoUrl = getRelativeUrl('api/view_maintenance_photo.php?id=' . (int) $r['id']); ?>
                                             <a href="<?php echo htmlspecialchars($photoUrl); ?>" target="_blank" class="btn btn-sm btn-outline-primary">عرض</a>
                                         <?php else: ?>
                                             <span class="text-muted">-</span>
