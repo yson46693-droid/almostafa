@@ -325,7 +325,7 @@ switch ($role) {
                 'badge' => null
             ],
             [
-                'title' => 'مهام الإنتاج',
+                'title' => 'الاوردرات',
                 'icon' => 'bi-list-task',
                 'url' => $baseUrl . 'driver.php?page=tasks',
                 'active' => ($currentPage === 'driver.php' && isset($_GET['page']) && $_GET['page'] === 'tasks'),
