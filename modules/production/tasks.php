@@ -980,9 +980,9 @@ if ($overdueFilter) {
     $whereConditions[] = 't.due_date < CURDATE()';
 }
 
-// السائق يرى المهام المكتملة + المع المندوب (جاهزة للتوصيل)
+// السائق يرى كل الأوردرات: مكتملة، مع المندوب، تم التوصيل، تم الارجاع
 if ($isDriver) {
-    $whereConditions[] = "t.status IN ('completed', 'with_delegate')";
+    $whereConditions[] = "t.status IN ('completed', 'with_delegate', 'delivered', 'returned')";
 } elseif ($statusFilter !== '') {
     $whereConditions[] = 't.status = ?';
     $params[] = $statusFilter;
@@ -1393,8 +1393,8 @@ try {
 }
 
 if ($isDriver) {
-    // السائق: إحصائيات المهام الجاهزة للتوصيل (مكتملة + مع المندوب)
-    $statsBaseConditions = ["status IN ('completed', 'with_delegate')"];
+    // السائق: إحصائيات كل الأوردرات (مكتملة، مع المندوب، تم التوصيل، تم الارجاع)
+    $statsBaseConditions = ["status IN ('completed', 'with_delegate', 'delivered', 'returned')"];
     $statsBaseParams = [];
 } else {
     $statsBaseConditions = [];
