@@ -793,6 +793,13 @@ switch ($role) {
     case 'driver':
         $menuItems = [
             [
+                'title' => isset($lang['dashboard']) ? $lang['dashboard'] : 'لوحة التحكم',
+                'icon' => 'bi-speedometer2',
+                'url' => $baseUrl . 'driver.php',
+                'active' => ($currentPage === 'driver.php' && ($currentPageParam === '' || $currentPageParam === 'dashboard')),
+                'badge' => null
+            ],
+            [
                 'title' => isset($lang['menu_attendance']) ? $lang['menu_attendance'] : 'الحضور والانصراف',
                 'icon' => 'bi-calendar-check',
                 'url' => getRelativeUrl('attendance.php'),

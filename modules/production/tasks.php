@@ -980,7 +980,10 @@ if ($overdueFilter) {
     $whereConditions[] = 't.due_date < CURDATE()';
 }
 
-if ($statusFilter !== '') {
+// السائق يرى المهام المكتملة + المع المندوب (جاهزة للتوصيل)
+if ($isDriver) {
+    $whereConditions[] = "t.status IN ('completed', 'with_delegate')";
+} elseif ($statusFilter !== '') {
     $whereConditions[] = 't.status = ?';
     $params[] = $statusFilter;
 } elseif (!$overdueFilter) {
@@ -1390,7 +1393,8 @@ try {
 }
 
 if ($isDriver) {
-    $statsBaseConditions = ["status = 'with_delegate'"];
+    // السائق: إحصائيات المهام الجاهزة للتوصيل (مكتملة + مع المندوب)
+    $statsBaseConditions = ["status IN ('completed', 'with_delegate')"];
     $statsBaseParams = [];
 } else {
     $statsBaseConditions = [];
