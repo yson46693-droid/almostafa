@@ -54,6 +54,12 @@ try {
         $db->execute("ALTER TABLE tasks ADD COLUMN customer_name VARCHAR(255) NULL DEFAULT NULL AFTER unit");
         error_log('Added customer_name column to tasks table in production/tasks.php');
     }
+    // التحقق من وجود عمود customer_phone في جدول tasks
+    $customerPhoneColumn = $db->queryOne("SHOW COLUMNS FROM tasks LIKE 'customer_phone'");
+    if (empty($customerPhoneColumn)) {
+        $db->execute("ALTER TABLE tasks ADD COLUMN customer_phone VARCHAR(50) NULL DEFAULT NULL AFTER customer_name");
+        error_log('Added customer_phone column to tasks table in production/tasks.php');
+    }
     // التحقق من وجود عمود receipt_print_count لتتبع عدد مرات طباعة إيصال الأوردر
     $receiptPrintCountColumn = $db->queryOne("SHOW COLUMNS FROM tasks LIKE 'receipt_print_count'");
     if (empty($receiptPrintCountColumn)) {
@@ -798,12 +804,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $queryParams = [];
         $queryParams['page'] = 'tasks';
         
-        // الحفاظ على معاملات GET الأخرى
+        // الحفاظ على معاملات GET الأخرى (بما فيها البحث والبحث المتقدم)
         if (isset($_GET['p']) && (int)$_GET['p'] > 0) {
             $queryParams['p'] = (int)$_GET['p'];
         }
         if (isset($_GET['search']) && $_GET['search'] !== '') {
             $queryParams['search'] = $_GET['search'];
+        }
+        if (isset($_GET['search_text']) && $_GET['search_text'] !== '') {
+            $queryParams['search_text'] = $_GET['search_text'];
         }
         if (isset($_GET['status']) && $_GET['status'] !== '') {
             $queryParams['status'] = $_GET['status'];
@@ -813,6 +822,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if (isset($_GET['assigned']) && (int)$_GET['assigned'] > 0) {
             $queryParams['assigned'] = (int)$_GET['assigned'];
+        }
+        if (isset($_GET['task_id']) && trim((string)$_GET['task_id']) !== '') {
+            $queryParams['task_id'] = trim((string)$_GET['task_id']);
+        }
+        if (isset($_GET['search_customer']) && trim((string)$_GET['search_customer']) !== '') {
+            $queryParams['search_customer'] = trim((string)$_GET['search_customer']);
+        }
+        if (isset($_GET['search_order_id']) && trim((string)$_GET['search_order_id']) !== '') {
+            $queryParams['search_order_id'] = trim((string)$_GET['search_order_id']);
+        }
+        if (isset($_GET['task_type']) && trim((string)$_GET['task_type']) !== '') {
+            $queryParams['task_type'] = trim((string)$_GET['task_type']);
+        }
+        if (isset($_GET['due_date_from']) && trim((string)$_GET['due_date_from']) !== '') {
+            $queryParams['due_date_from'] = trim((string)$_GET['due_date_from']);
+        }
+        if (isset($_GET['due_date_to']) && trim((string)$_GET['due_date_to']) !== '') {
+            $queryParams['due_date_to'] = trim((string)$_GET['due_date_to']);
+        }
+        if (isset($_GET['overdue']) && $_GET['overdue'] === '1') {
+            $queryParams['overdue'] = '1';
         }
         
         // استخدام preventDuplicateSubmission لإعادة التوجيه
@@ -917,10 +947,28 @@ $priorityFilter = tasksSafeString($_GET['priority'] ?? '');
 $assignedFilter = isset($_GET['assigned']) ? (int) $_GET['assigned'] : 0;
 $overdueFilter = isset($_GET['overdue']) && $_GET['overdue'] === '1';
 
+// معاملات البحث المتقدم (نفس صفحة تسجيل مهام الإنتاج)
+$filterTaskId = isset($_GET['task_id']) ? trim((string)$_GET['task_id']) : '';
+$filterCustomer = isset($_GET['search_customer']) ? trim((string)$_GET['search_customer']) : '';
+$filterOrderId = isset($_GET['search_order_id']) ? trim((string)$_GET['search_order_id']) : '';
+$filterTaskType = isset($_GET['task_type']) ? trim((string)$_GET['task_type']) : '';
+$filterDueFrom = isset($_GET['due_date_from']) ? trim((string)$_GET['due_date_from']) : '';
+$filterDueTo = isset($_GET['due_date_to']) ? trim((string)$_GET['due_date_to']) : '';
+$filterSearchText = isset($_GET['search_text']) ? trim((string)$_GET['search_text']) : '';
+
 $whereConditions = [];
 $params = [];
 
-if ($search !== '') {
+// بحث سريع: نص في العنوان، الوصف، الملاحظات، العميل، الهاتف
+if ($filterSearchText !== '') {
+    $whereConditions[] = '(t.title LIKE ? OR t.description LIKE ? OR t.notes LIKE ? OR t.customer_name LIKE ? OR t.customer_phone LIKE ?)';
+    $textLike = '%' . $filterSearchText . '%';
+    $params[] = $textLike;
+    $params[] = $textLike;
+    $params[] = $textLike;
+    $params[] = $textLike;
+    $params[] = $textLike;
+} elseif ($search !== '') {
     $whereConditions[] = '(t.title LIKE ? OR t.description LIKE ?)';
     $searchParam = '%' . $search . '%';
     $params[] = $searchParam;
@@ -947,6 +995,41 @@ if ($priorityFilter !== '' && in_array($priorityFilter, ['low', 'normal', 'high'
 if ($assignedFilter > 0) {
     $whereConditions[] = 't.assigned_to = ?';
     $params[] = $assignedFilter;
+}
+
+// فلترة البحث المتقدم (نفس صفحة تسجيل مهام الإنتاج)
+if ($filterTaskId !== '') {
+    $taskIdInt = (int) $filterTaskId;
+    if ($taskIdInt > 0) {
+        $whereConditions[] = 't.id = ?';
+        $params[] = $taskIdInt;
+    }
+}
+if ($filterCustomer !== '') {
+    $whereConditions[] = '(t.customer_name LIKE ? OR t.customer_phone LIKE ?)';
+    $customerLike = '%' . $filterCustomer . '%';
+    $params[] = $customerLike;
+    $params[] = $customerLike;
+}
+if ($filterOrderId !== '') {
+    $orderIdInt = (int) $filterOrderId;
+    if ($orderIdInt > 0) {
+        $whereConditions[] = "t.related_type = 'customer_order' AND t.related_id = ?";
+        $params[] = $orderIdInt;
+    }
+}
+if ($filterTaskType !== '') {
+    $whereConditions[] = "(t.task_type = ? OR t.related_type = CONCAT('manager_', ?))";
+    $params[] = $filterTaskType;
+    $params[] = $filterTaskType;
+}
+if ($filterDueFrom !== '') {
+    $whereConditions[] = 't.due_date >= ?';
+    $params[] = $filterDueFrom;
+}
+if ($filterDueTo !== '') {
+    $whereConditions[] = 't.due_date <= ?';
+    $params[] = $filterDueTo;
 }
 
 // السماح لجميع عمال الإنتاج برؤية جميع المهام المخصصة لأي عامل إنتاج
@@ -1373,9 +1456,16 @@ function tasksHtml(string $value): string
 
     <?php
     $filterBaseUrl = '?page=tasks';
-    if ($search !== '') { $filterBaseUrl .= '&search=' . rawurlencode($search); }
+    if ($filterSearchText !== '') { $filterBaseUrl .= '&search_text=' . rawurlencode($filterSearchText); }
+    elseif ($search !== '') { $filterBaseUrl .= '&search=' . rawurlencode($search); }
     if ($priorityFilter !== '') { $filterBaseUrl .= '&priority=' . rawurlencode($priorityFilter); }
     if ($assignedFilter > 0) { $filterBaseUrl .= '&assigned=' . $assignedFilter; }
+    if ($filterTaskId !== '') { $filterBaseUrl .= '&task_id=' . rawurlencode($filterTaskId); }
+    if ($filterCustomer !== '') { $filterBaseUrl .= '&search_customer=' . rawurlencode($filterCustomer); }
+    if ($filterOrderId !== '') { $filterBaseUrl .= '&search_order_id=' . rawurlencode($filterOrderId); }
+    if ($filterTaskType !== '') { $filterBaseUrl .= '&task_type=' . rawurlencode($filterTaskType); }
+    if ($filterDueFrom !== '') { $filterBaseUrl .= '&due_date_from=' . rawurlencode($filterDueFrom); }
+    if ($filterDueTo !== '') { $filterBaseUrl .= '&due_date_to=' . rawurlencode($filterDueTo); }
     ?>
     <div class="row g-2 mb-3">
         <div class="col-6 col-md-2">
@@ -1462,36 +1552,91 @@ function tasksHtml(string $value): string
 
     <div class="card mb-3">
         <div class="card-body p-3">
-            <form method="GET" action="" class="row g-2 align-items-end">
+            <form method="GET" action="" id="tasksFilterForm">
                 <input type="hidden" name="page" value="tasks">
                 <?php if ($overdueFilter): ?><input type="hidden" name="overdue" value="1"><?php endif; ?>
-                <div class="col-md-3 col-sm-6">
-                    <label class="form-label mb-1">بحث</label>
-                    <input type="text" class="form-control form-control-sm" name="search" value="<?php echo tasksHtml($search); ?>" placeholder="عنوان أو وصف">
+                <!-- بحث سريع و بحث متقدم (نفس صفحة تسجيل مهام الإنتاج) -->
+                <div class="row g-2 align-items-end mb-2">
+                    <div class="col-12 col-md-4 col-lg-3">
+                        <label class="form-label small mb-0">بحث سريع</label>
+                        <input type="text" class="form-control form-control-sm" name="search_text" value="<?php echo tasksHtml($filterSearchText !== '' ? $filterSearchText : $search); ?>" placeholder="نص في العنوان، الملاحظات، العميل...">
+                    </div>
+                    <div class="col-auto">
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="bi bi-search me-1"></i>بحث
+                        </button>
+                    </div>
+                    <div class="col-auto">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#tasksAdvancedSearch" aria-expanded="false" aria-controls="tasksAdvancedSearch">
+                            <i class="bi bi-funnel me-1"></i>بحث متقدم
+                        </button>
+                    </div>
+                    <?php if ($filterTaskId !== '' || $filterCustomer !== '' || $filterOrderId !== '' || $filterTaskType !== '' || $filterDueFrom !== '' || $filterDueTo !== '' || $filterSearchText !== '' || $search !== ''): ?>
+                    <div class="col-auto">
+                        <a href="?page=tasks<?php echo $statusFilter !== '' ? '&status=' . rawurlencode($statusFilter) : ''; ?><?php echo $priorityFilter !== '' ? '&priority=' . rawurlencode($priorityFilter) : ''; ?><?php echo $assignedFilter > 0 ? '&assigned=' . $assignedFilter : ''; ?><?php echo $overdueFilter ? '&overdue=1' : ''; ?>" class="btn btn-outline-danger btn-sm">إزالة الفلتر</a>
+                    </div>
+                    <?php endif; ?>
                 </div>
-                <div class="col-md-2 col-sm-6">
-                    <label class="form-label mb-1">الحالة</label>
-                    <select class="form-select form-select-sm" name="status" onchange="this.form.submit()">
-                        <option value="">الكل</option>
-                        <option value="pending" <?php echo $statusFilter === 'pending' ? 'selected' : ''; ?>>معلقة</option>
-                        <option value="received" <?php echo $statusFilter === 'received' ? 'selected' : ''; ?>>مستلمة</option>
-                        <option value="completed" <?php echo $statusFilter === 'completed' ? 'selected' : ''; ?>>مكتملة</option>
-                        <option value="with_delegate" <?php echo $statusFilter === 'with_delegate' ? 'selected' : ''; ?>>مع المندوب</option>
-                        <option value="delivered" <?php echo $statusFilter === 'delivered' ? 'selected' : ''; ?>>تم التوصيل</option>
-                        <option value="returned" <?php echo $statusFilter === 'returned' ? 'selected' : ''; ?>>تم الارجاع</option>
-                        <option value="cancelled" <?php echo $statusFilter === 'cancelled' ? 'selected' : ''; ?>>ملغاة</option>
-                    </select>
+                <div class="collapse <?php echo ($filterTaskId !== '' || $filterCustomer !== '' || $filterOrderId !== '' || $filterTaskType !== '' || $filterDueFrom !== '' || $filterDueTo !== '') ? 'show' : ''; ?>" id="tasksAdvancedSearch">
+                    <div class="row g-2 pt-2 border-top mt-2">
+                        <div class="col-6 col-md-4 col-lg-2">
+                            <label class="form-label small mb-0">رقم الطلب</label>
+                            <input type="text" name="task_id" class="form-control form-control-sm" placeholder="#" value="<?php echo tasksHtml($filterTaskId); ?>">
+                        </div>
+                        <div class="col-6 col-md-4 col-lg-2">
+                            <label class="form-label small mb-0">اسم العميل / هاتف</label>
+                            <input type="text" name="search_customer" class="form-control form-control-sm" placeholder="اسم أو رقم" value="<?php echo tasksHtml($filterCustomer); ?>">
+                        </div>
+                        <div class="col-6 col-md-4 col-lg-2">
+                            <label class="form-label small mb-0">رقم الأوردر</label>
+                            <input type="text" name="search_order_id" class="form-control form-control-sm" placeholder="رقم الأوردر" value="<?php echo tasksHtml($filterOrderId); ?>">
+                        </div>
+                        <div class="col-6 col-md-4 col-lg-2">
+                            <label class="form-label small mb-0">نوع الاوردر</label>
+                            <select name="task_type" class="form-select form-select-sm">
+                                <option value="">— الكل —</option>
+                                <option value="shop_order" <?php echo $filterTaskType === 'shop_order' ? 'selected' : ''; ?>>اوردر محل</option>
+                                <option value="cash_customer" <?php echo $filterTaskType === 'cash_customer' ? 'selected' : ''; ?>>عميل نقدي</option>
+                                <option value="telegraph" <?php echo $filterTaskType === 'telegraph' ? 'selected' : ''; ?>>تليجراف</option>
+                                <option value="shipping_company" <?php echo $filterTaskType === 'shipping_company' ? 'selected' : ''; ?>>شركة شحن</option>
+                                <option value="general" <?php echo $filterTaskType === 'general' ? 'selected' : ''; ?>>مهمة عامة</option>
+                                <option value="production" <?php echo $filterTaskType === 'production' ? 'selected' : ''; ?>>إنتاج منتج</option>
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-4 col-lg-2">
+                            <label class="form-label small mb-0">تاريخ تسليم من</label>
+                            <input type="date" name="due_date_from" class="form-control form-control-sm" value="<?php echo tasksHtml($filterDueFrom); ?>">
+                        </div>
+                        <div class="col-6 col-md-4 col-lg-2">
+                            <label class="form-label small mb-0">تاريخ تسليم إلى</label>
+                            <input type="date" name="due_date_to" class="form-control form-control-sm" value="<?php echo tasksHtml($filterDueTo); ?>">
+                        </div>
+                    </div>
                 </div>
-                <div class="col-md-2 col-sm-6">
-                    <label class="form-label mb-1">الأولوية</label>
-                    <select class="form-select form-select-sm" name="priority">
-                        <option value="">الكل</option>
-                        <option value="urgent" <?php echo $priorityFilter === 'urgent' ? 'selected' : ''; ?>>عاجلة</option>
-                        <option value="normal" <?php echo $priorityFilter === 'normal' ? 'selected' : ''; ?>>عادية</option>
-                        <option value="low" <?php echo $priorityFilter === 'low' ? 'selected' : ''; ?>>منخفضة</option>
-                    </select>
-                </div>
-                <?php if ($isManager): ?>
+                <div class="row g-2 align-items-end mt-2">
+                    <div class="col-md-2 col-sm-6">
+                        <label class="form-label mb-1">الحالة</label>
+                        <select class="form-select form-select-sm" name="status" onchange="this.form.submit()">
+                            <option value="">الكل</option>
+                            <option value="pending" <?php echo $statusFilter === 'pending' ? 'selected' : ''; ?>>معلقة</option>
+                            <option value="received" <?php echo $statusFilter === 'received' ? 'selected' : ''; ?>>مستلمة</option>
+                            <option value="completed" <?php echo $statusFilter === 'completed' ? 'selected' : ''; ?>>مكتملة</option>
+                            <option value="with_delegate" <?php echo $statusFilter === 'with_delegate' ? 'selected' : ''; ?>>مع المندوب</option>
+                            <option value="delivered" <?php echo $statusFilter === 'delivered' ? 'selected' : ''; ?>>تم التوصيل</option>
+                            <option value="returned" <?php echo $statusFilter === 'returned' ? 'selected' : ''; ?>>تم الارجاع</option>
+                            <option value="cancelled" <?php echo $statusFilter === 'cancelled' ? 'selected' : ''; ?>>ملغاة</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 col-sm-6">
+                        <label class="form-label mb-1">الأولوية</label>
+                        <select class="form-select form-select-sm" name="priority">
+                            <option value="">الكل</option>
+                            <option value="urgent" <?php echo $priorityFilter === 'urgent' ? 'selected' : ''; ?>>عاجلة</option>
+                            <option value="normal" <?php echo $priorityFilter === 'normal' ? 'selected' : ''; ?>>عادية</option>
+                            <option value="low" <?php echo $priorityFilter === 'low' ? 'selected' : ''; ?>>منخفضة</option>
+                        </select>
+                    </div>
+                    <?php if ($isManager): ?>
                     <div class="col-md-2 col-sm-6">
                         <label class="form-label mb-1">المخصص إلى</label>
                         <select class="form-select form-select-sm" name="assigned">
@@ -1503,16 +1648,17 @@ function tasksHtml(string $value): string
                             <?php endforeach; ?>
                         </select>
                     </div>
-                <?php endif; ?>
-                <div class="col-md-2 col-sm-6">
-                    <button type="submit" class="btn btn-primary btn-sm w-100">
-                        <i class="bi bi-search me-1"></i>بحث
-                    </button>
-                </div>
-                <div class="col-md-1 col-sm-6">
-                    <a href="?page=tasks" class="btn btn-secondary btn-sm w-100">
-                        <i class="bi bi-x"></i>
-                    </a>
+                    <?php endif; ?>
+                    <div class="col-md-2 col-sm-6">
+                        <button type="submit" class="btn btn-primary btn-sm w-100">
+                            <i class="bi bi-search me-1"></i>بحث
+                        </button>
+                    </div>
+                    <div class="col-md-1 col-sm-6">
+                        <a href="?page=tasks" class="btn btn-secondary btn-sm w-100" title="إعادة تعيين">
+                            <i class="bi bi-x"></i>
+                        </a>
+                    </div>
                 </div>
             </form>
         </div>

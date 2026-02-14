@@ -26,7 +26,7 @@ $db = db();
 $page = $_GET['page'] ?? 'attendance';
 
 if ($page === 'attendance') {
-    header('Location: ../v1/attendance.php');
+    header('Location: ' . getRelativeUrl('attendance.php'));
     exit;
 }
 
