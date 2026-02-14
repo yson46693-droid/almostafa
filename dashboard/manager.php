@@ -98,6 +98,35 @@ if ($page === 'representatives_customers' &&
     }
 }
 
+// معالجة AJAX لجلب بيانات الأوردر للتعديل - قبل أي إخراج أو headers
+if ($page === 'production_tasks' && 
+    $_SERVER['REQUEST_METHOD'] === 'GET' && 
+    isset($_GET['action']) && 
+    trim($_GET['action']) === 'get_task_for_edit' &&
+    isset($_GET['task_id'])) {
+    
+    require_once __DIR__ . '/../includes/config.php';
+    require_once __DIR__ . '/../includes/db.php';
+    require_once __DIR__ . '/../includes/auth.php';
+    require_once __DIR__ . '/../includes/notifications.php';
+    require_once __DIR__ . '/../includes/audit_log.php';
+    require_once __DIR__ . '/../includes/security.php';
+    require_once __DIR__ . '/../includes/path_helper.php';
+    require_once __DIR__ . '/../includes/table_styles.php';
+    
+    requireRole(['manager', 'accountant', 'developer']);
+    
+    $modulePath = __DIR__ . '/../modules/manager/production_tasks.php';
+    if (file_exists($modulePath)) {
+        include $modulePath;
+        exit;
+    }
+    
+    header('Content-Type: application/json; charset=UTF-8');
+    echo json_encode(['success' => false]);
+    exit;
+}
+
 // بدء output buffering لضمان عدم وجود محتوى قبل DOCTYPE
 if (!ob_get_level()) {
     ob_start();

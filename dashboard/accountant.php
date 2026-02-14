@@ -333,6 +333,28 @@ if ($page === 'representatives_customers' &&
     }
 }
 
+// معالجة AJAX لجلب بيانات الأوردر للتعديل - قبل أي إخراج HTML
+if ($page === 'production_tasks' && 
+    $_SERVER['REQUEST_METHOD'] === 'GET' && 
+    isset($_GET['action']) && 
+    trim($_GET['action']) === 'get_task_for_edit' &&
+    isset($_GET['task_id'])) {
+    
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    
+    $modulePath = __DIR__ . '/../modules/manager/production_tasks.php';
+    if (file_exists($modulePath)) {
+        include $modulePath;
+        exit;
+    }
+    
+    header('Content-Type: application/json; charset=UTF-8');
+    echo json_encode(['success' => false]);
+    exit;
+}
+
 /**
  * التأكد من وجود جدول accountant_transactions
  */

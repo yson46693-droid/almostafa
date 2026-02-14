@@ -264,6 +264,7 @@ function tasksHandleAction(string $action, array $input, array $context): array
     $currentUser = $context['user'];
     $isManager = (bool) ($context['is_manager'] ?? false);
     $isProduction = (bool) ($context['is_production'] ?? false);
+    $isDriver = (bool) ($context['is_driver'] ?? false);
     $retentionLimit = (int) $context['retention_limit'];
 
     $result = ['error' => null, 'success' => null];
@@ -803,6 +804,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'user' => $currentUser,
             'is_manager' => $isManager,
             'is_production' => $isProduction,
+            'is_driver' => $isDriver,
             'retention_limit' => getTasksRetentionLimit(),
         ];
 
