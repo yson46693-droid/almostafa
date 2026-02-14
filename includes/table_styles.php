@@ -316,5 +316,3 @@ if (!defined('GLOBAL_TABLE_STYLES_RENDERED') && !$isAjaxRequest && !$headersSent
     </style>
     <?php
 }
-?>
-
