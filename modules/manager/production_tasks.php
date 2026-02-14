@@ -1042,64 +1042,79 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// جلب بيانات المهمة للتعديل (AJAX)
-if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get_task_for_edit' && ($isAccountant || $isManager)) {
+// جلب بيانات المهمة للتعديل (AJAX) — المدير والمحاسب والمطور
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get_task_for_edit' && ($isAccountant || $isManager || $isDeveloper)) {
     $taskId = isset($_GET['task_id']) ? intval($_GET['task_id']) : 0;
     if ($taskId > 0) {
         $task = $db->queryOne("SELECT id, task_type, related_type, priority, due_date, customer_name, customer_phone, notes, description, product_name, quantity, unit FROM tasks WHERE id = ?", [$taskId]);
         if ($task) {
             $displayType = (strpos($task['related_type'] ?? '', 'manager_') === 0) ? substr($task['related_type'], 8) : ($task['task_type'] ?? 'shop_order');
-            $notes = $task['notes'] ?? '';
+            $notes = (string)($task['notes'] ?? '');
             $products = [];
             $assignees = [];
-            // استخراج المنتجات من [PRODUCTS_JSON]
-            if (preg_match('/\[PRODUCTS_JSON\]:\s*(.+?)(?=\n\n|\[ASSIGNED_WORKERS_IDS\]|$)/s', $notes, $m)) {
-                $decoded = json_decode(trim($m[1]), true);
+            // استخراج المنتجات من [PRODUCTS_JSON] — دعم \n و \r\n
+            if (preg_match('/\[PRODUCTS_JSON\]\s*:\s*(.+?)(?=\s*\n\s*\n|\[ASSIGNED_WORKERS_IDS\]|$)/s', $notes, $m)) {
+                $jsonStr = trim($m[1]);
+                $decoded = json_decode($jsonStr, true);
                 if (is_array($decoded)) {
                     foreach ($decoded as $p) {
                         $products[] = [
-                            'name' => $p['name'] ?? '',
-                            'quantity' => isset($p['quantity']) ? $p['quantity'] : null,
-                            'unit' => $p['unit'] ?? 'قطعة',
-                            'price' => isset($p['price']) && $p['price'] !== '' ? $p['price'] : null
+                            'name' => trim((string)($p['name'] ?? '')),
+                            'quantity' => isset($p['quantity']) ? (is_numeric($p['quantity']) ? (float)$p['quantity'] : null) : null,
+                            'unit' => trim((string)($p['unit'] ?? 'قطعة')) ?: 'قطعة',
+                            'price' => isset($p['price']) && $p['price'] !== '' && $p['price'] !== null ? (is_numeric($p['price']) ? (float)$p['price'] : null) : null
                         ];
                     }
                 }
             }
             // إذا لم نجد JSON، استخراج من النص "المنتج: X - الكمية: Y"
-            if (empty($products) && preg_match_all('/المنتج:\s*(.+?)(?:\s*-\s*الكمية:\s*([0-9.]+))?/u', $notes, $matches, PREG_SET_ORDER)) {
+            if (empty($products) && preg_match_all('/المنتج:\s*([^\n]+?)(?:\s*-\s*الكمية:\s*([0-9.]+))?/u', $notes, $matches, PREG_SET_ORDER)) {
                 foreach ($matches as $m) {
                     $products[] = [
                         'name' => trim($m[1]),
                         'quantity' => isset($m[2]) ? (float)$m[2] : null,
-                        'unit' => $task['unit'] ?? 'قطعة',
+                        'unit' => trim((string)($task['unit'] ?? 'قطعة')) ?: 'قطعة',
                         'price' => null
                     ];
                 }
             }
             // إذا لم نجد منتجات، استخدام الحقول من الجدول
-            if (empty($products) && !empty(trim($task['product_name'] ?? ''))) {
-                $products[] = [
-                    'name' => $task['product_name'],
-                    'quantity' => $task['quantity'] ?? null,
-                    'unit' => $task['unit'] ?? 'قطعة',
-                    'price' => null
-                ];
+            if (empty($products)) {
+                $pn = trim((string)($task['product_name'] ?? ''));
+                $qty = isset($task['quantity']) ? (is_numeric($task['quantity']) ? (float)$task['quantity'] : null) : null;
+                if ($pn !== '' || $qty !== null) {
+                    $products[] = [
+                        'name' => $pn,
+                        'quantity' => $qty,
+                        'unit' => trim((string)($task['unit'] ?? 'قطعة')) ?: 'قطعة',
+                        'price' => null
+                    ];
+                }
             }
             // استخراج العمال المخصصين
-            if (preg_match('/\[ASSIGNED_WORKERS_IDS\]:\s*([0-9,]+)/', $notes, $m)) {
-                $assignees = array_filter(array_map('intval', explode(',', $m[1])));
+            if (preg_match('/\[ASSIGNED_WORKERS_IDS\]\s*:\s*([0-9,\s]+)/', $notes, $m)) {
+                $assignees = array_filter(array_map('intval', preg_split('/[\s,]+/', trim($m[1]), -1, PREG_SPLIT_NO_EMPTY)));
             }
-            // استخراج التفاصيل (الوصف) - استخدام description أولاً
-            $details = trim($task['description'] ?? '');
+            // استخراج التفاصيل (الوصف) — استخدام description أولاً ثم تنظيف notes
+            $details = trim((string)($task['description'] ?? ''));
             if ($details === '') {
                 $details = $notes;
-                $details = preg_replace('/\[PRODUCTS_JSON\]:[\s\S]*?(?=\n\n|\[ASSIGNED_WORKERS_IDS\]|$)/', '', $details);
-                $details = preg_replace('/\[ASSIGNED_WORKERS_IDS\]:\s*[0-9,]+/', '', $details);
+                $details = preg_replace('/\[PRODUCTS_JSON\][\s\S]*?(?=\s*\n\s*\n|\[ASSIGNED_WORKERS_IDS\]|$)/', '', $details);
+                $details = preg_replace('/\[ASSIGNED_WORKERS_IDS\]\s*:[^\n]*/', '', $details);
                 $details = preg_replace('/العمال المخصصون:[^\n]*/', '', $details);
                 $details = preg_replace('/العامل المخصص:[^\n]*/', '', $details);
                 $details = preg_replace('/المنتج:\s*[^\n]+/m', '', $details);
                 $details = preg_replace('/\n\s*\n\s*\n+/', "\n\n", trim($details));
+            }
+            // تنسيق تاريخ الاستحقاق لـ input type="date" (YYYY-MM-DD)
+            $dueDate = $task['due_date'] ?? '';
+            if ($dueDate !== '' && $dueDate !== null) {
+                $dueDate = trim((string)$dueDate);
+                if (preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $dueDate, $d)) {
+                    $dueDate = $d[1] . '-' . $d[2] . '-' . $d[3];
+                }
+            } else {
+                $dueDate = '';
             }
             header('Content-Type: application/json; charset=UTF-8');
             echo json_encode([
@@ -1108,9 +1123,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['act
                     'id' => (int)$task['id'],
                     'task_type' => $displayType,
                     'priority' => $task['priority'] ?? 'normal',
-                    'due_date' => $task['due_date'] ?? '',
-                    'customer_name' => $task['customer_name'] ?? '',
-                    'customer_phone' => $task['customer_phone'] ?? '',
+                    'due_date' => $dueDate,
+                    'customer_name' => trim((string)($task['customer_name'] ?? '')),
+                    'customer_phone' => trim((string)($task['customer_phone'] ?? '')),
                     'details' => $details,
                     'products' => $products,
                     'assignees' => array_values($assignees)
