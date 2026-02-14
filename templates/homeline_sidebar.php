@@ -77,6 +77,8 @@ if (empty($role)) {
         $role = 'accountant';
     } elseif ($currentPage === 'production.php') {
         $role = 'production';
+    } elseif ($currentPage === 'driver.php') {
+        $role = 'driver';
     } elseif ($currentPage === 'developer.php') {
         $role = 'developer';
     }
@@ -230,6 +232,13 @@ switch ($role) {
                 'badge' => null
             ],
             [
+                'title' => 'التحكم في محافظ المستخدمين',
+                'icon' => 'bi-wallet',
+                'url' => $baseUrl . 'manager.php?page=user_wallets_control',
+                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'user_wallets_control'),
+                'badge' => null
+            ],
+            [
                 'title' => isset($lang['menu_warehouse_transfers']) ? $lang['menu_warehouse_transfers'] : 'نقل المخازن',
                 'icon' => 'bi-arrow-left-right',
                 'url' => $baseUrl . 'manager.php?page=warehouse_transfers',
@@ -319,6 +328,13 @@ switch ($role) {
                 'icon' => 'bi-safe',
                 'url' => $baseUrl . 'accountant.php?page=accountant_cash',
                 'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'financial'),
+                'badge' => null
+            ],
+            [
+                'title' => 'التحكم في محافظ المستخدمين',
+                'icon' => 'bi-wallet',
+                'url' => $baseUrl . 'accountant.php?page=user_wallets_control',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'user_wallets_control'),
                 'badge' => null
             ],
             [
@@ -756,12 +772,45 @@ switch ($role) {
                 'active' => ($currentPage === 'production.php' && $currentPageParam === 'my_salary'),
                 'badge' => null
             ],
+            [
+                'title' => 'محفظة المستخدم',
+                'icon' => 'bi-wallet',
+                'url' => $baseUrl . 'production.php?page=user_wallet',
+                'active' => ($currentPage === 'production.php' && $currentPageParam === 'user_wallet'),
+                'badge' => null
+            ],
             ['divider' => true, 'title' => 'أدوات'],
             [
                 'title' => 'قارئ أرقام التشغيلات',
                 'icon' => 'bi-upc-scan',
                 'url' => $baseUrl . 'production.php?page=batch_reader',
                 'active' => ($currentPage === 'production.php' && $currentPageParam === 'batch_reader'),
+                'badge' => null
+            ],
+        ];
+        break;
+
+    case 'driver':
+        $menuItems = [
+            [
+                'title' => isset($lang['menu_attendance']) ? $lang['menu_attendance'] : 'الحضور والانصراف',
+                'icon' => 'bi-calendar-check',
+                'url' => getRelativeUrl('attendance.php'),
+                'active' => ($currentPage === 'attendance.php'),
+                'badge' => null
+            ],
+            [
+                'title' => 'مهام الإنتاج',
+                'icon' => 'bi-list-task',
+                'url' => $baseUrl . 'driver.php?page=tasks',
+                'active' => ($currentPage === 'driver.php' && $currentPageParam === 'tasks'),
+                'badge' => null
+            ],
+            [
+                'title' => 'محفظة المستخدم',
+                'icon' => 'bi-wallet',
+                'url' => $baseUrl . 'driver.php?page=user_wallet',
+                'active' => ($currentPage === 'driver.php' && $currentPageParam === 'user_wallet'),
                 'badge' => null
             ],
         ];

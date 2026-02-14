@@ -307,6 +307,25 @@ switch ($role) {
             ]
         ];
         break;
+
+    case 'driver':
+        $menuItems = [
+            [
+                'title' => isset($lang['menu_attendance']) ? $lang['menu_attendance'] : 'الحضور والانصراف',
+                'icon' => 'bi-calendar-check',
+                'url' => getRelativeUrl('attendance.php'),
+                'active' => ($currentPage === 'attendance.php'),
+                'badge' => null
+            ],
+            [
+                'title' => 'مهام الإنتاج',
+                'icon' => 'bi-list-task',
+                'url' => $baseUrl . 'driver.php?page=tasks',
+                'active' => ($currentPage === 'driver.php' && isset($_GET['page']) && $_GET['page'] === 'tasks'),
+                'badge' => null
+            ],
+        ];
+        break;
 }
 ?>
 

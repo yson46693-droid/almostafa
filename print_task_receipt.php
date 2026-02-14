@@ -10,7 +10,7 @@ require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/path_helper.php';
 
-requireRole(['production', 'accountant', 'manager']);
+requireRole(['production', 'accountant', 'manager', 'driver']);
 
 // دعم طباعة إيصال واحد (id=) أو عدة إيصالات (ids=1,2,3)
 $taskIds = [];
@@ -482,10 +482,11 @@ $singleReceipt = count($receipts) === 1;
         <div class="no-print">
             <button class="btn-print" onclick="window.print()"><?php echo $singleReceipt ? 'طباعة' : 'طباعة الكل (' . count($receipts) . ')'; ?></button>
             <?php
+            $receiptUserRole = $currentUser['role'] ?? 'production';
             if (function_exists('getDashboardUrl')) {
-                $backUrl = getDashboardUrl('production') . '?page=tasks';
+                $backUrl = getDashboardUrl($receiptUserRole) . ($receiptUserRole === 'manager' ? '?page=production_tasks' : '?page=tasks');
             } else {
-                $backUrl = getRelativeUrl('dashboard/production.php?page=tasks');
+                $backUrl = $receiptUserRole === 'driver' ? getRelativeUrl('dashboard/driver.php?page=tasks') : getRelativeUrl('dashboard/production.php?page=tasks');
             }
             ?>
             <a href="<?php echo htmlspecialchars($backUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn-back" style="text-decoration: none; display: inline-block;">

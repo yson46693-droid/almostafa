@@ -327,7 +327,7 @@ try {
                             data-customer-region-id="<?php echo (int)($customer['region_id'] ?? 0); ?>"
                             data-customer-balance="<?php echo $rawBalance; ?>"
                         >
-                            <i class="bi bi-pencil me-1"></i>تعديل
+                            <i class="bi bi-pencil me-1"></i>
                         </button>
                         <?php endif; ?>
                         <button

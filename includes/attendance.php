@@ -70,6 +70,9 @@ function getOfficialWorkTime($userId) {
     } elseif ($role === 'sales') {
         // المندوبين
         return ['start' => '10:00:00', 'end' => '19:00:00'];
+    } elseif ($role === 'driver') {
+        // السائق: من 1 مساءً إلى 10 مساءً
+        return ['start' => '13:00:00', 'end' => '22:00:00'];
     } else {
         // عمال الإنتاج
         return ['start' => '09:00:00', 'end' => '19:00:00'];

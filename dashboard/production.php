@@ -1167,6 +1167,17 @@ if ($isAjaxNavigation) {
                 }
                 ?>
                 
+            <?php elseif ($page === 'user_wallet'): ?>
+                <!-- صفحة محفظة المستخدم -->
+                <?php 
+                $modulePath = __DIR__ . '/../modules/user/user_wallet.php';
+                if (file_exists($modulePath)) {
+                    include $modulePath;
+                } else {
+                    echo '<div class="alert alert-warning">صفحة محفظة المستخدم غير متاحة حالياً</div>';
+                }
+                ?>
+                
             <?php elseif ($page === 'product_storage'): ?>
                 <!-- صفحة تشوين المنتجات -->
                 <?php 

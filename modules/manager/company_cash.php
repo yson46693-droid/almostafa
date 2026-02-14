@@ -134,6 +134,7 @@ function ensureCompanyCustodyTables() {
                 CREATE TABLE IF NOT EXISTS `company_custody` (
                   `id` int(11) NOT NULL AUTO_INCREMENT,
                   `person_name` varchar(255) NOT NULL COMMENT 'اسم صاحب العهدة',
+                  `user_id` int(11) DEFAULT NULL COMMENT 'معرف المستخدم صاحب العهدة للمحفظة',
                   `amount` decimal(15,2) NOT NULL COMMENT 'المبلغ الأصلي',
                   `source` enum('from_safe','from_management') NOT NULL COMMENT 'من الخزنة أو من الإدارة',
                   `remaining_amount` decimal(15,2) NOT NULL COMMENT 'المبلغ المتبقي',
@@ -145,9 +146,19 @@ function ensureCompanyCustodyTables() {
                   PRIMARY KEY (`id`),
                   KEY `source` (`source`),
                   KEY `created_by` (`created_by`),
-                  KEY `expense_transaction_id` (`expense_transaction_id`)
+                  KEY `expense_transaction_id` (`expense_transaction_id`),
+                  KEY `user_id` (`user_id`)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='عهدة الأموال'
             ");
+        } else {
+            $col = $db->queryOne("SHOW COLUMNS FROM company_custody LIKE 'user_id'");
+            if (empty($col)) {
+                try {
+                    $db->execute("ALTER TABLE company_custody ADD COLUMN user_id INT(11) NULL DEFAULT NULL AFTER person_name, ADD KEY user_id (user_id)");
+                } catch (Throwable $ex) {
+                    error_log('Add user_id to company_custody: ' . $ex->getMessage());
+                }
+            }
         }
         if (empty($db->queryOne("SHOW TABLES LIKE 'custody_retrievals'"))) {
             $db->execute("
@@ -857,7 +868,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $personName = '';
         if ($custodyUserId > 0) {
-            $custodyUser = $db->queryOne("SELECT id, full_name, username FROM users WHERE id = ? AND status = 'active' AND role IN ('accountant', 'production', 'sales')", [$custodyUserId]);
+            $custodyUser = $db->queryOne("SELECT id, full_name, username FROM users WHERE id = ? AND status = 'active' AND role IN ('accountant', 'production', 'sales', 'driver')", [$custodyUserId]);
             $personName = $custodyUser ? trim($custodyUser['full_name'] ?? $custodyUser['username'] ?? '') : '';
         }
 
@@ -904,11 +915,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     );
                     $expenseTransactionId = $db->getLastInsertId();
                 }
+                $custodyUserIdVal = $custodyUserId > 0 ? $custodyUserId : null;
                 $db->execute(
-                    "INSERT INTO company_custody (person_name, amount, source, remaining_amount, expense_transaction_id, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    [$personName, $amount, $source, $amount, $expenseTransactionId, $notes ?: null, $currentUser['id']]
+                    "INSERT INTO company_custody (person_name, user_id, amount, source, remaining_amount, expense_transaction_id, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    [$personName, $custodyUserIdVal, $amount, $source, $amount, $expenseTransactionId, $notes ?: null, $currentUser['id']]
                 );
-                logAudit($currentUser['id'], 'custody_add', 'company_custody', $db->getLastInsertId(), null, ['person_name' => $personName, 'amount' => $amount, 'source' => $source]);
+                $custodyId = $db->getLastInsertId();
+                logAudit($currentUser['id'], 'custody_add', 'company_custody', $custodyId, null, ['person_name' => $personName, 'amount' => $amount, 'source' => $source]);
+                if ($custodyUserId > 0 && !empty($db->queryOne("SHOW TABLES LIKE 'user_wallet_transactions'"))) {
+                    $db->execute(
+                        "INSERT INTO user_wallet_transactions (user_id, type, amount, reason, reference_type, reference_id, created_by) VALUES (?, 'custody_add', ?, ?, 'company_custody', ?, ?)",
+                        [$custodyUserId, $amount, 'عهدة أموال - ' . $personName, $custodyId, $currentUser['id']]
+                    );
+                }
                 $_SESSION['financial_success'] = 'تم تسجيل العهدة لـ ' . htmlspecialchars($personName) . ' بنجاح.';
             } catch (Throwable $e) {
                 error_log('Add custody failed: ' . $e->getMessage());
@@ -961,7 +980,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($custodyId <= 0 || $retrieveAmount <= 0) {
             $_SESSION['financial_error'] = 'بيانات غير صحيحة.';
         } else {
-            $row = $db->queryOne("SELECT id, person_name, amount, remaining_amount, source, expense_transaction_id FROM company_custody WHERE id = ?", [$custodyId]);
+            $row = $db->queryOne("SELECT id, person_name, user_id, amount, remaining_amount, source, expense_transaction_id FROM company_custody WHERE id = ?", [$custodyId]);
             if (empty($row)) {
                 $_SESSION['financial_error'] = 'سجل العهدة غير موجود.';
             } elseif ($retrieveAmount > (float) $row['remaining_amount']) {
@@ -981,6 +1000,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $newRemaining = (float) $row['remaining_amount'] - $retrieveAmount;
                     $db->execute("INSERT INTO custody_retrievals (custody_id, amount, income_transaction_id, created_by) VALUES (?, ?, ?, ?)", [$custodyId, $retrieveAmount, $incomeTransactionId, $currentUser['id']]);
                     $db->execute("UPDATE company_custody SET remaining_amount = ? WHERE id = ?", [$newRemaining, $custodyId]);
+                    $custodyUserId = !empty($row['user_id']) ? (int) $row['user_id'] : 0;
+                    if ($custodyUserId > 0 && !empty($db->queryOne("SHOW TABLES LIKE 'user_wallet_transactions'"))) {
+                        $db->execute(
+                            "INSERT INTO user_wallet_transactions (user_id, type, amount, reason, reference_type, reference_id, created_by) VALUES (?, 'custody_retrieve', ?, ?, 'company_custody', ?, ?)",
+                            [$custodyUserId, $retrieveAmount, 'استرجاع عهدة أموال - ' . $row['person_name'], $custodyId, $currentUser['id']]
+                        );
+                    }
                     logAudit($currentUser['id'], 'custody_retrieve', 'company_custody', $custodyId, null, ['amount' => $retrieveAmount]);
                     $_SESSION['financial_success'] = 'تم استرجاع ' . formatCurrency($retrieveAmount) . ' من عهدة ' . htmlspecialchars($row['person_name']) . ' بنجاح.';
                 } catch (Throwable $e) {
@@ -1422,8 +1448,8 @@ $typeColorMap = [
 
             <!-- عهدة الأموال -->
             <?php
-            $custodyUsers = $db->query("SELECT id, full_name, username, role FROM users WHERE status = 'active' AND role IN ('accountant', 'production', 'sales') ORDER BY full_name ASC, username ASC") ?: [];
-            $roleLabels = ['accountant' => 'محاسب', 'production' => 'عامل إنتاج', 'sales' => 'مندوب مبيعات'];
+            $custodyUsers = $db->query("SELECT id, full_name, username, role FROM users WHERE status = 'active' AND role IN ('accountant', 'production', 'sales', 'driver') ORDER BY full_name ASC, username ASC") ?: [];
+            $roleLabels = ['accountant' => 'محاسب', 'production' => 'عامل إنتاج', 'sales' => 'مندوب مبيعات', 'driver' => 'سائق'];
             ?>
             <div class="col-12 col-lg-12 col-xxl-12">
                 <div class="card shadow-sm h-100">
@@ -1444,7 +1470,7 @@ $typeColorMap = [
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
-                                <small class="text-muted">محاسب - عامل إنتاج - مندوب مبيعات</small>
+                                <small class="text-muted">محاسب - عامل إنتاج - مندوب مبيعات - سائق</small>
                             </div>
                             <div class="col-12">
                                 <label for="custodyAmount" class="form-label">المبلغ <span class="text-danger">*</span></label>

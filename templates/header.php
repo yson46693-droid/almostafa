@@ -3480,6 +3480,12 @@ if (ob_get_level() > 0) {
                     basePath + '/production.php?page=chat'
                 ];
                 break;
+            case 'driver':
+                commonPages = [
+                    basePath + '/driver.php',
+                    basePath + '/driver.php?page=tasks'
+                ];
+                break;
             case 'accountant':
                 commonPages = [
                     basePath + '/accountant.php',

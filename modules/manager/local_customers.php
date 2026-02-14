@@ -4441,17 +4441,24 @@ function openLocalCustomerReturnModal() {
         alert('يرجى فتح سجل مشتريات عميل أولاً');
         return;
     }
-    if (localSelectedItemsForReturn.length === 0) {
-        alert('يرجى تحديد منتج واحد على الأقل للإرجاع');
+    // السماح بفتح النموذج إما عند وجود منتجات محددة (من القائمة القديمة) أو عند الإرجاع من خلال رقم الفاتورة
+    const hasInvoiceNumber = (document.getElementById('localReturnInvoiceNumber')?.value || '').trim().length > 0;
+    if (localSelectedItemsForReturn.length === 0 && !hasInvoiceNumber && !localReturnLoadedData) {
+        alert('يرجى إدخال رقم الفاتورة واضغط «تحميل الفاتورة»، أو من تفاصيل الفاتورة اختر «إرجاع من هذه الفاتورة»');
         return;
     }
     
-    // إظهار modal إرجاع المنتجات
     const returnModal = document.getElementById('localCustomerReturnModal');
     if (returnModal) {
-        // تحديث قائمة المنتجات المحددة
-        updateLocalReturnItemsList();
-        
+        if (localReturnLoadedData && localReturnLoadedData.items) {
+            renderLocalReturnInvoiceItems();
+            document.getElementById('localReturnInvoiceInfoCard')?.classList.remove('d-none');
+            document.getElementById('localReturnRefundMethodCard')?.classList.remove('d-none');
+            document.getElementById('localReturnProductsCard')?.classList.remove('d-none');
+            document.getElementById('localReturnNotesCard')?.classList.remove('d-none');
+        } else if (localSelectedItemsForReturn.length > 0) {
+            updateLocalReturnItemsList();
+        }
         const modal = new bootstrap.Modal(returnModal);
         modal.show();
     } else {
@@ -5312,16 +5319,14 @@ function showLocalInvoiceDetailsModal(invoiceNumber) {
 window.showLocalInvoiceDetailsModal = showLocalInvoiceDetailsModal;
 
 function localOpenReturnForInvoiceFromDetails() {
-    if (currentLocalDetailInvoiceNumber) {
-        var detailModal = document.getElementById('localInvoiceDetailsModal');
-        if (detailModal && bootstrap.Modal.getInstance(detailModal)) bootstrap.Modal.getInstance(detailModal).hide();
-        var returnInvoiceInput = document.getElementById('localReturnInvoiceNumber');
-        if (returnInvoiceInput) {
-            returnInvoiceInput.value = currentLocalDetailInvoiceNumber;
-            loadLocalReturnInvoiceByNumber();
-        }
-        openLocalCustomerReturnModal();
-    }
+    if (!currentLocalDetailInvoiceNumber) return;
+    var detailModal = document.getElementById('localInvoiceDetailsModal');
+    if (detailModal && bootstrap.Modal.getInstance(detailModal)) bootstrap.Modal.getInstance(detailModal).hide();
+    var returnInvoiceInput = document.getElementById('localReturnInvoiceNumber');
+    if (returnInvoiceInput) returnInvoiceInput.value = currentLocalDetailInvoiceNumber;
+    // فتح نموذج الإرجاع أولاً ثم تحميل الفاتورة حتى تظهر قائمة المنتجات عند الانتهاء
+    openLocalCustomerReturnModal();
+    loadLocalReturnInvoiceByNumber();
 }
 
 // دالة عرض سجل المشتريات (سطر واحد لكل فاتورة)

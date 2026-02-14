@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS `users` (
   `username` varchar(50) NOT NULL,
   `email` varchar(100) NOT NULL,
   `password_hash` varchar(255) DEFAULT NULL,
-  `role` enum('accountant','sales','production','manager','developer') NOT NULL,
+  `role` enum('accountant','sales','production','manager','developer','driver') NOT NULL,
   `webauthn_enabled` tinyint(1) DEFAULT 0,
   `full_name` varchar(100) DEFAULT NULL,
   `phone` varchar(20) DEFAULT NULL,
@@ -358,6 +358,25 @@ CREATE TABLE IF NOT EXISTS `backups` (
   KEY `created_by` (`created_by`),
   CONSTRAINT `backups_ibfk_1` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- جدول معاملات محفظة المستخدم
+CREATE TABLE IF NOT EXISTS `user_wallet_transactions` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) NOT NULL,
+  `type` enum('deposit','withdrawal','custody_add','custody_retrieve') NOT NULL,
+  `amount` decimal(15,2) NOT NULL,
+  `reason` text DEFAULT NULL,
+  `reference_type` varchar(50) DEFAULT NULL,
+  `reference_id` int(11) DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `user_id` (`user_id`),
+  KEY `created_by` (`created_by`),
+  KEY `idx_user_created` (`user_id`, `created_at`),
+  CONSTRAINT `user_wallet_transactions_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `user_wallet_transactions_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='معاملات محفظة المستخدم';
 
 -- إدراج بيانات أولية
 INSERT INTO `users` (`username`, `email`, `password_hash`, `role`, `full_name`, `status`) VALUES

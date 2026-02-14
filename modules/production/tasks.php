@@ -15,7 +15,7 @@ require_once __DIR__ . '/../../includes/path_helper.php';
 require_once __DIR__ . '/../../includes/notifications.php';
 require_once __DIR__ . '/../../includes/table_styles.php';
 
-requireRole(['production', 'accountant', 'manager', 'developer']);
+requireRole(['production', 'accountant', 'manager', 'developer', 'driver']);
 
 // التحقق من وجود عمود product_name في جدول tasks وإضافته إذا لم يكن موجوداً
 try {
@@ -91,6 +91,7 @@ $successMessages = [];
 
 $isManager = ($currentUser['role'] ?? '') === 'manager';
 $isProduction = ($currentUser['role'] ?? '') === 'production';
+$isDriver = ($currentUser['role'] ?? '') === 'driver';
 
 if (!function_exists('tasksSafeString')) {
     function tasksSafeString($value)
@@ -646,8 +647,8 @@ function tasksHandleAction(string $action, array $input, array $context): array
                 }
 
                 if (in_array($action, ['deliver_task', 'return_task'], true)) {
-                    // تم التوصيل / تم الارجاع: مسموح للمدير أو لأي عامل إنتاج عندما تكون المهمة مكتملة أو مع المندوب
-                    if (!$isManager && !$isProduction) {
+                    // تم التوصيل / تم الارجاع: مسموح للمدير أو عامل إنتاج أو السائق عندما تكون المهمة مكتملة أو مع المندوب
+                    if (!$isManager && !$isProduction && !$isDriver) {
                         throw new RuntimeException('غير مصرح لك بتنفيذ هذا الإجراء');
                     }
                     $currentStatus = $task['status'] ?? '';
@@ -909,6 +910,9 @@ $offset = ($pageNum - 1) * $perPage;
 
 $search = tasksSafeString($_GET['search'] ?? '');
 $statusFilter = tasksSafeString($_GET['status'] ?? '');
+if ($isDriver) {
+    $statusFilter = 'with_delegate';
+}
 $priorityFilter = tasksSafeString($_GET['priority'] ?? '');
 $assignedFilter = isset($_GET['assigned']) ? (int) $_GET['assigned'] : 0;
 $overdueFilter = isset($_GET['overdue']) && $_GET['overdue'] === '1';
@@ -1302,8 +1306,13 @@ try {
     $products = $db->query("SELECT id, name FROM products WHERE status = 'active' ORDER BY name");
 }
 
-$statsBaseConditions = [];
-$statsBaseParams = [];
+if ($isDriver) {
+    $statsBaseConditions = ["status = 'with_delegate'"];
+    $statsBaseParams = [];
+} else {
+    $statsBaseConditions = [];
+    $statsBaseParams = [];
+}
 
 $buildStatsQuery = function (?string $extraCondition = null, array $extraParams = []) use ($db, $statsBaseConditions, $statsBaseParams) {
     $conditions = $statsBaseConditions;
@@ -1696,9 +1705,9 @@ function tasksHtml(string $value): string
                                                     </button>
                                                 <?php endif; ?>
                                                 <?php
-                                                // بعد مكتملة أو مع المندوب: زر مع المندوب (فقط من مكتملة)، ثم تم التوصيل و تم الارجاع
+                                                // بعد مكتملة أو مع المندوب: زر مع المندوب (فقط من مكتملة)، ثم تم التوصيل و تم الارجاع (السائق يرى تم التوصيل/تم الارجاع فقط)
                                                 $canWithDelegate = ($isManager || $isProduction) && ($task['status'] ?? '') === 'completed';
-                                                $canDeliverReturn = ($isManager || $isProduction) && in_array($task['status'] ?? '', ['completed', 'with_delegate'], true);
+                                                $canDeliverReturn = ($isManager || $isProduction || $isDriver) && in_array($task['status'] ?? '', ['completed', 'with_delegate'], true);
                                                 if ($canWithDelegate):
                                                 ?>
                                                     <button type="button" class="btn btn-outline-info btn-sm" onclick="submitTaskAction('with_delegate_task', <?php echo (int) $task['id']; ?>)">
@@ -1725,7 +1734,7 @@ function tasksHtml(string $value): string
                                                 </button>
                                             <?php endif; ?>
                                             
-                                            <?php if ($isManager || $isProduction): ?>
+                                            <?php if ($isManager || $isProduction || $isDriver): ?>
                                                 <a href="<?php echo getRelativeUrl('print_task_receipt.php?id=' . (int) $task['id']); ?>" target="_blank" class="btn btn-outline-primary" title="طباعة إيصال المهمة">
                                                     <i class="bi bi-printer"></i>
                                                 </a>
