@@ -1793,6 +1793,7 @@ function tasksHtml(string $value): string
                                         echo $customerDisplay !== '' ? tasksHtml($customerDisplay) : '<span class="text-muted">-</span>';
                                     ?></td>
                                     <?php if (!$isDriver): ?>
+                                    <?php endif; ?>
                                     <td>
                                         <?php
                                         $relatedType = isset($task['related_type']) ? (string)$task['related_type'] : '';
