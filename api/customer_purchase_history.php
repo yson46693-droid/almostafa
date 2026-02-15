@@ -231,6 +231,11 @@ function handleGetHistory($currentUser): void
         // Format results
         $result = formatPurchaseHistory($purchaseHistory, $returnedQuantities, $isLocalCustomer, $db);
         
+        $paperInvoices = [];
+        if ($isLocalCustomer) {
+            $paperInvoices = getLocalCustomerPaperInvoices($db, $customerId);
+        }
+        
         returnJsonResponse([
             'success' => true,
             'customer' => [
@@ -240,7 +245,8 @@ function handleGetHistory($currentUser): void
                 'address' => $customer['address'] ?? '',
                 'balance' => (float)($customer['balance'] ?? 0)
             ],
-            'purchase_history' => $result
+            'purchase_history' => $result,
+            'paper_invoices' => $paperInvoices
         ]);
         
     } catch (Throwable $e) {
@@ -373,6 +379,42 @@ function getLocalCustomerPurchaseHistory($db, $customerId): array
         
     } catch (Throwable $e) {
         error_log('getLocalCustomerPurchaseHistory error: ' . $e->getMessage());
+        return [];
+    }
+}
+
+/**
+ * Get local customer paper invoices (فاتورة ورقية - رصيد دائن + صورة)
+ */
+function getLocalCustomerPaperInvoices($db, $customerId): array
+{
+    try {
+        $tableExists = $db->queryOne("SHOW TABLES LIKE 'local_customer_paper_invoices'");
+        if (empty($tableExists)) {
+            return [];
+        }
+        $rows = $db->query(
+            "SELECT id, customer_id, total_amount, image_path, created_at FROM local_customer_paper_invoices WHERE customer_id = ? ORDER BY created_at DESC, id DESC",
+            [$customerId]
+        );
+        if (!$rows) {
+            return [];
+        }
+        $out = [];
+        foreach ($rows as $row) {
+            $out[] = [
+                'id' => (int)$row['id'],
+                'customer_id' => (int)$row['customer_id'],
+                'total_amount' => (float)($row['total_amount'] ?? 0),
+                'image_path' => $row['image_path'] ?? '',
+                'created_at' => $row['created_at'] ?? '',
+                'invoice_number' => 'ورقية-' . (int)$row['id'],
+                'invoice_date' => isset($row['created_at']) ? date('Y-m-d', strtotime($row['created_at'])) : ''
+            ];
+        }
+        return $out;
+    } catch (Throwable $e) {
+        error_log('getLocalCustomerPaperInvoices error: ' . $e->getMessage());
         return [];
     }
 }

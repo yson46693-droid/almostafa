@@ -285,6 +285,30 @@ if (!$tablesChecked) {
             error_log('Error creating local_collections table: ' . $e->getMessage());
         }
     }
+
+    // إنشاء جدول فواتير ورقية العملاء المحليين إن لم يكن موجوداً
+    $paperInvoicesTable = $db->queryOne("SHOW TABLES LIKE 'local_customer_paper_invoices'");
+    if (empty($paperInvoicesTable)) {
+        $createPaperInvoicesSql = "CREATE TABLE IF NOT EXISTS `local_customer_paper_invoices` (
+            `id` int(11) NOT NULL AUTO_INCREMENT,
+            `customer_id` int(11) NOT NULL,
+            `total_amount` decimal(15,2) NOT NULL COMMENT 'إجمالي الفاتورة',
+            `image_path` varchar(500) DEFAULT NULL COMMENT 'مسار صورة الفاتورة الورقية',
+            `created_by` int(11) NOT NULL,
+            `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            KEY `customer_id` (`customer_id`),
+            KEY `created_at` (`created_at`),
+            CONSTRAINT `local_customer_paper_invoices_ibfk_1` FOREIGN KEY (`customer_id`) REFERENCES `local_customers` (`id`) ON DELETE CASCADE,
+            CONSTRAINT `local_customer_paper_invoices_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='فواتير ورقية للعملاء المحليين - رصيد دائن + صورة'";
+        try {
+            $db->rawQuery($createPaperInvoicesSql);
+            error_log('Table local_customer_paper_invoices created successfully');
+        } catch (Throwable $e) {
+            error_log('Error creating local_customer_paper_invoices table: ' . $e->getMessage());
+        }
+    }
     
     // حفظ حالة الفحص في cache
     $_SESSION[$tablesCacheKey] = time();
@@ -2296,68 +2320,53 @@ console.log('showImportLocalCustomersModal متاحة:', typeof window.showImpor
                                     $displayBalanceForButton = $customerBalance < 0 ? abs($customerBalance) : $customerBalance;
                                     $formattedBalance = formatCurrency($displayBalanceForButton);
                                     $rawBalance = number_format($customerBalance, 2, '.', '');
+                                    $custId = (int)$customer['id'];
+                                    $custName = htmlspecialchars($customer['name']);
+                                    $custPhone = htmlspecialchars($customer['phone'] ?? '');
+                                    $custAddress = htmlspecialchars($customer['address'] ?? '');
                                     ?>
-                                    <div class="d-flex flex-wrap align-items-center gap-2">
-                                        <?php if (in_array($currentRole, ['manager', 'developer', 'accountant', 'sales'], true)): ?>
-                                        <button
-                                            type="button"
-                                            class="btn btn-sm btn-outline-warning"
-                                            onclick="showEditLocalCustomerModal(this)"
-                                            data-customer-id="<?php echo (int)$customer['id']; ?>"
-                                            data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
-                                            data-customer-phone="<?php echo htmlspecialchars($customer['phone'] ?? ''); ?>"
-                                            data-customer-address="<?php echo htmlspecialchars($customer['address'] ?? ''); ?>"
-                                            data-customer-region-id="<?php echo (int)($customer['region_id'] ?? 0); ?>"
-                                            data-customer-balance="<?php echo $rawBalance; ?>"
-                                        >
-                                            <i class="bi bi-pencil me-1"></i>تعديل
+                                    <div class="dropdown">
+                                        <button type="button" class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                                            <i class="bi bi-gear me-1"></i>إجراءات
                                         </button>
-                                        <?php endif; ?>
-                                        <button
-                                            type="button"
-                                            class="btn btn-sm <?php echo $customerBalance > 0 ? 'btn-success' : 'btn-outline-secondary'; ?>"
-                                            onclick="showCollectPaymentModal(this)"
-                                            data-customer-id="<?php echo (int)$customer['id']; ?>"
-                                            data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
-                                            data-customer-balance="<?php echo $rawBalance; ?>"
-                                            data-customer-balance-formatted="<?php echo htmlspecialchars($formattedBalance); ?>"
-                                            <?php echo $customerBalance > 0 ? '' : 'disabled'; ?>
-                                        >
-                                            <i class="bi bi-cash-coin me-1"></i>تحصيل
-                                        </button>
-                                        <button
-                                            type="button"
-                                            class="btn btn-sm btn-outline-info local-customer-purchase-history-btn"
-                                            onclick="showLocalCustomerPurchaseHistoryModal(this)"
-                                            data-customer-id="<?php echo (int)$customer['id']; ?>"
-                                            data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
-                                            data-customer-phone="<?php echo htmlspecialchars($customer['phone'] ?? ''); ?>"
-                                            data-customer-address="<?php echo htmlspecialchars($customer['address'] ?? ''); ?>"
-                                        >
-                                            <i class="bi bi-receipt me-1"></i>سجل
-                                        </button>
-                                        <?php if ($currentRole === 'manager'): ?>
-                                        <button
-                                            type="button"
-                                            class="btn btn-sm btn-outline-danger"
-                                            onclick="showDeleteLocalCustomerModal(this)"
-                                            data-customer-id="<?php echo (int)$customer['id']; ?>"
-                                            data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
-                                        >
-                                            <i class="bi bi-trash3 me-1"></i>حذف
-                                        </button>
-                                        <?php endif; ?>
-                                        <button
-                                            type="button"
-                                            class="btn btn-sm btn-outline-warning local-customer-return-btn"
-                                            onclick="showLocalCustomerReturnModal(this)"
-                                            data-customer-id="<?php echo (int)$customer['id']; ?>"
-                                            data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
-                                            data-customer-phone="<?php echo htmlspecialchars($customer['phone'] ?? ''); ?>"
-                                            data-customer-address="<?php echo htmlspecialchars($customer['address'] ?? ''); ?>"
-                                        >
-                                            <i class="bi bi-arrow-return-left me-1"></i>مرتجع
-                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-end">
+                                            <?php if (in_array($currentRole, ['manager', 'developer', 'accountant', 'sales'], true)): ?>
+                                            <li>
+                                                <button type="button" class="dropdown-item" onclick="showEditLocalCustomerModal(this)" data-customer-id="<?php echo $custId; ?>" data-customer-name="<?php echo $custName; ?>" data-customer-phone="<?php echo $custPhone; ?>" data-customer-address="<?php echo $custAddress; ?>" data-customer-region-id="<?php echo (int)($customer['region_id'] ?? 0); ?>" data-customer-balance="<?php echo $rawBalance; ?>">
+                                                    <i class="bi bi-pencil me-2"></i>تعديل
+                                                </button>
+                                            </li>
+                                            <?php endif; ?>
+                                            <li>
+                                                <button type="button" class="dropdown-item <?php echo $customerBalance <= 0 ? 'disabled' : ''; ?>" onclick="showCollectPaymentModal(this)" data-customer-id="<?php echo $custId; ?>" data-customer-name="<?php echo $custName; ?>" data-customer-balance="<?php echo $rawBalance; ?>" data-customer-balance-formatted="<?php echo htmlspecialchars($formattedBalance); ?>" <?php echo $customerBalance > 0 ? '' : 'disabled'; ?>>
+                                                    <i class="bi bi-cash-coin me-2"></i>تحصيل
+                                                </button>
+                                            </li>
+                                            <li>
+                                                <button type="button" class="dropdown-item local-customer-purchase-history-btn" onclick="showLocalCustomerPurchaseHistoryModal(this)" data-customer-id="<?php echo $custId; ?>" data-customer-name="<?php echo $custName; ?>" data-customer-phone="<?php echo $custPhone; ?>" data-customer-address="<?php echo $custAddress; ?>">
+                                                    <i class="bi bi-receipt me-2"></i>سجل المشتريات
+                                                </button>
+                                            </li>
+                                            <li><hr class="dropdown-divider"></li>
+                                            <li>
+                                                <button type="button" class="dropdown-item" onclick="showPaperInvoiceModal(this)" data-customer-id="<?php echo $custId; ?>" data-customer-name="<?php echo $custName; ?>">
+                                                    <i class="bi bi-receipt-cutoff me-2"></i>فاتورة ورقية
+                                                </button>
+                                            </li>
+                                            <li>
+                                                <button type="button" class="dropdown-item local-customer-return-btn" onclick="showLocalCustomerReturnModal(this)" data-customer-id="<?php echo $custId; ?>" data-customer-name="<?php echo $custName; ?>" data-customer-phone="<?php echo $custPhone; ?>" data-customer-address="<?php echo $custAddress; ?>">
+                                                    <i class="bi bi-arrow-return-left me-2"></i>مرتجع
+                                                </button>
+                                            </li>
+                                            <?php if ($currentRole === 'manager'): ?>
+                                            <li><hr class="dropdown-divider"></li>
+                                            <li>
+                                                <button type="button" class="dropdown-item text-danger" onclick="showDeleteLocalCustomerModal(this)" data-customer-id="<?php echo $custId; ?>" data-customer-name="<?php echo $custName; ?>">
+                                                    <i class="bi bi-trash3 me-2"></i>حذف
+                                                </button>
+                                            </li>
+                                            <?php endif; ?>
+                                        </ul>
                                     </div>
                                 </td>
                             </tr>
@@ -2819,6 +2828,16 @@ console.log('showImportLocalCustomersModal متاحة:', typeof window.showImpor
                         </table>
                     </div>
                 </div>
+                <!-- فواتير ورقية -->
+                <div id="localPaperInvoicesSection" class="mt-3 d-none">
+                    <h6 class="text-muted mb-2"><i class="bi bi-receipt-cutoff me-1"></i>فواتير ورقية</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered">
+                            <thead class="table-light"><tr><th>رقم</th><th>الإجمالي</th><th>التاريخ</th><th>إجراءات</th></tr></thead>
+                            <tbody id="localPaperInvoicesTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-primary" id="printLocalCustomerStatementBtn" onclick="printLocalCustomerStatement()" style="display: none;">
@@ -2922,6 +2941,16 @@ console.log('showImportLocalCustomersModal متاحة:', typeof window.showImpor
                 </table>
             </div>
         </div>
+        <!-- فواتير ورقية (موبايل) -->
+        <div id="localPaperInvoicesCardSection" class="mt-3 d-none">
+            <h6 class="text-muted mb-2"><i class="bi bi-receipt-cutoff me-1"></i>فواتير ورقية</h6>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered">
+                    <thead class="table-light"><tr><th>رقم</th><th>الإجمالي</th><th>التاريخ</th><th>إجراءات</th></tr></thead>
+                    <tbody id="localPaperInvoicesCardTableBody"></tbody>
+                </table>
+            </div>
+        </div>
         
         <div class="d-flex gap-2 mt-3">
             <button type="button" class="btn btn-primary" id="printLocalCustomerStatementCardBtn" onclick="printLocalCustomerStatement()" style="display: none;">
@@ -2931,6 +2960,48 @@ console.log('showImportLocalCustomersModal متاحة:', typeof window.showImpor
                 <i class="bi bi-arrow-return-left me-1"></i>إرجاع منتجات
             </button>
             <button type="button" class="btn btn-secondary" onclick="closeLocalCustomerPurchaseHistoryCard()">إغلاق</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal فاتورة ورقية -->
+<div class="modal fade" id="paperInvoiceModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="bi bi-receipt-cutoff me-2"></i>فاتورة ورقية - <span id="paperInvoiceCustomerName">-</span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small">تصوير أو رفع صورة الفاتورة الورقية ثم إدخال الإجمالي. سيُضاف المبلغ كرصيد دائن للعميل ويُسجّل في سجل المشتريات.</p>
+                <input type="hidden" id="paperInvoiceCustomerId" value="">
+                <div class="mb-3">
+                    <label class="form-label">صورة الفاتورة <span class="text-danger">*</span></label>
+                    <div class="d-flex gap-2 flex-wrap align-items-center">
+                        <input type="file" id="paperInvoiceImageInput" class="form-control form-control-sm" accept="image/jpeg,image/png,image/gif,image/webp" capture="environment">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="paperInvoiceCaptureBtn" title="فتح الكاميرا"><i class="bi bi-camera me-1"></i>التقاط</button>
+                    </div>
+                    <div id="paperInvoiceImagePreview" class="mt-2 text-center" style="display: none;"><img id="paperInvoicePreviewImg" src="" alt="معاينة" class="img-fluid rounded border" style="max-height: 200px;"></div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">إجمالي الفاتورة (ج.م) <span class="text-danger">*</span></label>
+                    <input type="number" step="0.01" min="0.01" class="form-control" id="paperInvoiceTotalAmount" placeholder="0.00">
+                </div>
+                <div id="paperInvoiceMessage" class="alert d-none mb-0"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                <button type="button" class="btn btn-primary" id="paperInvoiceSubmitBtn" onclick="submitPaperInvoice()"><i class="bi bi-check-lg me-1"></i>حفظ وإضافة للرصيد الدائن</button>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Modal عرض صورة الفاتورة الورقية -->
+<div class="modal fade" id="paperInvoiceImageViewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-secondary text-white"><h5 class="modal-title">عرض الفاتورة الورقية</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button></div>
+            <div class="modal-body text-center p-0"><img id="paperInvoiceViewImage" src="" alt="صورة الفاتورة" class="img-fluid" style="max-height: 80vh;"></div>
         </div>
     </div>
 </div>
@@ -3519,6 +3590,86 @@ function showCollectPaymentModal(button) {
             modalInstance.show();
         }
     }
+}
+
+var paperInvoiceBasePath = '<?php echo isset($basePath) ? $basePath : ""; ?>';
+function showPaperInvoiceModal(button) {
+    if (!button) return;
+    closeAllForms();
+    var customerId = button.getAttribute('data-customer-id') || '';
+    var customerName = button.getAttribute('data-customer-name') || '-';
+    document.getElementById('paperInvoiceCustomerId').value = customerId;
+    document.getElementById('paperInvoiceCustomerName').textContent = customerName;
+    document.getElementById('paperInvoiceTotalAmount').value = '';
+    document.getElementById('paperInvoiceImageInput').value = '';
+    var preview = document.getElementById('paperInvoiceImagePreview');
+    var previewImg = document.getElementById('paperInvoicePreviewImg');
+    if (preview) preview.style.display = 'none';
+    if (previewImg) previewImg.src = '';
+    var msg = document.getElementById('paperInvoiceMessage');
+    if (msg) { msg.classList.add('d-none'); msg.className = 'alert d-none mb-0'; }
+    var modal = document.getElementById('paperInvoiceModal');
+    if (modal && typeof bootstrap !== 'undefined') (new bootstrap.Modal(modal)).show();
+}
+document.addEventListener('DOMContentLoaded', function() {
+    var input = document.getElementById('paperInvoiceImageInput');
+    if (input) input.addEventListener('change', function() {
+        var file = this.files && this.files[0];
+        var preview = document.getElementById('paperInvoiceImagePreview');
+        var previewImg = document.getElementById('paperInvoicePreviewImg');
+        if (!file || !preview || !previewImg) return;
+        var reader = new FileReader();
+        reader.onload = function(e) { previewImg.src = e.target.result; preview.style.display = 'block'; };
+        reader.readAsDataURL(file);
+    });
+    var captureBtn = document.getElementById('paperInvoiceCaptureBtn');
+    if (captureBtn && input) captureBtn.addEventListener('click', function() { input.click(); });
+});
+function submitPaperInvoice() {
+    var customerId = (document.getElementById('paperInvoiceCustomerId') || {}).value || '';
+    var totalEl = document.getElementById('paperInvoiceTotalAmount');
+    var totalAmount = totalEl ? totalEl.value.replace(',', '.').trim() : '';
+    var fileInput = document.getElementById('paperInvoiceImageInput');
+    var file = fileInput && fileInput.files && fileInput.files[0];
+    var msgEl = document.getElementById('paperInvoiceMessage');
+    var submitBtn = document.getElementById('paperInvoiceSubmitBtn');
+    if (!customerId) { alert('لم يتم تحديد العميل'); return; }
+    if (!totalAmount || isNaN(parseFloat(totalAmount)) || parseFloat(totalAmount) <= 0) { alert('يرجى إدخال إجمالي صحيح للفاتورة'); if (totalEl) totalEl.focus(); return; }
+    if (!file) { alert('يرجى اختيار أو تصوير صورة الفاتورة الورقية'); if (fileInput) fileInput.focus(); return; }
+    if (msgEl) { msgEl.classList.add('d-none'); msgEl.innerHTML = ''; }
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جاري الحفظ...'; }
+    var formData = new FormData();
+    formData.append('action', 'save');
+    formData.append('customer_id', customerId);
+    formData.append('total_amount', totalAmount);
+    formData.append('image', file);
+    var apiUrl = (paperInvoiceBasePath || '') + '/api/local_paper_invoice.php';
+    fetch(apiUrl, { method: 'POST', body: formData, credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (msgEl) { msgEl.classList.remove('d-none'); msgEl.className = data.success ? 'alert alert-success mb-0' : 'alert alert-danger mb-0'; msgEl.textContent = data.message || (data.success ? 'تم الحفظ.' : 'حدث خطأ.'); }
+            if (data.success) {
+                document.getElementById('paperInvoiceTotalAmount').value = '';
+                document.getElementById('paperInvoiceImageInput').value = '';
+                var preview = document.getElementById('paperInvoiceImagePreview');
+                var previewImg = document.getElementById('paperInvoicePreviewImg');
+                if (preview) preview.style.display = 'none';
+                if (previewImg) previewImg.src = '';
+                var modalEl = document.getElementById('paperInvoiceModal');
+                if (modalEl && typeof bootstrap !== 'undefined') { var m = bootstrap.Modal.getInstance(modalEl); if (m) setTimeout(function() { m.hide(); }, 1500); }
+                if (typeof loadLocalCustomerPurchaseHistory === 'function' && currentLocalCustomerId == customerId) loadLocalCustomerPurchaseHistory();
+            }
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i>حفظ وإضافة للرصيد الدائن'; }
+        })
+        .catch(function() { if (msgEl) { msgEl.classList.remove('d-none'); msgEl.className = 'alert alert-danger mb-0'; msgEl.textContent = 'حدث خطأ في الاتصال.'; } if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i>حفظ وإضافة للرصيد الدائن'; } });
+}
+function showPaperInvoiceImage(paperInvoiceId) {
+    if (!paperInvoiceId) return;
+    var imgUrl = (paperInvoiceBasePath || '') + '/api/local_paper_invoice.php?action=view_image&id=' + encodeURIComponent(paperInvoiceId);
+    var imgEl = document.getElementById('paperInvoiceViewImage');
+    var modalEl = document.getElementById('paperInvoiceImageViewModal');
+    if (imgEl) imgEl.src = imgUrl;
+    if (modalEl && typeof bootstrap !== 'undefined') (new bootstrap.Modal(modalEl)).show();
 }
 
 // دالة فتح نموذج تعديل عميل محلي
@@ -5104,10 +5255,10 @@ function loadLocalCustomerPurchaseHistory() {
         
         if (data.success) {
             localPurchaseHistoryData = data.purchase_history || [];
-            console.log('Purchase history data:', localPurchaseHistoryData.length, 'items');
+            var localPaperInvoicesData = data.paper_invoices || [];
+            console.log('Purchase history data:', localPurchaseHistoryData.length, 'items; paper invoices:', localPaperInvoicesData.length);
             
-            // عرض البيانات حتى لو كانت فارغة (ستعرض رسالة "لا توجد مشتريات")
-            displayLocalPurchaseHistory(localPurchaseHistoryData);
+            displayLocalPurchaseHistory(localPurchaseHistoryData, localPaperInvoicesData);
             if (contentElement) contentElement.classList.remove('d-none');
             
             // إظهار زر الطباعة حتى لو لم تكن هناك بيانات
@@ -5140,8 +5291,9 @@ function loadLocalCustomerPurchaseHistory() {
 // تعيين الدالة على window لضمان إمكانية استدعائها من أي مكان
 window.loadLocalCustomerPurchaseHistory = loadLocalCustomerPurchaseHistory;
 
-// دالة عرض سجل المشتريات
-function displayLocalPurchaseHistory(history) {
+// دالة عرض سجل المشتريات (+ الفواتير الورقية في قسم منفصل)
+function displayLocalPurchaseHistory(history, paperInvoices) {
+    paperInvoices = paperInvoices || [];
     const isMobileDevice = typeof isMobile === 'function' ? isMobile() : window.innerWidth <= 768;
     const tableBody = isMobileDevice
         ? document.getElementById('localPurchaseHistoryCardTableBody')
@@ -5160,6 +5312,34 @@ function displayLocalPurchaseHistory(history) {
     }
     
     tableBody.innerHTML = '';
+    
+    var paperSection = document.getElementById('localPaperInvoicesSection');
+    var paperTbody = document.getElementById('localPaperInvoicesTableBody');
+    var paperCardSection = document.getElementById('localPaperInvoicesCardSection');
+    var paperCardTbody = document.getElementById('localPaperInvoicesCardTableBody');
+    if (paperSection) paperSection.classList.add('d-none');
+    if (paperTbody) paperTbody.innerHTML = '';
+    if (paperCardSection) paperCardSection.classList.add('d-none');
+    if (paperCardTbody) paperCardTbody.innerHTML = '';
+    function addPaperInvoiceRow(tbody, pi) {
+        if (!tbody) return;
+        var safeNum = (pi.invoice_number || 'ورقية-' + pi.id).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        var dateStr = (pi.invoice_date || pi.created_at || '-').toString().substring(0, 10);
+        var viewBtn = pi.image_path
+            ? '<button type="button" class="btn btn-sm btn-outline-primary" onclick="showPaperInvoiceImage(' + parseInt(pi.id, 10) + ')" title="عرض صورة الفاتورة الورقية"><i class="bi bi-image me-1"></i>عرض الفاتورة</button>'
+            : '<span class="text-muted small">لا توجد صورة</span>';
+        var row = document.createElement('tr');
+        row.innerHTML = '<td>' + safeNum + '</td><td>' + parseFloat(pi.total_amount || 0).toFixed(2) + ' ج.م</td><td>' + dateStr + '</td><td>' + viewBtn + '</td>';
+        tbody.appendChild(row);
+    }
+    if (paperInvoices.length > 0) {
+        if (paperSection) paperSection.classList.remove('d-none');
+        if (paperCardSection) paperCardSection.classList.remove('d-none');
+        paperInvoices.forEach(function(pi) {
+            addPaperInvoiceRow(paperTbody, pi);
+            addPaperInvoiceRow(paperCardTbody, pi);
+        });
+    }
     
     if (!history || history.length === 0) {
         tableBody.innerHTML = '<tr><td colspan="11" class="text-center text-muted py-4"><i class="bi bi-info-circle me-2"></i>لا توجد مشتريات مسجلة لهذا العميل</td></tr>';
@@ -8209,16 +8389,21 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             locationHtml += '</div>';
             
-            // بناء الإجراءات
-            var actionsHtml = '<div class="d-flex flex-wrap align-items-center gap-2">';
-            actionsHtml += '<button type="button" class="btn btn-sm btn-outline-warning" onclick="showEditLocalCustomerModal(this)" data-customer-id="' + customer.id + '" data-customer-name="' + escapeHtml(customer.name) + '" data-customer-phone="' + escapeHtml(customer.phone || '') + '" data-customer-address="' + escapeHtml(customer.address || '') + '" data-customer-region-id="' + customer.region_id + '" data-customer-balance="' + customer.raw_balance + '"><i class="bi bi-pencil me-1"></i>تعديل</button>';
-            actionsHtml += '<button type="button" class="btn btn-sm ' + (customer.balance > 0 ? 'btn-success' : 'btn-outline-secondary') + '" onclick="showCollectPaymentModal(this)" data-customer-id="' + customer.id + '" data-customer-name="' + escapeHtml(customer.name) + '" data-customer-balance="' + customer.raw_balance + '" data-customer-balance-formatted="' + escapeHtml(customer.balance_formatted) + '" ' + (customer.balance > 0 ? '' : 'disabled') + '><i class="bi bi-cash-coin me-1"></i>تحصيل</button>';
-            actionsHtml += '<button type="button" class="btn btn-sm btn-outline-info local-customer-purchase-history-btn" onclick="showLocalCustomerPurchaseHistoryModal(this)" data-customer-id="' + customer.id + '" data-customer-name="' + escapeHtml(customer.name) + '" data-customer-phone="' + escapeHtml(customer.phone || '') + '" data-customer-address="' + escapeHtml(customer.address || '') + '"><i class="bi bi-receipt me-1"></i>سجل</button>';
+            // بناء الإجراءات (قائمة منسدلة)
+            var actionsHtml = '<div class="dropdown">';
+            actionsHtml += '<button type="button" class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-gear me-1"></i>إجراءات</button>';
+            actionsHtml += '<ul class="dropdown-menu dropdown-menu-end">';
+            actionsHtml += '<li><button type="button" class="dropdown-item" onclick="showEditLocalCustomerModal(this)" data-customer-id="' + customer.id + '" data-customer-name="' + escapeHtml(customer.name) + '" data-customer-phone="' + escapeHtml(customer.phone || '') + '" data-customer-address="' + escapeHtml(customer.address || '') + '" data-customer-region-id="' + customer.region_id + '" data-customer-balance="' + customer.raw_balance + '"><i class="bi bi-pencil me-2"></i>تعديل</button></li>';
+            actionsHtml += '<li><button type="button" class="dropdown-item ' + (customer.balance <= 0 ? 'disabled' : '') + '" onclick="showCollectPaymentModal(this)" data-customer-id="' + customer.id + '" data-customer-name="' + escapeHtml(customer.name) + '" data-customer-balance="' + customer.raw_balance + '" data-customer-balance-formatted="' + escapeHtml(customer.balance_formatted) + '" ' + (customer.balance > 0 ? '' : 'disabled') + '><i class="bi bi-cash-coin me-2"></i>تحصيل</button></li>';
+            actionsHtml += '<li><button type="button" class="dropdown-item local-customer-purchase-history-btn" onclick="showLocalCustomerPurchaseHistoryModal(this)" data-customer-id="' + customer.id + '" data-customer-name="' + escapeHtml(customer.name) + '" data-customer-phone="' + escapeHtml(customer.phone || '') + '" data-customer-address="' + escapeHtml(customer.address || '') + '"><i class="bi bi-receipt me-2"></i>سجل المشتريات</button></li>';
+            actionsHtml += '<li><hr class="dropdown-divider"></li>';
+            actionsHtml += '<li><button type="button" class="dropdown-item" onclick="showPaperInvoiceModal(this)" data-customer-id="' + customer.id + '" data-customer-name="' + escapeHtml(customer.name) + '"><i class="bi bi-receipt-cutoff me-2"></i>فاتورة ورقية</button></li>';
+            actionsHtml += '<li><button type="button" class="dropdown-item local-customer-return-btn" onclick="showLocalCustomerReturnModal(this)" data-customer-id="' + customer.id + '" data-customer-name="' + escapeHtml(customer.name) + '" data-customer-phone="' + escapeHtml(customer.phone || '') + '" data-customer-address="' + escapeHtml(customer.address || '') + '"><i class="bi bi-arrow-return-left me-2"></i>مرتجع</button></li>';
             if (currentRole === 'manager') {
-                actionsHtml += '<button type="button" class="btn btn-sm btn-outline-danger" onclick="showDeleteLocalCustomerModal(this)" data-customer-id="' + customer.id + '" data-customer-name="' + escapeHtml(customer.name) + '"><i class="bi bi-trash3 me-1"></i>حذف</button>';
+                actionsHtml += '<li><hr class="dropdown-divider"></li>';
+                actionsHtml += '<li><button type="button" class="dropdown-item text-danger" onclick="showDeleteLocalCustomerModal(this)" data-customer-id="' + customer.id + '" data-customer-name="' + escapeHtml(customer.name) + '"><i class="bi bi-trash3 me-2"></i>حذف</button></li>';
             }
-            actionsHtml += '<button type="button" class="btn btn-sm btn-outline-warning local-customer-return-btn" onclick="showLocalCustomerReturnModal(this)" data-customer-id="' + customer.id + '" data-customer-name="' + escapeHtml(customer.name) + '" data-customer-phone="' + escapeHtml(customer.phone || '') + '" data-customer-address="' + escapeHtml(customer.address || '') + '"><i class="bi bi-arrow-return-left me-1"></i>مرتجع</button>';
-            actionsHtml += '</div>';
+            actionsHtml += '</ul></div>';
             
             row.innerHTML = 
                 '<td><strong>' + customer.id + '</strong></td>' +
