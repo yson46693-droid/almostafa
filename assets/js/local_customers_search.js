@@ -204,6 +204,23 @@
             if (typeof window.reinitLocalCustomersTableActionsDropdowns === 'function') {
                 setTimeout(function() { window.reinitLocalCustomersTableActionsDropdowns(); }, 0);
             }
+            // على الموبايل: تمرير الجدول لعرض عمود الإجراءات فوراً بعد البحث
+            if (tbody && tbody.querySelector('tr td:nth-child(8)')) {
+                var isMobile = window.matchMedia && window.matchMedia('(max-width: 767.98px)').matches;
+                if (isMobile) {
+                    setTimeout(function() {
+                        var wrapper = document.querySelector('.dashboard-table-wrapper');
+                        if (wrapper) {
+                            var rtl = document.documentElement.getAttribute('dir') === 'rtl';
+                            if (rtl) {
+                                wrapper.scrollLeft = 0;
+                            } else {
+                                wrapper.scrollLeft = wrapper.scrollWidth - wrapper.clientWidth;
+                            }
+                        }
+                    }, 50);
+                }
+            }
         }
 
         function updatePagination(pagination) {

@@ -7165,19 +7165,26 @@ function printDebtorCustomers() {
         min-width: 90px;
     }
     
-    /* الإجراءات - عمود ثابت على اليمين على الموبايل لظهور زر الإجراءات دائماً */
+    /* الإجراءات - عمود ثابت لظهور زر الإجراءات دائماً على الموبايل (LTR: يمين | RTL: يسار) */
     .dashboard-table thead th:nth-child(8),
     .dashboard-table tbody td:nth-child(8) {
         width: 20%;
         min-width: 140px;
         position: sticky !important;
         right: 0 !important;
+        left: auto !important;
         background: var(--bs-body-bg, #fff) !important;
         z-index: 2;
         box-shadow: -4px 0 8px rgba(0,0,0,0.06);
     }
     .dashboard-table thead th:nth-child(8) {
         z-index: 3;
+    }
+    [dir="rtl"] .dashboard-table thead th:nth-child(8),
+    [dir="rtl"] .dashboard-table tbody td:nth-child(8) {
+        right: auto !important;
+        left: 0 !important;
+        box-shadow: 4px 0 8px rgba(0,0,0,0.06);
     }
     
     .dashboard-table thead th {
@@ -7198,6 +7205,15 @@ function printDebtorCustomers() {
         font-size: 0.7rem;
         padding: 0.25rem 0.4rem;
         white-space: nowrap;
+    }
+    
+    /* زر الإجراءات (dropdown): حجم لمس مريح على الموبايل */
+    .dashboard-table tbody td:last-child .table-actions-dropdown .dropdown-toggle {
+        min-height: 36px !important;
+        min-width: 90px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
     }
     
     .dashboard-table .btn i {
@@ -7297,18 +7313,23 @@ function printDebtorCustomers() {
         min-width: 85px;
     }
     
-    /* عمود الإجراءات ثابت على اليمين */
+    /* عمود الإجراءات ثابت */
     .dashboard-table thead th:nth-child(8),
     .dashboard-table tbody td:nth-child(8) {
         min-width: 130px;
         position: sticky !important;
         right: 0 !important;
+        left: auto !important;
         background: var(--bs-body-bg, #fff) !important;
         z-index: 2;
         box-shadow: -4px 0 8px rgba(0,0,0,0.06);
     }
-    .dashboard-table thead th:nth-child(8) {
-        z-index: 3;
+    .dashboard-table thead th:nth-child(8) { z-index: 3; }
+    [dir="rtl"] .dashboard-table thead th:nth-child(8),
+    [dir="rtl"] .dashboard-table tbody td:nth-child(8) {
+        right: auto !important;
+        left: 0 !important;
+        box-shadow: 4px 0 8px rgba(0,0,0,0.06);
     }
 }
 
