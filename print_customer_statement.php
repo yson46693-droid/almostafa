@@ -243,6 +243,29 @@ function getLocalCustomerStatementData($customerId) {
         }
     }
     
+    // الفواتير الورقية المحلية: مدين (تزيد رصيد العميل)
+    $paperInvoicesTableExists = $db->queryOne("SHOW TABLES LIKE 'local_customer_paper_invoices'");
+    if (!empty($paperInvoicesTableExists)) {
+        $hasInvNumCol = $db->queryOne("SHOW COLUMNS FROM local_customer_paper_invoices LIKE 'invoice_number'");
+        $paperInvoices = $db->query(
+            "SELECT id, " . (!empty($hasInvNumCol) ? "invoice_number, " : "") . "total_amount, created_at FROM local_customer_paper_invoices WHERE customer_id = ?",
+            [$customerId]
+        ) ?: [];
+        foreach ($paperInvoices as $pi) {
+            $invNum = (!empty($hasInvNumCol) && !empty(trim($pi['invoice_number'] ?? ''))) ? trim($pi['invoice_number']) : ('#' . $pi['id']);
+            $movements[] = [
+                'sort_date' => date('Y-m-d', strtotime($pi['created_at'])),
+                'sort_id' => (int)$pi['id'],
+                'type_order' => 1,
+                'type' => 'paper_invoice',
+                'date' => $pi['created_at'],
+                'label' => 'فاتورة ورقية ' . $invNum,
+                'debit' => (float)($pi['total_amount'] ?? 0),
+                'credit' => 0.0,
+            ];
+        }
+    }
+    
     // المرتجعات المحلية: دائن
     $localReturnsTableExists = $db->queryOne("SHOW TABLES LIKE 'local_returns'");
     if (!empty($localReturnsTableExists)) {
