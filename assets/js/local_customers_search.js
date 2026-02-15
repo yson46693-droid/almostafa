@@ -164,7 +164,7 @@
                 }
                 locationHtml += '</div>';
 
-                var actionsHtml = '<div class="dropdown">';
+                var actionsHtml = '<div class="dropdown table-actions-dropdown">';
                 actionsHtml += '<button type="button" class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-gear me-1"></i>إجراءات</button>';
                 actionsHtml += '<ul class="dropdown-menu dropdown-menu-end">';
                 if (['manager', 'developer', 'accountant', 'sales'].indexOf(currentRole) !== -1) {
@@ -199,6 +199,9 @@
                 tbody.appendChild(row);
             });
 
+            if (window.reinitTableActionsDropdowns) {
+                window.reinitTableActionsDropdowns();
+            }
             updatePagination(pagination);
         }
 

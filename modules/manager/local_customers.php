@@ -1930,6 +1930,18 @@ var dashboardWrapper = null;
 <script>
 window.LOCAL_CUSTOMERS_CONFIG = { currentRole: <?php echo json_encode($currentRole); ?>, apiBase: <?php echo json_encode(function_exists('getBasePath') ? rtrim(getBasePath(), '/') : ''); ?>, pageNum: <?php echo (int)$pageNum; ?> };
 (function runLocalCustomersSearchInit(tries) { tries = tries || 0; if (typeof window.initLocalCustomersSearch === 'function') { window.initLocalCustomersSearch(); } else if (tries < 100) { setTimeout(function() { runLocalCustomersSearchInit(tries + 1); }, 30); } })();
+function reinitTableActionsDropdowns() {
+    if (typeof bootstrap === 'undefined' || !bootstrap.Dropdown) return;
+    document.querySelectorAll('.table-actions-dropdown .dropdown-toggle').forEach(function(toggle) {
+        var existing = bootstrap.Dropdown.getInstance(toggle);
+        if (existing) existing.dispose();
+        try {
+            new bootstrap.Dropdown(toggle, { popperConfig: { strategy: 'fixed' } });
+        } catch (e) {}
+    });
+}
+document.addEventListener('DOMContentLoaded', function() { reinitTableActionsDropdowns(); });
+window.reinitTableActionsDropdowns = reinitTableActionsDropdowns;
 </script>
 <!-- قائمة العملاء -->
 <div class="card shadow-sm">
@@ -2066,7 +2078,7 @@ window.LOCAL_CUSTOMERS_CONFIG = { currentRole: <?php echo json_encode($currentRo
                                     $custPhone = htmlspecialchars($customer['phone'] ?? '');
                                     $custAddress = htmlspecialchars($customer['address'] ?? '');
                                     ?>
-                                    <div class="dropdown">
+                                    <div class="dropdown table-actions-dropdown">
                                         <button type="button" class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
                                             <i class="bi bi-gear me-1"></i>إجراءات
                                         </button>
@@ -3472,35 +3484,38 @@ function showPaperInvoiceModal(button) {
     }
 }
 
-// معاينة صورة الفاتورة الورقية عند اختيار ملف
+// معاينة صورة الفاتورة الورقية عند اختيار ملف (مودال + بطاقة)
 document.addEventListener('DOMContentLoaded', function() {
-    var input = document.getElementById('paperInvoiceImageInput');
-    if (input) {
+    function setupFilePreview(inputId, previewId, previewImgId, captureBtnId) {
+        var input = document.getElementById(inputId);
+        if (!input) return;
         input.addEventListener('change', function() {
             var file = this.files && this.files[0];
-            var preview = document.getElementById('paperInvoiceImagePreview');
-            var previewImg = document.getElementById('paperInvoicePreviewImg');
+            var preview = document.getElementById(previewId);
+            var previewImg = document.getElementById(previewImgId);
             if (!file || !preview || !previewImg) return;
             var reader = new FileReader();
             reader.onload = function(e) { previewImg.src = e.target.result; preview.style.display = 'block'; };
             reader.readAsDataURL(file);
         });
+        var captureBtn = document.getElementById(captureBtnId);
+        if (captureBtn) captureBtn.addEventListener('click', function() { input.click(); });
     }
-    var captureBtn = document.getElementById('paperInvoiceCaptureBtn');
-    if (captureBtn && input) {
-        captureBtn.addEventListener('click', function() { input.click(); });
-    }
+    setupFilePreview('paperInvoiceImageInput', 'paperInvoiceImagePreview', 'paperInvoicePreviewImg', 'paperInvoiceCaptureBtn');
+    setupFilePreview('paperInvoiceCardImageInput', 'paperInvoiceCardImagePreview', 'paperInvoiceCardPreviewImg', 'paperInvoiceCardCaptureBtn');
 });
 
-// إرسال فاتورة ورقية (صورة + إجمالي)
+// إرسال فاتورة ورقية (صورة + إجمالي) - يدعم البطاقة (موبايل) أو المودال (كمبيوتر)
 function submitPaperInvoice() {
-    var customerId = (document.getElementById('paperInvoiceCustomerId') || {}).value || '';
-    var totalEl = document.getElementById('paperInvoiceTotalAmount');
+    var useCard = (typeof isMobile === 'function' && isMobile()) && document.getElementById('paperInvoiceCard') && document.getElementById('paperInvoiceCard').style.display === 'block';
+    var customerIdEl = useCard ? document.getElementById('paperInvoiceCardCustomerId') : document.getElementById('paperInvoiceCustomerId');
+    var customerId = (customerIdEl && customerIdEl.value) || '';
+    var totalEl = useCard ? document.getElementById('paperInvoiceCardTotalAmount') : document.getElementById('paperInvoiceTotalAmount');
     var totalAmount = totalEl ? totalEl.value.replace(',', '.').trim() : '';
-    var fileInput = document.getElementById('paperInvoiceImageInput');
+    var fileInput = useCard ? document.getElementById('paperInvoiceCardImageInput') : document.getElementById('paperInvoiceImageInput');
     var file = fileInput && fileInput.files && fileInput.files[0];
-    var msgEl = document.getElementById('paperInvoiceMessage');
-    var submitBtn = document.getElementById('paperInvoiceSubmitBtn');
+    var msgEl = useCard ? document.getElementById('paperInvoiceCardMessage') : document.getElementById('paperInvoiceMessage');
+    var submitBtn = useCard ? document.getElementById('paperInvoiceCardSubmitBtn') : document.getElementById('paperInvoiceSubmitBtn');
 
     if (!customerId) { alert('لم يتم تحديد العميل'); return; }
     if (!totalAmount || isNaN(parseFloat(totalAmount)) || parseFloat(totalAmount) <= 0) {
@@ -3534,16 +3549,26 @@ function submitPaperInvoice() {
                 msgEl.textContent = data.message || (data.success ? 'تم الحفظ.' : 'حدث خطأ.');
             }
             if (data.success) {
-                document.getElementById('paperInvoiceTotalAmount').value = '';
-                document.getElementById('paperInvoiceImageInput').value = '';
-                var preview = document.getElementById('paperInvoiceImagePreview');
-                var previewImg = document.getElementById('paperInvoicePreviewImg');
-                if (preview) preview.style.display = 'none';
-                if (previewImg) previewImg.src = '';
-                var modalEl = document.getElementById('paperInvoiceModal');
-                if (modalEl && typeof bootstrap !== 'undefined') {
-                    var m = bootstrap.Modal.getInstance(modalEl);
-                    if (m) setTimeout(function() { m.hide(); }, 1500);
+                if (useCard) {
+                    if (totalEl) totalEl.value = '';
+                    if (fileInput) fileInput.value = '';
+                    var cardPreview = document.getElementById('paperInvoiceCardImagePreview');
+                    var cardPreviewImg = document.getElementById('paperInvoiceCardPreviewImg');
+                    if (cardPreview) cardPreview.style.display = 'none';
+                    if (cardPreviewImg) cardPreviewImg.src = '';
+                    setTimeout(function() { closePaperInvoiceCard(); }, 1500);
+                } else {
+                    document.getElementById('paperInvoiceTotalAmount').value = '';
+                    document.getElementById('paperInvoiceImageInput').value = '';
+                    var preview = document.getElementById('paperInvoiceImagePreview');
+                    var previewImg = document.getElementById('paperInvoicePreviewImg');
+                    if (preview) preview.style.display = 'none';
+                    if (previewImg) previewImg.src = '';
+                    var modalEl = document.getElementById('paperInvoiceModal');
+                    if (modalEl && typeof bootstrap !== 'undefined') {
+                        var m = bootstrap.Modal.getInstance(modalEl);
+                        if (m) setTimeout(function() { m.hide(); }, 1500);
+                    }
                 }
                 if (typeof loadLocalCustomerPurchaseHistory === 'function' && currentLocalCustomerId == customerId) {
                     loadLocalCustomerPurchaseHistory();
@@ -6830,6 +6855,24 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
 
 .dashboard-table tbody tr {
     contain: layout style;
+}
+
+/* قائمة الإجراءات: تطفو فوق الجدول ولا تُطيل الصف */
+#localCustomersTable tbody td:last-child,
+.dashboard-table tbody td:last-child {
+    overflow: visible !important;
+    position: relative;
+    vertical-align: middle;
+}
+#localCustomersTable tbody tr .table-actions-dropdown,
+.dashboard-table tbody tr .table-actions-dropdown {
+    position: static;
+}
+#localCustomersTable .table-actions-dropdown .dropdown-menu,
+.dashboard-table .table-actions-dropdown .dropdown-menu {
+    z-index: 1060 !important;
+    max-height: min(70vh, 400px);
+    overflow-y: auto;
 }
 </style>
 

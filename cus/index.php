@@ -2964,8 +2964,36 @@ console.log('showImportLocalCustomersModal متاحة:', typeof window.showImpor
     </div>
 </div>
 
-<!-- Modal فاتورة ورقية -->
-<div class="modal fade" id="paperInvoiceModal" tabindex="-1" aria-hidden="true">
+<!-- بطاقة فاتورة ورقية - للموبايل فقط (بدون مودال لتفادي البطء عند الإغلاق) -->
+<div class="card shadow-sm mb-4 d-md-none" id="paperInvoiceCard" style="display: none;">
+    <div class="card-header bg-primary text-white d-flex align-items-center justify-content-between">
+        <h5 class="mb-0"><i class="bi bi-receipt-cutoff me-2"></i>فاتورة ورقية - <span id="paperInvoiceCardCustomerName">-</span></h5>
+        <button type="button" class="btn btn-sm btn-light" onclick="closePaperInvoiceCard()" aria-label="إغلاق"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="card-body">
+        <p class="text-muted small">تصوير أو رفع صورة الفاتورة الورقية ثم إدخال الإجمالي. سيُضاف المبلغ كرصيد دائن للعميل ويُسجّل في سجل المشتريات.</p>
+        <input type="hidden" id="paperInvoiceCardCustomerId" value="">
+        <div class="mb-3">
+            <label class="form-label">صورة الفاتورة <span class="text-danger">*</span></label>
+            <div class="d-flex gap-2 flex-wrap align-items-center">
+                <input type="file" id="paperInvoiceCardImageInput" class="form-control form-control-sm" accept="image/jpeg,image/png,image/gif,image/webp" capture="environment">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="paperInvoiceCardCaptureBtn" title="فتح الكاميرا"><i class="bi bi-camera me-1"></i>التقاط</button>
+            </div>
+            <div id="paperInvoiceCardImagePreview" class="mt-2 text-center" style="display: none;"><img id="paperInvoiceCardPreviewImg" src="" alt="معاينة" class="img-fluid rounded border" style="max-height: 200px;"></div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">إجمالي الفاتورة (ج.م) <span class="text-danger">*</span></label>
+            <input type="number" step="0.01" min="0.01" class="form-control" id="paperInvoiceCardTotalAmount" placeholder="0.00">
+        </div>
+        <div id="paperInvoiceCardMessage" class="alert d-none mb-0"></div>
+        <div class="d-flex gap-2 mt-3">
+            <button type="button" class="btn btn-secondary flex-fill" onclick="closePaperInvoiceCard()">إلغاء</button>
+            <button type="button" class="btn btn-primary flex-fill" id="paperInvoiceCardSubmitBtn" onclick="submitPaperInvoice()"><i class="bi bi-check-lg me-1"></i>حفظ وإضافة للرصيد الدائن</button>
+        </div>
+    </div>
+</div>
+<!-- Modal فاتورة ورقية - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="paperInvoiceModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
@@ -3258,7 +3286,8 @@ function closeAllForms() {
         'deleteLocalCustomerCard',
         'customerExportCard',
         'viewLocationCard',
-        'localCustomerPurchaseHistoryCard'
+        'localCustomerPurchaseHistoryCard',
+        'paperInvoiceCard'
     ];
     
     cards.forEach(function(cardId) {
@@ -3593,46 +3622,78 @@ function showCollectPaymentModal(button) {
 }
 
 var paperInvoiceBasePath = '<?php echo isset($basePath) ? $basePath : ""; ?>';
+function closePaperInvoiceCard() {
+    var card = document.getElementById('paperInvoiceCard');
+    if (card) { card.style.display = 'none'; card.classList.add('d-none'); }
+}
+window.closePaperInvoiceCard = closePaperInvoiceCard;
 function showPaperInvoiceModal(button) {
     if (!button) return;
     closeAllForms();
     var customerId = button.getAttribute('data-customer-id') || '';
     var customerName = button.getAttribute('data-customer-name') || '-';
-    document.getElementById('paperInvoiceCustomerId').value = customerId;
-    document.getElementById('paperInvoiceCustomerName').textContent = customerName;
-    document.getElementById('paperInvoiceTotalAmount').value = '';
-    document.getElementById('paperInvoiceImageInput').value = '';
+    function setEl(id, val) { var el = document.getElementById(id); if (el) { if (el.value !== undefined) el.value = val; else el.textContent = val; } }
+    setEl('paperInvoiceCustomerId', customerId);
+    setEl('paperInvoiceCustomerName', customerName);
+    setEl('paperInvoiceTotalAmount', '');
+    setEl('paperInvoiceImageInput', '');
     var preview = document.getElementById('paperInvoiceImagePreview');
     var previewImg = document.getElementById('paperInvoicePreviewImg');
     if (preview) preview.style.display = 'none';
     if (previewImg) previewImg.src = '';
     var msg = document.getElementById('paperInvoiceMessage');
     if (msg) { msg.classList.add('d-none'); msg.className = 'alert d-none mb-0'; }
+    setEl('paperInvoiceCardCustomerId', customerId);
+    setEl('paperInvoiceCardCustomerName', customerName);
+    setEl('paperInvoiceCardTotalAmount', '');
+    var cardInput = document.getElementById('paperInvoiceCardImageInput');
+    if (cardInput) cardInput.value = '';
+    var cardPreview = document.getElementById('paperInvoiceCardImagePreview');
+    var cardPreviewImg = document.getElementById('paperInvoiceCardPreviewImg');
+    if (cardPreview) cardPreview.style.display = 'none';
+    if (cardPreviewImg) cardPreviewImg.src = '';
+    var cardMsg = document.getElementById('paperInvoiceCardMessage');
+    if (cardMsg) { cardMsg.classList.add('d-none'); cardMsg.className = 'alert d-none mb-0'; }
+    var card = document.getElementById('paperInvoiceCard');
     var modal = document.getElementById('paperInvoiceModal');
-    if (modal && typeof bootstrap !== 'undefined') (new bootstrap.Modal(modal)).show();
+    if (typeof isMobile === 'function' && isMobile() && card) {
+        card.style.display = 'block';
+        card.classList.remove('d-none');
+        setTimeout(function() {
+            if (typeof scrollToElement === 'function') scrollToElement(card);
+            else card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 50);
+    } else if (modal && typeof bootstrap !== 'undefined') (new bootstrap.Modal(modal)).show();
 }
 document.addEventListener('DOMContentLoaded', function() {
-    var input = document.getElementById('paperInvoiceImageInput');
-    if (input) input.addEventListener('change', function() {
-        var file = this.files && this.files[0];
-        var preview = document.getElementById('paperInvoiceImagePreview');
-        var previewImg = document.getElementById('paperInvoicePreviewImg');
-        if (!file || !preview || !previewImg) return;
-        var reader = new FileReader();
-        reader.onload = function(e) { previewImg.src = e.target.result; preview.style.display = 'block'; };
-        reader.readAsDataURL(file);
-    });
-    var captureBtn = document.getElementById('paperInvoiceCaptureBtn');
-    if (captureBtn && input) captureBtn.addEventListener('click', function() { input.click(); });
+    function setupFilePreview(inputId, previewId, previewImgId, captureBtnId) {
+        var input = document.getElementById(inputId);
+        if (!input) return;
+        input.addEventListener('change', function() {
+            var file = this.files && this.files[0];
+            var preview = document.getElementById(previewId);
+            var previewImg = document.getElementById(previewImgId);
+            if (!file || !preview || !previewImg) return;
+            var reader = new FileReader();
+            reader.onload = function(e) { previewImg.src = e.target.result; preview.style.display = 'block'; };
+            reader.readAsDataURL(file);
+        });
+        var captureBtn = document.getElementById(captureBtnId);
+        if (captureBtn) captureBtn.addEventListener('click', function() { input.click(); });
+    }
+    setupFilePreview('paperInvoiceImageInput', 'paperInvoiceImagePreview', 'paperInvoicePreviewImg', 'paperInvoiceCaptureBtn');
+    setupFilePreview('paperInvoiceCardImageInput', 'paperInvoiceCardImagePreview', 'paperInvoiceCardPreviewImg', 'paperInvoiceCardCaptureBtn');
 });
 function submitPaperInvoice() {
-    var customerId = (document.getElementById('paperInvoiceCustomerId') || {}).value || '';
-    var totalEl = document.getElementById('paperInvoiceTotalAmount');
+    var useCard = (typeof isMobile === 'function' && isMobile()) && document.getElementById('paperInvoiceCard') && document.getElementById('paperInvoiceCard').style.display === 'block';
+    var customerIdEl = useCard ? document.getElementById('paperInvoiceCardCustomerId') : document.getElementById('paperInvoiceCustomerId');
+    var customerId = (customerIdEl && customerIdEl.value) || '';
+    var totalEl = useCard ? document.getElementById('paperInvoiceCardTotalAmount') : document.getElementById('paperInvoiceTotalAmount');
     var totalAmount = totalEl ? totalEl.value.replace(',', '.').trim() : '';
-    var fileInput = document.getElementById('paperInvoiceImageInput');
+    var fileInput = useCard ? document.getElementById('paperInvoiceCardImageInput') : document.getElementById('paperInvoiceImageInput');
     var file = fileInput && fileInput.files && fileInput.files[0];
-    var msgEl = document.getElementById('paperInvoiceMessage');
-    var submitBtn = document.getElementById('paperInvoiceSubmitBtn');
+    var msgEl = useCard ? document.getElementById('paperInvoiceCardMessage') : document.getElementById('paperInvoiceMessage');
+    var submitBtn = useCard ? document.getElementById('paperInvoiceCardSubmitBtn') : document.getElementById('paperInvoiceSubmitBtn');
     if (!customerId) { alert('لم يتم تحديد العميل'); return; }
     if (!totalAmount || isNaN(parseFloat(totalAmount)) || parseFloat(totalAmount) <= 0) { alert('يرجى إدخال إجمالي صحيح للفاتورة'); if (totalEl) totalEl.focus(); return; }
     if (!file) { alert('يرجى اختيار أو تصوير صورة الفاتورة الورقية'); if (fileInput) fileInput.focus(); return; }
@@ -3649,14 +3710,24 @@ function submitPaperInvoice() {
         .then(function(data) {
             if (msgEl) { msgEl.classList.remove('d-none'); msgEl.className = data.success ? 'alert alert-success mb-0' : 'alert alert-danger mb-0'; msgEl.textContent = data.message || (data.success ? 'تم الحفظ.' : 'حدث خطأ.'); }
             if (data.success) {
-                document.getElementById('paperInvoiceTotalAmount').value = '';
-                document.getElementById('paperInvoiceImageInput').value = '';
-                var preview = document.getElementById('paperInvoiceImagePreview');
-                var previewImg = document.getElementById('paperInvoicePreviewImg');
-                if (preview) preview.style.display = 'none';
-                if (previewImg) previewImg.src = '';
-                var modalEl = document.getElementById('paperInvoiceModal');
-                if (modalEl && typeof bootstrap !== 'undefined') { var m = bootstrap.Modal.getInstance(modalEl); if (m) setTimeout(function() { m.hide(); }, 1500); }
+                if (useCard) {
+                    if (totalEl) totalEl.value = '';
+                    if (fileInput) fileInput.value = '';
+                    var cardPreview = document.getElementById('paperInvoiceCardImagePreview');
+                    var cardPreviewImg = document.getElementById('paperInvoiceCardPreviewImg');
+                    if (cardPreview) cardPreview.style.display = 'none';
+                    if (cardPreviewImg) cardPreviewImg.src = '';
+                    setTimeout(function() { closePaperInvoiceCard(); }, 1500);
+                } else {
+                    document.getElementById('paperInvoiceTotalAmount').value = '';
+                    document.getElementById('paperInvoiceImageInput').value = '';
+                    var preview = document.getElementById('paperInvoiceImagePreview');
+                    var previewImg = document.getElementById('paperInvoicePreviewImg');
+                    if (preview) preview.style.display = 'none';
+                    if (previewImg) previewImg.src = '';
+                    var modalEl = document.getElementById('paperInvoiceModal');
+                    if (modalEl && typeof bootstrap !== 'undefined') { var m = bootstrap.Modal.getInstance(modalEl); if (m) setTimeout(function() { m.hide(); }, 1500); }
+                }
                 if (typeof loadLocalCustomerPurchaseHistory === 'function' && currentLocalCustomerId == customerId) loadLocalCustomerPurchaseHistory();
             }
             if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i>حفظ وإضافة للرصيد الدائن'; }
