@@ -164,15 +164,22 @@
                 }
                 locationHtml += '</div>';
 
-                var actionsHtml = '<div class="d-flex flex-wrap align-items-center gap-2">';
-                actionsHtml += '<button type="button" class="btn btn-sm btn-outline-warning" onclick="showEditLocalCustomerModal(this)" data-customer-id="' + customer.id + '" data-customer-name="' + escapeHtml(customer.name) + '" data-customer-phone="' + escapeHtml(customer.phone || '') + '" data-customer-address="' + escapeHtml(customer.address || '') + '" data-customer-region-id="' + customer.region_id + '" data-customer-balance="' + customer.raw_balance + '"><i class="bi bi-pencil me-1"></i>تعديل</button>';
-                actionsHtml += '<button type="button" class="btn btn-sm ' + (customer.balance > 0 ? 'btn-success' : 'btn-outline-secondary') + '" onclick="showCollectPaymentModal(this)" data-customer-id="' + customer.id + '" data-customer-name="' + escapeHtml(customer.name) + '" data-customer-balance="' + customer.raw_balance + '" data-customer-balance-formatted="' + escapeHtml(customer.balance_formatted) + '" ' + (customer.balance > 0 ? '' : 'disabled') + '><i class="bi bi-cash-coin me-1"></i>تحصيل</button>';
-                actionsHtml += '<button type="button" class="btn btn-sm btn-outline-info local-customer-purchase-history-btn" onclick="showLocalCustomerPurchaseHistoryModal(this)" data-customer-id="' + customer.id + '" data-customer-name="' + escapeHtml(customer.name) + '" data-customer-phone="' + escapeHtml(customer.phone || '') + '" data-customer-address="' + escapeHtml(customer.address || '') + '"><i class="bi bi-receipt me-1"></i>سجل</button>';
-                if (currentRole === 'manager') {
-                    actionsHtml += '<button type="button" class="btn btn-sm btn-outline-danger" onclick="showDeleteLocalCustomerModal(this)" data-customer-id="' + customer.id + '" data-customer-name="' + escapeHtml(customer.name) + '"><i class="bi bi-trash3 me-1"></i>حذف</button>';
+                var actionsHtml = '<div class="dropdown">';
+                actionsHtml += '<button type="button" class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-gear me-1"></i>إجراءات</button>';
+                actionsHtml += '<ul class="dropdown-menu dropdown-menu-end">';
+                if (['manager', 'developer', 'accountant', 'sales'].indexOf(currentRole) !== -1) {
+                    actionsHtml += '<li><button type="button" class="dropdown-item" onclick="showEditLocalCustomerModal(this)" data-customer-id="' + customer.id + '" data-customer-name="' + escapeHtml(customer.name) + '" data-customer-phone="' + escapeHtml(customer.phone || '') + '" data-customer-address="' + escapeHtml(customer.address || '') + '" data-customer-region-id="' + customer.region_id + '" data-customer-balance="' + customer.raw_balance + '"><i class="bi bi-pencil me-2"></i>تعديل</button></li>';
                 }
-                actionsHtml += '<button type="button" class="btn btn-sm btn-outline-warning local-customer-return-btn" onclick="showLocalCustomerReturnModal(this)" data-customer-id="' + customer.id + '" data-customer-name="' + escapeHtml(customer.name) + '" data-customer-phone="' + escapeHtml(customer.phone || '') + '" data-customer-address="' + escapeHtml(customer.address || '') + '"><i class="bi bi-arrow-return-left me-1"></i>مرتجع</button>';
-                actionsHtml += '</div>';
+                actionsHtml += '<li><button type="button" class="dropdown-item ' + (customer.balance <= 0 ? 'disabled' : '') + '" onclick="showCollectPaymentModal(this)" data-customer-id="' + customer.id + '" data-customer-name="' + escapeHtml(customer.name) + '" data-customer-balance="' + customer.raw_balance + '" data-customer-balance-formatted="' + escapeHtml(customer.balance_formatted) + '" ' + (customer.balance > 0 ? '' : 'disabled') + '><i class="bi bi-cash-coin me-2"></i>تحصيل</button></li>';
+                actionsHtml += '<li><button type="button" class="dropdown-item local-customer-purchase-history-btn" onclick="showLocalCustomerPurchaseHistoryModal(this)" data-customer-id="' + customer.id + '" data-customer-name="' + escapeHtml(customer.name) + '" data-customer-phone="' + escapeHtml(customer.phone || '') + '" data-customer-address="' + escapeHtml(customer.address || '') + '"><i class="bi bi-receipt me-2"></i>سجل المشتريات</button></li>';
+                actionsHtml += '<li><hr class="dropdown-divider"></li>';
+                actionsHtml += '<li><button type="button" class="dropdown-item" onclick="showPaperInvoiceModal(this)" data-customer-id="' + customer.id + '" data-customer-name="' + escapeHtml(customer.name) + '"><i class="bi bi-receipt-cutoff me-2"></i>فاتورة ورقية</button></li>';
+                actionsHtml += '<li><button type="button" class="dropdown-item local-customer-return-btn" onclick="showLocalCustomerReturnModal(this)" data-customer-id="' + customer.id + '" data-customer-name="' + escapeHtml(customer.name) + '" data-customer-phone="' + escapeHtml(customer.phone || '') + '" data-customer-address="' + escapeHtml(customer.address || '') + '"><i class="bi bi-arrow-return-left me-2"></i>مرتجع</button></li>';
+                if (currentRole === 'manager') {
+                    actionsHtml += '<li><hr class="dropdown-divider"></li>';
+                    actionsHtml += '<li><button type="button" class="dropdown-item text-danger" onclick="showDeleteLocalCustomerModal(this)" data-customer-id="' + customer.id + '" data-customer-name="' + escapeHtml(customer.name) + '"><i class="bi bi-trash3 me-2"></i>حذف</button></li>';
+                }
+                actionsHtml += '</ul></div>';
 
                 var nameCellHtml = '';
                 if (customer.balance_updated_at_formatted) {
