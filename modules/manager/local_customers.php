@@ -2706,8 +2706,48 @@ window.LOCAL_CUSTOMERS_CONFIG = { currentRole: <?php echo json_encode($currentRo
     </div>
 </div>
 
-<!-- Modal فاتورة ورقية - تصوير صورة الفاتورة + إجمالي → رصيد دائن -->
-<div class="modal fade" id="paperInvoiceModal" tabindex="-1" aria-hidden="true">
+<!-- بطاقة فاتورة ورقية - للموبايل فقط (بدون مودال لتفادي البطء عند الإغلاق) -->
+<div class="card shadow-sm mb-4 d-md-none" id="paperInvoiceCard" style="display: none;">
+    <div class="card-header bg-primary text-white d-flex align-items-center justify-content-between">
+        <h5 class="mb-0">
+            <i class="bi bi-receipt-cutoff me-2"></i>
+            فاتورة ورقية - <span id="paperInvoiceCardCustomerName">-</span>
+        </h5>
+        <button type="button" class="btn btn-sm btn-light" onclick="closePaperInvoiceCard()" aria-label="إغلاق">
+            <i class="bi bi-x-lg"></i>
+        </button>
+    </div>
+    <div class="card-body">
+        <p class="text-muted small">تصوير أو رفع صورة الفاتورة الورقية ثم إدخال الإجمالي. سيُضاف المبلغ كرصيد دائن للعميل ويُسجّل في سجل المشتريات.</p>
+        <input type="hidden" id="paperInvoiceCardCustomerId" value="">
+        <div class="mb-3">
+            <label class="form-label">صورة الفاتورة <span class="text-danger">*</span></label>
+            <div class="d-flex gap-2 flex-wrap align-items-center">
+                <input type="file" id="paperInvoiceCardImageInput" class="form-control form-control-sm" accept="image/jpeg,image/png,image/gif,image/webp" capture="environment">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="paperInvoiceCardCaptureBtn" title="فتح الكاميرا">
+                    <i class="bi bi-camera me-1"></i>التقاط
+                </button>
+            </div>
+            <div id="paperInvoiceCardImagePreview" class="mt-2 text-center" style="display: none;">
+                <img id="paperInvoiceCardPreviewImg" src="" alt="معاينة" class="img-fluid rounded border" style="max-height: 200px;">
+            </div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">إجمالي الفاتورة (ج.م) <span class="text-danger">*</span></label>
+            <input type="number" step="0.01" min="0.01" class="form-control" id="paperInvoiceCardTotalAmount" placeholder="0.00">
+        </div>
+        <div id="paperInvoiceCardMessage" class="alert d-none mb-0"></div>
+        <div class="d-flex gap-2 mt-3">
+            <button type="button" class="btn btn-secondary flex-fill" onclick="closePaperInvoiceCard()">إلغاء</button>
+            <button type="button" class="btn btn-primary flex-fill" id="paperInvoiceCardSubmitBtn" onclick="submitPaperInvoice()">
+                <i class="bi bi-check-lg me-1"></i>حفظ وإضافة للرصيد الدائن
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal فاتورة ورقية - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="paperInvoiceModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
@@ -3045,7 +3085,8 @@ function closeAllForms() {
         'deleteLocalCustomerCard',
         'customerExportCard',
         'viewLocationCard',
-        'localCustomerPurchaseHistoryCard'
+        'localCustomerPurchaseHistoryCard',
+        'paperInvoiceCard'
     ];
     
     cards.forEach(function(cardId) {
@@ -3379,24 +3420,54 @@ function showCollectPaymentModal(button) {
     }
 }
 
-// دالة فتح نموذج فاتورة ورقية (صورة + إجمالي → رصيد دائن)
+// إغلاق بطاقة الفاتورة الورقية (موبايل)
+function closePaperInvoiceCard() {
+    var card = document.getElementById('paperInvoiceCard');
+    if (card) {
+        card.style.display = 'none';
+        card.classList.add('d-none');
+    }
+}
+window.closePaperInvoiceCard = closePaperInvoiceCard;
+
+// دالة فتح نموذج فاتورة ورقية (بطاقة على الموبايل، مودال على الكمبيوتر)
 function showPaperInvoiceModal(button) {
     if (!button) return;
     closeAllForms();
     var customerId = button.getAttribute('data-customer-id') || '';
     var customerName = button.getAttribute('data-customer-name') || '-';
-    document.getElementById('paperInvoiceCustomerId').value = customerId;
-    document.getElementById('paperInvoiceCustomerName').textContent = customerName;
-    document.getElementById('paperInvoiceTotalAmount').value = '';
-    document.getElementById('paperInvoiceImageInput').value = '';
+    function setEl(id, val) { var el = document.getElementById(id); if (el) { if (el.value !== undefined) el.value = val; else el.textContent = val; } }
+    setEl('paperInvoiceCustomerId', customerId);
+    setEl('paperInvoiceCustomerName', customerName);
+    setEl('paperInvoiceTotalAmount', '');
+    setEl('paperInvoiceImageInput', '');
     var preview = document.getElementById('paperInvoiceImagePreview');
     var previewImg = document.getElementById('paperInvoicePreviewImg');
     if (preview) preview.style.display = 'none';
     if (previewImg) previewImg.src = '';
     var msg = document.getElementById('paperInvoiceMessage');
     if (msg) { msg.classList.add('d-none'); msg.className = 'alert d-none mb-0'; }
+    setEl('paperInvoiceCardCustomerId', customerId);
+    setEl('paperInvoiceCardCustomerName', customerName);
+    setEl('paperInvoiceCardTotalAmount', '');
+    var cardInput = document.getElementById('paperInvoiceCardImageInput');
+    if (cardInput) cardInput.value = '';
+    var cardPreview = document.getElementById('paperInvoiceCardImagePreview');
+    var cardPreviewImg = document.getElementById('paperInvoiceCardPreviewImg');
+    if (cardPreview) cardPreview.style.display = 'none';
+    if (cardPreviewImg) cardPreviewImg.src = '';
+    var cardMsg = document.getElementById('paperInvoiceCardMessage');
+    if (cardMsg) { cardMsg.classList.add('d-none'); cardMsg.className = 'alert d-none mb-0'; }
+    var card = document.getElementById('paperInvoiceCard');
     var modal = document.getElementById('paperInvoiceModal');
-    if (modal && typeof bootstrap !== 'undefined') {
+    if (typeof isMobile === 'function' && isMobile() && card) {
+        card.style.display = 'block';
+        card.classList.remove('d-none');
+        setTimeout(function() {
+            if (typeof scrollToElement === 'function') scrollToElement(card);
+            else card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 50);
+    } else if (modal && typeof bootstrap !== 'undefined') {
         (new bootstrap.Modal(modal)).show();
     }
 }
