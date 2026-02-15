@@ -200,6 +200,10 @@
             });
 
             updatePagination(pagination);
+            // على الموبايل: تهيئة قوائم الإجراءات لعدم قص القائمة (strategy: fixed)
+            if (typeof window.reinitLocalCustomersTableActionsDropdowns === 'function') {
+                setTimeout(function() { window.reinitLocalCustomersTableActionsDropdowns(); }, 0);
+            }
         }
 
         function updatePagination(pagination) {

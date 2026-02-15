@@ -1930,6 +1930,26 @@ var dashboardWrapper = null;
 <script>
 window.LOCAL_CUSTOMERS_CONFIG = { currentRole: <?php echo json_encode($currentRole); ?>, apiBase: <?php echo json_encode(function_exists('getBasePath') ? rtrim(getBasePath(), '/') : ''); ?>, pageNum: <?php echo (int)$pageNum; ?> };
 (function runLocalCustomersSearchInit(tries) { tries = tries || 0; if (typeof window.initLocalCustomersSearch === 'function') { window.initLocalCustomersSearch(); } else if (tries < 100) { setTimeout(function() { runLocalCustomersSearchInit(tries + 1); }, 30); } })();
+// على الموبايل: تهيئة قوائم الإجراءات بـ strategy: fixed لعدم قص القائمة بسبب overflow
+window.reinitLocalCustomersTableActionsDropdowns = function() {
+    if (typeof bootstrap === 'undefined') return;
+    var isMobile = window.matchMedia && window.matchMedia('(max-width: 767.98px)').matches;
+    if (!isMobile) return;
+    var table = document.getElementById('localCustomersTable');
+    if (!table) return;
+    table.querySelectorAll('.table-actions-dropdown').forEach(function(el) {
+        var toggle = el.querySelector('[data-bs-toggle="dropdown"]');
+        if (!toggle) return;
+        try {
+            var inst = bootstrap.Dropdown.getInstance(toggle);
+            if (inst) inst.dispose();
+            bootstrap.Dropdown.getOrCreateInstance(toggle, { popperConfig: { strategy: 'fixed' } });
+        } catch (e) {}
+    });
+};
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(function() { if (typeof window.reinitLocalCustomersTableActionsDropdowns === 'function') window.reinitLocalCustomersTableActionsDropdowns(); }, 100);
+});
 </script>
 <!-- قائمة العملاء -->
 <div class="card shadow-sm">
@@ -7145,11 +7165,19 @@ function printDebtorCustomers() {
         min-width: 90px;
     }
     
-    /* الإجراءات */
+    /* الإجراءات - عمود ثابت على اليمين على الموبايل لظهور زر الإجراءات دائماً */
     .dashboard-table thead th:nth-child(8),
     .dashboard-table tbody td:nth-child(8) {
         width: 20%;
         min-width: 140px;
+        position: sticky !important;
+        right: 0 !important;
+        background: var(--bs-body-bg, #fff) !important;
+        z-index: 2;
+        box-shadow: -4px 0 8px rgba(0,0,0,0.06);
+    }
+    .dashboard-table thead th:nth-child(8) {
+        z-index: 3;
     }
     
     .dashboard-table thead th {
@@ -7269,9 +7297,18 @@ function printDebtorCustomers() {
         min-width: 85px;
     }
     
+    /* عمود الإجراءات ثابت على اليمين */
     .dashboard-table thead th:nth-child(8),
     .dashboard-table tbody td:nth-child(8) {
         min-width: 130px;
+        position: sticky !important;
+        right: 0 !important;
+        background: var(--bs-body-bg, #fff) !important;
+        z-index: 2;
+        box-shadow: -4px 0 8px rgba(0,0,0,0.06);
+    }
+    .dashboard-table thead th:nth-child(8) {
+        z-index: 3;
     }
 }
 
