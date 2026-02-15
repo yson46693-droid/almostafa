@@ -272,43 +272,44 @@ $apiBase = getRelativeUrl('api/vehicle_maintenance.php');
 </div>
 
 <?php if ($isDriver && $vehicle): ?>
-<!-- Modal الكاميرا -->
-<div class="modal fade" id="maintenanceCameraModal" tabindex="-1" data-bs-backdrop="static">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="maintenanceCameraTitle">التقاط صورة</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div id="maintenanceCameraContainer" class="text-center">
-                    <div id="maintenanceCameraLoading" class="mb-3" style="display: none;">
-                        <div class="spinner-border text-primary"></div>
-                        <p class="mt-2 text-muted">جاري تحميل الكاميرا...</p>
-                    </div>
-                    <video id="maintenanceVideo" autoplay playsinline muted style="width: 100%; border-radius: 8px; background: #000; max-height: 400px;"></video>
-                    <canvas id="maintenanceCanvas" style="display: none;"></canvas>
-                    <div id="maintenanceCameraError" class="alert alert-danger mt-2" style="display: none;"></div>
+<!-- بطاقة ثابتة للكاميرا (ليست مودال) -->
+<div id="maintenanceCameraCard" class="d-none" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1060; width: 90%; max-width: 420px; box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.2); border-radius: 12px; overflow: hidden;">
+    <div class="card border-0 h-100">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center py-2">
+            <h5 class="modal-title mb-0" id="maintenanceCameraTitle">التقاط صورة</h5>
+            <button type="button" class="btn btn-link btn-sm text-white text-decoration-none p-0" id="maintenanceCameraCloseBtn" aria-label="إغلاق">
+                <i class="bi bi-x-lg fs-5"></i>
+            </button>
+        </div>
+        <div class="card-body p-3">
+            <div id="maintenanceCameraContainer" class="text-center">
+                <div id="maintenanceCameraLoading" class="mb-3" style="display: none;">
+                    <div class="spinner-border text-primary"></div>
+                    <p class="mt-2 text-muted small">جاري تحميل الكاميرا...</p>
                 </div>
-                <div id="maintenanceCapturedContainer" style="display: none; text-align: center;">
-                    <img id="maintenanceCapturedImg" src="" alt="الصورة الملتقطة" style="max-width: 100%; border-radius: 8px; max-height: 400px;">
-                </div>
+                <video id="maintenanceVideo" autoplay playsinline muted style="width: 100%; border-radius: 8px; background: #000; max-height: 320px;"></video>
+                <canvas id="maintenanceCanvas" style="display: none;"></canvas>
+                <div id="maintenanceCameraError" class="alert alert-danger mt-2 small" style="display: none;"></div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-                <button type="button" class="btn btn-primary" id="maintenanceCaptureBtn" style="display: none;">
-                    <i class="bi bi-camera me-1"></i>التقاط
-                </button>
-                <button type="button" class="btn btn-success" id="maintenanceConfirmBtn" style="display: none;">
-                    <i class="bi bi-check me-1"></i>تأكيد
-                </button>
-                <button type="button" class="btn btn-outline-secondary" id="maintenanceRetakeBtn" style="display: none;">
-                    <i class="bi bi-arrow-counterclockwise me-1"></i>إعادة التقاط
-                </button>
+            <div id="maintenanceCapturedContainer" style="display: none; text-align: center;">
+                <img id="maintenanceCapturedImg" src="" alt="الصورة الملتقطة" style="max-width: 100%; border-radius: 8px; max-height: 320px;">
             </div>
+        </div>
+        <div class="card-footer bg-light d-flex flex-wrap gap-2 justify-content-end py-2">
+            <button type="button" class="btn btn-secondary btn-sm" id="maintenanceCameraCancelBtn">إلغاء</button>
+            <button type="button" class="btn btn-primary btn-sm" id="maintenanceCaptureBtn" style="display: none;">
+                <i class="bi bi-camera me-1"></i>التقاط
+            </button>
+            <button type="button" class="btn btn-success btn-sm" id="maintenanceConfirmBtn" style="display: none;">
+                <i class="bi bi-check me-1"></i>تأكيد
+            </button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="maintenanceRetakeBtn" style="display: none;">
+                <i class="bi bi-arrow-counterclockwise me-1"></i>إعادة التقاط
+            </button>
         </div>
     </div>
 </div>
+<div id="maintenanceCameraBackdrop" class="d-none" style="position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1055;" aria-hidden="true"></div>
 
 <script>
 (function() {
@@ -317,7 +318,8 @@ $apiBase = getRelativeUrl('api/vehicle_maintenance.php');
     let currentType = null;
     let capturedBase64 = null;
 
-    const modal = document.getElementById('maintenanceCameraModal');
+    const cameraCard = document.getElementById('maintenanceCameraCard');
+    const cameraBackdrop = document.getElementById('maintenanceCameraBackdrop');
     const video = document.getElementById('maintenanceVideo');
     const canvas = document.getElementById('maintenanceCanvas');
     const captureBtn = document.getElementById('maintenanceCaptureBtn');
@@ -328,6 +330,12 @@ $apiBase = getRelativeUrl('api/vehicle_maintenance.php');
     const cameraContainer = document.getElementById('maintenanceCameraContainer');
     const capturedContainer = document.getElementById('maintenanceCapturedContainer');
     const capturedImg = document.getElementById('maintenanceCapturedImg');
+
+    function closeCameraCard() {
+        stopCamera();
+        cameraCard.classList.add('d-none');
+        cameraBackdrop.classList.add('d-none');
+    }
 
     function openCamera(type) {
         currentType = type;
@@ -341,8 +349,8 @@ $apiBase = getRelativeUrl('api/vehicle_maintenance.php');
         capturedContainer.style.display = 'none';
         video.style.display = 'block';
 
-        const bsModal = bootstrap.Modal.getOrCreateInstance(modal);
-        bsModal.show();
+        cameraCard.classList.remove('d-none');
+        cameraBackdrop.classList.remove('d-none');
 
         const constraints = { video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } };
         navigator.mediaDevices.getUserMedia(constraints).then(function(stream) {
@@ -365,7 +373,11 @@ $apiBase = getRelativeUrl('api/vehicle_maintenance.php');
         video.srcObject = null;
     }
 
-    modal.addEventListener('hidden.bs.modal', stopCamera);
+    if (cameraBackdrop) cameraBackdrop.addEventListener('click', closeCameraCard);
+    const closeBtn = document.getElementById('maintenanceCameraCloseBtn');
+    const cancelBtn = document.getElementById('maintenanceCameraCancelBtn');
+    if (closeBtn) closeBtn.addEventListener('click', closeCameraCard);
+    if (cancelBtn) cancelBtn.addEventListener('click', closeCameraCard);
 
     captureBtn.addEventListener('click', function() {
         const ctx = canvas.getContext('2d');
@@ -401,7 +413,7 @@ $apiBase = getRelativeUrl('api/vehicle_maintenance.php');
             if (statusEl) statusEl.textContent = 'تم التقاط الصورة';
             if (submitBtn) submitBtn.disabled = false;
         }
-        bootstrap.Modal.getInstance(modal).hide();
+        closeCameraCard();
     });
 
     document.getElementById('captureOilBtn').addEventListener('click', function() { openCamera('oil_change'); });

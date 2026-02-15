@@ -271,7 +271,7 @@ $lang = isset($translations) ? $translations : [];
 <div class="container-fluid">
     <!-- إحصائيات سريعة -->
     <div class="row g-2 mb-3">
-        <div class="col-4 col-sm-4 col-md-3">
+        <div class="col-6 col-md-3">
             <div class="card">
                 <div class="card-body p-2">
                     <div class="d-flex align-items-center">
@@ -289,7 +289,7 @@ $lang = isset($translations) ? $translations : [];
             </div>
         </div>
         
-        <div class="col-4 col-sm-4 col-md-3">
+        <div class="col-6 col-md-3">
             <div class="card">
                 <div class="card-body p-2">
                     <div class="d-flex align-items-center">
@@ -307,7 +307,7 @@ $lang = isset($translations) ? $translations : [];
             </div>
         </div>
         
-        <div class="col-4 col-sm-4 col-md-3">
+        <div class="col-6 col-md-3">
             <div class="card">
                 <div class="card-body p-2">
                     <div class="d-flex align-items-center">
@@ -326,7 +326,7 @@ $lang = isset($translations) ? $translations : [];
             </div>
         </div>
         
-        <div class="col-4 col-sm-4 col-md-3">
+        <div class="col-6 col-md-3">
             <div class="card">
                 <div class="card-body p-2">
                     <div class="d-flex align-items-center">

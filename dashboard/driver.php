@@ -122,8 +122,8 @@ $pageDescription = 'لوحة تحكم السائق - الحضور والانصر
                                         <div class="rounded-circle bg-info bg-opacity-10 d-inline-flex p-3 mb-2">
                                             <i class="bi bi-list-task fs-2 text-info"></i>
                                         </div>
-                                        <h5 class="card-title text-dark">مهام الإنتاج</h5>
-                                        <p class="card-text text-muted small mb-0">أوردرات مع المندوب – تم التوصيل / تم الارجاع</p>
+                                        <h5 class="card-title text-dark">الاوردرات</h5>
+                                        <p class="card-text text-muted small mb-0">عرض الاوردرات  وتحديث حالتها إلى «تم التوصيل» أو «تم الارجاع».</p>
                                     </div>
                                 </div>
                             </a>
