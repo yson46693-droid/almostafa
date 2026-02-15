@@ -292,6 +292,7 @@ if (!$tablesChecked) {
         $createPaperInvoicesSql = "CREATE TABLE IF NOT EXISTS `local_customer_paper_invoices` (
             `id` int(11) NOT NULL AUTO_INCREMENT,
             `customer_id` int(11) NOT NULL,
+            `invoice_number` varchar(100) DEFAULT NULL COMMENT 'رقم الفاتورة (يدوي)',
             `total_amount` decimal(15,2) NOT NULL COMMENT 'إجمالي الفاتورة',
             `image_path` varchar(500) DEFAULT NULL COMMENT 'مسار صورة الفاتورة الورقية',
             `created_by` int(11) NOT NULL,
@@ -307,6 +308,17 @@ if (!$tablesChecked) {
             error_log('Table local_customer_paper_invoices created successfully');
         } catch (Throwable $e) {
             error_log('Error creating local_customer_paper_invoices table: ' . $e->getMessage());
+        }
+    }
+    $paperInvoicesTableCheck = $db->queryOne("SHOW TABLES LIKE 'local_customer_paper_invoices'");
+    if (!empty($paperInvoicesTableCheck)) {
+        $invoiceNumberCol = $db->queryOne("SHOW COLUMNS FROM local_customer_paper_invoices LIKE 'invoice_number'");
+        if (empty($invoiceNumberCol)) {
+            try {
+                $db->rawQuery("ALTER TABLE local_customer_paper_invoices ADD COLUMN invoice_number varchar(100) DEFAULT NULL COMMENT 'رقم الفاتورة (يدوي)' AFTER customer_id");
+            } catch (Throwable $e) {
+                error_log('Error adding invoice_number to local_customer_paper_invoices: ' . $e->getMessage());
+            }
         }
     }
     
@@ -2982,6 +2994,10 @@ console.log('showImportLocalCustomersModal متاحة:', typeof window.showImpor
             <div id="paperInvoiceCardImagePreview" class="mt-2 text-center" style="display: none;"><img id="paperInvoiceCardPreviewImg" src="" alt="معاينة" class="img-fluid rounded border" style="max-height: 200px;"></div>
         </div>
         <div class="mb-3">
+            <label class="form-label">رقم الفاتورة <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="paperInvoiceCardInvoiceNumber" placeholder="أدخل رقم الفاتورة يدوياً">
+        </div>
+        <div class="mb-3">
             <label class="form-label">إجمالي الفاتورة (ج.م) <span class="text-danger">*</span></label>
             <input type="number" step="0.01" min="0.01" class="form-control" id="paperInvoiceCardTotalAmount" placeholder="0.00">
         </div>
@@ -3010,6 +3026,10 @@ console.log('showImportLocalCustomersModal متاحة:', typeof window.showImpor
                         <button type="button" class="btn btn-outline-secondary btn-sm" id="paperInvoiceCaptureBtn" title="فتح الكاميرا"><i class="bi bi-camera me-1"></i>التقاط</button>
                     </div>
                     <div id="paperInvoiceImagePreview" class="mt-2 text-center" style="display: none;"><img id="paperInvoicePreviewImg" src="" alt="معاينة" class="img-fluid rounded border" style="max-height: 200px;"></div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">رقم الفاتورة <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="paperInvoiceInvoiceNumber" placeholder="أدخل رقم الفاتورة يدوياً">
                 </div>
                 <div class="mb-3">
                     <label class="form-label">إجمالي الفاتورة (ج.م) <span class="text-danger">*</span></label>
@@ -3635,6 +3655,7 @@ function showPaperInvoiceModal(button) {
     function setEl(id, val) { var el = document.getElementById(id); if (el) { if (el.value !== undefined) el.value = val; else el.textContent = val; } }
     setEl('paperInvoiceCustomerId', customerId);
     setEl('paperInvoiceCustomerName', customerName);
+    setEl('paperInvoiceInvoiceNumber', '');
     setEl('paperInvoiceTotalAmount', '');
     setEl('paperInvoiceImageInput', '');
     var preview = document.getElementById('paperInvoiceImagePreview');
@@ -3645,6 +3666,7 @@ function showPaperInvoiceModal(button) {
     if (msg) { msg.classList.add('d-none'); msg.className = 'alert d-none mb-0'; }
     setEl('paperInvoiceCardCustomerId', customerId);
     setEl('paperInvoiceCardCustomerName', customerName);
+    setEl('paperInvoiceCardInvoiceNumber', '');
     setEl('paperInvoiceCardTotalAmount', '');
     var cardInput = document.getElementById('paperInvoiceCardImageInput');
     if (cardInput) cardInput.value = '';
@@ -3688,6 +3710,8 @@ function submitPaperInvoice() {
     var useCard = (typeof isMobile === 'function' && isMobile()) && document.getElementById('paperInvoiceCard') && document.getElementById('paperInvoiceCard').style.display === 'block';
     var customerIdEl = useCard ? document.getElementById('paperInvoiceCardCustomerId') : document.getElementById('paperInvoiceCustomerId');
     var customerId = (customerIdEl && customerIdEl.value) || '';
+    var invoiceNumberEl = useCard ? document.getElementById('paperInvoiceCardInvoiceNumber') : document.getElementById('paperInvoiceInvoiceNumber');
+    var invoiceNumber = (invoiceNumberEl && invoiceNumberEl.value) ? invoiceNumberEl.value.trim() : '';
     var totalEl = useCard ? document.getElementById('paperInvoiceCardTotalAmount') : document.getElementById('paperInvoiceTotalAmount');
     var totalAmount = totalEl ? totalEl.value.replace(',', '.').trim() : '';
     var fileInput = useCard ? document.getElementById('paperInvoiceCardImageInput') : document.getElementById('paperInvoiceImageInput');
@@ -3695,6 +3719,7 @@ function submitPaperInvoice() {
     var msgEl = useCard ? document.getElementById('paperInvoiceCardMessage') : document.getElementById('paperInvoiceMessage');
     var submitBtn = useCard ? document.getElementById('paperInvoiceCardSubmitBtn') : document.getElementById('paperInvoiceSubmitBtn');
     if (!customerId) { alert('لم يتم تحديد العميل'); return; }
+    if (!invoiceNumber) { alert('يرجى إدخال رقم الفاتورة'); if (invoiceNumberEl) invoiceNumberEl.focus(); return; }
     if (!totalAmount || isNaN(parseFloat(totalAmount)) || parseFloat(totalAmount) <= 0) { alert('يرجى إدخال إجمالي صحيح للفاتورة'); if (totalEl) totalEl.focus(); return; }
     if (!file) { alert('يرجى اختيار أو تصوير صورة الفاتورة الورقية'); if (fileInput) fileInput.focus(); return; }
     if (msgEl) { msgEl.classList.add('d-none'); msgEl.innerHTML = ''; }
@@ -3702,6 +3727,7 @@ function submitPaperInvoice() {
     var formData = new FormData();
     formData.append('action', 'save');
     formData.append('customer_id', customerId);
+    formData.append('invoice_number', invoiceNumber);
     formData.append('total_amount', totalAmount);
     formData.append('image', file);
     var apiUrl = (paperInvoiceBasePath || '') + '/api/local_paper_invoice.php';
@@ -3711,6 +3737,7 @@ function submitPaperInvoice() {
             if (msgEl) { msgEl.classList.remove('d-none'); msgEl.className = data.success ? 'alert alert-success mb-0' : 'alert alert-danger mb-0'; msgEl.textContent = data.message || (data.success ? 'تم الحفظ.' : 'حدث خطأ.'); }
             if (data.success) {
                 if (useCard) {
+                    if (invoiceNumberEl) invoiceNumberEl.value = '';
                     if (totalEl) totalEl.value = '';
                     if (fileInput) fileInput.value = '';
                     var cardPreview = document.getElementById('paperInvoiceCardImagePreview');
@@ -3719,6 +3746,7 @@ function submitPaperInvoice() {
                     if (cardPreviewImg) cardPreviewImg.src = '';
                     setTimeout(function() { closePaperInvoiceCard(); }, 1500);
                 } else {
+                    document.getElementById('paperInvoiceInvoiceNumber').value = '';
                     document.getElementById('paperInvoiceTotalAmount').value = '';
                     document.getElementById('paperInvoiceImageInput').value = '';
                     var preview = document.getElementById('paperInvoiceImagePreview');
@@ -5330,7 +5358,11 @@ function loadLocalCustomerPurchaseHistory() {
             console.log('Purchase history data:', localPurchaseHistoryData.length, 'items; paper invoices:', localPaperInvoicesData.length);
             
             displayLocalPurchaseHistory(localPurchaseHistoryData, localPaperInvoicesData);
-            if (contentElement) contentElement.classList.remove('d-none');
+            // إظهار جدول الكارد وجدول المودال معاً لضمان ظهور الفواتير على الهاتف والكمبيوتر
+            var cardTable = document.getElementById('localPurchaseHistoryCardTable');
+            var modalTable = document.getElementById('localPurchaseHistoryTable');
+            if (cardTable) cardTable.classList.remove('d-none');
+            if (modalTable) modalTable.classList.remove('d-none');
             
             // إظهار زر الطباعة حتى لو لم تكن هناك بيانات
             const printBtn = isMobileDevice
@@ -5363,18 +5395,15 @@ function loadLocalCustomerPurchaseHistory() {
 window.loadLocalCustomerPurchaseHistory = loadLocalCustomerPurchaseHistory;
 
 // دالة عرض سجل المشتريات (+ الفواتير الورقية في قسم منفصل)
+// نملأ جدولي الكارد (موبايل) والمودال (كمبيوتر) معاً لتجنب عدم ظهور الفواتير على الهاتف عند اختلاف عرض الشاشة
 function displayLocalPurchaseHistory(history, paperInvoices) {
     paperInvoices = paperInvoices || [];
-    const isMobileDevice = typeof isMobile === 'function' ? isMobile() : window.innerWidth <= 768;
-    const tableBody = isMobileDevice
-        ? document.getElementById('localPurchaseHistoryCardTableBody')
-        : document.getElementById('localPurchaseHistoryTableBody');
+    const tableBodyCard = document.getElementById('localPurchaseHistoryCardTableBody');
+    const tableBodyModal = document.getElementById('localPurchaseHistoryTableBody');
     
-    if (!tableBody) {
-        console.error('Purchase history table body element not found');
-        const errorElement = isMobileDevice
-            ? document.getElementById('localPurchaseHistoryCardError')
-            : document.getElementById('localPurchaseHistoryError');
+    if (!tableBodyCard && !tableBodyModal) {
+        console.error('Purchase history table body elements not found');
+        const errorElement = document.getElementById('localPurchaseHistoryCardError') || document.getElementById('localPurchaseHistoryError');
         if (errorElement) {
             errorElement.innerHTML = '<div class="alert alert-danger mb-0"><strong>خطأ:</strong> عنصر الجدول غير موجود في الصفحة</div>';
             errorElement.classList.remove('d-none');
@@ -5382,7 +5411,8 @@ function displayLocalPurchaseHistory(history, paperInvoices) {
         return;
     }
     
-    tableBody.innerHTML = '';
+    if (tableBodyCard) tableBodyCard.innerHTML = '';
+    if (tableBodyModal) tableBodyModal.innerHTML = '';
     
     var paperSection = document.getElementById('localPaperInvoicesSection');
     var paperTbody = document.getElementById('localPaperInvoicesTableBody');
@@ -5412,8 +5442,10 @@ function displayLocalPurchaseHistory(history, paperInvoices) {
         });
     }
     
+    var emptyRowHtml = '<tr><td colspan="11" class="text-center text-muted py-4"><i class="bi bi-info-circle me-2"></i>لا توجد مشتريات مسجلة لهذا العميل</td></tr>';
     if (!history || history.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="11" class="text-center text-muted py-4"><i class="bi bi-info-circle me-2"></i>لا توجد مشتريات مسجلة لهذا العميل</td></tr>';
+        if (tableBodyCard) tableBodyCard.innerHTML = emptyRowHtml;
+        if (tableBodyModal) tableBodyModal.innerHTML = emptyRowHtml;
         console.log('No purchase history found for customer ID:', currentLocalCustomerId);
         return;
     }
@@ -5467,20 +5499,22 @@ function displayLocalPurchaseHistory(history, paperInvoices) {
                         </button>` : '<span class="text-muted small">-</span>'}
                     </td>
                 `;
-                tableBody.appendChild(row);
+                if (tableBodyCard) tableBodyCard.appendChild(row);
+                if (tableBodyModal) tableBodyModal.appendChild(row.cloneNode(true));
             } catch (itemError) {
                 console.error('Error displaying item at index', index, ':', itemError, item);
-                // إضافة صف خطأ للعنصر الفاشل
-                const errorRow = document.createElement('tr');
-                errorRow.innerHTML = `<td colspan="11" class="text-center text-danger py-2"><small>خطأ في عرض العنصر #${index + 1}</small></td>`;
-                tableBody.appendChild(errorRow);
+                var errorRowHtml = '<tr><td colspan="11" class="text-center text-danger py-2"><small>خطأ في عرض العنصر #' + (index + 1) + '</small></td></tr>';
+                if (tableBodyCard) tableBodyCard.insertAdjacentHTML('beforeend', errorRowHtml);
+                if (tableBodyModal) tableBodyModal.insertAdjacentHTML('beforeend', errorRowHtml);
             }
         });
         
         console.log('Successfully displayed', history.length, 'items');
     } catch (error) {
         console.error('Error displaying purchase history:', error);
-        tableBody.innerHTML = '<tr><td colspan="11" class="text-center text-danger py-4"><i class="bi bi-exclamation-triangle-fill me-2"></i>حدث خطأ أثناء عرض البيانات: ' + error.message + '</td></tr>';
+        var errorRowHtml = '<tr><td colspan="11" class="text-center text-danger py-4"><i class="bi bi-exclamation-triangle-fill me-2"></i>حدث خطأ أثناء عرض البيانات: ' + (error.message || '') + '</td></tr>';
+        if (tableBodyCard) tableBodyCard.innerHTML = errorRowHtml;
+        if (tableBodyModal) tableBodyModal.innerHTML = errorRowHtml;
     }
 }
 

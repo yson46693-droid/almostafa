@@ -393,8 +393,12 @@ function getLocalCustomerPaperInvoices($db, $customerId): array
         if (empty($tableExists)) {
             return [];
         }
+        $invoiceNumberCol = $db->queryOne("SHOW COLUMNS FROM local_customer_paper_invoices LIKE 'invoice_number'");
+        if (empty($invoiceNumberCol)) {
+            @$db->rawQuery("ALTER TABLE local_customer_paper_invoices ADD COLUMN invoice_number varchar(100) DEFAULT NULL COMMENT 'رقم الفاتورة (يدوي)' AFTER customer_id");
+        }
         $rows = $db->query(
-            "SELECT id, customer_id, total_amount, image_path, created_at FROM local_customer_paper_invoices WHERE customer_id = ? ORDER BY created_at DESC, id DESC",
+            "SELECT id, customer_id, invoice_number, total_amount, image_path, created_at FROM local_customer_paper_invoices WHERE customer_id = ? ORDER BY created_at DESC, id DESC",
             [$customerId]
         );
         if (!$rows) {
@@ -402,13 +406,14 @@ function getLocalCustomerPaperInvoices($db, $customerId): array
         }
         $out = [];
         foreach ($rows as $row) {
+            $invNum = !empty(trim($row['invoice_number'] ?? '')) ? trim($row['invoice_number']) : ('ورقية-' . (int)$row['id']);
             $out[] = [
                 'id' => (int)$row['id'],
                 'customer_id' => (int)$row['customer_id'],
                 'total_amount' => (float)($row['total_amount'] ?? 0),
                 'image_path' => $row['image_path'] ?? '',
                 'created_at' => $row['created_at'] ?? '',
-                'invoice_number' => 'ورقية-' . (int)$row['id'],
+                'invoice_number' => $invNum,
                 'invoice_date' => isset($row['created_at']) ? date('Y-m-d', strtotime($row['created_at'])) : ''
             ];
         }

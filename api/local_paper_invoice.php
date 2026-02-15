@@ -95,11 +95,18 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' || $action !== 'save') {
 }
 
 $customerId = isset($_POST['customer_id']) ? (int)$_POST['customer_id'] : 0;
+$invoiceNumber = isset($_POST['invoice_number']) ? trim($_POST['invoice_number']) : '';
 $totalAmount = isset($_POST['total_amount']) ? trim($_POST['total_amount']) : '';
 
 if ($customerId <= 0) {
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode(['success' => false, 'message' => 'معرف العميل غير صالح'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+if ($invoiceNumber === '') {
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['success' => false, 'message' => 'يرجى إدخال رقم الفاتورة'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -165,8 +172,8 @@ try {
         [$newBalance, $customerId]
     );
     $db->execute(
-        "INSERT INTO local_customer_paper_invoices (customer_id, total_amount, image_path, created_by) VALUES (?, ?, ?, ?)",
-        [$customerId, $totalAmount, $imagePath, $currentUser['id']]
+        "INSERT INTO local_customer_paper_invoices (customer_id, invoice_number, total_amount, image_path, created_by) VALUES (?, ?, ?, ?, ?)",
+        [$customerId, $invoiceNumber, $totalAmount, $imagePath, $currentUser['id']]
     );
     $paperInvoiceId = (int)$db->getLastInsertId();
     $db->commit();
