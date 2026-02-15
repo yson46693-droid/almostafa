@@ -1930,18 +1930,6 @@ var dashboardWrapper = null;
 <script>
 window.LOCAL_CUSTOMERS_CONFIG = { currentRole: <?php echo json_encode($currentRole); ?>, apiBase: <?php echo json_encode(function_exists('getBasePath') ? rtrim(getBasePath(), '/') : ''); ?>, pageNum: <?php echo (int)$pageNum; ?> };
 (function runLocalCustomersSearchInit(tries) { tries = tries || 0; if (typeof window.initLocalCustomersSearch === 'function') { window.initLocalCustomersSearch(); } else if (tries < 100) { setTimeout(function() { runLocalCustomersSearchInit(tries + 1); }, 30); } })();
-function reinitTableActionsDropdowns() {
-    if (typeof bootstrap === 'undefined' || !bootstrap.Dropdown) return;
-    document.querySelectorAll('.table-actions-dropdown .dropdown-toggle').forEach(function(toggle) {
-        var existing = bootstrap.Dropdown.getInstance(toggle);
-        if (existing) existing.dispose();
-        try {
-            new bootstrap.Dropdown(toggle, { popperConfig: { strategy: 'fixed' } });
-        } catch (e) {}
-    });
-}
-document.addEventListener('DOMContentLoaded', function() { reinitTableActionsDropdowns(); });
-window.reinitTableActionsDropdowns = reinitTableActionsDropdowns;
 </script>
 <!-- قائمة العملاء -->
 <div class="card shadow-sm">
@@ -2078,7 +2066,7 @@ window.reinitTableActionsDropdowns = reinitTableActionsDropdowns;
                                     $custPhone = htmlspecialchars($customer['phone'] ?? '');
                                     $custAddress = htmlspecialchars($customer['address'] ?? '');
                                     ?>
-                                    <div class="dropdown table-actions-dropdown">
+                                    <div class="dropdown table-actions-dropdown" data-bs-boundary="viewport">
                                         <button type="button" class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
                                             <i class="bi bi-gear me-1"></i>إجراءات
                                         </button>

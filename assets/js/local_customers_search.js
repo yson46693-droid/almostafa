@@ -199,9 +199,6 @@
                 tbody.appendChild(row);
             });
 
-            if (window.reinitTableActionsDropdowns) {
-                window.reinitTableActionsDropdowns();
-            }
             updatePagination(pagination);
         }
 
