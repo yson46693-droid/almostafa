@@ -5253,54 +5253,44 @@ function loadLocalCustomerPurchaseHistory() {
     console.log('loadLocalCustomerPurchaseHistory called, currentLocalCustomerId:', currentLocalCustomerId, 'window.currentLocalCustomerId:', window.currentLocalCustomerId, 'customerIdToUse:', customerIdToUse);
     
     const basePath = '<?php echo $basePath; ?>';
-    const isMobileDevice = typeof isMobile === 'function' ? isMobile() : window.innerWidth <= 768;
     
-    console.log('loadLocalCustomerPurchaseHistory - isMobileDevice:', isMobileDevice, 'openReturnModalAfterLoad:', window.openReturnModalAfterLoad);
+    // عناصر الكارد (موبايل) والمودال (كمبيوتر) - نحدث الاثنين دائماً لضمان ظهور البيانات على الهاتف
+    const loadingCard = document.getElementById('localPurchaseHistoryCardLoading');
+    const loadingModal = document.getElementById('localPurchaseHistoryLoading');
+    const contentCard = document.getElementById('localPurchaseHistoryCardTable');
+    const contentModal = document.getElementById('localPurchaseHistoryTable');
+    const errorCard = document.getElementById('localPurchaseHistoryCardError');
+    const errorModal = document.getElementById('localPurchaseHistoryError');
     
-    // تحديد العناصر حسب نوع الجهاز
-    const loadingElement = isMobileDevice 
-        ? document.getElementById('localPurchaseHistoryCardLoading')
-        : document.getElementById('localPurchaseHistoryLoading');
-    const contentElement = isMobileDevice
-        ? document.getElementById('localPurchaseHistoryCardTable')
-        : document.getElementById('localPurchaseHistoryTable');
-    const errorElement = isMobileDevice
-        ? document.getElementById('localPurchaseHistoryCardError')
-        : document.getElementById('localPurchaseHistoryError');
-    const tableBody = isMobileDevice
-        ? document.getElementById('localPurchaseHistoryCardTableBody')
-        : document.getElementById('localPurchaseHistoryTableBody');
-    
-    // دالة مساعدة لعرض الخطأ
+    // دالة مساعدة لعرض الخطأ في كلا الواجهتين
     function showError(message, details) {
-        if (loadingElement) loadingElement.classList.add('d-none');
-        if (contentElement) contentElement.classList.add('d-none');
-        if (errorElement) {
-            let errorHtml = '<div class="alert alert-danger mb-0">';
-            errorHtml += '<strong><i class="bi bi-exclamation-triangle-fill me-2"></i>خطأ في تحميل سجل المشتريات:</strong><br>';
-            errorHtml += '<div class="mt-2">' + message + '</div>';
-            if (details) {
-                errorHtml += '<div class="mt-2"><small class="text-muted">التفاصيل: ' + details + '</small></div>';
-            }
-            errorHtml += '<div class="mt-2"><small>معرف العميل: ' + (customerIdToUse || currentLocalCustomerId || window.currentLocalCustomerId || 'غير محدد') + '</small></div>';
-            errorHtml += '</div>';
-            errorElement.innerHTML = errorHtml;
-            errorElement.classList.remove('d-none');
+        [loadingCard, loadingModal].forEach(function(el) { if (el) el.classList.add('d-none'); });
+        [contentCard, contentModal].forEach(function(el) { if (el) el.classList.add('d-none'); });
+        var errorHtml = '<div class="alert alert-danger mb-0">';
+        errorHtml += '<strong><i class="bi bi-exclamation-triangle-fill me-2"></i>خطأ في تحميل سجل المشتريات:</strong><br>';
+        errorHtml += '<div class="mt-2">' + message + '</div>';
+        if (details) {
+            errorHtml += '<div class="mt-2"><small class="text-muted">التفاصيل: ' + details + '</small></div>';
         }
+        errorHtml += '<div class="mt-2"><small>معرف العميل: ' + (customerIdToUse || currentLocalCustomerId || window.currentLocalCustomerId || 'غير محدد') + '</small></div>';
+        errorHtml += '</div>';
+        if (errorCard) { errorCard.innerHTML = errorHtml; errorCard.classList.remove('d-none'); }
+        if (errorModal) { errorModal.innerHTML = errorHtml; errorModal.classList.remove('d-none'); }
         console.error('Purchase History Error:', message, details);
     }
     
-    // التحقق من وجود العناصر المطلوبة
-    if (!loadingElement || !contentElement || !errorElement || !tableBody) {
+    if (!loadingCard && !loadingModal) {
         showError('خطأ في تحميل عناصر الواجهة', 'عناصر HTML المطلوبة غير موجودة');
         return;
     }
     
-    // إظهار loading وإخفاء المحتوى
-    loadingElement.classList.remove('d-none');
-    contentElement.classList.add('d-none');
-    errorElement.classList.add('d-none');
-    errorElement.innerHTML = '';
+    // إظهار loading في الاثنين وإخفاء المحتوى والخطأ
+    if (loadingCard) { loadingCard.classList.remove('d-none'); loadingCard.style.display = ''; }
+    if (loadingModal) loadingModal.classList.remove('d-none');
+    if (contentCard) contentCard.classList.add('d-none');
+    if (contentModal) contentModal.classList.add('d-none');
+    if (errorCard) { errorCard.classList.add('d-none'); errorCard.innerHTML = ''; }
+    if (errorModal) { errorModal.classList.add('d-none'); errorModal.innerHTML = ''; }
     
     // التحقق من معرف العميل
     if (!currentLocalCustomerId) {
@@ -5350,7 +5340,8 @@ function loadLocalCustomerPurchaseHistory() {
     })
     .then(data => {
         console.log('API Response received:', data);
-        if (loadingElement) loadingElement.classList.add('d-none');
+        if (loadingCard) loadingCard.classList.add('d-none');
+        if (loadingModal) loadingModal.classList.add('d-none');
         
         if (data.success) {
             localPurchaseHistoryData = data.purchase_history || [];
@@ -5358,23 +5349,21 @@ function loadLocalCustomerPurchaseHistory() {
             console.log('Purchase history data:', localPurchaseHistoryData.length, 'items; paper invoices:', localPaperInvoicesData.length);
             
             displayLocalPurchaseHistory(localPurchaseHistoryData, localPaperInvoicesData);
-            // إظهار جدول الكارد وجدول المودال معاً لضمان ظهور الفواتير على الهاتف والكمبيوتر
-            var cardTable = document.getElementById('localPurchaseHistoryCardTable');
-            var modalTable = document.getElementById('localPurchaseHistoryTable');
-            if (cardTable) cardTable.classList.remove('d-none');
-            if (modalTable) modalTable.classList.remove('d-none');
+            if (contentCard) { contentCard.classList.remove('d-none'); contentCard.style.display = ''; }
+            if (contentModal) contentModal.classList.remove('d-none');
             
-            // إظهار زر الطباعة حتى لو لم تكن هناك بيانات
-            const printBtn = isMobileDevice
-                ? document.getElementById('printLocalCustomerStatementCardBtn')
-                : document.getElementById('printLocalCustomerStatementBtn');
-            if (printBtn) printBtn.style.display = 'inline-block';
+            var printBtnCard = document.getElementById('printLocalCustomerStatementCardBtn');
+            var printBtnModal = document.getElementById('printLocalCustomerStatementBtn');
+            if (printBtnCard) printBtnCard.style.display = 'inline-block';
+            if (printBtnModal) printBtnModal.style.display = 'inline-block';
             
-            // إذا كان modal المرتجع مفتوحاً، عرض قائمة المشتريات مباشرة فيه
+            var returnBtnCard = document.getElementById('localCustomerReturnCardBtn');
+            var returnBtnModal = document.getElementById('localCustomerReturnBtn');
+            if (returnBtnCard) returnBtnCard.style.display = 'inline-block';
+            if (returnBtnModal) returnBtnModal.style.display = 'inline-block';
+            
             const returnModal = document.getElementById('localCustomerReturnModal');
-            if (returnModal && returnModal.classList.contains('show') && !isMobileDevice) {
-                // عرض قائمة المشتريات في modal المرتجع
-                // يمكن إضافة كود هنا لعرض قائمة المشتريات مباشرة في modal المرتجع
+            if (returnModal && returnModal.classList.contains('show')) {
                 console.log('Return modal is open, purchase history loaded');
             }
         } else {
