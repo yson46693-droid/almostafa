@@ -2928,7 +2928,7 @@ console.log('showImportLocalCustomersModal متاحة:', typeof window.showImpor
         <div class="alert alert-danger d-none" id="localPurchaseHistoryCardError"></div>
 
         <!-- Purchase History Table -->
-        <div id="localPurchaseHistoryCardTable" class="d-none">
+        <div id="localPurchaseHistoryCardTable" class="d-none" style="min-height: 200px;">
             <div class="table-responsive">
                 <table class="table table-hover table-bordered">
                     <thead class="table-light">
@@ -4014,7 +4014,6 @@ window.showLocalCustomerPurchaseHistoryModal = function(button) {
         }
         if (contentElement) {
             contentElement.classList.add('d-none');
-            contentElement.style.display = 'none';
         }
         if (errorElement) {
             errorElement.classList.add('d-none');
@@ -4038,8 +4037,8 @@ window.showLocalCustomerPurchaseHistoryModal = function(button) {
             scrollToElement(card);
         }, 80);
         
-        // تحميل البيانات بعد إظهار الـ card أو مباشرة كنسخة احتياطية
-        const triggerLoad = function() {
+        // تحميل البيانات مرة واحدة فقط بعد إظهار الـ card (تفادي استدعاء مزدوج يخفي الجدول بعد ظهوره)
+        setTimeout(function() {
             if (typeof loadLocalCustomerPurchaseHistory === 'function') {
                 loadLocalCustomerPurchaseHistory();
             } else {
@@ -4049,9 +4048,7 @@ window.showLocalCustomerPurchaseHistoryModal = function(button) {
                 }
                 if (loadingElement) loadingElement.classList.add('d-none');
             }
-        };
-        setTimeout(triggerLoad, 100);
-        triggerLoad();
+        }, 150);
     } else {
         // على الكمبيوتر: استخدام Modal
         const modal = document.getElementById('localCustomerPurchaseHistoryModal');
@@ -5349,8 +5346,12 @@ function loadLocalCustomerPurchaseHistory() {
             console.log('Purchase history data:', localPurchaseHistoryData.length, 'items; paper invoices:', localPaperInvoicesData.length);
             
             displayLocalPurchaseHistory(localPurchaseHistoryData, localPaperInvoicesData);
-            if (contentCard) { contentCard.classList.remove('d-none'); contentCard.style.display = ''; }
-            if (contentModal) contentModal.classList.remove('d-none');
+            if (contentCard) { contentCard.classList.remove('d-none'); contentCard.style.display = 'block'; contentCard.style.visibility = 'visible'; contentCard.offsetHeight; }
+            if (contentModal) { contentModal.classList.remove('d-none'); }
+            var cardEl = document.getElementById('localCustomerPurchaseHistoryCard');
+            if (cardEl && cardEl.style.display !== 'none' && contentCard && contentCard.offsetParent) {
+                setTimeout(function() { contentCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, 200);
+            }
             
             var printBtnCard = document.getElementById('printLocalCustomerStatementCardBtn');
             var printBtnModal = document.getElementById('printLocalCustomerStatementBtn');
