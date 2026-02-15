@@ -196,7 +196,7 @@
             shortcuts.push(['Ctrl/Cmd + 5', 'الفواتير']);
         } else {
             shortcuts.push(['Ctrl/Cmd + 1', 'لوحة التحكم']);
-        }
+        } 
 
         let helpHTML = '<div class="keyboard-shortcuts-help"><h5>اختصارات لوحة المفاتيح</h5><table class="table table-sm table-hover">';
         shortcuts.forEach(function(shortcut) {
