@@ -159,7 +159,7 @@ if (!empty($_FILES['image']['name']) && $_FILES['image']['error'] === UPLOAD_ERR
 try {
     $db->beginTransaction();
     $currentBalance = (float)($customer['balance'] ?? 0);
-    $newBalance = $currentBalance - $totalAmount; // رصيد دائن = تقليل الرصيد (سالِب أكبر)
+    $newBalance = $currentBalance + $totalAmount; // رصيد مدين = زيادة الرصيد
     $db->execute(
         "UPDATE local_customers SET balance = ?, balance_updated_at = NOW() WHERE id = ?",
         [$newBalance, $customerId]
