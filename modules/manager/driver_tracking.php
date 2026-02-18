@@ -15,10 +15,7 @@ require_once __DIR__ . '/../../includes/path_helper.php';
 
 requireRole(['manager', 'accountant', 'developer']);
 
-$currentScript = $_SERVER['SCRIPT_NAME'] ?? '';
-$isAccountant = (strpos($currentScript, 'accountant') !== false);
-$dashboardScript = $isAccountant ? 'accountant.php' : 'manager.php';
-$driverLocationApiPath = (function_exists('getRelativeUrl') ? getRelativeUrl('dashboard/' . $dashboardScript) : '') . '?page=driver_tracking&ajax=driver_location';
+$driverLocationApiPath = (function_exists('getRelativeUrl') ? getRelativeUrl('api/driver_location.php') : '/api/driver_location.php');
 ?>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous" />
 <style>
