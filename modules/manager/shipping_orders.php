@@ -5071,33 +5071,25 @@ function confirmCancelOrderWithDeductedAmount() {
     </div>
 </div>
 
-<!-- Modal عرض صورة الفاتورة الورقية (طلبات الشحن) -->
-<div class="modal fade" id="shippingPaperInvoiceViewModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content">
-            <div class="modal-header bg-secondary text-white">
-                <h5 class="modal-title">عرض الفاتورة الورقية</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
-            </div>
-            <div class="modal-body text-center p-0">
-                <img id="shippingPaperInvoiceViewImg" src="" alt="صورة الفاتورة" class="img-fluid" style="max-height: 80vh;">
-            </div>
-        </div>
+<!-- بطاقة عرض صورة الفاتورة الورقية (طلبات الشحن) -->
+<div class="card shadow-sm mb-4 border-secondary" id="shippingPaperInvoiceViewCard" style="display: none;">
+    <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">عرض الفاتورة الورقية</h5>
+        <button type="button" class="btn btn-sm btn-light" onclick="closeShippingPaperInvoiceViewCard()" aria-label="إغلاق"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="card-body text-center p-0">
+        <img id="shippingPaperInvoiceViewImg" src="" alt="صورة الفاتورة" class="img-fluid" style="max-height: 80vh;">
     </div>
 </div>
 
-<!-- Modal عرض صورة مرتجع الفاتورة الورقية (طلبات الشحن) -->
-<div class="modal fade" id="shippingPaperInvoiceReturnViewModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content">
-            <div class="modal-header bg-warning text-dark">
-                <h5 class="modal-title">عرض صورة مرتجع الفاتورة الورقية</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
-            </div>
-            <div class="modal-body text-center p-0">
-                <img id="shippingPaperInvoiceReturnViewImg" src="" alt="صورة المرتجع" class="img-fluid" style="max-height: 80vh;">
-            </div>
-        </div>
+<!-- بطاقة عرض صورة مرتجع الفاتورة الورقية (طلبات الشحن) -->
+<div class="card shadow-sm mb-4 border-warning" id="shippingPaperInvoiceReturnViewCard" style="display: none;">
+    <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">عرض صورة مرتجع الفاتورة الورقية</h5>
+        <button type="button" class="btn btn-sm btn-dark" onclick="closeShippingPaperInvoiceReturnViewCard()" aria-label="إغلاق"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="card-body text-center p-0">
+        <img id="shippingPaperInvoiceReturnViewImg" src="" alt="صورة المرتجع" class="img-fluid" style="max-height: 80vh;">
     </div>
 </div>
 
@@ -5254,11 +5246,16 @@ function showCompanyPaperInvoiceImage(paperInvoiceId) {
     if (!paperInvoiceId) return;
     var imgUrl = companyPaperInvoiceUrl + (companyPaperInvoiceUrl.indexOf('?') >= 0 ? '&' : '?') + 'action=view_image&id=' + encodeURIComponent(paperInvoiceId);
     document.getElementById('shippingPaperInvoiceViewImg').src = imgUrl;
-    var modalEl = document.getElementById('shippingPaperInvoiceViewModal');
-    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-        var m = bootstrap.Modal.getOrCreateInstance(modalEl);
-        m.show();
+    var cardEl = document.getElementById('shippingPaperInvoiceViewCard');
+    if (cardEl) {
+        cardEl.style.display = '';
+        cardEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+}
+
+function closeShippingPaperInvoiceViewCard() {
+    var cardEl = document.getElementById('shippingPaperInvoiceViewCard');
+    if (cardEl) cardEl.style.display = 'none';
 }
 
 function showShippingInvoiceLogModal(button) {
@@ -5489,10 +5486,10 @@ function showShippingPaperInvoiceImage(paperInvoiceId) {
     if (!paperInvoiceId) return;
     var imgUrl = shippingPaperInvoiceUrl + (shippingPaperInvoiceUrl.indexOf('?') >= 0 ? '&' : '?') + 'action=view_image&id=' + encodeURIComponent(paperInvoiceId);
     document.getElementById('shippingPaperInvoiceViewImg').src = imgUrl;
-    var modalEl = document.getElementById('shippingPaperInvoiceViewModal');
-    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-        var m = bootstrap.Modal.getOrCreateInstance(modalEl);
-        m.show();
+    var cardEl = document.getElementById('shippingPaperInvoiceViewCard');
+    if (cardEl) {
+        cardEl.style.display = '';
+        cardEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 }
 
@@ -5567,11 +5564,16 @@ function showShippingPaperInvoiceReturnImage(returnId) {
     if (!returnId) return;
     var imgUrl = shippingPaperInvoiceReturnUrl + (shippingPaperInvoiceReturnUrl.indexOf('?') >= 0 ? '&' : '?') + 'action=view_image&id=' + encodeURIComponent(returnId);
     document.getElementById('shippingPaperInvoiceReturnViewImg').src = imgUrl;
-    var modalEl = document.getElementById('shippingPaperInvoiceReturnViewModal');
-    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-        var m = bootstrap.Modal.getOrCreateInstance(modalEl);
-        m.show();
+    var cardEl = document.getElementById('shippingPaperInvoiceReturnViewCard');
+    if (cardEl) {
+        cardEl.style.display = '';
+        cardEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+}
+
+function closeShippingPaperInvoiceReturnViewCard() {
+    var cardEl = document.getElementById('shippingPaperInvoiceReturnViewCard');
+    if (cardEl) cardEl.style.display = 'none';
 }
 
 document.addEventListener('DOMContentLoaded', function() {

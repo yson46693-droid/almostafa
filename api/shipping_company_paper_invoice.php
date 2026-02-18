@@ -2,7 +2,7 @@
 /**
  * API: قائمة وحفظ وعرض الفواتير الورقية لشركات الشحن
  * - list: قائمة فواتير شركة معينة
- * - save: رفع صورة + رقم + إجمالي (سجل فقط، لا يغيّر رصيد الشركة)
+ * - save: رفع صورة + رقم + إجمالي، وتسجيل الفاتورة مع إضافة الإجمالي إلى ديون شركة الشحن
  * - view_image: عرض صورة الفاتورة
  */
 
@@ -214,10 +214,15 @@ try {
         [$companyId, $invoiceNumber, $totalAmount, $imagePath, $currentUser['id']]
     );
     $paperInvoiceId = (int)$db->getLastInsertId();
+    // إضافة إجمالي الفاتورة إلى ديون شركة الشحن
+    $db->execute(
+        "UPDATE shipping_companies SET balance = balance + ?, updated_by = ?, updated_at = NOW() WHERE id = ?",
+        [$totalAmount, $currentUser['id'], $companyId]
+    );
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode([
         'success' => true,
-        'message' => 'تم تسجيل الفاتورة الورقية للشركة.',
+        'message' => 'تم تسجيل الفاتورة الورقية وإضافة الإجمالي إلى ديون الشركة.',
         'paper_invoice_id' => $paperInvoiceId,
     ], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
