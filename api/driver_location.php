@@ -96,7 +96,7 @@ switch ($action) {
         if (!$hasTables) {
             echo json_encode(['success' => true, 'locations' => []], JSON_UNESCAPED_UNICODE);
         } else {
-            $rows = $db->queryAll(
+            $rows = $db->query(
                 "SELECT d.user_id, d.latitude, d.longitude, d.updated_at, d.is_online,
                         u.full_name, u.username
                  FROM driver_live_location d
@@ -110,12 +110,12 @@ switch ($action) {
     case 'status':
         try {
             if (!$hasTables) {
-                $drivers = $db->queryAll(
+                $drivers = $db->query(
                     "SELECT id, full_name, username, NULL as latitude, NULL as longitude, NULL as updated_at, 0 as location_active
                      FROM users WHERE role = 'driver' AND status = 'active' ORDER BY full_name"
                 );
             } else {
-                $drivers = $db->queryAll(
+                $drivers = $db->query(
                     "SELECT u.id, u.full_name, u.username,
                             d.latitude, d.longitude, d.updated_at, d.is_online,
                             CASE 
@@ -148,7 +148,7 @@ switch ($action) {
         }
         $points = [];
         if ($hasTables) {
-            $points = $db->queryAll(
+            $points = $db->query(
                 "SELECT latitude, longitude, created_at 
                  FROM driver_location_history 
                  WHERE user_id = ? AND recorded_at = ? 
@@ -173,7 +173,7 @@ switch ($action) {
         }
         $dates = [];
         if ($hasTables) {
-            $dateRows = $db->queryAll(
+            $dateRows = $db->query(
                 "SELECT DISTINCT recorded_at as date FROM driver_location_history 
                  WHERE user_id = ? ORDER BY recorded_at DESC LIMIT 90",
                 [$driverId]
