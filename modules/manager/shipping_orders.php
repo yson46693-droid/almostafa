@@ -177,6 +177,31 @@ try {
     error_log('shipping_orders: shipping_company_collections table -> ' . $e->getMessage());
 }
 
+// جدول الفواتير الورقية لشركات الشحن (سجل فواتير ورقية مرفقة بكل شركة)
+$paperInvTable = $db->queryOne("SHOW TABLES LIKE 'shipping_company_paper_invoices'");
+if (empty($paperInvTable)) {
+    try {
+        $db->rawQuery(
+            "CREATE TABLE IF NOT EXISTS `shipping_company_paper_invoices` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `shipping_company_id` int(11) NOT NULL,
+                `invoice_number` varchar(100) DEFAULT NULL COMMENT 'رقم الفاتورة',
+                `total_amount` decimal(15,2) NOT NULL COMMENT 'إجمالي الفاتورة',
+                `image_path` varchar(500) DEFAULT NULL COMMENT 'مسار صورة الفاتورة الورقية',
+                `created_by` int(11) NOT NULL,
+                `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (`id`),
+                KEY `shipping_company_id` (`shipping_company_id`),
+                KEY `created_at` (`created_at`),
+                CONSTRAINT `sc_paper_inv_company_fk` FOREIGN KEY (`shipping_company_id`) REFERENCES `shipping_companies` (`id`) ON DELETE CASCADE,
+                CONSTRAINT `sc_paper_inv_created_fk` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='فواتير ورقية مرفقة بشركات الشحن'"
+        );
+    } catch (Throwable $e) {
+        error_log('shipping_orders: shipping_company_paper_invoices table -> ' . $e->getMessage());
+    }
+}
+
 function generateShippingOrderNumber(Database $db): string
 {
     $maxAttempts = 10;
@@ -3368,8 +3393,11 @@ $hasShippingCompanies = !empty($shippingCompanies);
 </div>
 
 <div class="card shadow-sm mb-4">
-    <div class="card-header">
+    <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
         <h5 class="mb-0">شركات الشحن</h5>
+        <button type="button" class="btn btn-primary btn-sm" onclick="showAddShippingCompanyModal()" title="إضافة شركة شحن">
+            <i class="bi bi-plus-lg me-1"></i>إضافة شركة شحن
+        </button>
     </div>
     <div class="card-body p-0">
         <?php if (empty($shippingCompanies)): ?>
@@ -3383,7 +3411,7 @@ $hasShippingCompanies = !empty($shippingCompanies);
                             <th>الهاتف</th>
                             <th>الحالة</th>
                             <th>ديون الشركة</th>
-                            <th style="width: 220px;">الإجراءات</th>
+                            <th style="width: 300px;">الإجراءات</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -3406,6 +3434,12 @@ $hasShippingCompanies = !empty($shippingCompanies);
                                 </td>
                                 <td>
                                     <div class="d-flex flex-wrap gap-2">
+                                        <button type="button" class="btn btn-sm btn-outline-info" onclick="showCompanyPaperInvoicesModal(this)"
+                                                data-company-id="<?php echo (int)$company['id']; ?>"
+                                                data-company-name="<?php echo htmlspecialchars($company['name']); ?>"
+                                                title="سجل الفواتير الورقية">
+                                            <i class="bi bi-receipt-cutoff me-1"></i>فواتير ورقية
+                                        </button>
                                         <button type="button" class="btn btn-sm btn-outline-warning" onclick="showEditShippingCompanyBalanceModal(this)"
                                                 data-company-id="<?php echo (int)$company['id']; ?>"
                                                 data-company-name="<?php echo htmlspecialchars($company['name']); ?>"
@@ -4967,6 +5001,85 @@ function confirmCancelOrderWithDeductedAmount() {
     </div>
 </div>
 
+<!-- Modal سجل الفواتير الورقية لشركة الشحن -->
+<div class="modal fade" id="companyPaperInvoicesModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="bi bi-receipt-cutoff me-2"></i>سجل الفواتير الورقية - <span id="companyPaperInvoicesCompanyName">-</span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="companyPaperInvoicesCompanyId" value="">
+                <div class="mb-3">
+                    <button type="button" class="btn btn-primary btn-sm" onclick="openCompanyPaperInvoiceForm()">
+                        <i class="bi bi-plus-lg me-1"></i>إضافة فاتورة ورقية
+                    </button>
+                </div>
+                <div id="companyPaperInvoicesLoading" class="text-center py-4 text-muted d-none">
+                    <div class="spinner-border" role="status"></div>
+                    <p class="mt-2 mb-0">جاري تحميل السجل...</p>
+                </div>
+                <div class="table-responsive" id="companyPaperInvoicesTableWrap" style="display: none;">
+                    <table class="table table-sm table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>رقم الفاتورة</th>
+                                <th>الإجمالي</th>
+                                <th>التاريخ</th>
+                                <th>الإجراء</th>
+                            </tr>
+                        </thead>
+                        <tbody id="companyPaperInvoicesTableBody"></tbody>
+                    </table>
+                </div>
+                <div id="companyPaperInvoicesEmpty" class="text-center py-4 text-muted" style="display: none;">
+                    <i class="bi bi-inbox fs-1"></i>
+                    <p class="mb-0">لا توجد فواتير ورقية مسجلة لهذه الشركة بعد.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal إضافة فاتورة ورقية لشركة الشحن -->
+<div class="modal fade" id="companyPaperInvoiceAddModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="bi bi-receipt-cutoff me-2"></i>إضافة فاتورة ورقية</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small">رفع صورة الفاتورة الورقية وإدخال رقم الفاتورة والإجمالي. تُحفظ كسجل للشركة.</p>
+                <input type="hidden" id="companyPaperInvoiceAddCompanyId" value="">
+                <div class="mb-3">
+                    <label class="form-label">صورة الفاتورة <span class="text-danger">*</span></label>
+                    <input type="file" id="companyPaperInvoiceAddImageInput" class="form-control form-control-sm" accept="image/jpeg,image/png,image/gif,image/webp">
+                    <div id="companyPaperInvoiceAddImagePreview" class="mt-2 text-center" style="display: none;">
+                        <img id="companyPaperInvoiceAddPreviewImg" src="" alt="معاينة" class="img-fluid rounded border" style="max-height: 180px;">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">رقم الفاتورة <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="companyPaperInvoiceAddNumber" placeholder="أدخل رقم الفاتورة">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">إجمالي الفاتورة (ج.م) <span class="text-danger">*</span></label>
+                    <input type="number" step="0.01" min="0.01" class="form-control" id="companyPaperInvoiceAddTotal" placeholder="0.00">
+                </div>
+                <div id="companyPaperInvoiceAddMessage" class="alert d-none mb-0"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                <button type="button" class="btn btn-primary" id="companyPaperInvoiceAddSubmitBtn" onclick="submitCompanyPaperInvoice()">
+                    <i class="bi bi-check-lg me-1"></i>حفظ
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Modal إضافة مرتجع من فاتورة ورقية (طلبات الشحن) -->
 <div class="modal fade" id="shippingPaperInvoiceReturnModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -5024,6 +5137,136 @@ function confirmCancelOrderWithDeductedAmount() {
 var shippingPurchaseHistoryUrl = <?php echo json_encode(getRelativeUrl('api/customer_purchase_history.php')); ?>;
 var shippingPaperInvoiceUrl = <?php echo json_encode(getRelativeUrl('api/local_paper_invoice.php')); ?>;
 var shippingPaperInvoiceReturnUrl = <?php echo json_encode(getRelativeUrl('api/local_paper_invoice_return.php')); ?>;
+var companyPaperInvoiceUrl = <?php echo json_encode(getRelativeUrl('api/shipping_company_paper_invoice.php')); ?>;
+
+function showCompanyPaperInvoicesModal(button) {
+    var companyId = button.getAttribute('data-company-id');
+    var companyName = button.getAttribute('data-company-name') || 'شركة الشحن';
+    if (!companyId) return;
+    document.getElementById('companyPaperInvoicesCompanyId').value = companyId;
+    document.getElementById('companyPaperInvoicesCompanyName').textContent = companyName;
+    document.getElementById('companyPaperInvoicesTableWrap').style.display = 'none';
+    document.getElementById('companyPaperInvoicesEmpty').style.display = 'none';
+    document.getElementById('companyPaperInvoicesLoading').classList.remove('d-none');
+    var modalEl = document.getElementById('companyPaperInvoicesModal');
+    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+        var m = bootstrap.Modal.getOrCreateInstance(modalEl);
+        m.show();
+    }
+    loadCompanyPaperInvoices(companyId);
+}
+
+function loadCompanyPaperInvoices(companyId) {
+    var url = companyPaperInvoiceUrl + (companyPaperInvoiceUrl.indexOf('?') >= 0 ? '&' : '?') + 'action=list&shipping_company_id=' + encodeURIComponent(companyId);
+    fetch(url, { credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            document.getElementById('companyPaperInvoicesLoading').classList.add('d-none');
+            if (data.success) {
+                var list = data.paper_invoices || [];
+                displayCompanyPaperInvoices(list);
+            } else {
+                document.getElementById('companyPaperInvoicesEmpty').style.display = 'block';
+                document.getElementById('companyPaperInvoicesEmpty').querySelector('p').textContent = data.message || 'حدث خطأ في تحميل السجل.';
+            }
+        })
+        .catch(function() {
+            document.getElementById('companyPaperInvoicesLoading').classList.add('d-none');
+            document.getElementById('companyPaperInvoicesEmpty').style.display = 'block';
+            document.getElementById('companyPaperInvoicesEmpty').querySelector('p').textContent = 'حدث خطأ في الاتصال بالخادم.';
+        });
+}
+
+function displayCompanyPaperInvoices(list) {
+    var tbody = document.getElementById('companyPaperInvoicesTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    if (!list || list.length === 0) {
+        document.getElementById('companyPaperInvoicesEmpty').style.display = 'block';
+        return;
+    }
+    document.getElementById('companyPaperInvoicesTableWrap').style.display = 'block';
+    list.forEach(function(pi) {
+        var safeNum = (pi.invoice_number || 'ورقية-' + pi.id).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        var dateStr = (pi.created_at || '-').toString().substring(0, 10);
+        var viewBtn = pi.image_path
+            ? '<button type="button" class="btn btn-sm btn-outline-primary" onclick="showCompanyPaperInvoiceImage(' + parseInt(pi.id, 10) + ')" title="عرض صورة الفاتورة"><i class="bi bi-image me-1"></i>عرض الفاتورة</button>'
+            : '<span class="text-muted small">لا توجد صورة</span>';
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td>' + safeNum + '</td><td>' + parseFloat(pi.total_amount || 0).toFixed(2) + ' ج.م</td><td>' + dateStr + '</td><td>' + viewBtn + '</td>';
+        tbody.appendChild(tr);
+    });
+}
+
+function openCompanyPaperInvoiceForm() {
+    var companyId = document.getElementById('companyPaperInvoicesCompanyId').value;
+    if (!companyId) return;
+    document.getElementById('companyPaperInvoiceAddCompanyId').value = companyId;
+    document.getElementById('companyPaperInvoiceAddNumber').value = '';
+    document.getElementById('companyPaperInvoiceAddTotal').value = '';
+    document.getElementById('companyPaperInvoiceAddImageInput').value = '';
+    document.getElementById('companyPaperInvoiceAddImagePreview').style.display = 'none';
+    document.getElementById('companyPaperInvoiceAddMessage').classList.add('d-none');
+    var modalEl = document.getElementById('companyPaperInvoiceAddModal');
+    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+        var m = bootstrap.Modal.getOrCreateInstance(modalEl);
+        m.show();
+    }
+}
+
+function submitCompanyPaperInvoice() {
+    var companyId = document.getElementById('companyPaperInvoiceAddCompanyId').value;
+    var invoiceNumber = (document.getElementById('companyPaperInvoiceAddNumber').value || '').trim();
+    var total = (document.getElementById('companyPaperInvoiceAddTotal').value || '').replace(',', '.').trim();
+    var fileInput = document.getElementById('companyPaperInvoiceAddImageInput');
+    var file = fileInput && fileInput.files && fileInput.files[0];
+    var msgEl = document.getElementById('companyPaperInvoiceAddMessage');
+    var submitBtn = document.getElementById('companyPaperInvoiceAddSubmitBtn');
+    if (!companyId) { alert('لم يتم تحديد الشركة'); return; }
+    if (!invoiceNumber) { alert('يرجى إدخال رقم الفاتورة'); return; }
+    if (!total || isNaN(parseFloat(total)) || parseFloat(total) <= 0) { alert('يرجى إدخال إجمالي صحيح'); return; }
+    if (!file) { alert('يرجى اختيار صورة الفاتورة الورقية'); return; }
+    if (msgEl) { msgEl.classList.add('d-none'); msgEl.innerHTML = ''; }
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جاري الحفظ...'; }
+    var formData = new FormData();
+    formData.append('action', 'save');
+    formData.append('shipping_company_id', companyId);
+    formData.append('invoice_number', invoiceNumber);
+    formData.append('total_amount', total);
+    formData.append('image', file);
+    fetch(companyPaperInvoiceUrl, { method: 'POST', body: formData, credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (msgEl) {
+                msgEl.classList.remove('d-none');
+                msgEl.className = data.success ? 'alert alert-success mb-0' : 'alert alert-danger mb-0';
+                msgEl.textContent = data.message || (data.success ? 'تم الحفظ.' : 'حدث خطأ.');
+            }
+            if (data.success) {
+                loadCompanyPaperInvoices(companyId);
+                if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                    var m = bootstrap.Modal.getInstance(document.getElementById('companyPaperInvoiceAddModal'));
+                    if (m) setTimeout(function() { m.hide(); }, 1200);
+                }
+            }
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i>حفظ'; }
+        })
+        .catch(function() {
+            if (msgEl) { msgEl.classList.remove('d-none'); msgEl.className = 'alert alert-danger mb-0'; msgEl.textContent = 'حدث خطأ في الاتصال.'; }
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i>حفظ'; }
+        });
+}
+
+function showCompanyPaperInvoiceImage(paperInvoiceId) {
+    if (!paperInvoiceId) return;
+    var imgUrl = companyPaperInvoiceUrl + (companyPaperInvoiceUrl.indexOf('?') >= 0 ? '&' : '?') + 'action=view_image&id=' + encodeURIComponent(paperInvoiceId);
+    document.getElementById('shippingPaperInvoiceViewImg').src = imgUrl;
+    var modalEl = document.getElementById('shippingPaperInvoiceViewModal');
+    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+        var m = bootstrap.Modal.getOrCreateInstance(modalEl);
+        m.show();
+    }
+}
 
 function showShippingInvoiceLogModal(button) {
     var customerId = button.getAttribute('data-customer-id');
