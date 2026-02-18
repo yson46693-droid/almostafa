@@ -15,8 +15,8 @@ require_once __DIR__ . '/../../includes/path_helper.php';
 
 requireRole(['manager', 'accountant', 'developer']);
 
-$apiUrl = getRelativeUrl('api/driver_location.php');
-$apiUrlAbsolute = function_exists('getAbsoluteUrl') ? getAbsoluteUrl('api/driver_location.php') : $apiUrl;
+$basePath = function_exists('getBasePath') ? rtrim(getBasePath(), '/') : '';
+$driverLocationApiPath = preg_replace('#/+#', '/', ($basePath ?: '') . '/api/driver_location.php');
 $isManager = (isset($_GET['dashboard']) && $_GET['dashboard'] === 'manager') || (strpos($_SERVER['HTTP_REFERER'] ?? '', 'manager.php') !== false);
 $baseDashboard = $isManager ? 'manager.php' : 'accountant.php';
 ?>
@@ -73,7 +73,7 @@ $baseDashboard = $isManager ? 'manager.php' : 'accountant.php';
     <p class="text-muted mb-0">عرض المواقع المباشرة وخطوط السير اليومية والتاريخية للسائقين</p>
 </div>
 
-<div class="row g-4" data-driver-location-api="<?php echo htmlspecialchars($apiUrl, ENT_QUOTES); ?>" data-driver-location-api-absolute="<?php echo htmlspecialchars($apiUrlAbsolute, ENT_QUOTES); ?>">
+<div class="row g-4">
     <div class="col-lg-8">
         <div class="card driver-tracking-panel shadow-sm">
             <div class="card-header d-flex justify-content-between align-items-center py-2">
@@ -128,31 +128,7 @@ $baseDashboard = $isManager ? 'manager.php' : 'accountant.php';
 <script>
 (function () {
     'use strict';
-    var apiBase = (function () {
-        var el = document.querySelector('[data-driver-location-api]');
-        if (el) {
-            var abs = el.getAttribute('data-driver-location-api-absolute');
-            if (abs && abs.indexOf('driver_location') >= 0) return abs;
-            var rel = el.getAttribute('data-driver-location-api');
-            if (rel && rel.indexOf('driver_location') >= 0) {
-                if (rel.startsWith('http')) return rel;
-                return (window.location.origin || '') + (rel.startsWith('/') ? rel : '/' + rel);
-            }
-        }
-        var basePath = (typeof window.getApiPath === 'function') ? window.getApiPath('api/driver_location.php') : null;
-        if (basePath) return (window.location.origin || '') + basePath;
-        var currentPath = window.location.pathname || '/';
-        var parts = currentPath.split('/').filter(Boolean);
-        var stopSegments = { dashboard: 1, modules: 1, api: 1, assets: 1, includes: 1 };
-        var baseParts = [];
-        for (var i = 0; i < parts.length; i++) {
-            if (stopSegments[parts[i]] || (parts[i] && parts[i].indexOf('.php') >= 0)) break;
-            baseParts.push(parts[i]);
-        }
-        var base = baseParts.length ? '/' + baseParts.join('/') : '';
-        var path = (base + '/api/driver_location.php').replace(/\/+/g, '/');
-        return (window.location.origin || '') + path;
-    })();
+    var apiBase = '<?php echo addslashes($driverLocationApiPath); ?>';
     var map = null;
     var liveMarkers = {};
     var routeLayer = null;
@@ -225,17 +201,28 @@ $baseDashboard = $isManager ? 'manager.php' : 'accountant.php';
     }
 
     function refreshStatusTable() {
-        fetch(apiBase + '?action=status', { credentials: 'same-origin' })
+        fetch(apiBase + '?action=status', {
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+        })
             .then(function (r) {
-                if (!r.ok) throw new Error('Network error');
-                return r.json();
+                return r.text().then(function (text) {
+                    try {
+                        var data = JSON.parse(text || '{}');
+                        if (!r.ok) data.success = false;
+                        return data;
+                    } catch (e) {
+                        return { success: false, message: r.ok ? 'استجابة غير صالحة' : 'خطأ ' + r.status };
+                    }
+                });
             })
             .then(function (data) {
                 var tbody = document.querySelector('#drivers-status-table tbody');
                 if (!tbody) return;
                 tbody.innerHTML = '';
                 if (!data || !data.success) {
-                    tbody.innerHTML = '<tr><td colspan="3" class="text-muted text-center py-3">فشل تحميل البيانات</td></tr>';
+                    var msg = (data && data.message) ? data.message : 'فشل تحميل البيانات';
+                    tbody.innerHTML = '<tr><td colspan="3" class="text-muted text-center py-3">' + escapeHtml(msg) + '</td></tr>';
                     return;
                 }
                 var drivers = data.drivers || [];
