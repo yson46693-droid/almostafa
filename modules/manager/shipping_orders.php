@@ -326,10 +326,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $html .= '<td>';
                 $html .= '<div class="d-flex flex-wrap gap-2">';
                 
-                // سجل الفواتير والفاتورة الورقية (للعملاء المحليين فقط)
-                if (!empty($order['is_local_customer'])) {
+                // سجل الفواتير والفاتورة الورقية (يظهر لجميع الطلبات؛ المحتوى حسب عميل محلي أو لا)
+                if (!empty($order['customer_id'])) {
                     $html .= '<button type="button" class="btn btn-outline-info btn-sm btn-shipping-invoice-log" onclick="showShippingInvoiceLogModal(this)" ';
-                    $html .= 'data-customer-id="' . (int)$order['customer_id'] . '" data-customer-name="' . htmlspecialchars($order['customer_name'] ?? 'غير محدد') . '" title="سجل الفواتير والفاتورة الورقية">';
+                    $html .= 'data-customer-id="' . (int)$order['customer_id'] . '" data-customer-name="' . htmlspecialchars($order['customer_name'] ?? 'غير محدد') . '" ';
+                    $html .= 'data-is-local="' . ((int)(isset($order['is_local_customer']) ? $order['is_local_customer'] : 0)) . '" title="سجل الفواتير والفاتورة الورقية">';
                     $html .= '<i class="bi bi-receipt me-1"></i>سجل الفواتير';
                     $html .= '</button>';
                 }
@@ -3564,10 +3565,11 @@ $hasShippingCompanies = !empty($shippingCompanies);
                                         </td>
                                         <td>
                                             <div class="d-flex flex-wrap gap-2">
-                                                <?php if (!empty($order['is_local_customer'])): ?>
+                                                <?php if (!empty($order['customer_id'])): ?>
                                                     <button type="button" class="btn btn-outline-info btn-sm btn-shipping-invoice-log" onclick="showShippingInvoiceLogModal(this)"
                                                             data-customer-id="<?php echo (int)$order['customer_id']; ?>"
                                                             data-customer-name="<?php echo htmlspecialchars($order['customer_name'] ?? 'غير محدد'); ?>"
+                                                            data-is-local="<?php echo (int)(isset($order['is_local_customer']) ? $order['is_local_customer'] : 0); ?>"
                                                             title="سجل الفواتير والفاتورة الورقية">
                                                         <i class="bi bi-receipt me-1"></i>سجل الفواتير
                                                     </button>
@@ -3619,7 +3621,7 @@ $hasShippingCompanies = !empty($shippingCompanies);
                                     <th>المبلغ</th>
                                     <th>تاريخ التسليم للعميل</th>
                                     <th>الفاتورة</th>
-                                    <th style="width: 120px;">الإجراءات</th>
+                                    <th style="width: 250px;">الإجراءات</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -3662,10 +3664,11 @@ $hasShippingCompanies = !empty($shippingCompanies);
                                             <?php endif; ?>
                                         </td>
                                         <td>
-                                            <?php if (!empty($order['is_local_customer'])): ?>
+                                            <?php if (!empty($order['customer_id'])): ?>
                                                 <button type="button" class="btn btn-outline-info btn-sm btn-shipping-invoice-log" onclick="showShippingInvoiceLogModal(this)"
                                                         data-customer-id="<?php echo (int)$order['customer_id']; ?>"
                                                         data-customer-name="<?php echo htmlspecialchars($order['customer_name'] ?? 'غير محدد'); ?>"
+                                                        data-is-local="<?php echo (int)(isset($order['is_local_customer']) ? $order['is_local_customer'] : 0); ?>"
                                                         title="سجل الفواتير والفاتورة الورقية">
                                                     <i class="bi bi-receipt me-1"></i>سجل الفواتير
                                                 </button>
@@ -3696,7 +3699,7 @@ $hasShippingCompanies = !empty($shippingCompanies);
                                     <th>المبلغ</th>
                                     <th>تاريخ الإلغاء</th>
                                     <th>الفاتورة</th>
-                                    <th style="width: 120px;">الإجراءات</th>
+                                    <th style="width: 250px;">الإجراءات</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -3738,10 +3741,11 @@ $hasShippingCompanies = !empty($shippingCompanies);
                                             <?php endif; ?>
                                         </td>
                                         <td>
-                                            <?php if (!empty($order['is_local_customer'])): ?>
+                                            <?php if (!empty($order['customer_id'])): ?>
                                                 <button type="button" class="btn btn-outline-info btn-sm btn-shipping-invoice-log" onclick="showShippingInvoiceLogModal(this)"
                                                         data-customer-id="<?php echo (int)$order['customer_id']; ?>"
                                                         data-customer-name="<?php echo htmlspecialchars($order['customer_name'] ?? 'غير محدد'); ?>"
+                                                        data-is-local="<?php echo (int)(isset($order['is_local_customer']) ? $order['is_local_customer'] : 0); ?>"
                                                         title="سجل الفواتير والفاتورة الورقية">
                                                     <i class="bi bi-receipt me-1"></i>سجل الفواتير
                                                 </button>
@@ -4875,9 +4879,13 @@ function confirmCancelOrderWithDeductedAmount() {
             </div>
             <div class="modal-body">
                 <input type="hidden" id="shippingInvoiceLogCustomerId" value="">
-                <div class="mb-3">
+                <input type="hidden" id="shippingInvoiceLogIsLocal" value="1">
+                <div class="mb-3" id="shippingAddPaperInvoiceWrap">
                     <button type="button" class="btn btn-primary btn-sm" id="shippingAddPaperInvoiceBtn" onclick="openShippingPaperInvoiceForm()">
                         <i class="bi bi-plus-lg me-1"></i>إضافة فاتورة ورقية
+                    </button>
+                    <button type="button" class="btn btn-warning btn-sm ms-2" id="shippingAddPaperInvoiceReturnBtn" onclick="openShippingPaperInvoiceReturnForm()">
+                        <i class="bi bi-arrow-return-left me-1"></i>مرتجع من فاتورة ورقية
                     </button>
                 </div>
                 <div id="shippingInvoiceLogLoading" class="text-center py-4 text-muted d-none">
@@ -4899,7 +4907,7 @@ function confirmCancelOrderWithDeductedAmount() {
                 </div>
                 <div id="shippingInvoiceLogEmpty" class="text-center py-4 text-muted" style="display: none;">
                     <i class="bi bi-inbox fs-1"></i>
-                    <p class="mb-0">لا توجد فواتير مسجلة لهذا العميل بعد.</p>
+                    <p class="mb-0" id="shippingInvoiceLogEmptyText">لا توجد فواتير مسجلة لهذا العميل بعد.</p>
                 </div>
             </div>
         </div>
@@ -4959,16 +4967,74 @@ function confirmCancelOrderWithDeductedAmount() {
     </div>
 </div>
 
+<!-- Modal إضافة مرتجع من فاتورة ورقية (طلبات الشحن) -->
+<div class="modal fade" id="shippingPaperInvoiceReturnModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title"><i class="bi bi-arrow-return-left me-2"></i>مرتجع من فاتورة ورقية</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small">رفع صورة الفاتورة/المرتجع وإدخال رقم الفاتورة ومبلغ المرتجع. يُخصم المبلغ من الرصيد المدين؛ إن زاد عن الدين يتحول الفرق إلى رصيد دائن.</p>
+                <input type="hidden" id="shippingPaperInvoiceReturnCustomerId" value="">
+                <div class="mb-3">
+                    <label class="form-label">صورة الفاتورة / المرتجع <span class="text-danger">*</span></label>
+                    <input type="file" id="shippingPaperInvoiceReturnImageInput" class="form-control form-control-sm" accept="image/jpeg,image/png,image/gif,image/webp">
+                    <div id="shippingPaperInvoiceReturnImagePreview" class="mt-2 text-center" style="display: none;">
+                        <img id="shippingPaperInvoiceReturnPreviewImg" src="" alt="معاينة" class="img-fluid rounded border" style="max-height: 180px;">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">رقم الفاتورة <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="shippingPaperInvoiceReturnNumber" placeholder="رقم الفاتورة المرتجعة">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">مبلغ المرتجع (ج.م) <span class="text-danger">*</span></label>
+                    <input type="number" step="0.01" min="0.01" class="form-control" id="shippingPaperInvoiceReturnAmount" placeholder="0.00">
+                </div>
+                <div id="shippingPaperInvoiceReturnMessage" class="alert d-none mb-0"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                <button type="button" class="btn btn-warning" id="shippingPaperInvoiceReturnSubmitBtn" onclick="submitShippingPaperInvoiceReturn()">
+                    <i class="bi bi-check-lg me-1"></i>حفظ وخصم من الرصيد
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal عرض صورة مرتجع الفاتورة الورقية (طلبات الشحن) -->
+<div class="modal fade" id="shippingPaperInvoiceReturnViewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title">عرض صورة مرتجع الفاتورة الورقية</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body text-center p-0">
+                <img id="shippingPaperInvoiceReturnViewImg" src="" alt="صورة المرتجع" class="img-fluid" style="max-height: 80vh;">
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 var shippingPurchaseHistoryUrl = <?php echo json_encode(getRelativeUrl('api/customer_purchase_history.php')); ?>;
 var shippingPaperInvoiceUrl = <?php echo json_encode(getRelativeUrl('api/local_paper_invoice.php')); ?>;
+var shippingPaperInvoiceReturnUrl = <?php echo json_encode(getRelativeUrl('api/local_paper_invoice_return.php')); ?>;
 
 function showShippingInvoiceLogModal(button) {
     var customerId = button.getAttribute('data-customer-id');
     var customerName = button.getAttribute('data-customer-name') || 'غير محدد';
+    var isLocal = parseInt(button.getAttribute('data-is-local') || '1', 10) !== 0;
     if (!customerId) return;
     document.getElementById('shippingInvoiceLogCustomerId').value = customerId;
     document.getElementById('shippingInvoiceLogCustomerName').textContent = customerName;
+    document.getElementById('shippingInvoiceLogIsLocal').value = isLocal ? '1' : '0';
+    var addWrap = document.getElementById('shippingAddPaperInvoiceWrap');
+    if (addWrap) addWrap.style.display = isLocal ? '' : 'none';
     document.getElementById('shippingInvoiceLogTableWrap').style.display = 'none';
     document.getElementById('shippingInvoiceLogEmpty').style.display = 'none';
     document.getElementById('shippingInvoiceLogLoading').classList.remove('d-none');
@@ -4977,28 +5043,32 @@ function showShippingInvoiceLogModal(button) {
         var m = bootstrap.Modal.getOrCreateInstance(modalEl);
         m.show();
     }
-    loadShippingInvoiceLog(customerId);
+    loadShippingInvoiceLog(customerId, isLocal);
 }
 
-function loadShippingInvoiceLog(customerId) {
+function loadShippingInvoiceLog(customerId, isLocal) {
+    isLocal = isLocal !== false;
     var url = shippingPurchaseHistoryUrl + (shippingPurchaseHistoryUrl.indexOf('?') >= 0 ? '&' : '?') + 'action=get_history&customer_id=' + encodeURIComponent(customerId) + '&type=local';
     fetch(url, { credentials: 'same-origin' })
         .then(function(r) { return r.json(); })
         .then(function(data) {
             document.getElementById('shippingInvoiceLogLoading').classList.add('d-none');
+            var emptyText = document.getElementById('shippingInvoiceLogEmptyText');
             if (data.success) {
                 var history = data.purchase_history || [];
                 var paperInvoices = data.paper_invoices || [];
-                displayShippingInvoiceLog(history, paperInvoices);
+                var paperInvoiceReturns = data.paper_invoice_returns || [];
+                displayShippingInvoiceLog(history, paperInvoices, paperInvoiceReturns);
             } else {
                 document.getElementById('shippingInvoiceLogEmpty').style.display = 'block';
-                document.getElementById('shippingInvoiceLogEmpty').querySelector('p').textContent = data.message || 'حدث خطأ في تحميل السجل.';
+                if (emptyText) emptyText.textContent = !isLocal ? 'العميل غير مسجل كعميل محلي. سجل الفواتير والفاتورة الورقية متاح للعملاء المحليين فقط.' : (data.message || 'حدث خطأ في تحميل السجل.');
             }
         })
         .catch(function() {
             document.getElementById('shippingInvoiceLogLoading').classList.add('d-none');
             document.getElementById('shippingInvoiceLogEmpty').style.display = 'block';
-            document.getElementById('shippingInvoiceLogEmpty').querySelector('p').textContent = 'حدث خطأ في الاتصال بالخادم.';
+            var emptyText = document.getElementById('shippingInvoiceLogEmptyText');
+            if (emptyText) emptyText.textContent = 'حدث خطأ في الاتصال بالخادم.';
         });
 }
 
@@ -5026,15 +5096,20 @@ function groupShippingHistoryByInvoice(history) {
     });
 }
 
-function displayShippingInvoiceLog(history, paperInvoices) {
+function displayShippingInvoiceLog(history, paperInvoices, paperInvoiceReturns) {
     paperInvoices = paperInvoices || [];
+    paperInvoiceReturns = paperInvoiceReturns || [];
     var tbody = document.getElementById('shippingInvoiceLogTableBody');
     if (!tbody) return;
     tbody.innerHTML = '';
     var invoices = groupShippingHistoryByInvoice(history);
-    var hasAny = invoices.length > 0 || paperInvoices.length > 0;
+    var hasAny = invoices.length > 0 || paperInvoices.length > 0 || paperInvoiceReturns.length > 0;
+    var isLocal = document.getElementById('shippingInvoiceLogIsLocal');
+    isLocal = isLocal ? (parseInt(isLocal.value, 10) !== 0) : true;
     if (!hasAny) {
         document.getElementById('shippingInvoiceLogEmpty').style.display = 'block';
+        var emptyText = document.getElementById('shippingInvoiceLogEmptyText');
+        if (emptyText && !isLocal) emptyText.textContent = 'العميل غير مسجل كعميل محلي. سجل الفواتير والفاتورة الورقية متاح للعملاء المحليين فقط.';
         return;
     }
     document.getElementById('shippingInvoiceLogTableWrap').style.display = 'block';
@@ -5052,6 +5127,16 @@ function displayShippingInvoiceLog(history, paperInvoices) {
             : '<span class="text-muted small">لا توجد صورة</span>';
         var tr = document.createElement('tr');
         tr.innerHTML = '<td>' + safeNum + '</td><td>' + parseFloat(pi.total_amount || 0).toFixed(2) + ' ج.م</td><td>' + dateStr + '</td><td>' + viewBtn + '</td>';
+        tbody.appendChild(tr);
+    });
+    paperInvoiceReturns.forEach(function(pr) {
+        var safeNum = ('مرتجع ورقية - ' + (pr.invoice_number || pr.id)).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        var dateStr = (pr.return_date || pr.created_at || '-').toString().substring(0, 10);
+        var viewBtn = pr.image_path
+            ? '<button type="button" class="btn btn-sm btn-outline-warning" onclick="showShippingPaperInvoiceReturnImage(' + parseInt(pr.id, 10) + ')" title="عرض صورة المرتجع"><i class="bi bi-image me-1"></i>عرض المرتجع</button>'
+            : '<span class="text-muted small">لا توجد صورة</span>';
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td>' + safeNum + '</td><td class="text-warning">-' + parseFloat(pr.return_amount || 0).toFixed(2) + ' ج.م</td><td>' + dateStr + '</td><td>' + viewBtn + '</td>';
         tbody.appendChild(tr);
     });
 }
@@ -5131,6 +5216,83 @@ function showShippingPaperInvoiceImage(paperInvoiceId) {
     }
 }
 
+function openShippingPaperInvoiceReturnForm() {
+    var customerId = document.getElementById('shippingInvoiceLogCustomerId').value;
+    if (!customerId) return;
+    document.getElementById('shippingPaperInvoiceReturnCustomerId').value = customerId;
+    document.getElementById('shippingPaperInvoiceReturnNumber').value = '';
+    document.getElementById('shippingPaperInvoiceReturnAmount').value = '';
+    document.getElementById('shippingPaperInvoiceReturnImageInput').value = '';
+    document.getElementById('shippingPaperInvoiceReturnImagePreview').style.display = 'none';
+    document.getElementById('shippingPaperInvoiceReturnMessage').classList.add('d-none');
+    var modalEl = document.getElementById('shippingPaperInvoiceReturnModal');
+    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+        var m = bootstrap.Modal.getOrCreateInstance(modalEl);
+        m.show();
+    }
+}
+
+function submitShippingPaperInvoiceReturn() {
+    var customerId = document.getElementById('shippingPaperInvoiceReturnCustomerId').value;
+    var invoiceNumber = (document.getElementById('shippingPaperInvoiceReturnNumber').value || '').trim();
+    var returnAmount = (document.getElementById('shippingPaperInvoiceReturnAmount').value || '').replace(',', '.').trim();
+    var fileInput = document.getElementById('shippingPaperInvoiceReturnImageInput');
+    var file = fileInput && fileInput.files && fileInput.files[0];
+    var msgEl = document.getElementById('shippingPaperInvoiceReturnMessage');
+    var submitBtn = document.getElementById('shippingPaperInvoiceReturnSubmitBtn');
+    if (!customerId) { alert('لم يتم تحديد العميل'); return; }
+    if (!invoiceNumber) { alert('يرجى إدخال رقم الفاتورة'); return; }
+    if (!returnAmount || isNaN(parseFloat(returnAmount)) || parseFloat(returnAmount) <= 0) { alert('يرجى إدخال مبلغ مرتجع صحيح'); return; }
+    if (!file) { alert('يرجى اختيار صورة الفاتورة/المرتجع'); return; }
+    if (msgEl) { msgEl.classList.add('d-none'); msgEl.innerHTML = ''; }
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جاري الحفظ...'; }
+    var formData = new FormData();
+    formData.append('action', 'save');
+    formData.append('customer_id', customerId);
+    formData.append('invoice_number', invoiceNumber);
+    formData.append('return_amount', returnAmount);
+    formData.append('image', file);
+    fetch(shippingPaperInvoiceReturnUrl, { method: 'POST', body: formData, credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (msgEl) {
+                msgEl.classList.remove('d-none');
+                msgEl.className = data.success ? 'alert alert-success mb-0' : 'alert alert-danger mb-0';
+                msgEl.textContent = data.message || (data.success ? 'تم الحفظ.' : 'حدث خطأ.');
+            }
+            if (data.success) {
+                document.getElementById('shippingPaperInvoiceReturnNumber').value = '';
+                document.getElementById('shippingPaperInvoiceReturnAmount').value = '';
+                fileInput.value = '';
+                document.getElementById('shippingPaperInvoiceReturnImagePreview').style.display = 'none';
+                var logCustomerId = document.getElementById('shippingInvoiceLogCustomerId').value;
+                var isLocalEl = document.getElementById('shippingInvoiceLogIsLocal');
+                var isLocal = !isLocalEl || parseInt(isLocalEl.value, 10) !== 0;
+                loadShippingInvoiceLog(logCustomerId, isLocal);
+                if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                    var m = bootstrap.Modal.getInstance(document.getElementById('shippingPaperInvoiceReturnModal'));
+                    if (m) setTimeout(function() { m.hide(); }, 1200);
+                }
+            }
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i>حفظ وخصم من الرصيد'; }
+        })
+        .catch(function() {
+            if (msgEl) { msgEl.classList.remove('d-none'); msgEl.className = 'alert alert-danger mb-0'; msgEl.textContent = 'حدث خطأ في الاتصال.'; }
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i>حفظ وخصم من الرصيد'; }
+        });
+}
+
+function showShippingPaperInvoiceReturnImage(returnId) {
+    if (!returnId) return;
+    var imgUrl = shippingPaperInvoiceReturnUrl + (shippingPaperInvoiceReturnUrl.indexOf('?') >= 0 ? '&' : '?') + 'action=view_image&id=' + encodeURIComponent(returnId);
+    document.getElementById('shippingPaperInvoiceReturnViewImg').src = imgUrl;
+    var modalEl = document.getElementById('shippingPaperInvoiceReturnViewModal');
+    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+        var m = bootstrap.Modal.getOrCreateInstance(modalEl);
+        m.show();
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     var shippingPaperInvoiceImageInput = document.getElementById('shippingPaperInvoiceImageInput');
     if (shippingPaperInvoiceImageInput) {
@@ -5138,6 +5300,18 @@ document.addEventListener('DOMContentLoaded', function() {
             var file = this.files && this.files[0];
             var preview = document.getElementById('shippingPaperInvoiceImagePreview');
             var previewImg = document.getElementById('shippingPaperInvoicePreviewImg');
+            if (!file || !preview || !previewImg) return;
+            var reader = new FileReader();
+            reader.onload = function(e) { previewImg.src = e.target.result; preview.style.display = 'block'; };
+            reader.readAsDataURL(file);
+        });
+    }
+    var shippingPaperInvoiceReturnImageInput = document.getElementById('shippingPaperInvoiceReturnImageInput');
+    if (shippingPaperInvoiceReturnImageInput) {
+        shippingPaperInvoiceReturnImageInput.addEventListener('change', function() {
+            var file = this.files && this.files[0];
+            var preview = document.getElementById('shippingPaperInvoiceReturnImagePreview');
+            var previewImg = document.getElementById('shippingPaperInvoiceReturnPreviewImg');
             if (!file || !preview || !previewImg) return;
             var reader = new FileReader();
             reader.onload = function(e) { previewImg.src = e.target.result; preview.style.display = 'block'; };

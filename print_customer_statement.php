@@ -266,6 +266,28 @@ function getLocalCustomerStatementData($customerId) {
         }
     }
     
+    // مرتجعات الفواتير الورقية: دائن (تخصم من الرصيد المدين)
+    $paperReturnsTableExists = $db->queryOne("SHOW TABLES LIKE 'local_customer_paper_invoice_returns'");
+    if (!empty($paperReturnsTableExists)) {
+        $paperReturns = $db->query(
+            "SELECT id, invoice_number, return_amount, created_at FROM local_customer_paper_invoice_returns WHERE customer_id = ?",
+            [$customerId]
+        ) ?: [];
+        foreach ($paperReturns as $pr) {
+            $invNum = !empty(trim($pr['invoice_number'] ?? '')) ? trim($pr['invoice_number']) : ('#' . $pr['id']);
+            $movements[] = [
+                'sort_date' => date('Y-m-d', strtotime($pr['created_at'])),
+                'sort_id' => (int)$pr['id'],
+                'type_order' => 2,
+                'type' => 'paper_invoice_return',
+                'date' => $pr['created_at'],
+                'label' => 'مرتجع فاتورة ورقية ' . $invNum,
+                'debit' => 0.0,
+                'credit' => (float)($pr['return_amount'] ?? 0),
+            ];
+        }
+    }
+    
     // المرتجعات المحلية: دائن
     $localReturnsTableExists = $db->queryOne("SHOW TABLES LIKE 'local_returns'");
     if (!empty($localReturnsTableExists)) {

@@ -232,8 +232,10 @@ function handleGetHistory($currentUser): void
         $result = formatPurchaseHistory($purchaseHistory, $returnedQuantities, $isLocalCustomer, $db);
         
         $paperInvoices = [];
+        $paperInvoiceReturns = [];
         if ($isLocalCustomer) {
             $paperInvoices = getLocalCustomerPaperInvoices($db, $customerId);
+            $paperInvoiceReturns = getLocalCustomerPaperInvoiceReturns($db, $customerId);
         }
         
         returnJsonResponse([
@@ -246,7 +248,8 @@ function handleGetHistory($currentUser): void
                 'balance' => (float)($customer['balance'] ?? 0)
             ],
             'purchase_history' => $result,
-            'paper_invoices' => $paperInvoices
+            'paper_invoices' => $paperInvoices,
+            'paper_invoice_returns' => $paperInvoiceReturns
         ]);
         
     } catch (Throwable $e) {
@@ -420,6 +423,42 @@ function getLocalCustomerPaperInvoices($db, $customerId): array
         return $out;
     } catch (Throwable $e) {
         error_log('getLocalCustomerPaperInvoices error: ' . $e->getMessage());
+        return [];
+    }
+}
+
+/**
+ * Get local customer paper invoice returns (مرتجعات فواتير ورقية)
+ */
+function getLocalCustomerPaperInvoiceReturns($db, $customerId): array
+{
+    try {
+        $tableExists = $db->queryOne("SHOW TABLES LIKE 'local_customer_paper_invoice_returns'");
+        if (empty($tableExists)) {
+            return [];
+        }
+        $rows = $db->query(
+            "SELECT id, customer_id, invoice_number, return_amount, image_path, created_at FROM local_customer_paper_invoice_returns WHERE customer_id = ? ORDER BY created_at DESC, id DESC",
+            [$customerId]
+        );
+        if (!$rows) {
+            return [];
+        }
+        $out = [];
+        foreach ($rows as $row) {
+            $out[] = [
+                'id' => (int)$row['id'],
+                'customer_id' => (int)$row['customer_id'],
+                'invoice_number' => trim($row['invoice_number'] ?? ''),
+                'return_amount' => (float)($row['return_amount'] ?? 0),
+                'image_path' => $row['image_path'] ?? '',
+                'created_at' => $row['created_at'] ?? '',
+                'return_date' => isset($row['created_at']) ? date('Y-m-d', strtotime($row['created_at'])) : ''
+            ];
+        }
+        return $out;
+    } catch (Throwable $e) {
+        error_log('getLocalCustomerPaperInvoiceReturns error: ' . $e->getMessage());
         return [];
     }
 }
