@@ -2862,18 +2862,32 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 
-<!-- Modal عرض صورة الفاتورة الورقية -->
+<!-- Modal عرض صورة الفاتورة الورقية - للكمبيوتر -->
 <div class="modal fade" id="paperInvoiceImageViewModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
-            <div class="modal-header bg-secondary text-white">
-                <h5 class="modal-title">عرض الفاتورة الورقية</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            <div class="modal-header bg-secondary text-white d-flex align-items-center justify-content-between">
+                <h5 class="modal-title mb-0">عرض الفاتورة الورقية</h5>
+                <div class="d-flex gap-1">
+                    <button type="button" class="btn btn-light btn-sm" id="paperInvoiceModalCloseFastBtn" onclick="closePaperInvoiceImageViewNow()" title="إغلاق فوري">إغلاق</button>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+                </div>
             </div>
             <div class="modal-body text-center p-0">
                 <img id="paperInvoiceViewImage" src="" alt="صورة الفاتورة" class="img-fluid" style="max-height: 80vh;">
             </div>
         </div>
+    </div>
+</div>
+
+<!-- بطاقة عرض صورة الفاتورة الورقية - للموبايل فقط (إغلاق فوري بدون تجمّد) -->
+<div class="card shadow-sm mb-4 d-md-none position-fixed top-0 start-0 end-0 m-2" id="paperInvoiceViewCard" style="display: none; z-index: 1060; max-height: 95vh;">
+    <div class="card-header bg-secondary text-white d-flex align-items-center justify-content-between py-2">
+        <span class="fw-bold">عرض الفاتورة الورقية</span>
+        <button type="button" class="btn btn-light btn-sm fw-bold" onclick="closePaperInvoiceViewCard()" aria-label="إغلاق">✕ إغلاق</button>
+    </div>
+    <div class="card-body p-2 overflow-auto" style="max-height: 85vh;">
+        <img id="paperInvoiceViewCardImage" src="" alt="صورة الفاتورة" class="img-fluid w-100">
     </div>
 </div>
 
@@ -3149,6 +3163,8 @@ function scrollToElement(element) {
 
 // دالة لإغلاق جميع النماذج المفتوحة
 function closeAllForms() {
+    if (typeof closePaperInvoiceViewCard === 'function') closePaperInvoiceViewCard();
+    if (typeof closePaperInvoiceImageViewNow === 'function') closePaperInvoiceImageViewNow();
     // إغلاق جميع Cards على الموبايل
     const cards = [
         'collectPaymentCard', 
@@ -3161,7 +3177,8 @@ function closeAllForms() {
         'viewLocationCard',
         'localCustomerPurchaseHistoryCard',
         'paperInvoiceCard',
-        'localInvoiceDetailsCard'
+        'localInvoiceDetailsCard',
+        'paperInvoiceViewCard'
     ];
     
     cards.forEach(function(cardId) {
@@ -3667,16 +3684,59 @@ function submitPaperInvoice() {
         });
 }
 
-// عرض صورة الفاتورة الورقية في modal
+function closePaperInvoiceViewCard() {
+    var card = document.getElementById('paperInvoiceViewCard');
+    if (card) { card.style.display = 'none'; }
+    var img = document.getElementById('paperInvoiceViewCardImage');
+    if (img) img.src = '';
+}
+function closePaperInvoiceImageViewNow() {
+    var modalEl = document.getElementById('paperInvoiceImageViewModal');
+    if (modalEl) {
+        var inst = typeof bootstrap !== 'undefined' && bootstrap.Modal.getInstance(modalEl);
+        if (inst) inst.hide();
+        modalEl.classList.remove('show');
+        modalEl.style.display = 'none';
+        modalEl.setAttribute('aria-hidden', 'true');
+    }
+    document.querySelectorAll('.modal-backdrop').forEach(function(el) { el.remove(); });
+    document.body.classList.remove('modal-open');
+    document.body.style.overflow = '';
+    document.body.style.paddingRight = '';
+}
 function showPaperInvoiceImage(paperInvoiceId) {
     if (!paperInvoiceId) return;
     var basePath = (typeof window.LOCAL_CUSTOMERS_CONFIG !== 'undefined' && window.LOCAL_CUSTOMERS_CONFIG.apiBase) ? window.LOCAL_CUSTOMERS_CONFIG.apiBase : '';
     var imgUrl = basePath + '/api/local_paper_invoice.php?action=view_image&id=' + encodeURIComponent(paperInvoiceId);
+    var isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
+    if (isMobile) {
+        var card = document.getElementById('paperInvoiceViewCard');
+        var cardImg = document.getElementById('paperInvoiceViewCardImage');
+        if (card && cardImg) {
+            cardImg.src = imgUrl;
+            card.style.display = 'block';
+        }
+        return;
+    }
     var imgEl = document.getElementById('paperInvoiceViewImage');
     var modalEl = document.getElementById('paperInvoiceImageViewModal');
     if (imgEl) imgEl.src = imgUrl;
-    if (modalEl && typeof bootstrap !== 'undefined') (new bootstrap.Modal(modalEl)).show();
+    if (modalEl && typeof bootstrap !== 'undefined') {
+        var m = bootstrap.Modal.getOrCreateInstance(modalEl);
+        m.show();
+    }
 }
+document.addEventListener('DOMContentLoaded', function() {
+    var modalEl = document.getElementById('paperInvoiceImageViewModal');
+    if (modalEl) {
+        modalEl.addEventListener('hidden.bs.modal', function() {
+            document.querySelectorAll('.modal-backdrop').forEach(function(el) { el.remove(); });
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
+        });
+    }
+});
 
 // دالة فتح نموذج تعديل عميل محلي
 function showEditLocalCustomerModal(button) {

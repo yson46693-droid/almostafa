@@ -57,16 +57,21 @@ if ($isManager || $isAccountant) {
 /** تنبيه تغيير الزيت: ربط آخر تغيير زيت بآخر تفويل بنزين (فرق 2400–3000 كم) */
 $oilChangeAlert = null;
 $vehiclesNeedingOilAlert = [];
+/** بيانات المتبقي على تغيير الزيت التالي (للمستطيل فوق الجدول) — سيارة واحدة فقط */
+$oilRemainingInfo = null;
 if ($isDriver && $vehicle) {
     $oilChangeAlert = getVehicleOilChangeAlert($vehicle['id']);
+    $oilRemainingInfo = $oilChangeAlert;
 }
 if ($isManager || $isAccountant) {
     if (!empty($filters['vehicle_id'])) {
         $oilChangeAlert = getVehicleOilChangeAlert($filters['vehicle_id']);
+        $oilRemainingInfo = $oilChangeAlert;
     } else {
         $vehiclesNeedingOilAlert = getVehiclesNeedingOilChangeAlert();
     }
 }
+$oilTargetKm = defined('OIL_CHANGE_ALERT_KM_MAX') ? (int) OIL_CHANGE_ALERT_KM_MAX : 3000;
 
 $apiBase = getRelativeUrl('api/vehicle_maintenance.php');
 ?>
@@ -228,6 +233,41 @@ $apiBase = getRelativeUrl('api/vehicle_maintenance.php');
             </div>
         </div>
     <?php endif; ?>
+
+    <!-- مستطيل المتبقي على تغيير الزيت التالي (فوق جدول سجل الصيانات) -->
+    <div class="card shadow-sm mb-3 border-warning">
+        <div class="card-body py-3">
+            <div class="d-flex align-items-center flex-wrap gap-2">
+                <div class="flex-shrink-0 rounded bg-warning bg-opacity-25 p-2">
+                    <i class="bi bi-droplet-half text-warning fs-4"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <?php
+                    if ($oilRemainingInfo !== null && isset($oilRemainingInfo['km_since_oil']) && $oilRemainingInfo['km_since_oil'] !== null):
+                        $kmSince = (int) $oilRemainingInfo['km_since_oil'];
+                        $remaining = max(0, $oilTargetKm - $kmSince);
+                        $vehicleLabel = ($isManager || $isAccountant) && !empty($oilRemainingInfo['vehicle_number']) ? ' — ' . htmlspecialchars($oilRemainingInfo['vehicle_number']) : '';
+                    ?>
+                        <span class="text-muted small d-block">المتبقي على تغيير الزيت التالي<?php echo $vehicleLabel; ?></span>
+                        <?php if ($remaining > 0): ?>
+                            <span class="fw-bold text-dark"><span id="oilRemainingKm"><?php echo number_format($remaining); ?></span> كم</span>
+                            <span class="text-muted small">(تم قطع <?php echo number_format($kmSince); ?> كم منذ آخر تغيير زيت — الموعد المقترح عند <?php echo number_format($oilTargetKm); ?> كم)</span>
+                        <?php else: ?>
+                            <span class="fw-bold text-danger">٠ كم — يُنصح بتغيير الزيت</span>
+                            <span class="text-muted small">(تم قطع <?php echo number_format($kmSince); ?> كم منذ آخر تغيير زيت)</span>
+                        <?php endif; ?>
+                    <?php else: ?>
+                        <span class="text-muted small d-block">المتبقي على تغيير الزيت التالي</span>
+                        <?php if (($isManager || $isAccountant) && empty($filters['vehicle_id'])): ?>
+                            <span class="text-muted">اختر سيارة من الفلتر لعرض المتبقي</span>
+                        <?php else: ?>
+                            <span class="text-muted">لا يوجد بيانات كافية (يُحتسب من آخر تغيير زيت وآخر تفويل بنزين)</span>
+                        <?php endif; ?>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- جدول السجلات -->
     <div class="card shadow-sm">
