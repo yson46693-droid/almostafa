@@ -209,6 +209,7 @@ if (!$mainWarehouse) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
+    $isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
 
     if ($action === 'search_orders') {
         $query = trim($_POST['query'] ?? '');
@@ -683,18 +684,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $msg .= ' رقم التحصيل: ' . $collectionNumber . '.';
                 }
                 $_SESSION[$sessionSuccessKey] = $msg;
+                if ($isAjax) {
+                    header('Content-Type: application/json; charset=utf-8');
+                    echo json_encode([
+                        'success' => true,
+                        'message' => $msg,
+                        'amount_collected' => (float)$amount,
+                        'new_balance' => (float)$newBalance,
+                        'collection_number' => $collectionNumber,
+                        'company_id' => $companyId
+                    ], JSON_UNESCAPED_UNICODE);
+                    exit;
+                }
             } catch (InvalidArgumentException $e) {
                 if ($transactionStarted) {
                     $db->rollback();
                 }
                 $_SESSION[$sessionErrorKey] = $e->getMessage();
+                if ($isAjax) {
+                    header('Content-Type: application/json; charset=utf-8');
+                    echo json_encode(['success' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+                    exit;
+                }
             } catch (Throwable $e) {
                 if ($transactionStarted) {
                     $db->rollback();
                 }
                 error_log('shipping_orders: collect from shipping company -> ' . $e->getMessage());
                 $_SESSION[$sessionErrorKey] = 'حدث خطأ أثناء تحصيل المبلغ. يرجى المحاولة مرة أخرى.';
+                if ($isAjax) {
+                    header('Content-Type: application/json; charset=utf-8');
+                    echo json_encode(['success' => false, 'error' => 'حدث خطأ أثناء تحصيل المبلغ. يرجى المحاولة مرة أخرى.'], JSON_UNESCAPED_UNICODE);
+                    exit;
+                }
             }
+        }
+        if ($isAjax) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'error' => $_SESSION[$sessionErrorKey] ?? 'خطأ في البيانات المدخلة.'], JSON_UNESCAPED_UNICODE);
+            if (!empty($_SESSION[$sessionErrorKey])) {
+                unset($_SESSION[$sessionErrorKey]);
+            }
+            exit;
         }
         redirectAfterPost('shipping_orders', [], [], 'manager');
         exit;
@@ -1770,6 +1801,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($orderId <= 0) {
             $_SESSION[$sessionErrorKey] = 'طلب غير صالح لإتمام التسليم.';
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['success' => false, 'error' => 'طلب غير صالح لإتمام التسليم.'], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
             redirectAfterPost('shipping_orders', [], [], 'manager');
             exit;
         }
@@ -2834,18 +2870,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db->commit();
             $transactionStarted = false;
 
-            $_SESSION[$sessionSuccessKey] = 'تم تأكيد تسليم الطلب للعميل ونقل الدين بنجاح. تم إضافة المنتجات إلى سجل مشتريات العميل.';
+            $deliverySuccessMsg = 'تم تأكيد تسليم الطلب للعميل ونقل الدين بنجاح. تم إضافة المنتجات إلى سجل مشتريات العميل.';
+            $_SESSION[$sessionSuccessKey] = $deliverySuccessMsg;
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode([
+                    'success' => true,
+                    'message' => $deliverySuccessMsg,
+                    'collected_amount' => (float)$collectedAmount,
+                    'total_amount' => (float)$totalAmount,
+                    'remaining_balance' => (float)$newBalance,
+                    'order_id' => (int)$orderId
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
         } catch (InvalidArgumentException $validationError) {
             if ($transactionStarted) {
                 $db->rollback();
             }
             $_SESSION[$sessionErrorKey] = $validationError->getMessage();
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['success' => false, 'error' => $validationError->getMessage()], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
         } catch (Throwable $completeError) {
             if ($transactionStarted) {
                 $db->rollback();
             }
             error_log('shipping_orders: complete order error -> ' . $completeError->getMessage());
             $_SESSION[$sessionErrorKey] = 'تعذر إتمام إجراءات الطلب. يرجى المحاولة لاحقاً.';
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['success' => false, 'error' => 'تعذر إتمام إجراءات الطلب. يرجى المحاولة لاحقاً.'], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
         }
 
         redirectAfterPost('shipping_orders', [], [], 'manager');
@@ -5091,7 +5150,30 @@ document.addEventListener('DOMContentLoaded', function() {
 <script>
 (function() {
     'use strict';
-    
+
+    function showShippingToast(message, type) {
+        type = type || 'success';
+        var container = document.getElementById('toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'toast-container';
+            container.className = 'toast-container position-fixed top-0 end-0 p-3';
+            container.style.zIndex = '9999';
+            document.body.appendChild(container);
+        }
+        var id = 'toast-' + Date.now();
+        var bg = type === 'success' ? 'bg-success' : 'bg-danger';
+        var safeMsg = (message || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+        var html = '<div id="' + id + '" class="toast align-items-center text-white ' + bg + ' border-0" role="alert" data-bs-autohide="true" data-bs-delay="6000"><div class="d-flex"><div class="toast-body">' + safeMsg + '</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button></div></div>';
+        container.insertAdjacentHTML('beforeend', html);
+        var el = document.getElementById(id);
+        if (el && typeof bootstrap !== 'undefined' && bootstrap.Toast) {
+            var t = new bootstrap.Toast(el);
+            t.show();
+            el.addEventListener('hidden.bs.toast', function() { el.remove(); });
+        }
+    }
+
     const deliveryModal = document.getElementById('deliveryModal');
     const deliveryForm = document.getElementById('deliveryForm');
     const collectedAmountInput = document.getElementById('collected_amount');
@@ -5152,6 +5234,156 @@ document.addEventListener('DOMContentLoaded', function() {
         deliveryModal.addEventListener('hidden.bs.modal', function() {
             collectedAmountInput.value = '';
             balanceWarning.style.display = 'none';
+        });
+    }
+
+    if (deliveryForm) {
+        deliveryForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var formData = new FormData(deliveryForm);
+            var submitBtn = deliveryForm.querySelector('button[type="submit"]');
+            var orderId = formData.get('order_id');
+            if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جاري الحفظ...'; }
+            fetch(window.location.href, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: formData, credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i>تأكيد التسليم'; }
+                    if (data.success) {
+                        var msg = data.message || 'تم تأكيد التسليم بنجاح.';
+                        if (data.collected_amount != null && parseFloat(data.collected_amount) > 0) {
+                            msg += ' المبلغ المحصل: ' + parseFloat(data.collected_amount).toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ج.م.';
+                        }
+                        if (data.remaining_balance != null) {
+                            msg += ' المبلغ المتبقي على العميل: ' + parseFloat(data.remaining_balance).toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ج.م.';
+                        }
+                        showShippingToast(msg, 'success');
+                        if (deliveryModal && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                            var m = bootstrap.Modal.getInstance(deliveryModal);
+                            if (m) m.hide();
+                        }
+                        var btn = document.querySelector('button.delivery-btn[data-order-id="' + (data.order_id || orderId) + '"]');
+                        if (btn && btn.closest('tr')) btn.closest('tr').remove();
+                    } else {
+                        showShippingToast(data.error || 'حدث خطأ.', 'danger');
+                    }
+                })
+                .catch(function() {
+                    if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i>تأكيد التسليم'; }
+                    showShippingToast('حدث خطأ في الاتصال.', 'danger');
+                });
+            return false;
+        });
+    }
+
+    var deliveryFormCard = document.getElementById('deliveryFormCard');
+    if (deliveryFormCard) {
+        deliveryFormCard.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var formData = new FormData(deliveryFormCard);
+            var submitBtn = deliveryFormCard.querySelector('button[type="submit"]');
+            var orderId = formData.get('order_id');
+            if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جاري الحفظ...'; }
+            fetch(window.location.href, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: formData, credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i>تأكيد التسليم'; }
+                    if (data.success) {
+                        var msg = data.message || 'تم تأكيد التسليم بنجاح.';
+                        if (data.collected_amount != null && parseFloat(data.collected_amount) > 0) {
+                            msg += ' المبلغ المحصل: ' + parseFloat(data.collected_amount).toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ج.م.';
+                        }
+                        if (data.remaining_balance != null) {
+                            msg += ' المبلغ المتبقي على العميل: ' + parseFloat(data.remaining_balance).toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ج.م.';
+                        }
+                        showShippingToast(msg, 'success');
+                        var card = document.getElementById('deliveryCard');
+                        if (card) { card.style.display = 'none'; if (deliveryFormCard.reset) deliveryFormCard.reset(); }
+                        var btn = document.querySelector('button.delivery-btn[data-order-id="' + (data.order_id || orderId) + '"]');
+                        if (btn && btn.closest('tr')) btn.closest('tr').remove();
+                    } else {
+                        showShippingToast(data.error || 'حدث خطأ.', 'danger');
+                    }
+                })
+                .catch(function() {
+                    if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i>تأكيد التسليم'; }
+                    showShippingToast('حدث خطأ في الاتصال.', 'danger');
+                });
+            return false;
+        });
+    }
+
+    var collectModal = document.getElementById('collectFromShippingCompanyModal');
+    var collectModalForm = collectModal ? collectModal.querySelector('form') : null;
+    if (collectModalForm) {
+        collectModalForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var formData = new FormData(collectModalForm);
+            var submitBtn = collectModalForm.querySelector('button[type="submit"]');
+            if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جاري التحصيل...'; }
+            fetch(window.location.href, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: formData, credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = 'تحصيل المبلغ'; }
+                    if (data.success) {
+                        var msg = data.message || 'تم التحصيل بنجاح.';
+                        if (data.amount_collected != null) {
+                            msg += ' المبلغ المحصل: ' + parseFloat(data.amount_collected).toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ج.م.';
+                        }
+                        if (data.new_balance != null) {
+                            msg += ' المبلغ المتبقي (ديون الشركة): ' + parseFloat(data.new_balance).toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ج.م.';
+                        }
+                        showShippingToast(msg, 'success');
+                        var debtEl = collectModal.querySelector('.collection-shipping-current-debt');
+                        if (debtEl && data.new_balance != null) debtEl.textContent = parseFloat(data.new_balance).toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ج.م';
+                        if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                            var m = bootstrap.Modal.getInstance(collectModal);
+                            if (m) m.hide();
+                        }
+                    } else {
+                        showShippingToast(data.error || 'حدث خطأ.', 'danger');
+                    }
+                })
+                .catch(function() {
+                    if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = 'تحصيل المبلغ'; }
+                    showShippingToast('حدث خطأ في الاتصال.', 'danger');
+                });
+            return false;
+        });
+    }
+
+    var collectCard = document.getElementById('collectFromShippingCompanyCard');
+    var collectCardForm = collectCard ? collectCard.querySelector('form') : null;
+    if (collectCardForm) {
+        collectCardForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var formData = new FormData(collectCardForm);
+            var submitBtn = collectCardForm.querySelector('button[type="submit"]');
+            if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جاري التحصيل...'; }
+            fetch(window.location.href, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: formData, credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = 'تحصيل المبلغ'; }
+                    if (data.success) {
+                        var msg = data.message || 'تم التحصيل بنجاح.';
+                        if (data.amount_collected != null) {
+                            msg += ' المبلغ المحصل: ' + parseFloat(data.amount_collected).toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ج.م.';
+                        }
+                        if (data.new_balance != null) {
+                            msg += ' المبلغ المتبقي (ديون الشركة): ' + parseFloat(data.new_balance).toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ج.م.';
+                        }
+                        showShippingToast(msg, 'success');
+                        var debtEl = document.getElementById('collectCardCurrentDebt');
+                        if (debtEl && data.new_balance != null) debtEl.textContent = parseFloat(data.new_balance).toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ج.م';
+                        if (collectCard) { collectCard.style.display = 'none'; if (collectCardForm.reset) collectCardForm.reset(); }
+                    } else {
+                        showShippingToast(data.error || 'حدث خطأ.', 'danger');
+                    }
+                })
+                .catch(function() {
+                    if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = 'تحصيل المبلغ'; }
+                    showShippingToast('حدث خطأ في الاتصال.', 'danger');
+                });
+            return false;
         });
     }
     
