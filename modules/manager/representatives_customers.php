@@ -2992,7 +2992,8 @@ document.addEventListener('DOMContentLoaded', function() {
                             id="repCollectionAmount"
                             name="amount"
                             step="0.01"
-                            min="0.01"
+                            min="0"
+                            value="0"
                             required
                         >
                         <div class="form-text">يمكن إدخال مبلغ أكبر من الدين؛ الفرق يُحول تلقائياً إلى رصيد دائن للعميل.</div>
@@ -3037,7 +3038,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     id="repCollectionCardAmount"
                     name="amount"
                     step="0.01"
-                    min="0.01"
+                    min="0"
+                    value="0"
                     required
                 >
                 <div class="form-text">يمكن إدخال مبلغ أكبر من الدين؛ الفرق يُحول تلقائياً إلى رصيد دائن للعميل.</div>
@@ -6769,7 +6771,7 @@ function showRepCollectPaymentModal(button) {
             if (customerNameEl) customerNameEl.textContent = customerName;
             if (debtEl) debtEl.textContent = balanceFormatted;
             if (amountInput) {
-                amountInput.value = debtAmount.toFixed(2);
+                amountInput.value = '0';
                 amountInput.removeAttribute('max');
                 amountInput.setAttribute('min', '0');
                 amountInput.readOnly = debtAmount <= 0;
@@ -6797,7 +6799,7 @@ function showRepCollectPaymentModal(button) {
             if (customerNameEl) customerNameEl.textContent = customerName;
             if (debtEl) debtEl.textContent = balanceFormatted;
             if (amountInput) {
-                amountInput.value = debtAmount.toFixed(2);
+                amountInput.value = '0';
                 amountInput.removeAttribute('max');
                 amountInput.setAttribute('min', '0');
                 amountInput.readOnly = debtAmount <= 0;

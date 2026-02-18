@@ -766,13 +766,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     );
                 }
 
-                // توزيع التحصيل على الفواتير المحلية (إن وجدت)
+                // توزيع التحصيل على الفواتير المحلية (فقط الجزء الذي يغطي الدين؛ الزيادة تصبح رصيداً دائناً)
+                $amountToDistribute = min($amount, $currentBalance);
                 $localInvoicesTableExists = $db->queryOne("SHOW TABLES LIKE 'local_invoices'");
-                if (!empty($localInvoicesTableExists)) {
+                if ($amountToDistribute > 0 && !empty($localInvoicesTableExists)) {
                     try {
                         require_once __DIR__ . '/../../includes/local_invoices_helper.php';
                         if (function_exists('distributeLocalCollectionToInvoices')) {
-                            distributeLocalCollectionToInvoices($customerId, $amount, $currentUser['id']);
+                            distributeLocalCollectionToInvoices($customerId, $amountToDistribute, $currentUser['id']);
                         }
                     } catch (Throwable $e) {
                         error_log('Error distributing local collection to invoices: ' . $e->getMessage());
@@ -2216,7 +2217,8 @@ document.addEventListener('DOMContentLoaded', function() {
                             id="collectionAmount"
                             name="amount"
                             step="0.01"
-                            min="0.01"
+                            min="0"
+                            value="0"
                             required
                         >
                         <div class="form-text">يمكن إدخال مبلغ أكبر من الدين؛ الفرق يُحول تلقائياً إلى رصيد دائن للعميل.</div>
@@ -2283,7 +2285,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     id="collectPaymentCardAmount"
                     name="amount"
                     step="0.01"
-                    min="0.01"
+                    min="0"
+                    value="0"
                     required
                 >
                 <div class="form-text">يمكن إدخال مبلغ أكبر من الدين؛ الفرق يُحول تلقائياً إلى رصيد دائن للعميل.</div>
@@ -3465,8 +3468,8 @@ function showCollectPaymentModal(button) {
             if (customerNameEl) customerNameEl.textContent = customerName;
             if (debtEl) debtEl.textContent = balanceFormatted;
             if (amountInput) {
-                amountInput.value = debtAmount.toFixed(2);
-                amountInput.setAttribute('max', debtAmount.toFixed(2));
+                amountInput.value = '0';
+                amountInput.removeAttribute('max');
                 amountInput.setAttribute('min', '0');
                 amountInput.readOnly = debtAmount <= 0;
             }
@@ -3494,9 +3497,9 @@ function showCollectPaymentModal(button) {
             if (customerNameEl) customerNameEl.textContent = customerName;
             if (debtEl) debtEl.textContent = balanceFormatted;
             if (amountInput) {
-                amountInput.value = debtAmount.toFixed(2);
+                amountInput.value = '0';
                 amountInput.removeAttribute('max');
-                amountInput.setAttribute('min', '0.01');
+                amountInput.setAttribute('min', '0');
                 amountInput.readOnly = debtAmount <= 0;
             }
             
@@ -4430,9 +4433,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 debtElement.textContent = balanceFormatted;
                 customerIdInput.value = triggerButton.getAttribute('data-customer-id') || '';
 
-                amountInput.value = debtAmount.toFixed(2);
+                amountInput.value = '0';
                 amountInput.removeAttribute('max');
-                amountInput.setAttribute('min', '0.01');
+                amountInput.setAttribute('min', '0');
                 amountInput.readOnly = debtAmount <= 0;
                 amountInput.focus();
             });

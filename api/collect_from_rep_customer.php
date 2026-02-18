@@ -119,11 +119,8 @@ try {
         throw new InvalidArgumentException('لا توجد ديون نشطة على هذا العميل.');
     }
     
-    if ($amount > $currentBalance) {
-        throw new InvalidArgumentException('المبلغ المدخل أكبر من ديون العميل الحالية.');
-    }
-    
-    $newBalance = round(max($currentBalance - $amount, 0), 2);
+    // السماح بتحصيل مبلغ أكبر من الدين؛ الفرق يُحول إلى رصيد دائن (رصيد سالب)
+    $newBalance = round($currentBalance - $amount, 2);
     
     // تحديث رصيد العميل
     $db->execute(
@@ -256,11 +253,12 @@ try {
         }
     }
     
-    // توزيع التحصيل على فواتير العميل
+    // توزيع التحصيل على فواتير العميل (فقط الجزء الذي يغطي الدين، لا الزيادة التي تصبح رصيداً دائناً)
+    $amountToDistribute = min($amount, $currentBalance);
     $distributionResult = null;
-    if (function_exists('distributeCollectionToInvoices')) {
+    if ($amountToDistribute > 0 && function_exists('distributeCollectionToInvoices')) {
         try {
-            $distributionResult = distributeCollectionToInvoices($customerId, $amount, $currentUser['id']);
+            $distributionResult = distributeCollectionToInvoices($customerId, $amountToDistribute, $currentUser['id']);
             file_put_contents($debugFile, "Invoice distribution result: " . json_encode($distributionResult, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND);
         } catch (Throwable $distError) {
             file_put_contents($debugFile, "Error in invoice distribution: " . $distError->getMessage() . "\n", FILE_APPEND);

@@ -777,11 +777,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     throw new InvalidArgumentException('لا توجد ديون نشطة على هذا العميل.');
                 }
 
-                if ($amount > $currentBalance) {
-                    throw new InvalidArgumentException('المبلغ المدخل أكبر من ديون العميل الحالية.');
-                }
-
-                $newBalance = round(max($currentBalance - $amount, 0), 2);
+                // السماح بتحصيل مبلغ أكبر من الدين؛ الفرق يُحول إلى رصيد دائن (رصيد سالب)
+                $newBalance = round($currentBalance - $amount, 2);
+                $amountToDistribute = min($amount, $currentBalance);
 
                 $db->execute(
                     "UPDATE customers SET balance = ? WHERE id = ?",
@@ -934,8 +932,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         }
                     }
 
-                    // توزيع التحصيل على فواتير العميل
-                    $distributionResult = distributeCollectionToInvoices($customerId, $amount, $currentUser['id']);
+                    // توزيع التحصيل على فواتير العميل (فقط الجزء الذي يغطي الدين)
+                    $distributionResult = $amountToDistribute > 0 ? distributeCollectionToInvoices($customerId, $amountToDistribute, $currentUser['id']) : null;
 
                     $db->commit();
                     $transactionStarted = false;
@@ -1096,7 +1094,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         error_log('collect_debt: collections table not found, skipping collection record.');
                     }
 
-                    $distributionResult = distributeCollectionToInvoices($customerId, $amount, $currentUser['id']);
+                    $distributionResult = $amountToDistribute > 0 ? distributeCollectionToInvoices($customerId, $amountToDistribute, $currentUser['id']) : null;
 
                     $db->commit();
                     $transactionStarted = false;
@@ -4950,8 +4948,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 debtElement.textContent = balanceFormatted;
                 customerIdInput.value = triggerButton.getAttribute('data-customer-id') || '';
 
-                amountInput.value = debtAmount.toFixed(2);
-                amountInput.setAttribute('max', debtAmount.toFixed(2));
+                amountInput.value = '0';
+                amountInput.removeAttribute('max');
                 amountInput.setAttribute('min', '0');
                 amountInput.readOnly = debtAmount <= 0;
                 amountInput.focus();
@@ -5815,10 +5813,11 @@ document.addEventListener('DOMContentLoaded', function () {
                             id="collectionAmount"
                             name="amount"
                             step="0.01"
-                            min="0.01"
+                            min="0"
+                            value="0"
                             required
                         >
-                        <div class="form-text">لن يتم قبول مبلغ أكبر من قيمة الديون الحالية.</div>
+                        <div class="form-text">يمكن إدخال مبلغ أكبر من الدين؛ الفرق يُحول تلقائياً إلى رصيد دائن للعميل.</div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -5853,8 +5852,8 @@ document.addEventListener('DOMContentLoaded', function () {
             <div class="mb-3">
                 <label class="form-label">مبلغ التحصيل <span class="text-danger">*</span></label>
                 <input type="number" class="form-control" id="collectPaymentCardAmount" 
-                       name="amount" step="0.01" min="0.01" required>
-                <div class="form-text">لن يتم قبول مبلغ أكبر من قيمة الديون الحالية.</div>
+                       name="amount" step="0.01" min="0" value="0" required>
+                <div class="form-text">يمكن إدخال مبلغ أكبر من الدين؛ الفرق يُحول تلقائياً إلى رصيد دائن للعميل.</div>
             </div>
             <div class="d-flex gap-2">
                 <button type="submit" class="btn btn-primary">تحصيل المبلغ</button>
@@ -6662,8 +6661,8 @@ function showCollectPaymentModal(button) {
             if (customerNameEl) customerNameEl.textContent = customerName;
             if (currentDebtEl) currentDebtEl.textContent = balanceFormatted;
             if (amountInput) {
-                amountInput.value = debtAmount.toFixed(2);
-                amountInput.setAttribute('max', debtAmount.toFixed(2));
+                amountInput.value = '0';
+                amountInput.removeAttribute('max');
                 amountInput.setAttribute('min', '0');
                 amountInput.readOnly = debtAmount <= 0;
             }
@@ -6685,8 +6684,8 @@ function showCollectPaymentModal(button) {
             if (customerNameEl) customerNameEl.textContent = customerName;
             if (currentDebtEl) currentDebtEl.textContent = balanceFormatted;
             if (amountInput) {
-                amountInput.value = debtAmount.toFixed(2);
-                amountInput.setAttribute('max', debtAmount.toFixed(2));
+                amountInput.value = '0';
+                amountInput.removeAttribute('max');
                 amountInput.setAttribute('min', '0');
                 amountInput.readOnly = debtAmount <= 0;
             }
