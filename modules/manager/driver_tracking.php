@@ -21,7 +21,16 @@ $driverLocationApiPath = (function_exists('getRelativeUrl') ? getRelativeUrl('ap
 <style>
 #driver-tracking-map {
     height: 480px;
+    min-height: 280px;
     border-radius: 12px;
+}
+@media (max-width: 768px) {
+    #driver-tracking-map {
+        height: min(400px, 55vh);
+        min-height: 240px;
+    }
+}
+#driver-tracking-map.leaflet-container {
     border: 2px solid #8b4513;
     box-shadow: inset 0 0 30px rgba(139,69,19,0.08), 0 4px 20px rgba(0,0,0,0.12);
     background: #f5f0e6;
@@ -142,16 +151,44 @@ $driverLocationApiPath = (function_exists('getRelativeUrl') ? getRelativeUrl('ap
         return c;
     }
 
-    // CartoDB Positron - خلفية فاتحة مستوحاة من الخرائط الورقية
-    var mapLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
-        subdomains: 'abcd',
-        maxZoom: 19
-    });
+    function runWhenLeafletReady(callback) {
+        if (typeof L !== 'undefined') {
+            callback();
+            return;
+        }
+        var attempts = 0;
+        var maxAttempts = 100;
+        function check() {
+            if (typeof L !== 'undefined') {
+                callback();
+                return;
+            }
+            attempts++;
+            if (attempts < maxAttempts) {
+                setTimeout(check, 50);
+            }
+        }
+        setTimeout(check, 50);
+    }
 
-    map = L.map('driver-tracking-map', { zoomControl: false }).addLayer(mapLayer);
-    L.control.zoom({ position: 'topright' }).addTo(map);
-    map.setView([30.0444, 31.2357], 10);
+    function initDriverTrackingMap() {
+        var mapEl = document.getElementById('driver-tracking-map');
+        if (!mapEl) return;
+
+        // CartoDB Positron - خلفية فاتحة مستوحاة من الخرائط الورقية
+        var mapLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 19
+        });
+
+        map = L.map('driver-tracking-map', { zoomControl: false }).addLayer(mapLayer);
+        L.control.zoom({ position: 'topright' }).addTo(map);
+        map.setView([30.0444, 31.2357], 10);
+
+        setTimeout(function () {
+            if (map) try { map.invalidateSize(); } catch (e) {}
+        }, 300);
 
     function createLiveIcon(color) {
         return L.divIcon({
@@ -299,9 +336,11 @@ $driverLocationApiPath = (function_exists('getRelativeUrl') ? getRelativeUrl('ap
             .catch(function () {});
     }
 
-    document.getElementById('route-date-input').value = new Date().toISOString().slice(0, 10);
+    var routeDateInput = document.getElementById('route-date-input');
+    if (routeDateInput) routeDateInput.value = new Date().toISOString().slice(0, 10);
 
-    document.getElementById('btn-live-view').addEventListener('click', function () {
+    var btnLiveView = document.getElementById('btn-live-view');
+    if (btnLiveView) btnLiveView.addEventListener('click', function () {
         document.getElementById('btn-live-view').classList.add('active');
         document.getElementById('btn-route-view').classList.remove('active');
         document.getElementById('route-controls').classList.add('d-none');
@@ -311,7 +350,8 @@ $driverLocationApiPath = (function_exists('getRelativeUrl') ? getRelativeUrl('ap
         refreshLiveLocations();
     });
 
-    document.getElementById('btn-route-view').addEventListener('click', function () {
+    var btnRouteView = document.getElementById('btn-route-view');
+    if (btnRouteView) btnRouteView.addEventListener('click', function () {
         document.getElementById('btn-route-view').classList.add('active');
         document.getElementById('btn-live-view').classList.remove('active');
         document.getElementById('route-controls').classList.remove('d-none');
@@ -319,11 +359,15 @@ $driverLocationApiPath = (function_exists('getRelativeUrl') ? getRelativeUrl('ap
         populateDriverSelect();
     });
 
-    document.getElementById('btn-load-route').addEventListener('click', loadRoute);
+    var btnLoadRoute = document.getElementById('btn-load-route');
+    if (btnLoadRoute) btnLoadRoute.addEventListener('click', loadRoute);
 
     refreshLiveLocations();
     refreshStatusTable();
     setInterval(refreshLiveLocations, 15000);
     setInterval(refreshStatusTable, 15000);
+    }
+
+    runWhenLeafletReady(initDriverTrackingMap);
 })();
 </script>
