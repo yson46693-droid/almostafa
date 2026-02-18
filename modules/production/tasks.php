@@ -2211,6 +2211,14 @@ function tasksHtml(string $value): string
         taskActionForm.action = window.location.href || '';
     }
 
+    window.submitTaskAction = function (action, taskId) {
+        if (taskActionForm && taskId) {
+            taskActionForm.querySelector('input[name="action"]').value = (action || '').toString().replace(/[<>"']/g, '');
+            taskActionForm.querySelector('input[name="task_id"]').value = parseInt(taskId, 10) || '';
+            taskActionForm.submit();
+        }
+    };
+
     function hideLoader() {
         // تم حذف pageLoader
     }
@@ -2505,8 +2513,6 @@ function tasksHtml(string $value): string
 
     const statusLabelMap = {
         'pending': 'معلقة',
-        'received': 'مستلمة',
-        'in_progress': 'قيد التنفيذ',
         'completed': 'مكتملة',
         'with_delegate': 'مع المندوب',
         'delivered': 'تم التوصيل',
@@ -2566,7 +2572,6 @@ function tasksHtml(string $value): string
     }
 
     window.submitTaskAction = function (action, taskId) {
-        if (!taskActionForm) return;
         taskId = parseInt(taskId, 10) || 0;
         if (!taskId) return;
 
@@ -2574,7 +2579,7 @@ function tasksHtml(string $value): string
         formData.append('action', action);
         formData.append('task_id', taskId);
 
-        var url = (taskActionForm.action || window.location.href).split('?')[0] + (window.location.search || '');
+        var url = window.location.href;
         if (url.indexOf('page=tasks') === -1) {
             url = url + (url.indexOf('?') !== -1 ? '&' : '?') + 'page=tasks';
         }
@@ -2582,9 +2587,19 @@ function tasksHtml(string $value): string
         fetch(url, {
             method: 'POST',
             headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            body: formData
+            body: formData,
+            credentials: 'same-origin'
         })
-        .then(function (r) { return r.json(); })
+        .then(function (r) {
+            var ct = r.headers.get('Content-Type') || '';
+            if (!r.ok) {
+                throw new Error(r.status === 403 ? 'غير مصرح' : r.status === 500 ? 'خطأ في الخادم' : 'خطأ ' + r.status);
+            }
+            if (ct.indexOf('application/json') === -1) {
+                throw new Error('الرد غير متوقع');
+            }
+            return r.json();
+        })
         .then(function (data) {
             if (data.error) {
                 alert(data.error);
@@ -2605,8 +2620,15 @@ function tasksHtml(string $value): string
             }
         })
         .catch(function (err) {
-            console.error(err);
-            alert('حدث خطأ أثناء تحديث المهمة.');
+            console.error('submitTaskAction error:', err);
+            if (taskActionForm) {
+                taskActionForm.querySelector('input[name="action"]').value = action;
+                taskActionForm.querySelector('input[name="task_id"]').value = taskId;
+                taskActionForm.action = url;
+                taskActionForm.submit();
+            } else {
+                alert('حدث خطأ أثناء تحديث المهمة. ' + (err.message || ''));
+            }
         });
     };
 
