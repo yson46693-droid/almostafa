@@ -89,47 +89,50 @@ if (!in_array($role, ['manager', 'accountant', 'developer'], true)) {
 }
 
 $action = trim($_GET['action'] ?? 'live');
-
-// التحقق من وجود الجداول
 $tablesExist = $db->queryOne("SHOW TABLES LIKE 'driver_live_location'");
-if (empty($tablesExist)) {
-    echo json_encode(['success' => false, 'message' => 'جداول التتبع غير موجودة. قم بتشغيل الـ migration أولاً.'], JSON_UNESCAPED_UNICODE);
-    exit;
-}
+$hasTables = !empty($tablesExist);
 
 switch ($action) {
     case 'live':
-        // المواقع المباشرة لجميع السائقين
-        $rows = $db->queryAll(
-            "SELECT d.user_id, d.latitude, d.longitude, d.updated_at, d.is_online,
-                    u.full_name, u.username
-             FROM driver_live_location d
-             JOIN users u ON u.id = d.user_id AND u.role = 'driver' AND u.status = 'active'
-             ORDER BY u.full_name"
-        );
-        echo json_encode(['success' => true, 'locations' => $rows], JSON_UNESCAPED_UNICODE);
+        if (!$hasTables) {
+            echo json_encode(['success' => true, 'locations' => []], JSON_UNESCAPED_UNICODE);
+        } else {
+            $rows = $db->queryAll(
+                "SELECT d.user_id, d.latitude, d.longitude, d.updated_at, d.is_online,
+                        u.full_name, u.username
+                 FROM driver_live_location d
+                 JOIN users u ON u.id = d.user_id AND u.role = 'driver' AND u.status = 'active'
+                 ORDER BY u.full_name"
+            );
+            echo json_encode(['success' => true, 'locations' => $rows], JSON_UNESCAPED_UNICODE);
+        }
         break;
 
     case 'status':
-        // جدول حالة Live للسائقين (يعمل / لا يعمل)
-        $drivers = $db->queryAll(
-            "SELECT u.id, u.full_name, u.username,
-                    d.latitude, d.longitude, d.updated_at, d.is_online,
-                    CASE 
-                      WHEN d.user_id IS NULL THEN 0
-                      WHEN TIMESTAMPDIFF(MINUTE, d.updated_at, NOW()) > 5 THEN 0
-                      ELSE 1
-                    END AS location_active
-             FROM users u
-             LEFT JOIN driver_live_location d ON d.user_id = u.id
-             WHERE u.role = 'driver' AND u.status = 'active'
-             ORDER BY location_active DESC, u.full_name"
-        );
+        if (!$hasTables) {
+            $drivers = $db->queryAll(
+                "SELECT id, full_name, username, NULL as latitude, NULL as longitude, NULL as updated_at, 0 as location_active
+                 FROM users WHERE role = 'driver' AND status = 'active' ORDER BY full_name"
+            );
+        } else {
+            $drivers = $db->queryAll(
+                "SELECT u.id, u.full_name, u.username,
+                        d.latitude, d.longitude, d.updated_at, d.is_online,
+                        CASE 
+                          WHEN d.user_id IS NULL THEN 0
+                          WHEN TIMESTAMPDIFF(MINUTE, d.updated_at, NOW()) > 5 THEN 0
+                          ELSE 1
+                        END AS location_active
+                 FROM users u
+                 LEFT JOIN driver_live_location d ON d.user_id = u.id
+                 WHERE u.role = 'driver' AND u.status = 'active'
+                 ORDER BY location_active DESC, u.full_name"
+            );
+        }
         echo json_encode(['success' => true, 'drivers' => $drivers], JSON_UNESCAPED_UNICODE);
         break;
 
     case 'route':
-        // خط سير سائق في يوم معين
         $driverId = (int) ($_GET['driver_id'] ?? 0);
         $date = trim($_GET['date'] ?? date('Y-m-d'));
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
@@ -139,13 +142,16 @@ switch ($action) {
             echo json_encode(['success' => false, 'message' => 'معرف السائق مطلوب'], JSON_UNESCAPED_UNICODE);
             exit;
         }
-        $points = $db->queryAll(
-            "SELECT latitude, longitude, created_at 
-             FROM driver_location_history 
-             WHERE user_id = ? AND recorded_at = ? 
-             ORDER BY created_at ASC",
-            [$driverId, $date]
-        );
+        $points = [];
+        if ($hasTables) {
+            $points = $db->queryAll(
+                "SELECT latitude, longitude, created_at 
+                 FROM driver_location_history 
+                 WHERE user_id = ? AND recorded_at = ? 
+                 ORDER BY created_at ASC",
+                [$driverId, $date]
+            );
+        }
         $driver = $db->queryOne("SELECT full_name, username FROM users WHERE id = ? AND role = 'driver'", [$driverId]);
         echo json_encode([
             'success' => true,
@@ -156,18 +162,21 @@ switch ($action) {
         break;
 
     case 'available_dates':
-        // تواريخ متاحة لسائق معين
         $driverId = (int) ($_GET['driver_id'] ?? 0);
         if ($driverId <= 0) {
             echo json_encode(['success' => false, 'message' => 'معرف السائق مطلوب'], JSON_UNESCAPED_UNICODE);
             exit;
         }
-        $dates = $db->queryAll(
-            "SELECT DISTINCT recorded_at as date FROM driver_location_history 
-             WHERE user_id = ? ORDER BY recorded_at DESC LIMIT 90",
-            [$driverId]
-        );
-        echo json_encode(['success' => true, 'dates' => array_column($dates, 'date')], JSON_UNESCAPED_UNICODE);
+        $dates = [];
+        if ($hasTables) {
+            $dateRows = $db->queryAll(
+                "SELECT DISTINCT recorded_at as date FROM driver_location_history 
+                 WHERE user_id = ? ORDER BY recorded_at DESC LIMIT 90",
+                [$driverId]
+            );
+            $dates = array_column($dateRows, 'date');
+        }
+        echo json_encode(['success' => true, 'dates' => $dates], JSON_UNESCAPED_UNICODE);
         break;
 
     default:

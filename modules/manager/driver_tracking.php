@@ -72,7 +72,7 @@ $baseDashboard = $isManager ? 'manager.php' : 'accountant.php';
     <p class="text-muted mb-0">عرض المواقع المباشرة وخطوط السير اليومية والتاريخية للسائقين</p>
 </div>
 
-<div class="row g-4">
+<div class="row g-4" data-driver-location-api="<?php echo htmlspecialchars($apiUrl, ENT_QUOTES); ?>">
     <div class="col-lg-8">
         <div class="card driver-tracking-panel shadow-sm">
             <div class="card-header d-flex justify-content-between align-items-center py-2">
@@ -127,7 +127,12 @@ $baseDashboard = $isManager ? 'manager.php' : 'accountant.php';
 <script>
 (function () {
     'use strict';
-    function getDriverTrackingApiBase() {
+    var apiBase = (function () {
+        var el = document.querySelector('[data-driver-location-api]');
+        if (el && el.getAttribute('data-driver-location-api')) {
+            var url = el.getAttribute('data-driver-location-api');
+            if (url && url.indexOf('driver_location') >= 0) return url;
+        }
         var currentPath = window.location.pathname || '/';
         var parts = currentPath.split('/').filter(Boolean);
         var stopSegments = { dashboard: 1, modules: 1, api: 1, assets: 1, includes: 1 };
@@ -138,8 +143,7 @@ $baseDashboard = $isManager ? 'manager.php' : 'accountant.php';
         }
         var basePath = baseParts.length ? '/' + baseParts.join('/') : '';
         return (basePath + '/api/driver_location.php').replace(/\/+/g, '/');
-    }
-    var apiBase = getDriverTrackingApiBase();
+    })();
     var map = null;
     var liveMarkers = {};
     var routeLayer = null;
@@ -213,14 +217,26 @@ $baseDashboard = $isManager ? 'manager.php' : 'accountant.php';
 
     function refreshStatusTable() {
         fetch(apiBase + '?action=status', { credentials: 'same-origin' })
-            .then(function (r) { return r.json(); })
+            .then(function (r) {
+                if (!r.ok) throw new Error('Network error');
+                return r.json();
+            })
             .then(function (data) {
-                if (!data.success || !data.drivers) return;
                 var tbody = document.querySelector('#drivers-status-table tbody');
+                if (!tbody) return;
                 tbody.innerHTML = '';
-                data.drivers.forEach(function (d) {
+                if (!data || !data.success) {
+                    tbody.innerHTML = '<tr><td colspan="3" class="text-muted text-center py-3">فشل تحميل البيانات</td></tr>';
+                    return;
+                }
+                var drivers = data.drivers || [];
+                if (drivers.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="3" class="text-muted text-center py-3">لا يوجد سائقين مسجلين في النظام</td></tr>';
+                    return;
+                }
+                drivers.forEach(function (d) {
                     var active = d.location_active == 1;
-                    var name = (d.full_name || d.username || 'سائق').trim();
+                    var name = (d.full_name || d.username || 'سائق').trim() || '-';
                     var updated = d.updated_at ? new Date(d.updated_at.replace(' ', 'T')).toLocaleString('ar-EG') : '-';
                     var row = '<tr><td>' + escapeHtml(name) + '</td><td>';
                     if (active) {
@@ -228,11 +244,14 @@ $baseDashboard = $isManager ? 'manager.php' : 'accountant.php';
                     } else {
                         row += '<span class="driver-status-inactive"><i class="bi bi-broadcast-pin me-1"></i>لا يعمل</span>';
                     }
-                    row += '</td><td class="small text-muted">' + escapeHtml(updated) + '</td></tr>';
+                    row += '</td><td class="small text-muted">' + escapeHtml(String(updated)) + '</td></tr>';
                     tbody.insertAdjacentHTML('beforeend', row);
                 });
             })
-            .catch(function () {});
+            .catch(function () {
+                var tbody = document.querySelector('#drivers-status-table tbody');
+                if (tbody) tbody.innerHTML = '<tr><td colspan="3" class="text-danger text-center py-3">فشل الاتصال بالخادم - تحقق من مسار API</td></tr>';
+            });
     }
 
     function escapeHtml(s) {
