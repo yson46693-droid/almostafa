@@ -616,6 +616,25 @@ function tasksHandleAction(string $action, array $input, array $context): array
                     }
                 }
 
+                // إرسال إشعار لعمال الإنتاج والمدير والمحاسب مع اسم منشئ الأوردر
+                try {
+                    $creatorName = $currentUser['full_name'] ?? $currentUser['name'] ?? 'غير معروف';
+                    $taskSummary = !empty($displayProductName) ? $displayProductName : ($title ?: 'مهمة جديدة');
+                    if ($quantity > 0 && !empty($displayProductName)) {
+                        $taskSummary .= ' - ' . number_format($quantity, 2) . ' ' . $unit;
+                    }
+                    $notificationTitle = 'أوردر جديد';
+                    $notificationMessage = $taskSummary . ' - أنشأه: ' . $creatorName;
+                    $productionUrl = getDashboardUrl('production') . '?page=tasks';
+                    $managerUrl = getDashboardUrl('manager') . '?page=tasks';
+                    $accountantUrl = getDashboardUrl('accountant') . '?page=tasks';
+                    createNotificationForRole('production', $notificationTitle, $notificationMessage, 'info', $productionUrl, true);
+                    createNotificationForRole('manager', $notificationTitle, $notificationMessage, 'info', $managerUrl, true);
+                    createNotificationForRole('accountant', $notificationTitle, $notificationMessage, 'info', $accountantUrl, true);
+                } catch (Throwable $notificationError) {
+                    error_log('Task order notification error: ' . $notificationError->getMessage());
+                }
+
                 $result['success'] = 'تم إضافة المهمة بنجاح';
                 break;
 
