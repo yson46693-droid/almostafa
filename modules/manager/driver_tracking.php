@@ -36,6 +36,7 @@ $driverLocationApiPath = (function_exists('getRelativeUrl') ? getRelativeUrl('ap
     background: #f5f0e6;
 }
 #driver-tracking-map .leaflet-tile-pane { filter: sepia(0.15) contrast(1.05) brightness(0.98); }
+#driver-tracking-map.driver-tracking-map-satellite .leaflet-tile-pane { filter: none; }
 .driver-tracking-panel {
     background: linear-gradient(145deg, #faf7f0 0%, #f0ebe0 100%);
     border: 1px solid #c4a574;
@@ -89,11 +90,17 @@ $driverLocationApiPath = (function_exists('getRelativeUrl') ? getRelativeUrl('ap
 <div class="row g-4">
     <div class="col-lg-8">
         <div class="card driver-tracking-panel shadow-sm">
-            <div class="card-header d-flex justify-content-between align-items-center py-2">
+            <div class="card-header d-flex flex-wrap justify-content-between align-items-center py-2 gap-2">
                 <span><i class="bi bi-map me-2"></i>الخريطة</span>
-                <div class="btn-group btn-group-sm" role="group">
-                    <button type="button" class="btn btn-outline-light active" id="btn-live-view" data-view="live">مباشر</button>
-                    <button type="button" class="btn btn-outline-light" id="btn-route-view" data-view="route">خط السير</button>
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button type="button" class="btn btn-outline-light active" id="btn-map-type-street" data-type="street" title="خريطة طرق">طرق</button>
+                        <button type="button" class="btn btn-outline-light" id="btn-map-type-satellite" data-type="satellite" title="قمر صناعي">قمر صناعي</button>
+                    </div>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button type="button" class="btn btn-outline-light active" id="btn-live-view" data-view="live">مباشر</button>
+                        <button type="button" class="btn btn-outline-light" id="btn-route-view" data-view="route">خط السير</button>
+                    </div>
                 </div>
             </div>
             <div class="card-body p-2">
@@ -183,18 +190,26 @@ $driverLocationApiPath = (function_exists('getRelativeUrl') ? getRelativeUrl('ap
         setTimeout(check, 50);
     }
 
+    var streetLayer = null;
+    var satelliteLayer = null;
+
     function initDriverTrackingMap() {
         var mapEl = document.getElementById('driver-tracking-map');
         if (!mapEl) return;
 
-        // CartoDB Positron - خلفية فاتحة مستوحاة من الخرائط الورقية
-        var mapLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        // خريطة الطرق (CartoDB)
+        streetLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
             subdomains: 'abcd',
             maxZoom: 19
         });
+        // قمر صناعي (ESRI World Imagery)
+        satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: '&copy; <a href="https://www.esri.com/">Esri</a>',
+            maxZoom: 19
+        });
 
-        map = L.map('driver-tracking-map', { zoomControl: false }).addLayer(mapLayer);
+        map = L.map('driver-tracking-map', { zoomControl: false }).addLayer(streetLayer);
         L.control.zoom({ position: 'topright' }).addTo(map);
         map.setView([30.0444, 31.2357], 10);
 
@@ -353,6 +368,29 @@ $driverLocationApiPath = (function_exists('getRelativeUrl') ? getRelativeUrl('ap
 
     var routeDateInput = document.getElementById('route-date-input');
     if (routeDateInput) routeDateInput.value = new Date().toISOString().slice(0, 10);
+
+    function setMapType(type) {
+        if (!map || !streetLayer || !satelliteLayer) return;
+        var container = map.getContainer();
+        if (type === 'satellite') {
+            map.removeLayer(streetLayer);
+            map.addLayer(satelliteLayer);
+            if (container) container.classList.add('driver-tracking-map-satellite');
+        } else {
+            map.removeLayer(satelliteLayer);
+            map.addLayer(streetLayer);
+            if (container) container.classList.remove('driver-tracking-map-satellite');
+        }
+        var btnStreet = document.getElementById('btn-map-type-street');
+        var btnSat = document.getElementById('btn-map-type-satellite');
+        if (btnStreet) btnStreet.classList.toggle('active', type === 'street');
+        if (btnSat) btnSat.classList.toggle('active', type === 'satellite');
+    }
+
+    var btnMapStreet = document.getElementById('btn-map-type-street');
+    if (btnMapStreet) btnMapStreet.addEventListener('click', function () { setMapType('street'); });
+    var btnMapSatellite = document.getElementById('btn-map-type-satellite');
+    if (btnMapSatellite) btnMapSatellite.addEventListener('click', function () { setMapType('satellite'); });
 
     var btnLiveView = document.getElementById('btn-live-view');
     if (btnLiveView) btnLiveView.addEventListener('click', function () {

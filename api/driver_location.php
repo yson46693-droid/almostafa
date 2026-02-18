@@ -91,6 +91,12 @@ $action = trim($_GET['action'] ?? 'live');
 $tablesExist = $db->queryOne("SHOW TABLES LIKE 'driver_live_location'");
 $hasTables = !empty($tablesExist);
 
+// تنظيف تلقائي: حذف خط سير الأيام الأقدم من أسبوع (مرة واحدة يومياً)
+require_once __DIR__ . '/../includes/driver_location_cleanup.php';
+if (function_exists('runDriverLocationCleanupOnceDaily')) {
+    runDriverLocationCleanupOnceDaily();
+}
+
 switch ($action) {
     case 'live':
         if (!$hasTables) {
