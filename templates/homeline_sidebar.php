@@ -286,7 +286,8 @@ switch ($role) {
                 'icon' => 'bi-geo-alt-fill',
                 'url' => $baseUrl . 'manager.php?page=driver_tracking',
                 'active' => ($currentPage === 'manager.php' && $currentPageParam === 'driver_tracking'),
-                'badge' => null
+                'badge' => null,
+                'no_ajax' => true
             ],
             [
                 'title' => isset($lang['menu_reports']) ? $lang['menu_reports'] : 'التقارير',
@@ -370,7 +371,8 @@ switch ($role) {
                 'icon' => 'bi-geo-alt-fill',
                 'url' => $baseUrl . 'accountant.php?page=driver_tracking',
                 'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'driver_tracking'),
-                'badge' => null
+                'badge' => null,
+                'no_ajax' => true
             ],
             [
                 'title' => 'طلبات العملاء',
@@ -986,6 +988,7 @@ if (empty($menuItems)) {
                 <li class="nav-item">
                     <a class="nav-link <?php echo $item['active'] ? 'active' : ''; ?>" 
                        href="<?php echo htmlspecialchars($item['url']); ?>"
+                       <?php if (!empty($item['no_ajax'])): ?>data-ajax="false"<?php endif; ?>
                        data-no-splash="true">
                         <i class="bi <?php echo htmlspecialchars($item['icon']); ?>"></i>
                         <span><?php echo htmlspecialchars($item['title']); ?></span>

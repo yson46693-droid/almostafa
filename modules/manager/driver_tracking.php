@@ -72,6 +72,13 @@ $driverLocationApiPath = (function_exists('getRelativeUrl') ? getRelativeUrl('ap
     font-weight: bold !important;
 }
 .driver-route-colors { --route-1: #c41e3a; --route-2: #1e3a8a; --route-3: #047857; --route-4: #7c2d12; }
+.driver-tracking-map-loading {
+    position: absolute; left: 0; top: 0; right: 0; bottom: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: #f5f0e6; border-radius: 10px; z-index: 500;
+    font-size: 0.95rem; color: #5a4a3a;
+}
+.driver-tracking-map-loading.hide { display: none !important; }
 </style>
 
 <div class="page-header mb-4">
@@ -107,7 +114,12 @@ $driverLocationApiPath = (function_exists('getRelativeUrl') ? getRelativeUrl('ap
                         </div>
                     </div>
                 </div>
-                <div id="driver-tracking-map"></div>
+                <div id="driver-tracking-map" class="position-relative">
+                    <div id="driver-tracking-map-loading" class="driver-tracking-map-loading">
+                        <span class="spinner-border spinner-border-sm text-primary me-2" role="status"></span>
+                        جاري تحميل الخريطة...
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -189,6 +201,9 @@ $driverLocationApiPath = (function_exists('getRelativeUrl') ? getRelativeUrl('ap
         setTimeout(function () {
             if (map) try { map.invalidateSize(); } catch (e) {}
         }, 300);
+
+        var loadingEl = document.getElementById('driver-tracking-map-loading');
+        if (loadingEl) loadingEl.classList.add('hide');
 
     function createLiveIcon(color) {
         return L.divIcon({
