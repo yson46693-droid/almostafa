@@ -127,6 +127,19 @@ if ($page === 'production_tasks' &&
     exit;
 }
 
+// معالجة AJAX لتتبع السائقين - عبر نفس الصفحة لضمان مشاركة الجلسة
+if ($page === 'driver_tracking' && $_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['ajax']) && $_GET['ajax'] === 'driver_location') {
+    $apiPath = __DIR__ . '/../api/driver_location.php';
+    if (file_exists($apiPath)) {
+        require_once __DIR__ . '/../includes/config.php';
+        require_once __DIR__ . '/../includes/db.php';
+        require_once __DIR__ . '/../includes/auth.php';
+        require_once __DIR__ . '/../includes/path_helper.php';
+        include $apiPath;
+        exit;
+    }
+}
+
 // بدء output buffering لضمان عدم وجود محتوى قبل DOCTYPE
 if (!ob_get_level()) {
     ob_start();

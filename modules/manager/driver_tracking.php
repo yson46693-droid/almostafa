@@ -15,10 +15,10 @@ require_once __DIR__ . '/../../includes/path_helper.php';
 
 requireRole(['manager', 'accountant', 'developer']);
 
-$basePath = function_exists('getBasePath') ? rtrim(getBasePath(), '/') : '';
-$driverLocationApiPath = preg_replace('#/+#', '/', ($basePath ?: '') . '/api/driver_location.php');
-$isManager = (isset($_GET['dashboard']) && $_GET['dashboard'] === 'manager') || (strpos($_SERVER['HTTP_REFERER'] ?? '', 'manager.php') !== false);
-$baseDashboard = $isManager ? 'manager.php' : 'accountant.php';
+$currentScript = $_SERVER['SCRIPT_NAME'] ?? '';
+$isAccountant = (strpos($currentScript, 'accountant') !== false);
+$dashboardScript = $isAccountant ? 'accountant.php' : 'manager.php';
+$driverLocationApiPath = (function_exists('getRelativeUrl') ? getRelativeUrl('dashboard/' . $dashboardScript) : '') . '?page=driver_tracking&ajax=driver_location';
 ?>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous" />
 <style>

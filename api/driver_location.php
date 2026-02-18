@@ -5,9 +5,8 @@
  * للسائق: POST لتحديث الموقع
  * للمدير/المحاسب: GET live, status, route
  */
-
-header('Content-Type: application/json; charset=utf-8');
 define('ACCESS_ALLOWED', true);
+header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
@@ -109,27 +108,32 @@ switch ($action) {
         break;
 
     case 'status':
-        if (!$hasTables) {
-            $drivers = $db->queryAll(
-                "SELECT id, full_name, username, NULL as latitude, NULL as longitude, NULL as updated_at, 0 as location_active
-                 FROM users WHERE role = 'driver' AND status = 'active' ORDER BY full_name"
-            );
-        } else {
-            $drivers = $db->queryAll(
-                "SELECT u.id, u.full_name, u.username,
-                        d.latitude, d.longitude, d.updated_at, d.is_online,
-                        CASE 
-                          WHEN d.user_id IS NULL THEN 0
-                          WHEN TIMESTAMPDIFF(MINUTE, d.updated_at, NOW()) > 5 THEN 0
-                          ELSE 1
-                        END AS location_active
-                 FROM users u
-                 LEFT JOIN driver_live_location d ON d.user_id = u.id
-                 WHERE u.role = 'driver' AND u.status = 'active'
-                 ORDER BY location_active DESC, u.full_name"
-            );
+        try {
+            if (!$hasTables) {
+                $drivers = $db->queryAll(
+                    "SELECT id, full_name, username, NULL as latitude, NULL as longitude, NULL as updated_at, 0 as location_active
+                     FROM users WHERE role = 'driver' AND status = 'active' ORDER BY full_name"
+                );
+            } else {
+                $drivers = $db->queryAll(
+                    "SELECT u.id, u.full_name, u.username,
+                            d.latitude, d.longitude, d.updated_at, d.is_online,
+                            CASE 
+                              WHEN d.user_id IS NULL THEN 0
+                              WHEN TIMESTAMPDIFF(MINUTE, d.updated_at, NOW()) > 5 THEN 0
+                              ELSE 1
+                            END AS location_active
+                     FROM users u
+                     LEFT JOIN driver_live_location d ON d.user_id = u.id
+                     WHERE u.role = 'driver' AND u.status = 'active'
+                     ORDER BY location_active DESC, u.full_name"
+                );
+            }
+            echo json_encode(['success' => true, 'drivers' => $drivers], JSON_UNESCAPED_UNICODE);
+        } catch (Throwable $e) {
+            error_log('Driver location status error: ' . $e->getMessage());
+            echo json_encode(['success' => false, 'message' => 'حدث خطأ في جلب البيانات: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
         }
-        echo json_encode(['success' => true, 'drivers' => $drivers], JSON_UNESCAPED_UNICODE);
         break;
 
     case 'route':
