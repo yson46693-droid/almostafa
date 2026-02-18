@@ -3434,7 +3434,7 @@ $hasShippingCompanies = !empty($shippingCompanies);
                                 </td>
                                 <td>
                                     <div class="d-flex flex-wrap gap-2">
-                                        <button type="button" class="btn btn-sm btn-outline-info" onclick="showCompanyPaperInvoicesModal(this)"
+                                        <button type="button" class="btn btn-sm btn-outline-info" onclick="showCompanyPaperInvoicesCard(this)"
                                                 data-company-id="<?php echo (int)$company['id']; ?>"
                                                 data-company-name="<?php echo htmlspecialchars($company['name']); ?>"
                                                 title="سجل الفواتير الورقية">
@@ -3465,6 +3465,73 @@ $hasShippingCompanies = !empty($shippingCompanies);
                 </table>
             </div>
         <?php endif; ?>
+    </div>
+</div>
+
+<!-- بطاقة سجل الفواتير الورقية لشركة الشحن (بدل المودال) -->
+<div class="card shadow-sm mb-4 border-info" id="companyPaperInvoicesCard" style="display: none;">
+    <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-receipt-cutoff me-2"></i>سجل الفواتير الورقية - <span id="companyPaperInvoicesCompanyName">-</span></h5>
+        <button type="button" class="btn btn-sm btn-light" onclick="closeCompanyPaperInvoicesCard()" aria-label="إغلاق"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="card-body">
+        <input type="hidden" id="companyPaperInvoicesCompanyId" value="">
+        <div class="mb-3">
+            <button type="button" class="btn btn-primary btn-sm" onclick="toggleCompanyPaperInvoiceAddCard()">
+                <i class="bi bi-plus-lg me-1"></i>إضافة فاتورة ورقية
+            </button>
+        </div>
+        <!-- بطاقة إضافة فاتورة ورقية لشركة (قابلة للطي) -->
+        <div class="card mb-3 border-primary collapse" id="companyPaperInvoiceAddCard">
+            <div class="card-header bg-primary text-white py-2 d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-receipt-cutoff me-2"></i>إضافة فاتورة ورقية</span>
+                <button type="button" class="btn btn-sm btn-light" onclick="toggleCompanyPaperInvoiceAddCard()"><i class="bi bi-x-lg"></i></button>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small">رفع صورة الفاتورة الورقية وإدخال رقم الفاتورة والإجمالي. تُحفظ كسجل للشركة.</p>
+                <input type="hidden" id="companyPaperInvoiceAddCompanyId" value="">
+                <div class="mb-3">
+                    <label class="form-label">صورة الفاتورة <span class="text-danger">*</span></label>
+                    <input type="file" id="companyPaperInvoiceAddImageInput" class="form-control form-control-sm" accept="image/jpeg,image/png,image/gif,image/webp">
+                    <div id="companyPaperInvoiceAddImagePreview" class="mt-2 text-center" style="display: none;">
+                        <img id="companyPaperInvoiceAddPreviewImg" src="" alt="معاينة" class="img-fluid rounded border" style="max-height: 180px;">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">رقم الفاتورة <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="companyPaperInvoiceAddNumber" placeholder="أدخل رقم الفاتورة">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">إجمالي الفاتورة (ج.م) <span class="text-danger">*</span></label>
+                    <input type="number" step="0.01" min="0.01" class="form-control" id="companyPaperInvoiceAddTotal" placeholder="0.00">
+                </div>
+                <div id="companyPaperInvoiceAddMessage" class="alert d-none mb-0"></div>
+                <button type="button" class="btn btn-primary" id="companyPaperInvoiceAddSubmitBtn" onclick="submitCompanyPaperInvoice()">
+                    <i class="bi bi-check-lg me-1"></i>حفظ
+                </button>
+            </div>
+        </div>
+        <div id="companyPaperInvoicesLoading" class="text-center py-4 text-muted d-none">
+            <div class="spinner-border" role="status"></div>
+            <p class="mt-2 mb-0">جاري تحميل السجل...</p>
+        </div>
+        <div class="table-responsive" id="companyPaperInvoicesTableWrap" style="display: none;">
+            <table class="table table-sm table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>رقم الفاتورة</th>
+                        <th>الإجمالي</th>
+                        <th>التاريخ</th>
+                        <th>الإجراء</th>
+                    </tr>
+                </thead>
+                <tbody id="companyPaperInvoicesTableBody"></tbody>
+            </table>
+        </div>
+        <div id="companyPaperInvoicesEmpty" class="text-center py-4 text-muted" style="display: none;">
+            <i class="bi bi-inbox fs-1"></i>
+            <p class="mb-0">لا توجد فواتير ورقية مسجلة لهذه الشركة بعد.</p>
+        </div>
     </div>
 </div>
 
@@ -4901,62 +4968,32 @@ function confirmCancelOrderWithDeductedAmount() {
     </div>
 </div>
 
-<!-- Modal سجل الفواتير والفاتورة الورقية (طلبات الشحن - عميل محلي) -->
-<div class="modal fade" id="shippingInvoiceLogModal" tabindex="-1" aria-labelledby="shippingInvoiceLogModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header bg-info text-white">
-                <h5 class="modal-title" id="shippingInvoiceLogModalLabel">
-                    <i class="bi bi-receipt me-2"></i>سجل الفواتير والفاتورة الورقية - <span id="shippingInvoiceLogCustomerName">-</span>
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="shippingInvoiceLogCustomerId" value="">
-                <input type="hidden" id="shippingInvoiceLogIsLocal" value="1">
-                <div class="mb-3" id="shippingAddPaperInvoiceWrap">
-                    <button type="button" class="btn btn-primary btn-sm" id="shippingAddPaperInvoiceBtn" onclick="openShippingPaperInvoiceForm()">
-                        <i class="bi bi-plus-lg me-1"></i>إضافة فاتورة ورقية
-                    </button>
-                    <button type="button" class="btn btn-warning btn-sm ms-2" id="shippingAddPaperInvoiceReturnBtn" onclick="openShippingPaperInvoiceReturnForm()">
-                        <i class="bi bi-arrow-return-left me-1"></i>مرتجع من فاتورة ورقية
-                    </button>
-                </div>
-                <div id="shippingInvoiceLogLoading" class="text-center py-4 text-muted d-none">
-                    <div class="spinner-border" role="status"></div>
-                    <p class="mt-2 mb-0">جاري تحميل سجل الفواتير...</p>
-                </div>
-                <div class="table-responsive" id="shippingInvoiceLogTableWrap" style="display: none;">
-                    <table class="table table-sm table-hover">
-                        <thead class="table-light">
-                            <tr>
-                                <th>رقم الفاتورة</th>
-                                <th>الإجمالي</th>
-                                <th>التاريخ</th>
-                                <th>الإجراء</th>
-                            </tr>
-                        </thead>
-                        <tbody id="shippingInvoiceLogTableBody"></tbody>
-                    </table>
-                </div>
-                <div id="shippingInvoiceLogEmpty" class="text-center py-4 text-muted" style="display: none;">
-                    <i class="bi bi-inbox fs-1"></i>
-                    <p class="mb-0" id="shippingInvoiceLogEmptyText">لا توجد فواتير مسجلة لهذا العميل بعد.</p>
-                </div>
-            </div>
-        </div>
+<!-- بطاقة سجل الفواتير والفاتورة الورقية (طلبات الشحن - عميل محلي) -->
+<div class="card shadow-sm mb-4 border-info" id="shippingInvoiceLogCard" style="display: none;">
+    <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">
+            <i class="bi bi-receipt me-2"></i>سجل الفواتير والفاتورة الورقية - <span id="shippingInvoiceLogCustomerName">-</span>
+        </h5>
+        <button type="button" class="btn btn-sm btn-light" onclick="closeShippingInvoiceLogCard()" aria-label="إغلاق"><i class="bi bi-x-lg"></i></button>
     </div>
-</div>
-
-<!-- Modal إضافة فاتورة ورقية (طلبات الشحن) -->
-<div class="modal fade" id="shippingPaperInvoiceModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title"><i class="bi bi-receipt-cutoff me-2"></i>إضافة فاتورة ورقية</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+    <div class="card-body">
+        <input type="hidden" id="shippingInvoiceLogCustomerId" value="">
+        <input type="hidden" id="shippingInvoiceLogIsLocal" value="1">
+        <div class="mb-3" id="shippingAddPaperInvoiceWrap">
+            <button type="button" class="btn btn-primary btn-sm" id="shippingAddPaperInvoiceBtn" onclick="toggleShippingPaperInvoiceCard()">
+                <i class="bi bi-plus-lg me-1"></i>إضافة فاتورة ورقية
+            </button>
+            <button type="button" class="btn btn-warning btn-sm ms-2" id="shippingAddPaperInvoiceReturnBtn" onclick="toggleShippingPaperInvoiceReturnCard()">
+                <i class="bi bi-arrow-return-left me-1"></i>مرتجع من فاتورة ورقية
+            </button>
+        </div>
+        <!-- بطاقة إضافة فاتورة ورقية (عميل محلي) -->
+        <div class="card mb-3 border-primary collapse" id="shippingPaperInvoiceCard">
+            <div class="card-header bg-primary text-white py-2 d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-receipt-cutoff me-2"></i>إضافة فاتورة ورقية</span>
+                <button type="button" class="btn btn-sm btn-light" onclick="toggleShippingPaperInvoiceCard()"><i class="bi bi-x-lg"></i></button>
             </div>
-            <div class="modal-body">
+            <div class="card-body">
                 <p class="text-muted small">رفع صورة الفاتورة الورقية وإدخال الإجمالي. سيُضاف المبلغ كرصيد دائن للعميل ويُسجّل في سجل الفواتير.</p>
                 <input type="hidden" id="shippingPaperInvoiceCustomerId" value="">
                 <div class="mb-3">
@@ -4975,120 +5012,18 @@ function confirmCancelOrderWithDeductedAmount() {
                     <input type="number" step="0.01" min="0.01" class="form-control" id="shippingPaperInvoiceTotal" placeholder="0.00">
                 </div>
                 <div id="shippingPaperInvoiceMessage" class="alert d-none mb-0"></div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
                 <button type="button" class="btn btn-primary" id="shippingPaperInvoiceSubmitBtn" onclick="submitShippingPaperInvoice()">
                     <i class="bi bi-check-lg me-1"></i>حفظ وإضافة للرصيد الدائن
                 </button>
             </div>
         </div>
-    </div>
-</div>
-
-<!-- Modal عرض صورة الفاتورة الورقية (طلبات الشحن) -->
-<div class="modal fade" id="shippingPaperInvoiceViewModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content">
-            <div class="modal-header bg-secondary text-white">
-                <h5 class="modal-title">عرض الفاتورة الورقية</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+        <!-- بطاقة مرتجع من فاتورة ورقية (عميل محلي) -->
+        <div class="card mb-3 border-warning collapse" id="shippingPaperInvoiceReturnCard">
+            <div class="card-header bg-warning text-dark py-2 d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-arrow-return-left me-2"></i>مرتجع من فاتورة ورقية</span>
+                <button type="button" class="btn btn-sm btn-dark" onclick="toggleShippingPaperInvoiceReturnCard()"><i class="bi bi-x-lg"></i></button>
             </div>
-            <div class="modal-body text-center p-0">
-                <img id="shippingPaperInvoiceViewImg" src="" alt="صورة الفاتورة" class="img-fluid" style="max-height: 80vh;">
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal سجل الفواتير الورقية لشركة الشحن -->
-<div class="modal fade" id="companyPaperInvoicesModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header bg-info text-white">
-                <h5 class="modal-title"><i class="bi bi-receipt-cutoff me-2"></i>سجل الفواتير الورقية - <span id="companyPaperInvoicesCompanyName">-</span></h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="companyPaperInvoicesCompanyId" value="">
-                <div class="mb-3">
-                    <button type="button" class="btn btn-primary btn-sm" onclick="openCompanyPaperInvoiceForm()">
-                        <i class="bi bi-plus-lg me-1"></i>إضافة فاتورة ورقية
-                    </button>
-                </div>
-                <div id="companyPaperInvoicesLoading" class="text-center py-4 text-muted d-none">
-                    <div class="spinner-border" role="status"></div>
-                    <p class="mt-2 mb-0">جاري تحميل السجل...</p>
-                </div>
-                <div class="table-responsive" id="companyPaperInvoicesTableWrap" style="display: none;">
-                    <table class="table table-sm table-hover">
-                        <thead class="table-light">
-                            <tr>
-                                <th>رقم الفاتورة</th>
-                                <th>الإجمالي</th>
-                                <th>التاريخ</th>
-                                <th>الإجراء</th>
-                            </tr>
-                        </thead>
-                        <tbody id="companyPaperInvoicesTableBody"></tbody>
-                    </table>
-                </div>
-                <div id="companyPaperInvoicesEmpty" class="text-center py-4 text-muted" style="display: none;">
-                    <i class="bi bi-inbox fs-1"></i>
-                    <p class="mb-0">لا توجد فواتير ورقية مسجلة لهذه الشركة بعد.</p>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal إضافة فاتورة ورقية لشركة الشحن -->
-<div class="modal fade" id="companyPaperInvoiceAddModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title"><i class="bi bi-receipt-cutoff me-2"></i>إضافة فاتورة ورقية</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
-            </div>
-            <div class="modal-body">
-                <p class="text-muted small">رفع صورة الفاتورة الورقية وإدخال رقم الفاتورة والإجمالي. تُحفظ كسجل للشركة.</p>
-                <input type="hidden" id="companyPaperInvoiceAddCompanyId" value="">
-                <div class="mb-3">
-                    <label class="form-label">صورة الفاتورة <span class="text-danger">*</span></label>
-                    <input type="file" id="companyPaperInvoiceAddImageInput" class="form-control form-control-sm" accept="image/jpeg,image/png,image/gif,image/webp">
-                    <div id="companyPaperInvoiceAddImagePreview" class="mt-2 text-center" style="display: none;">
-                        <img id="companyPaperInvoiceAddPreviewImg" src="" alt="معاينة" class="img-fluid rounded border" style="max-height: 180px;">
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">رقم الفاتورة <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" id="companyPaperInvoiceAddNumber" placeholder="أدخل رقم الفاتورة">
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">إجمالي الفاتورة (ج.م) <span class="text-danger">*</span></label>
-                    <input type="number" step="0.01" min="0.01" class="form-control" id="companyPaperInvoiceAddTotal" placeholder="0.00">
-                </div>
-                <div id="companyPaperInvoiceAddMessage" class="alert d-none mb-0"></div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-                <button type="button" class="btn btn-primary" id="companyPaperInvoiceAddSubmitBtn" onclick="submitCompanyPaperInvoice()">
-                    <i class="bi bi-check-lg me-1"></i>حفظ
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal إضافة مرتجع من فاتورة ورقية (طلبات الشحن) -->
-<div class="modal fade" id="shippingPaperInvoiceReturnModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-warning text-dark">
-                <h5 class="modal-title"><i class="bi bi-arrow-return-left me-2"></i>مرتجع من فاتورة ورقية</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
-            </div>
-            <div class="modal-body">
+            <div class="card-body">
                 <p class="text-muted small">رفع صورة الفاتورة/المرتجع وإدخال رقم الفاتورة ومبلغ المرتجع. يُخصم المبلغ من الرصيد المدين؛ إن زاد عن الدين يتحول الفرق إلى رصيد دائن.</p>
                 <input type="hidden" id="shippingPaperInvoiceReturnCustomerId" value="">
                 <div class="mb-3">
@@ -5107,12 +5042,45 @@ function confirmCancelOrderWithDeductedAmount() {
                     <input type="number" step="0.01" min="0.01" class="form-control" id="shippingPaperInvoiceReturnAmount" placeholder="0.00">
                 </div>
                 <div id="shippingPaperInvoiceReturnMessage" class="alert d-none mb-0"></div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
                 <button type="button" class="btn btn-warning" id="shippingPaperInvoiceReturnSubmitBtn" onclick="submitShippingPaperInvoiceReturn()">
                     <i class="bi bi-check-lg me-1"></i>حفظ وخصم من الرصيد
                 </button>
+            </div>
+        </div>
+        <div id="shippingInvoiceLogLoading" class="text-center py-4 text-muted d-none">
+            <div class="spinner-border" role="status"></div>
+            <p class="mt-2 mb-0">جاري تحميل سجل الفواتير...</p>
+        </div>
+        <div class="table-responsive" id="shippingInvoiceLogTableWrap" style="display: none;">
+            <table class="table table-sm table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>رقم الفاتورة</th>
+                        <th>الإجمالي</th>
+                        <th>التاريخ</th>
+                        <th>الإجراء</th>
+                    </tr>
+                </thead>
+                <tbody id="shippingInvoiceLogTableBody"></tbody>
+            </table>
+        </div>
+        <div id="shippingInvoiceLogEmpty" class="text-center py-4 text-muted" style="display: none;">
+            <i class="bi bi-inbox fs-1"></i>
+            <p class="mb-0" id="shippingInvoiceLogEmptyText">لا توجد فواتير مسجلة لهذا العميل بعد.</p>
+        </div>
+    </div>
+</div>
+
+<!-- Modal عرض صورة الفاتورة الورقية (طلبات الشحن) -->
+<div class="modal fade" id="shippingPaperInvoiceViewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-secondary text-white">
+                <h5 class="modal-title">عرض الفاتورة الورقية</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body text-center p-0">
+                <img id="shippingPaperInvoiceViewImg" src="" alt="صورة الفاتورة" class="img-fluid" style="max-height: 80vh;">
             </div>
         </div>
     </div>
@@ -5139,7 +5107,7 @@ var shippingPaperInvoiceUrl = <?php echo json_encode(getRelativeUrl('api/local_p
 var shippingPaperInvoiceReturnUrl = <?php echo json_encode(getRelativeUrl('api/local_paper_invoice_return.php')); ?>;
 var companyPaperInvoiceUrl = <?php echo json_encode(getRelativeUrl('api/shipping_company_paper_invoice.php')); ?>;
 
-function showCompanyPaperInvoicesModal(button) {
+function showCompanyPaperInvoicesCard(button) {
     var companyId = button.getAttribute('data-company-id');
     var companyName = button.getAttribute('data-company-name') || 'شركة الشحن';
     if (!companyId) return;
@@ -5148,12 +5116,36 @@ function showCompanyPaperInvoicesModal(button) {
     document.getElementById('companyPaperInvoicesTableWrap').style.display = 'none';
     document.getElementById('companyPaperInvoicesEmpty').style.display = 'none';
     document.getElementById('companyPaperInvoicesLoading').classList.remove('d-none');
-    var modalEl = document.getElementById('companyPaperInvoicesModal');
-    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-        var m = bootstrap.Modal.getOrCreateInstance(modalEl);
-        m.show();
+    var cardEl = document.getElementById('companyPaperInvoicesCard');
+    if (cardEl) {
+        cardEl.style.display = '';
+        cardEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    var addCard = document.getElementById('companyPaperInvoiceAddCard');
+    if (addCard && typeof bootstrap !== 'undefined' && bootstrap.Collapse) {
+        var col = bootstrap.Collapse.getInstance(addCard);
+        if (col) col.hide();
     }
     loadCompanyPaperInvoices(companyId);
+}
+
+function closeCompanyPaperInvoicesCard() {
+    var cardEl = document.getElementById('companyPaperInvoicesCard');
+    if (cardEl) cardEl.style.display = 'none';
+}
+
+function toggleCompanyPaperInvoiceAddCard() {
+    var addCard = document.getElementById('companyPaperInvoiceAddCard');
+    if (!addCard) return;
+    var companyIdEl = document.getElementById('companyPaperInvoicesCompanyId');
+    if (companyIdEl) document.getElementById('companyPaperInvoiceAddCompanyId').value = companyIdEl.value;
+    if (typeof bootstrap !== 'undefined' && bootstrap.Collapse) {
+        var col = bootstrap.Collapse.getOrCreateInstance(addCard, { toggle: true });
+        col.toggle();
+    } else {
+        addCard.classList.toggle('show');
+        addCard.style.display = addCard.classList.contains('show') ? 'block' : 'none';
+    }
 }
 
 function loadCompanyPaperInvoices(companyId) {
@@ -5207,10 +5199,10 @@ function openCompanyPaperInvoiceForm() {
     document.getElementById('companyPaperInvoiceAddImageInput').value = '';
     document.getElementById('companyPaperInvoiceAddImagePreview').style.display = 'none';
     document.getElementById('companyPaperInvoiceAddMessage').classList.add('d-none');
-    var modalEl = document.getElementById('companyPaperInvoiceAddModal');
-    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-        var m = bootstrap.Modal.getOrCreateInstance(modalEl);
-        m.show();
+    var addCard = document.getElementById('companyPaperInvoiceAddCard');
+    if (addCard && typeof bootstrap !== 'undefined' && bootstrap.Collapse) {
+        var col = bootstrap.Collapse.getOrCreateInstance(addCard);
+        col.show();
     }
 }
 
@@ -5244,9 +5236,10 @@ function submitCompanyPaperInvoice() {
             }
             if (data.success) {
                 loadCompanyPaperInvoices(companyId);
-                if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-                    var m = bootstrap.Modal.getInstance(document.getElementById('companyPaperInvoiceAddModal'));
-                    if (m) setTimeout(function() { m.hide(); }, 1200);
+                var addCard = document.getElementById('companyPaperInvoiceAddCard');
+                if (addCard && typeof bootstrap !== 'undefined' && bootstrap.Collapse) {
+                    var col = bootstrap.Collapse.getInstance(addCard);
+                    if (col) setTimeout(function() { col.hide(); }, 1200);
                 }
             }
             if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i>حفظ'; }
@@ -5281,12 +5274,55 @@ function showShippingInvoiceLogModal(button) {
     document.getElementById('shippingInvoiceLogTableWrap').style.display = 'none';
     document.getElementById('shippingInvoiceLogEmpty').style.display = 'none';
     document.getElementById('shippingInvoiceLogLoading').classList.remove('d-none');
-    var modalEl = document.getElementById('shippingInvoiceLogModal');
-    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-        var m = bootstrap.Modal.getOrCreateInstance(modalEl);
-        m.show();
+    var cardEl = document.getElementById('shippingInvoiceLogCard');
+    if (cardEl) {
+        cardEl.style.display = '';
+        cardEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    var paperCard = document.getElementById('shippingPaperInvoiceCard');
+    var returnCard = document.getElementById('shippingPaperInvoiceReturnCard');
+    if (paperCard && typeof bootstrap !== 'undefined' && bootstrap.Collapse) {
+        var col = bootstrap.Collapse.getInstance(paperCard);
+        if (col) col.hide();
+    }
+    if (returnCard && typeof bootstrap !== 'undefined' && bootstrap.Collapse) {
+        var col = bootstrap.Collapse.getInstance(returnCard);
+        if (col) col.hide();
     }
     loadShippingInvoiceLog(customerId, isLocal);
+}
+
+function closeShippingInvoiceLogCard() {
+    var cardEl = document.getElementById('shippingInvoiceLogCard');
+    if (cardEl) cardEl.style.display = 'none';
+}
+
+function toggleShippingPaperInvoiceCard() {
+    var cardEl = document.getElementById('shippingPaperInvoiceCard');
+    if (!cardEl) return;
+    var customerIdEl = document.getElementById('shippingInvoiceLogCustomerId');
+    if (customerIdEl) document.getElementById('shippingPaperInvoiceCustomerId').value = customerIdEl.value;
+    if (typeof bootstrap !== 'undefined' && bootstrap.Collapse) {
+        var col = bootstrap.Collapse.getOrCreateInstance(cardEl, { toggle: true });
+        col.toggle();
+    } else {
+        cardEl.classList.toggle('show');
+        cardEl.style.display = cardEl.classList.contains('show') ? 'block' : 'none';
+    }
+}
+
+function toggleShippingPaperInvoiceReturnCard() {
+    var cardEl = document.getElementById('shippingPaperInvoiceReturnCard');
+    if (!cardEl) return;
+    var customerIdEl = document.getElementById('shippingInvoiceLogCustomerId');
+    if (customerIdEl) document.getElementById('shippingPaperInvoiceReturnCustomerId').value = customerIdEl.value;
+    if (typeof bootstrap !== 'undefined' && bootstrap.Collapse) {
+        var col = bootstrap.Collapse.getOrCreateInstance(cardEl, { toggle: true });
+        col.toggle();
+    } else {
+        cardEl.classList.toggle('show');
+        cardEl.style.display = cardEl.classList.contains('show') ? 'block' : 'none';
+    }
 }
 
 function loadShippingInvoiceLog(customerId, isLocal) {
@@ -5393,10 +5429,10 @@ function openShippingPaperInvoiceForm() {
     document.getElementById('shippingPaperInvoiceImageInput').value = '';
     document.getElementById('shippingPaperInvoiceImagePreview').style.display = 'none';
     document.getElementById('shippingPaperInvoiceMessage').classList.add('d-none');
-    var modalEl = document.getElementById('shippingPaperInvoiceModal');
-    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-        var m = bootstrap.Modal.getOrCreateInstance(modalEl);
-        m.show();
+    var cardEl = document.getElementById('shippingPaperInvoiceCard');
+    if (cardEl && typeof bootstrap !== 'undefined' && bootstrap.Collapse) {
+        var col = bootstrap.Collapse.getOrCreateInstance(cardEl);
+        col.show();
     }
 }
 
@@ -5435,9 +5471,10 @@ function submitShippingPaperInvoice() {
                 document.getElementById('shippingPaperInvoiceImagePreview').style.display = 'none';
                 var logCustomerId = document.getElementById('shippingInvoiceLogCustomerId').value;
                 loadShippingInvoiceLog(logCustomerId);
-                if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-                    var m = bootstrap.Modal.getInstance(document.getElementById('shippingPaperInvoiceModal'));
-                    if (m) setTimeout(function() { m.hide(); }, 1200);
+                var cardEl = document.getElementById('shippingPaperInvoiceCard');
+                if (cardEl && typeof bootstrap !== 'undefined' && bootstrap.Collapse) {
+                    var col = bootstrap.Collapse.getInstance(cardEl);
+                    if (col) setTimeout(function() { col.hide(); }, 1200);
                 }
             }
             if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i>حفظ وإضافة للرصيد الدائن'; }
@@ -5468,10 +5505,10 @@ function openShippingPaperInvoiceReturnForm() {
     document.getElementById('shippingPaperInvoiceReturnImageInput').value = '';
     document.getElementById('shippingPaperInvoiceReturnImagePreview').style.display = 'none';
     document.getElementById('shippingPaperInvoiceReturnMessage').classList.add('d-none');
-    var modalEl = document.getElementById('shippingPaperInvoiceReturnModal');
-    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-        var m = bootstrap.Modal.getOrCreateInstance(modalEl);
-        m.show();
+    var cardEl = document.getElementById('shippingPaperInvoiceReturnCard');
+    if (cardEl && typeof bootstrap !== 'undefined' && bootstrap.Collapse) {
+        var col = bootstrap.Collapse.getOrCreateInstance(cardEl);
+        col.show();
     }
 }
 
@@ -5512,9 +5549,10 @@ function submitShippingPaperInvoiceReturn() {
                 var isLocalEl = document.getElementById('shippingInvoiceLogIsLocal');
                 var isLocal = !isLocalEl || parseInt(isLocalEl.value, 10) !== 0;
                 loadShippingInvoiceLog(logCustomerId, isLocal);
-                if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-                    var m = bootstrap.Modal.getInstance(document.getElementById('shippingPaperInvoiceReturnModal'));
-                    if (m) setTimeout(function() { m.hide(); }, 1200);
+                var returnCardEl = document.getElementById('shippingPaperInvoiceReturnCard');
+                if (returnCardEl && typeof bootstrap !== 'undefined' && bootstrap.Collapse) {
+                    var col = bootstrap.Collapse.getInstance(returnCardEl);
+                    if (col) setTimeout(function() { col.hide(); }, 1200);
                 }
             }
             if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i>حفظ وخصم من الرصيد'; }
@@ -5537,6 +5575,18 @@ function showShippingPaperInvoiceReturnImage(returnId) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+    var companyPaperInvoiceAddImageInput = document.getElementById('companyPaperInvoiceAddImageInput');
+    if (companyPaperInvoiceAddImageInput) {
+        companyPaperInvoiceAddImageInput.addEventListener('change', function() {
+            var file = this.files && this.files[0];
+            var preview = document.getElementById('companyPaperInvoiceAddImagePreview');
+            var previewImg = document.getElementById('companyPaperInvoiceAddPreviewImg');
+            if (!file || !preview || !previewImg) return;
+            var reader = new FileReader();
+            reader.onload = function(e) { previewImg.src = e.target.result; preview.style.display = 'block'; };
+            reader.readAsDataURL(file);
+        });
+    }
     var shippingPaperInvoiceImageInput = document.getElementById('shippingPaperInvoiceImageInput');
     if (shippingPaperInvoiceImageInput) {
         shippingPaperInvoiceImageInput.addEventListener('change', function() {
