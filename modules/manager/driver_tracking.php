@@ -80,6 +80,8 @@ $driverLocationApiPath = (function_exists('getRelativeUrl') ? getRelativeUrl('ap
     font-size: 0.95rem; color: #5a4a3a;
 }
 .driver-tracking-map-loading.hide { display: none !important; }
+#driver-tracking-map .leaflet-control-layers { border: 2px solid rgba(139,69,19,0.5); border-radius: 8px; }
+#driver-tracking-map .leaflet-control-layers-expanded { padding: 8px 10px; background: rgba(250,247,240,0.95); }
 </style>
 
 <div class="page-header mb-4">
@@ -211,6 +213,16 @@ $driverLocationApiPath = (function_exists('getRelativeUrl') ? getRelativeUrl('ap
 
         map = L.map('driver-tracking-map', { zoomControl: false }).addLayer(streetLayer);
         L.control.zoom({ position: 'topright' }).addTo(map);
+        var baseLayers = { 'طرق': streetLayer, 'قمر صناعي': satelliteLayer };
+        var layerControl = L.control.layers(baseLayers, null, { position: 'topright' }).addTo(map);
+        map.on('baselayerchange', function (e) {
+            var container = map.getContainer();
+            if (container) container.classList.toggle('driver-tracking-map-satellite', e.name === 'قمر صناعي');
+            var btnStreet = document.getElementById('btn-map-type-street');
+            var btnSat = document.getElementById('btn-map-type-satellite');
+            if (btnStreet) btnStreet.classList.toggle('active', e.name === 'طرق');
+            if (btnSat) btnSat.classList.toggle('active', e.name === 'قمر صناعي');
+        });
         map.setView([30.0444, 31.2357], 10);
 
         setTimeout(function () {
