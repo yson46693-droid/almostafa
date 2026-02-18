@@ -2509,7 +2509,7 @@ function tasksHtml(string $value): string
             console.log('Final task type:', taskTypeSelect ? taskTypeSelect.value : 'NOT FOUND');
             console.log('=== END FORM SUBMIT DEBUG ===');
         });
-    }
+    } 
 
     const statusLabelMap = {
         'pending': 'معلقة',
