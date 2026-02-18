@@ -3024,7 +3024,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <?php if (!$isAjaxNavigation): ?>
 <?php include __DIR__ . '/../templates/footer.php'; ?>
-<script src="<?php echo ASSETS_URL; ?>js/local_customers_search.js" defer></script>
+<script src="<?php echo ASSETS_URL; ?>js/local_customers_search.js?v=2" defer></script>
 <script src="<?php echo ASSETS_URL; ?>js/reports.js"></script>
 <?php else: ?>
 <?php
