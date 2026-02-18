@@ -2695,8 +2695,8 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 
-<!-- Modal عرض تفاصيل فاتورة العميل المحلي -->
-<div class="modal fade" id="localInvoiceDetailsModal" tabindex="-1" aria-hidden="true">
+<!-- Modal عرض تفاصيل فاتورة العميل المحلي - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="localInvoiceDetailsModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-info text-white">
@@ -2732,6 +2732,42 @@ document.addEventListener('DOMContentLoaded', function() {
                     </button>
                 </div>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- بطاقة تفاصيل فاتورة العميل المحلي - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="localInvoiceDetailsCard" style="display: none;">
+    <div class="card-header bg-info text-white d-flex align-items-center justify-content-between">
+        <h5 class="mb-0">
+            <i class="bi bi-receipt-detailed me-2"></i>
+            تفاصيل الفاتورة - <span id="localInvoiceDetailsCardNumber">-</span>
+        </h5>
+        <button type="button" class="btn btn-sm btn-light" onclick="closeLocalInvoiceDetailsCard()" aria-label="إغلاق"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="card-body">
+        <div class="mb-3">
+            <span class="text-muted">التاريخ: </span><strong id="localInvoiceDetailsCardDate">-</strong>
+            <span class="ms-2 text-muted">الإجمالي: </span><strong id="localInvoiceDetailsCardTotal">0.00 ج.م</strong>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered">
+                <thead class="table-light">
+                    <tr>
+                        <th>اسم المنتج</th>
+                        <th>رقم التشغيلة</th>
+                        <th>الكمية</th>
+                        <th>سعر الوحدة</th>
+                        <th>الإجمالي</th>
+                    </tr>
+                </thead>
+                <tbody id="localInvoiceDetailsCardTableBody"></tbody>
+            </table>
+        </div>
+        <div class="mt-3">
+            <button type="button" class="btn btn-success btn-sm" id="localInvoiceDetailsCardReturnBtn" onclick="localOpenReturnForInvoiceFromDetails()">
+                <i class="bi bi-arrow-return-left me-1"></i>إرجاع من هذه الفاتورة
+            </button>
         </div>
     </div>
 </div>
@@ -3124,7 +3160,8 @@ function closeAllForms() {
         'customerExportCard',
         'viewLocationCard',
         'localCustomerPurchaseHistoryCard',
-        'paperInvoiceCard'
+        'paperInvoiceCard',
+        'localInvoiceDetailsCard'
     ];
     
     cards.forEach(function(cardId) {
@@ -5618,8 +5655,14 @@ function groupLocalPurchaseHistoryByInvoice(history) {
     });
 }
 
-// عرض تفاصيل فاتورة العميل المحلي في modal
+// عرض تفاصيل فاتورة العميل المحلي: بطاقة على الموبايل، مودال على الكمبيوتر
 var currentLocalDetailInvoiceNumber = null;
+
+function closeLocalInvoiceDetailsCard() {
+    var card = document.getElementById('localInvoiceDetailsCard');
+    if (card) card.style.display = 'none';
+}
+
 function showLocalInvoiceDetailsModal(invoiceNumber) {
     if (!localPurchaseHistoryData || !localPurchaseHistoryData.length) return;
     const items = localPurchaseHistoryData.filter(function(item) {
@@ -5632,24 +5675,57 @@ function showLocalInvoiceDetailsModal(invoiceNumber) {
     const first = items[0];
     const total = items.reduce(function(sum, it) { return sum + parseFloat(it.total_price || 0); }, 0);
     const date = first.invoice_date || '-';
+    currentLocalDetailInvoiceNumber = invoiceNumber;
+
+    var isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
+
+    if (isMobile) {
+        var card = document.getElementById('localInvoiceDetailsCard');
+        if (card) {
+            var numEl = document.getElementById('localInvoiceDetailsCardNumber');
+            var dateEl = document.getElementById('localInvoiceDetailsCardDate');
+            var totalEl = document.getElementById('localInvoiceDetailsCardTotal');
+            var cardTbody = document.getElementById('localInvoiceDetailsCardTableBody');
+            var cardReturnBtn = document.getElementById('localInvoiceDetailsCardReturnBtn');
+            if (numEl) numEl.textContent = invoiceNumber || '-';
+            if (dateEl) dateEl.textContent = date;
+            if (totalEl) totalEl.textContent = total.toFixed(2) + ' ج.م';
+            if (cardTbody) {
+                cardTbody.innerHTML = '';
+                items.forEach(function(item) {
+                    var safeName = (item.product_name || '-').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    var batch = item.batch_numbers ? (Array.isArray(item.batch_numbers) ? item.batch_numbers.join(', ') : String(item.batch_numbers)) : '-';
+                    var tr = document.createElement('tr');
+                    tr.innerHTML = '<td>' + safeName + '</td><td>' + batch + '</td><td>' + parseFloat(item.quantity || 0).toFixed(2) + '</td><td>' + parseFloat(item.unit_price || 0).toFixed(2) + ' ج.م</td><td>' + parseFloat(item.total_price || 0).toFixed(2) + ' ج.م</td>';
+                    cardTbody.appendChild(tr);
+                });
+            }
+            if (cardReturnBtn) cardReturnBtn.style.display = 'inline-block';
+            card.style.display = 'block';
+            setTimeout(function() { if (card.scrollIntoView) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, 100);
+        }
+        return;
+    }
+
     document.getElementById('localInvoiceDetailsNumber').textContent = invoiceNumber;
     document.getElementById('localInvoiceDetailsDate').textContent = date;
     document.getElementById('localInvoiceDetailsTotal').textContent = total.toFixed(2) + ' ج.م';
-    const tbody = document.getElementById('localInvoiceDetailsTableBody');
-    tbody.innerHTML = '';
-    items.forEach(function(item) {
-        const safeName = (item.product_name || '-').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        const batch = item.batch_numbers ? (Array.isArray(item.batch_numbers) ? item.batch_numbers.join(', ') : String(item.batch_numbers)) : '-';
-        const tr = document.createElement('tr');
-        tr.innerHTML = '<td>' + safeName + '</td><td>' + batch + '</td><td>' + parseFloat(item.quantity || 0).toFixed(2) + '</td><td>' + parseFloat(item.unit_price || 0).toFixed(2) + ' ج.م</td><td>' + parseFloat(item.total_price || 0).toFixed(2) + ' ج.م</td>';
-        tbody.appendChild(tr);
-    });
-    currentLocalDetailInvoiceNumber = invoiceNumber;
+    var tbody = document.getElementById('localInvoiceDetailsTableBody');
+    if (tbody) {
+        tbody.innerHTML = '';
+        items.forEach(function(item) {
+            var safeName = (item.product_name || '-').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            var batch = item.batch_numbers ? (Array.isArray(item.batch_numbers) ? item.batch_numbers.join(', ') : String(item.batch_numbers)) : '-';
+            var tr = document.createElement('tr');
+            tr.innerHTML = '<td>' + safeName + '</td><td>' + batch + '</td><td>' + parseFloat(item.quantity || 0).toFixed(2) + '</td><td>' + parseFloat(item.unit_price || 0).toFixed(2) + ' ج.م</td><td>' + parseFloat(item.total_price || 0).toFixed(2) + ' ج.م</td>';
+            tbody.appendChild(tr);
+        });
+    }
     var returnBtn = document.getElementById('localInvoiceDetailsReturnBtn');
     if (returnBtn) returnBtn.style.display = 'inline-block';
     var modalEl = document.getElementById('localInvoiceDetailsModal');
     if (modalEl && typeof bootstrap !== 'undefined') {
-        var m = new bootstrap.Modal(modalEl);
+        var m = bootstrap.Modal.getOrCreateInstance(modalEl);
         m.show();
     }
 }
@@ -5659,6 +5735,7 @@ function localOpenReturnForInvoiceFromDetails() {
     if (!currentLocalDetailInvoiceNumber) return;
     var detailModal = document.getElementById('localInvoiceDetailsModal');
     if (detailModal && bootstrap.Modal.getInstance(detailModal)) bootstrap.Modal.getInstance(detailModal).hide();
+    closeLocalInvoiceDetailsCard();
     var returnInvoiceInput = document.getElementById('localReturnInvoiceNumber');
     if (returnInvoiceInput) returnInvoiceInput.value = currentLocalDetailInvoiceNumber;
     // فتح نموذج الإرجاع أولاً ثم تحميل الفاتورة حتى تظهر قائمة المنتجات عند الانتهاء

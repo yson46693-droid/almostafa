@@ -127,7 +127,19 @@ $baseDashboard = $isManager ? 'manager.php' : 'accountant.php';
 <script>
 (function () {
     'use strict';
-    var apiBase = '<?php echo htmlspecialchars($apiUrl, ENT_QUOTES); ?>';
+    function getDriverTrackingApiBase() {
+        var currentPath = window.location.pathname || '/';
+        var parts = currentPath.split('/').filter(Boolean);
+        var stopSegments = { dashboard: 1, modules: 1, api: 1, assets: 1, includes: 1 };
+        var baseParts = [];
+        for (var i = 0; i < parts.length; i++) {
+            if (stopSegments[parts[i]] || (parts[i] && parts[i].indexOf('.php') >= 0)) break;
+            baseParts.push(parts[i]);
+        }
+        var basePath = baseParts.length ? '/' + baseParts.join('/') : '';
+        return (basePath + '/api/driver_location.php').replace(/\/+/g, '/');
+    }
+    var apiBase = getDriverTrackingApiBase();
     var map = null;
     var liveMarkers = {};
     var routeLayer = null;
