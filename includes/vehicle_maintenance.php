@@ -323,6 +323,98 @@ function countVehicleMaintenanceRecords($filters = []) {
     return (int) ($row['total'] ?? 0);
 }
 
+/** نطاق الكيلومترات لتنبيه "تحتاج إلى تغيير الزيت في أقرب وقت" */
+define('OIL_CHANGE_ALERT_KM_MIN', 2400);
+define('OIL_CHANGE_ALERT_KM_MAX', 3000);
+
+/**
+ * ربط ذكي: حساب الفرق بين آخر تغيير زيت وآخر تفويل بنزين لسيارة
+ * والتحقق إن كان ينبغي إظهار تنبيه (الفرق بين 2400 و 3000 كم).
+ *
+ * @param int $vehicleId
+ * @return array ['need_alert' => bool, 'km_since_oil' => int|null, 'last_oil_km' => int|null, 'last_fuel_km' => int|null, 'vehicle_number' => string]
+ */
+function getVehicleOilChangeAlert($vehicleId) {
+    ensureVehicleMaintenanceTable();
+    $vehicleId = (int) $vehicleId;
+    $result = [
+        'need_alert' => false,
+        'km_since_oil' => null,
+        'last_oil_km' => null,
+        'last_fuel_km' => null,
+        'vehicle_number' => '',
+    ];
+    if ($vehicleId <= 0) {
+        return $result;
+    }
+    $db = db();
+    $vehicle = $db->queryOne("SELECT vehicle_number FROM vehicles WHERE id = ? AND status = 'active'", [$vehicleId]);
+    if (!$vehicle) {
+        return $result;
+    }
+    $result['vehicle_number'] = $vehicle['vehicle_number'] ?? '';
+
+    $lastOil = $db->queryOne(
+        "SELECT km_reading FROM vehicle_maintenance WHERE vehicle_id = ? AND type = 'oil_change' ORDER BY maintenance_date DESC, id DESC LIMIT 1",
+        [$vehicleId]
+    );
+    $lastFuel = $db->queryOne(
+        "SELECT km_reading FROM vehicle_maintenance WHERE vehicle_id = ? AND type = 'fuel_refill' ORDER BY maintenance_date DESC, id DESC LIMIT 1",
+        [$vehicleId]
+    );
+    if (!$lastOil || !$lastFuel || !isset($lastOil['km_reading'], $lastFuel['km_reading'])) {
+        return $result;
+    }
+    $lastOilKm = (int) $lastOil['km_reading'];
+    $lastFuelKm = (int) $lastFuel['km_reading'];
+    $kmSinceOil = $lastFuelKm - $lastOilKm;
+    $result['last_oil_km'] = $lastOilKm;
+    $result['last_fuel_km'] = $lastFuelKm;
+    $result['km_since_oil'] = $kmSinceOil;
+    $minKm = defined('OIL_CHANGE_ALERT_KM_MIN') ? (int) OIL_CHANGE_ALERT_KM_MIN : 2400;
+    $maxKm = defined('OIL_CHANGE_ALERT_KM_MAX') ? (int) OIL_CHANGE_ALERT_KM_MAX : 3000;
+    $result['need_alert'] = ($kmSinceOil >= $minKm && $kmSinceOil <= $maxKm);
+    return $result;
+}
+
+/**
+ * جلب كل السيارات التي تحتاج تنبيه تغيير زيت (الفرق بين 2400 و 3000 كم).
+ *
+ * @return array قائمة [ ['vehicle_id'=>int, 'vehicle_number'=>string, 'km_since_oil'=>int, 'last_oil_km'=>int, 'last_fuel_km'=>int], ... ]
+ */
+function getVehiclesNeedingOilChangeAlert() {
+    ensureVehicleMaintenanceTable();
+    $db = db();
+    $minKm = defined('OIL_CHANGE_ALERT_KM_MIN') ? (int) OIL_CHANGE_ALERT_KM_MIN : 2400;
+    $maxKm = defined('OIL_CHANGE_ALERT_KM_MAX') ? (int) OIL_CHANGE_ALERT_KM_MAX : 3000;
+    $rows = $db->query(
+        "SELECT v.id AS vehicle_id, v.vehicle_number,
+         (SELECT vm.km_reading FROM vehicle_maintenance vm WHERE vm.vehicle_id = v.id AND vm.type = 'oil_change' ORDER BY vm.maintenance_date DESC, vm.id DESC LIMIT 1) AS last_oil_km,
+         (SELECT vm.km_reading FROM vehicle_maintenance vm WHERE vm.vehicle_id = v.id AND vm.type = 'fuel_refill' ORDER BY vm.maintenance_date DESC, vm.id DESC LIMIT 1) AS last_fuel_km
+         FROM vehicles v
+         WHERE v.status = 'active'"
+    );
+    $list = [];
+    foreach ($rows as $r) {
+        $lastOil = isset($r['last_oil_km']) ? (int) $r['last_oil_km'] : null;
+        $lastFuel = isset($r['last_fuel_km']) ? (int) $r['last_fuel_km'] : null;
+        if ($lastOil === null || $lastFuel === null) {
+            continue;
+        }
+        $kmSinceOil = $lastFuel - $lastOil;
+        if ($kmSinceOil >= $minKm && $kmSinceOil <= $maxKm) {
+            $list[] = [
+                'vehicle_id' => (int) $r['vehicle_id'],
+                'vehicle_number' => $r['vehicle_number'] ?? '',
+                'km_since_oil' => $kmSinceOil,
+                'last_oil_km' => $lastOil,
+                'last_fuel_km' => $lastFuel,
+            ];
+        }
+    }
+    return $list;
+}
+
 /**
  * تنظيف صور صيانات السيارة الأقدم من X يوم
  * @param int $daysOld عدد الأيام (افتراضي 90 = 3 أشهر)

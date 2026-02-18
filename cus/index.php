@@ -2927,39 +2927,22 @@ console.log('showImportLocalCustomersModal متاحة:', typeof window.showImpor
         <!-- Error -->
         <div class="alert alert-danger d-none" id="localPurchaseHistoryCardError"></div>
 
-        <!-- Purchase History Table -->
+        <!-- جدول الفواتير الموحد (موبايل): فواتير نقطة البيع + فواتير ورقية -->
         <div id="localPurchaseHistoryCardTable" class="d-none" style="min-height: 200px;">
+            <h6 class="text-muted mb-2"><i class="bi bi-receipt me-1"></i>جدول الفواتير</h6>
             <div class="table-responsive">
-                <table class="table table-hover table-bordered">
+                <table class="table table-hover table-bordered table-sm">
                     <thead class="table-light">
                         <tr>
-                            <th style="width: 50px;">
-                                <input type="checkbox" id="localSelectAllItemsCard" onchange="localToggleAllItems()">
-                            </th>
+                            <th>نوع الفاتورة</th>
                             <th>رقم الفاتورة</th>
-                            <th>رقم التشغيلة</th>
-                            <th>اسم المنتج</th>
-                            <th>الكمية المشتراة</th>
-                            <th>الكمية المرتجعة</th>
-                            <th>المتاح للإرجاع</th>
-                            <th>سعر الوحدة</th>
-                            <th>السعر الإجمالي</th>
-                            <th>تاريخ الشراء</th>
-                            <th style="width: 100px;">إجراءات</th>
+                            <th>الإجمالي</th>
+                            <th>التاريخ</th>
+                            <th>إجراءات</th>
                         </tr>
                     </thead>
                     <tbody id="localPurchaseHistoryCardTableBody">
                     </tbody>
-                </table>
-            </div>
-        </div>
-        <!-- فواتير ورقية (موبايل) -->
-        <div id="localPaperInvoicesCardSection" class="mt-3 d-none">
-            <h6 class="text-muted mb-2"><i class="bi bi-receipt-cutoff me-1"></i>فواتير ورقية</h6>
-            <div class="table-responsive">
-                <table class="table table-sm table-bordered">
-                    <thead class="table-light"><tr><th>رقم</th><th>الإجمالي</th><th>التاريخ</th><th>إجراءات</th></tr></thead>
-                    <tbody id="localPaperInvoicesCardTableBody"></tbody>
                 </table>
             </div>
         </div>
@@ -4007,26 +3990,30 @@ window.showLocalCustomerPurchaseHistoryModal = function(button) {
         if (phoneElement) phoneElement.textContent = customerPhone || '-';
         if (addressElement) addressElement.textContent = customerAddress || '-';
         
-        // إظهار loading وإخفاء المحتوى
         if (loadingElement) {
             loadingElement.classList.remove('d-none');
             loadingElement.style.display = '';
-        }
-        if (contentElement) {
-            contentElement.classList.add('d-none');
         }
         if (errorElement) {
             errorElement.classList.add('d-none');
             errorElement.innerHTML = '';
         }
+        var tableWrap = card.querySelector('#localPurchaseHistoryCardTable');
+        var tableBody = card.querySelector('#localPurchaseHistoryCardTableBody');
+        if (tableWrap) {
+            tableWrap.classList.remove('d-none');
+            tableWrap.style.display = 'block';
+            tableWrap.style.visibility = 'visible';
+        }
+        if (tableBody) {
+            tableBody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4"><span class="spinner-border spinner-border-sm me-2" role="status"></span>جاري تحميل الفواتير...</td></tr>';
+        }
         
-        // إخفاء الأزرار مؤقتاً
         const printBtn = card.querySelector('#printLocalCustomerStatementCardBtn');
         const returnBtn = card.querySelector('#localCustomerReturnCardBtn');
         if (printBtn) printBtn.style.display = 'none';
         if (returnBtn) returnBtn.style.display = 'none';
         
-        // إعادة تعيين العناصر المحددة
         if (typeof localSelectedItemsForReturn !== 'undefined') {
             localSelectedItemsForReturn = [];
         }
@@ -4037,7 +4024,6 @@ window.showLocalCustomerPurchaseHistoryModal = function(button) {
             scrollToElement(card);
         }, 80);
         
-        // تحميل البيانات مرة واحدة فقط بعد إظهار الـ card (تفادي استدعاء مزدوج يخفي الجدول بعد ظهوره)
         setTimeout(function() {
             if (typeof loadLocalCustomerPurchaseHistory === 'function') {
                 loadLocalCustomerPurchaseHistory();
@@ -5281,13 +5267,16 @@ function loadLocalCustomerPurchaseHistory() {
         return;
     }
     
-    // إظهار loading في الاثنين وإخفاء المحتوى والخطأ
     if (loadingCard) { loadingCard.classList.remove('d-none'); loadingCard.style.display = ''; }
     if (loadingModal) loadingModal.classList.remove('d-none');
-    if (contentCard) contentCard.classList.add('d-none');
     if (contentModal) contentModal.classList.add('d-none');
     if (errorCard) { errorCard.classList.add('d-none'); errorCard.innerHTML = ''; }
     if (errorModal) { errorModal.classList.add('d-none'); errorModal.innerHTML = ''; }
+    if (contentCard) {
+        contentCard.classList.remove('d-none');
+        contentCard.style.display = 'block';
+        contentCard.style.visibility = 'visible';
+    }
     
     // التحقق من معرف العميل
     if (!currentLocalCustomerId) {
@@ -5406,13 +5395,9 @@ function displayLocalPurchaseHistory(history, paperInvoices) {
     
     var paperSection = document.getElementById('localPaperInvoicesSection');
     var paperTbody = document.getElementById('localPaperInvoicesTableBody');
-    var paperCardSection = document.getElementById('localPaperInvoicesCardSection');
-    var paperCardTbody = document.getElementById('localPaperInvoicesCardTableBody');
     if (paperSection) paperSection.classList.add('d-none');
     if (paperTbody) paperTbody.innerHTML = '';
-    if (paperCardSection) paperCardSection.classList.add('d-none');
-    if (paperCardTbody) paperCardTbody.innerHTML = '';
-    function addPaperInvoiceRow(tbody, pi) {
+    function addPaperInvoiceRowModal(tbody, pi) {
         if (!tbody) return;
         var safeNum = (pi.invoice_number || 'ورقية-' + pi.id).replace(/</g, '&lt;').replace(/>/g, '&gt;');
         var dateStr = (pi.invoice_date || pi.created_at || '-').toString().substring(0, 10);
@@ -5423,88 +5408,82 @@ function displayLocalPurchaseHistory(history, paperInvoices) {
         row.innerHTML = '<td>' + safeNum + '</td><td>' + parseFloat(pi.total_amount || 0).toFixed(2) + ' ج.م</td><td>' + dateStr + '</td><td>' + viewBtn + '</td>';
         tbody.appendChild(row);
     }
-    if (paperInvoices.length > 0) {
-        if (paperSection) paperSection.classList.remove('d-none');
-        if (paperCardSection) paperCardSection.classList.remove('d-none');
-        paperInvoices.forEach(function(pi) {
-            addPaperInvoiceRow(paperTbody, pi);
-            addPaperInvoiceRow(paperCardTbody, pi);
-        });
+    if (paperInvoices.length > 0 && paperSection && paperTbody) {
+        paperSection.classList.remove('d-none');
+        paperInvoices.forEach(function(pi) { addPaperInvoiceRowModal(paperTbody, pi); });
     }
     
-    var emptyRowHtml = '<tr><td colspan="11" class="text-center text-muted py-4"><i class="bi bi-info-circle me-2"></i>لا توجد مشتريات مسجلة لهذا العميل</td></tr>';
-    if (!history || history.length === 0) {
-        if (tableBodyCard) tableBodyCard.innerHTML = emptyRowHtml;
-        if (tableBodyModal) tableBodyModal.innerHTML = emptyRowHtml;
+    var emptyRowCard = '<tr><td colspan="5" class="text-center text-muted py-4"><i class="bi bi-info-circle me-2"></i>لا توجد فواتير مسجلة لهذا العميل</td></tr>';
+    var emptyRowModal = '<tr><td colspan="11" class="text-center text-muted py-4"><i class="bi bi-info-circle me-2"></i>لا توجد مشتريات مسجلة لهذا العميل</td></tr>';
+    
+    var hasPos = history && history.length > 0;
+    var hasPaper = paperInvoices && paperInvoices.length > 0;
+    if (!hasPos && !hasPaper) {
+        if (tableBodyCard) tableBodyCard.innerHTML = emptyRowCard;
+        if (tableBodyModal) tableBodyModal.innerHTML = emptyRowModal;
         console.log('No purchase history found for customer ID:', currentLocalCustomerId);
         return;
     }
     
-    console.log('Displaying', history.length, 'purchase history items');
-    
     try {
-        history.forEach(function(item, index) {
-            try {
-                const row = document.createElement('tr');
-                
-                // التحقق من البيانات المطلوبة
-                if (!item.invoice_id || !item.invoice_item_id) {
-                    console.warn('Invalid item data at index', index, ':', item);
-                    return;
+        var unifiedRows = [];
+        if (hasPos) {
+            var byInvoice = {};
+            history.forEach(function(item) {
+                var id = item.invoice_id;
+                if (!byInvoice[id]) {
+                    byInvoice[id] = { invoice_number: item.invoice_number || '-', invoice_date: item.invoice_date || '-', total: 0 };
                 }
-                
-                // تنظيف البيانات لتجنب مشاكل XSS
-                const safeProductName = (item.product_name || '-').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                const safeInvoiceNumber = (item.invoice_number || '-').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                const safeBatchNumbers = item.batch_numbers 
-                    ? (Array.isArray(item.batch_numbers) ? item.batch_numbers.join(', ') : String(item.batch_numbers))
-                    : '-';
-                
-                row.innerHTML = `
-                    <td>
-                        ${item.can_return ? `<input type="checkbox" class="local-item-checkbox" 
-                               data-invoice-id="${item.invoice_id}"
-                               data-invoice-item-id="${item.invoice_item_id}"
-                               data-product-id="${item.product_id || ''}"
-                               data-product-name="${safeProductName.replace(/"/g, '&quot;')}"
-                               data-unit-price="${parseFloat(item.unit_price || 0)}"
-                               data-batch-number-ids='${JSON.stringify(item.batch_number_ids || [])}'
-                               data-batch-numbers='${JSON.stringify(item.batch_numbers || [])}'
-                               onchange="localUpdateSelectedItems()">` : '-'}
-                    </td>
-                    <td>${safeInvoiceNumber}</td>
-                    <td>${safeBatchNumbers}</td>
-                    <td>${safeProductName}</td>
-                    <td>${parseFloat(item.quantity || 0).toFixed(2)}</td>
-                    <td>${parseFloat(item.returned_quantity || 0).toFixed(2)}</td>
-                    <td><strong>${parseFloat(item.available_to_return || 0).toFixed(2)}</strong></td>
-                    <td>${parseFloat(item.unit_price || 0).toFixed(2)} ج.م</td>
-                    <td>${parseFloat(item.total_price || 0).toFixed(2)} ج.م</td>
-                    <td>${item.invoice_date || '-'}</td>
-                    <td>
-                        ${item.can_return ? `<button class="btn btn-sm btn-primary" 
-                                onclick="localSelectItemForReturn(${item.invoice_item_id}, ${item.product_id || 0})"
-                                title="إرجاع جزئي">
-                            <i class="bi bi-arrow-return-left"></i>
-                        </button>` : '<span class="text-muted small">-</span>'}
-                    </td>
-                `;
-                if (tableBodyCard) tableBodyCard.appendChild(row);
-                if (tableBodyModal) tableBodyModal.appendChild(row.cloneNode(true));
-            } catch (itemError) {
-                console.error('Error displaying item at index', index, ':', itemError, item);
-                var errorRowHtml = '<tr><td colspan="11" class="text-center text-danger py-2"><small>خطأ في عرض العنصر #' + (index + 1) + '</small></td></tr>';
-                if (tableBodyCard) tableBodyCard.insertAdjacentHTML('beforeend', errorRowHtml);
-                if (tableBodyModal) tableBodyModal.insertAdjacentHTML('beforeend', errorRowHtml);
-            }
+                byInvoice[id].total += parseFloat(item.total_price || 0);
+            });
+            Object.keys(byInvoice).forEach(function(id) {
+                var inv = byInvoice[id];
+                unifiedRows.push({ type: 'نقطة بيع', number: inv.invoice_number, total: inv.total, date: inv.invoice_date, actions: '' });
+            });
+        }
+        if (hasPaper) {
+            paperInvoices.forEach(function(pi) {
+                var num = (pi.invoice_number || 'ورقية-' + pi.id).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                var dateStr = (pi.invoice_date || pi.created_at || '-').toString().substring(0, 10);
+                var viewBtn = pi.image_path
+                    ? '<button type="button" class="btn btn-sm btn-outline-primary" onclick="showPaperInvoiceImage(' + parseInt(pi.id, 10) + ')" title="عرض صورة الفاتورة"><i class="bi bi-image me-1"></i>عرض</button>'
+                    : '<span class="text-muted small">-</span>';
+                unifiedRows.push({ type: 'ورقية', number: num, total: parseFloat(pi.total_amount || 0), date: dateStr, actions: viewBtn });
+            });
+        }
+        unifiedRows.sort(function(a, b) {
+            if (a.date && b.date) return b.date.localeCompare(a.date);
+            return 0;
         });
         
-        console.log('Successfully displayed', history.length, 'items');
+        if (tableBodyCard) {
+            unifiedRows.forEach(function(r) {
+                var tr = document.createElement('tr');
+                var safeNum = (typeof r.number === 'string') ? r.number : String(r.number || '-');
+                var actionsCell = (r.actions && typeof r.actions === 'string' && r.actions.indexOf('<') !== -1) ? r.actions : (r.actions || '-');
+                tr.innerHTML = '<td>' + (r.type || '-') + '</td><td>' + safeNum + '</td><td>' + (r.total != null ? r.total.toFixed(2) + ' ج.م' : '-') + '</td><td>' + (r.date || '-') + '</td><td>' + actionsCell + '</td>';
+                tableBodyCard.appendChild(tr);
+            });
+        }
+        
+        if (tableBodyModal) {
+            history.forEach(function(item, index) {
+                try {
+                    if (!item.invoice_id || !item.invoice_item_id) return;
+                    var safeProductName = (item.product_name || '-').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    var safeInvoiceNumber = (item.invoice_number || '-').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    var safeBatchNumbers = item.batch_numbers ? (Array.isArray(item.batch_numbers) ? item.batch_numbers.join(', ') : String(item.batch_numbers)) : '-';
+                    var row = document.createElement('tr');
+                    row.innerHTML = '<td>' + (item.can_return ? '<input type="checkbox" class="local-item-checkbox" data-invoice-id="' + item.invoice_id + '" data-invoice-item-id="' + item.invoice_item_id + '" data-product-id="' + (item.product_id || '') + '" data-product-name="' + safeProductName.replace(/"/g, '&quot;') + '" data-unit-price="' + parseFloat(item.unit_price || 0) + '" data-batch-number-ids=\'' + JSON.stringify(item.batch_number_ids || []) + '\' data-batch-numbers=\'' + JSON.stringify(item.batch_numbers || []) + '\' onchange="localUpdateSelectedItems()">' : '-') + '</td><td>' + safeInvoiceNumber + '</td><td>' + safeBatchNumbers + '</td><td>' + safeProductName + '</td><td>' + parseFloat(item.quantity || 0).toFixed(2) + '</td><td>' + parseFloat(item.returned_quantity || 0).toFixed(2) + '</td><td><strong>' + parseFloat(item.available_to_return || 0).toFixed(2) + '</strong></td><td>' + parseFloat(item.unit_price || 0).toFixed(2) + ' ج.م</td><td>' + parseFloat(item.total_price || 0).toFixed(2) + ' ج.م</td><td>' + (item.invoice_date || '-') + '</td><td>' + (item.can_return ? '<button class="btn btn-sm btn-primary" onclick="localSelectItemForReturn(' + item.invoice_item_id + ',' + (item.product_id || 0) + ')" title="إرجاع جزئي"><i class="bi bi-arrow-return-left"></i></button>' : '<span class="text-muted small">-</span>') + '</td>';
+                    tableBodyModal.appendChild(row);
+                } catch (e) { console.warn('Display item error', e); }
+            });
+        }
+        console.log('Displayed', unifiedRows.length, 'invoices on card;', history.length, 'lines on modal');
     } catch (error) {
         console.error('Error displaying purchase history:', error);
-        var errorRowHtml = '<tr><td colspan="11" class="text-center text-danger py-4"><i class="bi bi-exclamation-triangle-fill me-2"></i>حدث خطأ أثناء عرض البيانات: ' + (error.message || '') + '</td></tr>';
-        if (tableBodyCard) tableBodyCard.innerHTML = errorRowHtml;
-        if (tableBodyModal) tableBodyModal.innerHTML = errorRowHtml;
+        if (tableBodyCard) tableBodyCard.innerHTML = '<tr><td colspan="5" class="text-center text-danger py-4"><i class="bi bi-exclamation-triangle-fill me-2"></i>حدث خطأ أثناء عرض البيانات</td></tr>';
+        if (tableBodyModal) tableBodyModal.innerHTML = '<tr><td colspan="11" class="text-center text-danger py-4"><i class="bi bi-exclamation-triangle-fill me-2"></i>حدث خطأ أثناء عرض البيانات</td></tr>';
     }
 }
 

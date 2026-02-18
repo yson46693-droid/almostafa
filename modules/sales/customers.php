@@ -1955,6 +1955,46 @@ $collectionsLabel = $isSalesUser ? 'تحصيلاتي' : 'إجمالي التحص
                 </button>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
             </div>
+</div>
+</div>
+</div>
+
+<!-- Card سجل مشتريات العميل - للموبايل فقط (جدول الفواتير) -->
+<div class="card shadow-sm mb-4 d-md-none" id="customerHistoryCard" style="display: none;">
+    <div class="card-header bg-dark text-white d-flex align-items-center justify-content-between">
+        <h5 class="mb-0"><i class="bi bi-journal-text me-2"></i>سجل مشتريات العميل</h5>
+        <button type="button" class="btn btn-sm btn-light" onclick="closeCustomerHistoryCard()" aria-label="إغلاق"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="card-body">
+        <div class="mb-3">
+            <div class="text-muted small fw-semibold">العميل</div>
+            <div class="fs-5 fw-bold" id="customerHistoryCardName">-</div>
+        </div>
+        <div class="text-center py-3" id="customerHistoryCardLoading">
+            <div class="spinner-border text-primary" role="status"><span class="visually-hidden">جاري التحميل...</span></div>
+        </div>
+        <div class="alert alert-danger d-none" id="customerHistoryCardError"></div>
+        <div id="customerHistoryCardTableWrap" class="d-none" style="min-height: 120px;">
+            <h6 class="text-muted mb-2"><i class="bi bi-receipt me-1"></i>جدول الفواتير</h6>
+            <div class="table-responsive">
+                <table class="table table-hover table-bordered table-sm">
+                    <thead class="table-light">
+                        <tr>
+                            <th>رقم الفاتورة</th>
+                            <th>التاريخ</th>
+                            <th>الإجمالي</th>
+                            <th>المدفوع</th>
+                            <th>المرتجعات</th>
+                            <th>الصافي</th>
+                        </tr>
+                    </thead>
+                    <tbody id="customerHistoryCardTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="d-flex gap-2 mt-3">
+            <button type="button" class="btn btn-primary btn-sm" onclick="printCustomerStatementFromHistory()"><i class="bi bi-printer me-1"></i>طباعة كشف الحساب</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="closeCustomerHistoryCard()">إغلاق</button>
         </div>
     </div>
 </div>
@@ -1962,6 +2002,12 @@ $collectionsLabel = $isSalesUser ? 'تحصيلاتي' : 'إجمالي التحص
 
 <?php if (in_array($currentRole, ['manager', 'sales'], true)): ?>
 <script>
+// إغلاق كارد سجل المشتريات (موبايل)
+function closeCustomerHistoryCard() {
+    var card = document.getElementById('customerHistoryCard');
+    if (card) { card.style.display = 'none'; }
+}
+
 // ========== معالج أخطاء عام شامل لمنع ظهور رسائل خطأ classList ==========
 (function() {
     'use strict';
@@ -2215,13 +2261,74 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     var historyButtons = document.querySelectorAll('.js-customer-history');
+    var isMobileView = function() { return window.innerWidth <= 768; };
+
+    function loadCustomerHistoryIntoCard(customerId, customerName) {
+        var card = document.getElementById('customerHistoryCard');
+        var cardName = document.getElementById('customerHistoryCardName');
+        var cardLoading = document.getElementById('customerHistoryCardLoading');
+        var cardError = document.getElementById('customerHistoryCardError');
+        var cardTableWrap = document.getElementById('customerHistoryCardTableWrap');
+        var cardTableBody = document.getElementById('customerHistoryCardTableBody');
+        if (!card || !cardTableBody) return;
+        currentHistoryCustomerId = customerId;
+        if (cardName) cardName.textContent = customerName || '-';
+        if (cardLoading) { cardLoading.classList.remove('d-none'); cardLoading.style.display = ''; }
+        if (cardError) { cardError.classList.add('d-none'); cardError.textContent = ''; }
+        if (cardTableWrap) cardTableWrap.classList.add('d-none');
+        cardTableBody.innerHTML = '';
+        card.style.display = 'block';
+
+        var url = purchaseHistoryEndpointBase + '&action=purchase_history&ajax=purchase_history&customer_id=' + encodeURIComponent(customerId);
+        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function(res) {
+                if (!res.ok) throw new Error('تعذر تحميل البيانات. حالة: ' + res.status);
+                var ct = (res.headers.get('content-type') || '');
+                if (!ct.includes('application/json')) return res.text().then(function(t) { throw new Error('استجابة غير صحيحة'); });
+                return res.json();
+            })
+            .then(function(payload) {
+                if (cardLoading) cardLoading.classList.add('d-none');
+                if (!payload || !payload.success) {
+                    if (cardError) { cardError.textContent = (payload && payload.message) || 'فشل تحميل البيانات'; cardError.classList.remove('d-none'); }
+                    return;
+                }
+                var history = payload.history || {};
+                var invoices = Array.isArray(history.invoices) ? history.invoices : [];
+                if (cardTableWrap) cardTableWrap.classList.remove('d-none');
+                if (invoices.length === 0) {
+                    var emptyRow = document.createElement('tr');
+                    emptyRow.innerHTML = '<td colspan="6" class="text-center text-muted py-4">لا توجد فواتير خلال الفترة.</td>';
+                    cardTableBody.appendChild(emptyRow);
+                } else {
+                    invoices.forEach(function(row) {
+                        var tr = document.createElement('tr');
+                        var fmt = function(v) {
+                            var n = Number(v || 0);
+                            return n.toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ج.م';
+                        };
+                        tr.innerHTML = '<td class="fw-bold text-primary">' + (row.invoice_number || '—') + '</td><td>' + (row.invoice_date || '—') + '</td><td class="fw-semibold">' + fmt(row.invoice_total) + '</td><td>' + fmt(row.paid_amount) + '</td><td><span class="text-danger fw-semibold">' + fmt(row.return_total) + '</span></td><td class="fw-bold">' + fmt(row.net_total) + '</td>';
+                        cardTableBody.appendChild(tr);
+                    });
+                }
+            })
+            .catch(function(err) {
+                if (cardLoading) cardLoading.classList.add('d-none');
+                if (cardError) { cardError.textContent = err.message || 'حدث خطأ في الاتصال'; cardError.classList.remove('d-none'); }
+            });
+    }
+
     historyButtons.forEach(function (button) {
         button.addEventListener('click', function () {
             var customerId = button.getAttribute('data-customer-id');
             var customerName = button.getAttribute('data-customer-name') || '-';
             
-            // حفظ معرف العميل في المتغير العام
             currentHistoryCustomerId = customerId;
+
+            if (isMobileView()) {
+                loadCustomerHistoryIntoCard(customerId, customerName);
+                return;
+            }
 
             if (nameTarget) {
                 nameTarget.textContent = customerName;
@@ -6478,7 +6585,7 @@ function scrollToElement(element) {
 // دالة إغلاق جميع النماذج
 function closeAllForms() {
     // إغلاق جميع Cards على الموبايل
-    const cards = ['collectPaymentCard', 'addCustomerCard', 'editCustomerCard'];
+    const cards = ['collectPaymentCard', 'addCustomerCard', 'editCustomerCard', 'customerHistoryCard'];
     cards.forEach(function(cardId) {
         const card = document.getElementById(cardId);
         if (card && card.style.display !== 'none') {

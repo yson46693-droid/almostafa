@@ -880,33 +880,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $expenseTransactionId = null;
                 if ($source === 'from_safe') {
-                    $treasurySummary = $db->queryOne("
-                        SELECT
-                        (SELECT COALESCE(SUM(CASE WHEN type = 'income' AND status = 'approved' THEN amount ELSE 0 END), 0) FROM financial_transactions) +
-                        (SELECT COALESCE(SUM(CASE WHEN transaction_type IN ('collection_from_sales_rep', 'income') AND status = 'approved' THEN amount ELSE 0 END), 0) FROM accountant_transactions) AS approved_income,
-                        (SELECT COALESCE(SUM(CASE WHEN type = 'expense' AND status = 'approved' THEN amount ELSE 0 END), 0) FROM financial_transactions) +
-                        (SELECT COALESCE(SUM(CASE WHEN transaction_type = 'expense' AND status = 'approved' AND (description NOT LIKE '%سلفة%' AND description NOT LIKE '%سلف%') AND description NOT LIKE '%تسوية رصيد دائن ل%' THEN amount ELSE 0 END), 0) FROM accountant_transactions) AS approved_expense,
-                        (SELECT COALESCE(SUM(CASE WHEN type = 'payment' AND status = 'approved' THEN amount ELSE 0 END), 0) FROM financial_transactions) +
-                        (SELECT COALESCE(SUM(CASE WHEN transaction_type = 'payment' AND status = 'approved' AND (description NOT LIKE '%تسوية راتب%' OR description IS NULL) THEN amount ELSE 0 END), 0) FROM accountant_transactions) AS approved_payment
-                    ");
-                    $totalSalaries = 0.0;
-                    if (!empty($db->queryOne("SHOW TABLES LIKE 'salaries'"))) {
-                        $sr = $db->queryOne("SELECT COALESCE(SUM(total_amount), 0) as t FROM salaries WHERE status IN ('approved', 'paid')");
-                        $totalSalaries = (float)($sr['t'] ?? 0);
-                    }
-                    $adjResult = $db->queryOne("SELECT COALESCE(SUM(amount), 0) as t FROM accountant_transactions WHERE status = 'approved' AND ((transaction_type = 'payment' AND description LIKE '%تسوية راتب%') OR (transaction_type = 'expense' AND (description LIKE '%سلفة%' OR description LIKE '%سلف%')))");
-                    $settResult = $db->queryOne("SELECT COALESCE(SUM(amount), 0) as t FROM accountant_transactions WHERE transaction_type = 'expense' AND status = 'approved' AND (description LIKE '%تسوية رصيد دائن لعميل محلي%' OR description LIKE '%تسوية رصيد دائن لعميل مندوب%')");
-                    $mgmtResult = $db->queryOne("SELECT COALESCE(SUM(amount), 0) as t FROM accountant_transactions WHERE transaction_type = 'income' AND status = 'approved' AND description LIKE '%تحصيل للإدارة%'");
-                    $totalAdj = (float)($adjResult['t'] ?? 0);
-                    $totalSett = (float)($settResult['t'] ?? 0);
-                    $totalMgmt = (float)($mgmtResult['t'] ?? 0);
-                    $netBalance = ($treasurySummary['approved_income'] ?? 0) - ($treasurySummary['approved_expense'] ?? 0) - ($treasurySummary['approved_payment'] ?? 0) - $totalSalaries - $totalAdj - $totalSett - $totalMgmt;
-                    if ($amount > $netBalance) {
-                        $_SESSION['financial_error'] = 'رصيد الخزنة غير كافٍ. الصافي: ' . formatCurrency($netBalance);
-                        $redirectTarget = $_SERVER['REQUEST_URI'] ?? '';
-                        if (!headers_sent()) header('Location: ' . $redirectTarget); else echo '<script>window.location.href = ' . json_encode($redirectTarget) . ';</script>';
-                        exit;
-                    }
+                    // السماح بسحب العهدة من الخزنة حتى لو كان الرصيد غير كافٍ (يُسجّل المصروف ويصبح رصيد الخزنة سالباً إن لزم)
                     $ref = generateUniqueReferenceNumber($db);
                     $desc = 'عهدة أموال (من الخزنة) - ' . $personName;
                     $db->execute(

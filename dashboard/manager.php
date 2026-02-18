@@ -2020,6 +2020,17 @@ if ($isAjaxNavigation) {
                     echo '<div class="alert alert-warning">صفحة صيانات السيارة غير متاحة حالياً</div>';
                 }
                 ?>
+
+            <?php elseif ($page === 'driver_tracking'): ?>
+                <!-- صفحة تتبع الموقع المباشر للسائقين -->
+                <?php 
+                $modulePath = __DIR__ . '/../modules/manager/driver_tracking.php';
+                if (file_exists($modulePath)) {
+                    include $modulePath;
+                } else {
+                    echo '<div class="alert alert-warning">صفحة تتبع السائقين غير متاحة حالياً</div>';
+                }
+                ?>
                 
             <?php elseif ($page === 'vehicle_inventory'): ?>
                 <!-- صفحة مخزون السيارات -->

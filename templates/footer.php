@@ -2187,7 +2187,14 @@ if (!defined('ACCESS_ALLOWED')) {
         // لا حاجة لـ setInterval منفصل بعد الآن
     })();
     </script>
-    
+    <?php
+    if (isset($currentUser) && is_array($currentUser) && ($currentUser['role'] ?? '') === 'driver' && function_exists('getRelativeUrl')) {
+        $apiUrl = htmlspecialchars(getRelativeUrl('api/driver_location.php'), ENT_QUOTES);
+        $scriptUrl = htmlspecialchars(getRelativeUrl('assets/js/driver_location_tracker.js'));
+        echo "<script>window.DRIVER_LOCATION_API_URL = '$apiUrl';</script>";
+        echo "<script src=\"$scriptUrl\"></script>";
+    }
+    ?>
         </main>
     </div>
 </body>

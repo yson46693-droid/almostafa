@@ -2666,7 +2666,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="alert alert-danger d-none" id="localPurchaseHistoryCardError"></div>
 
         <!-- Purchase History Table - سطر لكل فاتورة -->
-        <div id="localPurchaseHistoryCardTable" class="d-none">
+        <div id="localPurchaseHistoryCardTable" class="d-none" style="min-height: 200px;">
             <div class="table-responsive">
                 <table class="table table-hover table-bordered">
                     <thead class="table-light">
@@ -3877,27 +3877,30 @@ window.showLocalCustomerPurchaseHistoryModal = function(button) {
         if (phoneElement) phoneElement.textContent = customerPhone || '-';
         if (addressElement) addressElement.textContent = customerAddress || '-';
         
-        // إظهار loading وإخفاء المحتوى
         if (loadingElement) {
             loadingElement.classList.remove('d-none');
             loadingElement.style.display = '';
-        }
-        if (contentElement) {
-            contentElement.classList.add('d-none');
-            contentElement.style.display = 'none';
         }
         if (errorElement) {
             errorElement.classList.add('d-none');
             errorElement.innerHTML = '';
         }
+        var tableWrap = card.querySelector('#localPurchaseHistoryCardTable');
+        var tableBody = card.querySelector('#localPurchaseHistoryCardTableBody');
+        if (tableWrap) {
+            tableWrap.classList.remove('d-none');
+            tableWrap.style.display = 'block';
+            tableWrap.style.visibility = 'visible';
+        }
+        if (tableBody) {
+            tableBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-4"><span class="spinner-border spinner-border-sm me-2" role="status"></span>جاري تحميل الفواتير...</td></tr>';
+        }
         
-        // إخفاء الأزرار مؤقتاً
         const printBtn = card.querySelector('#printLocalCustomerStatementCardBtn');
         const returnBtn = card.querySelector('#localCustomerReturnCardBtn');
         if (printBtn) printBtn.style.display = 'none';
         if (returnBtn) returnBtn.style.display = 'none';
         
-        // إعادة تعيين العناصر المحددة
         if (typeof localSelectedItemsForReturn !== 'undefined') {
             localSelectedItemsForReturn = [];
         }
@@ -3908,8 +3911,7 @@ window.showLocalCustomerPurchaseHistoryModal = function(button) {
             scrollToElement(card);
         }, 80);
         
-        // تحميل البيانات بعد إظهار الـ card أو مباشرة كنسخة احتياطية
-        const triggerLoad = function() {
+        setTimeout(function() {
             if (typeof loadLocalCustomerPurchaseHistory === 'function') {
                 loadLocalCustomerPurchaseHistory();
             } else {
@@ -3919,9 +3921,7 @@ window.showLocalCustomerPurchaseHistoryModal = function(button) {
                 }
                 if (loadingElement) loadingElement.classList.add('d-none');
             }
-        };
-        setTimeout(triggerLoad, 100);
-        triggerLoad();
+        }, 150);
     } else {
         // على الكمبيوتر: استخدام Modal
         const modal = document.getElementById('localCustomerPurchaseHistoryModal');
@@ -5490,11 +5490,16 @@ function loadLocalCustomerPurchaseHistory() {
         return;
     }
     
-    // إظهار loading وإخفاء المحتوى
     loadingElement.classList.remove('d-none');
-    contentElement.classList.add('d-none');
     errorElement.classList.add('d-none');
     errorElement.innerHTML = '';
+    if (isMobileDevice && contentElement) {
+        contentElement.classList.remove('d-none');
+        contentElement.style.display = 'block';
+        contentElement.style.visibility = 'visible';
+    } else if (contentElement) {
+        contentElement.classList.add('d-none');
+    }
     
     // التحقق من معرف العميل
     if (!currentLocalCustomerId) {
@@ -5553,10 +5558,9 @@ function loadLocalCustomerPurchaseHistory() {
             
             // عرض البيانات حتى لو كانت فارغة (ستعرض رسالة "لا توجد مشتريات")
             displayLocalPurchaseHistory(localPurchaseHistoryData, localPaperInvoicesData);
-            // إظهار جدول الكارد وجدول المودال معاً لضمان ظهور الفواتير على الهاتف والكمبيوتر
             var cardTable = document.getElementById('localPurchaseHistoryCardTable');
             var modalTable = document.getElementById('localPurchaseHistoryTable');
-            if (cardTable) cardTable.classList.remove('d-none');
+            if (cardTable) { cardTable.classList.remove('d-none'); cardTable.style.display = 'block'; cardTable.style.visibility = 'visible'; }
             if (modalTable) modalTable.classList.remove('d-none');
             
             // إظهار زر الطباعة حتى لو لم تكن هناك بيانات

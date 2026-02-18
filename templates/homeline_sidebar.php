@@ -282,6 +282,13 @@ switch ($role) {
                 'badge' => null
             ],
             [
+                'title' => 'تتبع السائقين',
+                'icon' => 'bi-geo-alt-fill',
+                'url' => $baseUrl . 'manager.php?page=driver_tracking',
+                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'driver_tracking'),
+                'badge' => null
+            ],
+            [
                 'title' => isset($lang['menu_reports']) ? $lang['menu_reports'] : 'التقارير',
                 'icon' => 'bi-file-earmark-text',
                 'url' => $baseUrl . 'manager.php?page=reports',
@@ -356,6 +363,13 @@ switch ($role) {
                 'icon' => 'bi-send-check',
                 'url' => $baseUrl . 'accountant.php?page=production_tasks',
                 'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'production_tasks'),
+                'badge' => null
+            ],
+            [
+                'title' => 'تتبع السائقين',
+                'icon' => 'bi-geo-alt-fill',
+                'url' => $baseUrl . 'accountant.php?page=driver_tracking',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'driver_tracking'),
                 'badge' => null
             ],
             [

@@ -54,6 +54,20 @@ if ($isManager || $isAccountant) {
     $vehicles = $db->query("SELECT id, vehicle_number, model FROM vehicles WHERE status = 'active' ORDER BY vehicle_number");
 }
 
+/** تنبيه تغيير الزيت: ربط آخر تغيير زيت بآخر تفويل بنزين (فرق 2400–3000 كم) */
+$oilChangeAlert = null;
+$vehiclesNeedingOilAlert = [];
+if ($isDriver && $vehicle) {
+    $oilChangeAlert = getVehicleOilChangeAlert($vehicle['id']);
+}
+if ($isManager || $isAccountant) {
+    if (!empty($filters['vehicle_id'])) {
+        $oilChangeAlert = getVehicleOilChangeAlert($filters['vehicle_id']);
+    } else {
+        $vehiclesNeedingOilAlert = getVehiclesNeedingOilChangeAlert();
+    }
+}
+
 $apiBase = getRelativeUrl('api/vehicle_maintenance.php');
 ?>
 <div class="container-fluid">
@@ -75,6 +89,35 @@ $apiBase = getRelativeUrl('api/vehicle_maintenance.php');
             <i class="bi bi-check-circle me-2"></i><?php echo htmlspecialchars($success); ?>
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
+    <?php endif; ?>
+
+    <?php
+    /** تنبيه ذكي: السيارة تحتاج إلى تغيير الزيت في أقرب وقت (الفرق 2400–3000 كم) حسب الدور */
+    if ($oilChangeAlert && !empty($oilChangeAlert['need_alert'])):
+        $roleLabel = $isDriver ? 'سائق' : ($isManager ? 'مدير' : 'محاسب');
+        $msg = $isDriver
+            ? 'السيارة تحتاج إلى تغيير الزيت في أقرب وقت (تم قطع ' . number_format($oilChangeAlert['km_since_oil']) . ' كم منذ آخر تغيير زيت).'
+            : 'السيارة «' . htmlspecialchars($oilChangeAlert['vehicle_number']) . '» تحتاج إلى تغيير الزيت في أقرب وقت (تم قطع ' . number_format($oilChangeAlert['km_since_oil']) . ' كم منذ آخر تغيير زيت).';
+    ?>
+    <div class="alert alert-warning alert-dismissible fade show border-warning" role="alert">
+        <span class="badge bg-warning text-dark me-2"><?php echo htmlspecialchars($roleLabel); ?></span>
+        <i class="bi bi-droplet-fill me-2"></i><?php echo $msg; ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    <?php endif; ?>
+
+    <?php if (!empty($vehiclesNeedingOilAlert)): ?>
+    <div class="alert alert-warning alert-dismissible fade show border-warning" role="alert">
+        <span class="badge bg-warning text-dark me-2"><?php echo $isManager ? 'مدير' : 'محاسب'; ?></span>
+        <i class="bi bi-droplet-fill me-2"></i>
+        السيارات التالية تحتاج إلى تغيير الزيت في أقرب وقت (الفرق بين آخر تغيير زيت وآخر تفويل بنزين 2400–3000 كم):
+        <ul class="mb-0 mt-2">
+            <?php foreach ($vehiclesNeedingOilAlert as $v): ?>
+                <li><strong><?php echo htmlspecialchars($v['vehicle_number']); ?></strong> — <?php echo number_format($v['km_since_oil']); ?> كم منذ آخر تغيير زيت</li>
+            <?php endforeach; ?>
+        </ul>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
     <?php endif; ?>
 
     <?php if ($isDriver): ?>

@@ -729,6 +729,7 @@ function tasksHandleAction(string $action, array $input, array $context): array
                 }
 
                 $result['success'] = 'تم تحديث حالة المهمة بنجاح';
+                $result['new_status'] = $update['status'];
                 break;
 
             case 'change_status':
@@ -762,6 +763,7 @@ function tasksHandleAction(string $action, array $input, array $context): array
                 logAudit($currentUser['id'], 'change_task_status', 'tasks', $taskId, null, ['status' => $status]);
 
                 $result['success'] = 'تم تحديث حالة المهمة بنجاح';
+                $result['new_status'] = $status;
                 break;
 
             case 'delete_task':
@@ -809,6 +811,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ];
 
         $result = tasksHandleAction($action, $_POST, $context);
+
+        $isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+        if ($isAjax) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode($result, JSON_UNESCAPED_UNICODE);
+            exit;
+        }
         
         // استخدام preventDuplicateSubmission لإعادة التوجيه بشكل صحيح
         $queryParams = [];
@@ -1802,7 +1811,7 @@ function tasksHtml(string $value): string
                                         echo tasksHtml($orderTypeLabels[$displayType] ?? $displayType);
                                         ?>
                                     </td>
-                                    <td><span class="badge bg-<?php echo $statusClass; ?>"><?php echo tasksHtml($statusLabel); ?></span></td>
+                                    <td class="task-status-cell"><span class="badge bg-<?php echo $statusClass; ?>"><?php echo tasksHtml($statusLabel); ?></span></td>
                                     <td>
                                         <?php if (!empty($task['due_date'])): ?>
                                             <?php echo tasksHtml(date('Y-m-d', strtotime((string) $task['due_date']))); ?>
@@ -1810,7 +1819,7 @@ function tasksHtml(string $value): string
                                             <span class="text-muted">-</span>
                                         <?php endif; ?>
                                     </td>
-                                    <td>
+                                    <td class="task-actions-cell">
                                         <div class="btn-group btn-group-sm" role="group">
                                             <?php if ($isProduction): ?>
                                                 <?php 
@@ -2184,6 +2193,13 @@ function tasksHtml(string $value): string
         ? tasksDataRaw
         : (tasksDataRaw && typeof tasksDataRaw === 'object' ? Object.values(tasksDataRaw) : []);
 
+    window.TASK_PAGE_FLAGS = {
+        isManager: <?php echo $isManager ? 'true' : 'false'; ?>,
+        isProduction: <?php echo $isProduction ? 'true' : 'false'; ?>,
+        isDriver: <?php echo $isDriver ? 'true' : 'false'; ?>
+    };
+    var printTaskReceiptBase = <?php echo json_encode(getRelativeUrl('print_task_receipt.php')); ?>;
+
     const taskTypeSelect = document.getElementById('task_type');
     const productionFields = document.getElementById('production_fields');
     const productSelect = document.getElementById('product_id');
@@ -2487,12 +2503,111 @@ function tasksHtml(string $value): string
         });
     }
 
+    const statusLabelMap = {
+        'pending': 'معلقة',
+        'received': 'مستلمة',
+        'in_progress': 'قيد التنفيذ',
+        'completed': 'مكتملة',
+        'with_delegate': 'مع المندوب',
+        'delivered': 'تم التوصيل',
+        'returned': 'تم الارجاع',
+        'cancelled': 'ملغاة'
+    };
+    const statusClassMap = {
+        'pending': 'warning',
+        'received': 'info',
+        'in_progress': 'primary',
+        'completed': 'success',
+        'with_delegate': 'info',
+        'delivered': 'success',
+        'returned': 'secondary',
+        'cancelled': 'secondary'
+    };
+
+    function buildActionsHtml(taskId, newStatus) {
+        var flags = window.TASK_PAGE_FLAGS || {};
+        var html = '<div class="btn-group btn-group-sm" role="group">';
+        if (flags.isProduction) {
+            if (['pending', 'received', 'in_progress'].indexOf(newStatus) !== -1) {
+                html += '<button type="button" class="btn btn-outline-success" onclick="submitTaskAction(\'complete_task\', ' + taskId + ')"><i class="bi bi-check2-circle me-1"></i>إكمال</button>';
+            }
+            if (newStatus === 'completed') {
+                html += '<button type="button" class="btn btn-outline-info btn-sm" onclick="submitTaskAction(\'with_delegate_task\', ' + taskId + ')"><i class="bi bi-person-badge me-1"></i>مع المندوب</button>';
+            }
+        }
+        if ((flags.isManager || flags.isProduction || flags.isDriver) && ['completed', 'with_delegate'].indexOf(newStatus) !== -1) {
+            html += '<button type="button" class="btn btn-outline-success btn-sm" onclick="submitTaskAction(\'deliver_task\', ' + taskId + ')"><i class="bi bi-truck me-1"></i>تم التوصيل</button>';
+            html += '<button type="button" class="btn btn-outline-secondary btn-sm" onclick="submitTaskAction(\'return_task\', ' + taskId + ')"><i class="bi bi-arrow-return-left me-1"></i>تم الارجاع</button>';
+        }
+        if (flags.isManager) {
+            html += '<button type="button" class="btn btn-outline-secondary" onclick="viewTask(' + taskId + ')"><i class="bi bi-eye"></i></button>';
+            html += '<button type="button" class="btn btn-outline-danger" onclick="confirmDeleteTask(' + taskId + ')"><i class="bi bi-trash"></i></button>';
+        }
+        if (flags.isManager || flags.isProduction || flags.isDriver) {
+            html += '<a href="' + printTaskReceiptBase + '?id=' + taskId + '" target="_blank" class="btn btn-outline-primary" title="طباعة إيصال المهمة"><i class="bi bi-printer"></i></a>';
+        }
+        html += '</div>';
+        return html;
+    }
+
+    function updateTaskRow(taskId, newStatus) {
+        var row = document.querySelector('tr[data-task-id="' + taskId + '"]');
+        if (!row) return;
+        var statusCell = row.querySelector('.task-status-cell');
+        var actionsCell = row.querySelector('.task-actions-cell');
+        if (statusCell) {
+            var label = statusLabelMap[newStatus] || newStatus;
+            var cls = statusClassMap[newStatus] || 'secondary';
+            statusCell.innerHTML = '<span class="badge bg-' + cls + '">' + sanitizeText(label) + '</span>';
+        }
+        if (actionsCell) {
+            actionsCell.innerHTML = buildActionsHtml(taskId, newStatus);
+        }
+    }
+
     window.submitTaskAction = function (action, taskId) {
         if (!taskActionForm) return;
+        taskId = parseInt(taskId, 10) || 0;
+        if (!taskId) return;
 
-        taskActionForm.querySelector('input[name="action"]').value = sanitizeText(action);
-        taskActionForm.querySelector('input[name="task_id"]').value = parseInt(taskId, 10) || '';
-        taskActionForm.submit();
+        var formData = new FormData();
+        formData.append('action', action);
+        formData.append('task_id', taskId);
+
+        var url = (taskActionForm.action || window.location.href).split('?')[0] + (window.location.search || '');
+        if (url.indexOf('page=tasks') === -1) {
+            url = url + (url.indexOf('?') !== -1 ? '&' : '?') + 'page=tasks';
+        }
+
+        fetch(url, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            body: formData
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+            if (data.success) {
+                if (action === 'delete_task') {
+                    var row = document.querySelector('tr[data-task-id="' + taskId + '"]');
+                    if (row) row.remove();
+                } else if (data.new_status) {
+                    updateTaskRow(taskId, data.new_status);
+                }
+                if (typeof window.showToast === 'function') {
+                    window.showToast(data.success, 'success');
+                } else {
+                    alert(data.success);
+                }
+            }
+        })
+        .catch(function (err) {
+            console.error(err);
+            alert('حدث خطأ أثناء تحديث المهمة.');
+        });
     };
 
     window.confirmDeleteTask = function (taskId) {

@@ -94,12 +94,27 @@ $pageDescription = 'لوحة تحكم السائق - الحضور والانصر
                 $attendanceUrl = getRelativeUrl('attendance.php');
                 $tasksUrl = $baseUrlDriver . '?page=tasks';
                 $hasUserWallet = file_exists(__DIR__ . '/../modules/user/user_wallet.php');
+                $maintenanceUrl = $baseUrlDriver . '?page=vehicle_maintenance';
+                require_once __DIR__ . '/../includes/vehicle_maintenance.php';
+                $driverVehicle = getDriverVehicle($currentUser['id']);
+                $driverOilAlert = $driverVehicle ? getVehicleOilChangeAlert($driverVehicle['id']) : null;
+                $showDriverOilAlert = $driverOilAlert && !empty($driverOilAlert['need_alert']);
                 ?>
                 <div class="container-fluid">
                     <div class="page-header mb-4">
                         <h2><i class="bi bi-speedometer2 me-2"></i>لوحة السائق</h2>
                         <p class="text-muted mb-0">الحضور والانصراف، وأوردرات التوصيل (مع المندوب)</p>
                     </div>
+
+                    <?php if ($showDriverOilAlert): ?>
+                    <div class="alert alert-warning alert-dismissible fade show border-warning mb-4" role="alert">
+                        <span class="badge bg-warning text-dark me-2">سائق</span>
+                        <i class="bi bi-droplet-fill me-2"></i>
+                        السيارة تحتاج إلى تغيير الزيت في أقرب وقت (تم قطع <?php echo number_format($driverOilAlert['km_since_oil']); ?> كم منذ آخر تغيير زيت).
+                        <a href="<?php echo htmlspecialchars($maintenanceUrl); ?>" class="alert-link ms-2">صيانات السيارة <i class="bi bi-arrow-left"></i></a>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                    <?php endif; ?>
 
                     <div class="row g-3 mb-4">
                         <div class="col-12 col-sm-6 col-lg-4">
