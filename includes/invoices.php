@@ -1142,7 +1142,7 @@ function getInvoicesCount($filters = []) {
 
 /**
  * الحصول على قائمة الفواتير الورقية (محلي + شركات شحن) مع فلترة وترتيب موحد
- * @param array $filters ['date_from'=>'', 'date_to'=>'', 'invoice_number'=>'']
+ * @param array $filters ['date_from'=>'', 'date_to'=>'', 'invoice_number'=>'', 'paper_search'=>'']
  * @param int $limit
  * @param int $offset
  * @return array عناصر بصيغة: id, invoice_number, total_amount, date, customer_name, type (local|shipping), image_path, view_image_url
@@ -1153,6 +1153,7 @@ function getPaperInvoices($filters = [], $limit = 50, $offset = 0) {
     $dateFrom = $filters['date_from'] ?? null;
     $dateTo = $filters['date_to'] ?? null;
     $invoiceNumber = isset($filters['invoice_number']) ? trim($filters['invoice_number']) : '';
+    $paperSearch = isset($filters['paper_search']) ? trim($filters['paper_search']) : '';
 
     // فواتير ورقية عملاء محليين
     $localTable = $db->queryOne("SHOW TABLES LIKE 'local_customer_paper_invoices'");
@@ -1176,6 +1177,13 @@ function getPaperInvoices($filters = [], $limit = 50, $offset = 0) {
             $sql .= " AND (p.invoice_number LIKE ? OR CAST(p.id AS CHAR) LIKE ?)";
             $params[] = "%{$invoiceNumber}%";
             $params[] = "%{$invoiceNumber}%";
+        }
+        if ($paperSearch !== '') {
+            $sql .= " AND (p.invoice_number LIKE ? OR CAST(p.id AS CHAR) LIKE ? OR l.name LIKE ? OR CAST(p.total_amount AS CHAR) LIKE ?)";
+            $params[] = "%{$paperSearch}%";
+            $params[] = "%{$paperSearch}%";
+            $params[] = "%{$paperSearch}%";
+            $params[] = "%{$paperSearch}%";
         }
         $sql .= " ORDER BY p.created_at DESC";
         $localRows = $db->query($sql, $params) ?: [];
@@ -1214,6 +1222,13 @@ function getPaperInvoices($filters = [], $limit = 50, $offset = 0) {
             $params[] = "%{$invoiceNumber}%";
             $params[] = "%{$invoiceNumber}%";
         }
+        if ($paperSearch !== '') {
+            $sql .= " AND (p.invoice_number LIKE ? OR CAST(p.id AS CHAR) LIKE ? OR s.name LIKE ? OR CAST(p.total_amount AS CHAR) LIKE ?)";
+            $params[] = "%{$paperSearch}%";
+            $params[] = "%{$paperSearch}%";
+            $params[] = "%{$paperSearch}%";
+            $params[] = "%{$paperSearch}%";
+        }
         $sql .= " ORDER BY p.created_at DESC";
         $shipRows = $db->query($sql, $params) ?: [];
         foreach ($shipRows as $row) {
@@ -1248,11 +1263,12 @@ function getPaperInvoicesCount($filters = []) {
     $dateFrom = $filters['date_from'] ?? null;
     $dateTo = $filters['date_to'] ?? null;
     $invoiceNumber = isset($filters['invoice_number']) ? trim($filters['invoice_number']) : '';
+    $paperSearch = isset($filters['paper_search']) ? trim($filters['paper_search']) : '';
 
     $localTable = $db->queryOne("SHOW TABLES LIKE 'local_customer_paper_invoices'");
     if (!empty($localTable)) {
         $hasInvNum = !empty($db->queryOne("SHOW COLUMNS FROM local_customer_paper_invoices LIKE 'invoice_number'"));
-        $sql = "SELECT COUNT(*) as c FROM local_customer_paper_invoices p WHERE 1=1";
+        $sql = "SELECT COUNT(*) as c FROM local_customer_paper_invoices p LEFT JOIN local_customers l ON p.customer_id = l.id WHERE 1=1";
         $params = [];
         if ($dateFrom) { $sql .= " AND DATE(p.created_at) >= ?"; $params[] = $dateFrom; }
         if ($dateTo) { $sql .= " AND DATE(p.created_at) <= ?"; $params[] = $dateTo; }
@@ -1261,13 +1277,20 @@ function getPaperInvoicesCount($filters = []) {
             $params[] = "%{$invoiceNumber}%";
             $params[] = "%{$invoiceNumber}%";
         }
+        if ($paperSearch !== '') {
+            $sql .= " AND (p.invoice_number LIKE ? OR CAST(p.id AS CHAR) LIKE ? OR l.name LIKE ? OR CAST(p.total_amount AS CHAR) LIKE ?)";
+            $params[] = "%{$paperSearch}%";
+            $params[] = "%{$paperSearch}%";
+            $params[] = "%{$paperSearch}%";
+            $params[] = "%{$paperSearch}%";
+        }
         $r = $db->queryOne($sql, $params);
         $total += (int)($r['c'] ?? 0);
     }
 
     $shippingTable = $db->queryOne("SHOW TABLES LIKE 'shipping_company_paper_invoices'");
     if (!empty($shippingTable)) {
-        $sql = "SELECT COUNT(*) as c FROM shipping_company_paper_invoices p WHERE 1=1";
+        $sql = "SELECT COUNT(*) as c FROM shipping_company_paper_invoices p LEFT JOIN shipping_companies s ON p.shipping_company_id = s.id WHERE 1=1";
         $params = [];
         if ($dateFrom) { $sql .= " AND DATE(p.created_at) >= ?"; $params[] = $dateFrom; }
         if ($dateTo) { $sql .= " AND DATE(p.created_at) <= ?"; $params[] = $dateTo; }
@@ -1275,6 +1298,13 @@ function getPaperInvoicesCount($filters = []) {
             $sql .= " AND (p.invoice_number LIKE ? OR CAST(p.id AS CHAR) LIKE ?)";
             $params[] = "%{$invoiceNumber}%";
             $params[] = "%{$invoiceNumber}%";
+        }
+        if ($paperSearch !== '') {
+            $sql .= " AND (p.invoice_number LIKE ? OR CAST(p.id AS CHAR) LIKE ? OR s.name LIKE ? OR CAST(p.total_amount AS CHAR) LIKE ?)";
+            $params[] = "%{$paperSearch}%";
+            $params[] = "%{$paperSearch}%";
+            $params[] = "%{$paperSearch}%";
+            $params[] = "%{$paperSearch}%";
         }
         $r = $db->queryOne($sql, $params);
         $total += (int)($r['c'] ?? 0);

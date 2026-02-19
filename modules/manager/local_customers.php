@@ -2895,32 +2895,32 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 
-<!-- Modal عرض صورة الفاتورة الورقية - للكمبيوتر -->
+<!-- Modal عرض صورة الفاتورة الورقية - للكمبيوتر (عرض كامل الصورة) -->
 <div class="modal fade" id="paperInvoiceImageViewModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-dialog modal-fullscreen modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header bg-secondary text-white d-flex align-items-center justify-content-between">
+            <div class="modal-header bg-secondary text-white d-flex align-items-center justify-content-between py-2">
                 <h5 class="modal-title mb-0">عرض الفاتورة الورقية</h5>
                 <div class="d-flex gap-1">
                     <button type="button" class="btn btn-light btn-sm" id="paperInvoiceModalCloseFastBtn" onclick="closePaperInvoiceImageViewNow()" title="إغلاق فوري">إغلاق</button>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
                 </div>
             </div>
-            <div class="modal-body text-center p-0">
-                <img id="paperInvoiceViewImage" src="" alt="صورة الفاتورة" class="img-fluid" style="max-height: 80vh;">
+            <div class="modal-body d-flex align-items-center justify-content-center overflow-auto p-2" style="min-height: 0;">
+                <img id="paperInvoiceViewImage" src="" alt="صورة الفاتورة" class="paper-invoice-full-image" style="max-width: 100%; max-height: calc(100vh - 120px); width: auto; height: auto; object-fit: contain; display: block;">
             </div>
         </div>
     </div>
 </div>
 
-<!-- بطاقة عرض صورة الفاتورة الورقية - للموبايل فقط (إغلاق فوري بدون تجمّد) -->
+<!-- بطاقة عرض صورة الفاتورة الورقية - للموبايل فقط (عرض كامل الصورة) -->
 <div class="card shadow-sm mb-4 d-md-none position-fixed top-0 start-0 end-0 m-2" id="paperInvoiceViewCard" style="display: none; z-index: 1060; max-height: 95vh;">
     <div class="card-header bg-secondary text-white d-flex align-items-center justify-content-between py-2">
         <span class="fw-bold">عرض الفاتورة الورقية</span>
         <button type="button" class="btn btn-light btn-sm fw-bold" onclick="closePaperInvoiceViewCard()" aria-label="إغلاق">✕ إغلاق</button>
     </div>
-    <div class="card-body p-2 overflow-auto" style="max-height: 85vh;">
-        <img id="paperInvoiceViewCardImage" src="" alt="صورة الفاتورة" class="img-fluid w-100">
+    <div class="card-body p-2 d-flex align-items-center justify-content-center overflow-auto" style="max-height: 85vh;">
+        <img id="paperInvoiceViewCardImage" src="" alt="صورة الفاتورة" style="max-width: 100%; max-height: 82vh; width: auto; height: auto; object-fit: contain;">
     </div>
 </div>
 
@@ -2988,12 +2988,12 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 
-<!-- Modal عرض صورة مرتجع الفاتورة الورقية - للكمبيوتر -->
+<!-- Modal عرض صورة مرتجع الفاتورة الورقية - للكمبيوتر (عرض كامل الصورة) -->
 <div class="modal fade" id="paperInvoiceReturnImageViewModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-dialog modal-fullscreen modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-warning text-dark"><h5 class="modal-title mb-0">عرض صورة مرتجع الفاتورة الورقية</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button></div>
-            <div class="modal-body text-center p-0"><img id="paperInvoiceReturnViewImage" src="" alt="صورة المرتجع" class="img-fluid" style="max-height: 80vh;"></div>
+            <div class="modal-body d-flex align-items-center justify-content-center overflow-auto p-2" style="min-height: 0;"><img id="paperInvoiceReturnViewImage" src="" alt="صورة المرتجع" style="max-width: 100%; max-height: calc(100vh - 120px); width: auto; height: auto; object-fit: contain; display: block;"></div>
         </div>
     </div>
 </div>
@@ -3004,7 +3004,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <span class="fw-bold">عرض صورة مرتجع الفاتورة الورقية</span>
         <button type="button" class="btn btn-light btn-sm fw-bold" onclick="closePaperInvoiceReturnViewCard()" aria-label="إغلاق">✕ إغلاق</button>
     </div>
-    <div class="card-body p-2 overflow-auto" style="max-height: 85vh;"><img id="paperInvoiceReturnViewCardImage" src="" alt="صورة المرتجع" class="img-fluid w-100"></div>
+    <div class="card-body p-2 d-flex align-items-center justify-content-center overflow-auto" style="max-height: 85vh;"><img id="paperInvoiceReturnViewCardImage" src="" alt="صورة المرتجع" style="max-width: 100%; max-height: 82vh; width: auto; height: auto; object-fit: contain;"></div>
 </div>
 
 <!-- Modal إرجاع منتجات العميل المحلي - للكمبيوتر فقط -->

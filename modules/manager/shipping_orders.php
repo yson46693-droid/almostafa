@@ -5077,8 +5077,8 @@ function confirmCancelOrderWithDeductedAmount() {
         <h5 class="mb-0">عرض الفاتورة الورقية</h5>
         <button type="button" class="btn btn-sm btn-light" onclick="closeShippingPaperInvoiceViewCard()" aria-label="إغلاق"><i class="bi bi-x-lg"></i></button>
     </div>
-    <div class="card-body text-center p-0">
-        <img id="shippingPaperInvoiceViewImg" src="" alt="صورة الفاتورة" class="img-fluid" style="max-height: 80vh;">
+    <div class="card-body d-flex align-items-center justify-content-center overflow-auto p-2" style="min-height: 300px; max-height: 85vh;">
+        <img id="shippingPaperInvoiceViewImg" src="" alt="صورة الفاتورة" style="max-width: 100%; max-height: 82vh; width: auto; height: auto; object-fit: contain;">
     </div>
 </div>
 

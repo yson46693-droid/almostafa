@@ -35,6 +35,7 @@ $filters = [
     'date_exact' => trim($_GET['date_exact'] ?? ''),
     'status' => trim($_GET['status'] ?? ''),
     'customer_id' => isset($_GET['customer_id']) && $_GET['customer_id'] !== '' ? intval($_GET['customer_id']) : null,
+    'paper_search' => trim($_GET['paper_search'] ?? ''),
 ];
 // يوم محدد: استخدام نفس التاريخ للفترة
 if (!empty($filters['date_exact'])) {
@@ -126,8 +127,11 @@ $totalInvoices = getInvoicesCount($filters);
 $totalPages = ceil($totalInvoices / $perPage);
 $invoices = getInvoices($filters, $perPage, $offset);
 
-// الفواتير الورقية (محلي + شركات شحن) — نفس فلاتر التاريخ ورقم الفاتورة
-$paperFilters = array_intersect_key($filters, array_flip(['date_from', 'date_to', 'invoice_number']));
+// الفواتير الورقية (محلي + شركات شحن) — فلاتر: التاريخ، رقم الفاتورة، البحث المتقدم
+$paperFilters = array_intersect_key($filters, array_flip(['date_from', 'date_to', 'invoice_number', 'paper_search']));
+if (isset($_GET['paper_search']) && trim($_GET['paper_search']) !== '') {
+    $paperFilters['paper_search'] = trim($_GET['paper_search']);
+}
 $totalPaperInvoices = getPaperInvoicesCount($paperFilters);
 $paperPerPage = 20;
 $paperPage = isset($_GET['paper_p']) ? max(1, intval($_GET['paper_p'])) : 1;
@@ -275,6 +279,14 @@ if (isset($_GET['id'])) {
                                    value="<?php echo htmlspecialchars($filters['date_to'] ?? ''); ?>" placeholder="إلى">
                         </div>
                     </div>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">بحث متقدم في الفواتير الورقية</label>
+                    <input type="text" class="form-control" name="paper_search" id="paperSearchInput"
+                           value="<?php echo htmlspecialchars($filters['paper_search'] ?? ''); ?>"
+                           placeholder="رقم الفاتورة، اسم العميل/الشركة، أو المبلغ..."
+                           autocomplete="off">
+                    <small class="text-muted">يبحث في رقم الفاتورة واسم العميل/الشركة والمبلغ دفعة واحدة</small>
                 </div>
                 <div class="col-12">
                     <button type="submit" class="btn btn-primary" id="searchButton">
@@ -475,9 +487,7 @@ if (isset($_GET['id'])) {
                     <?php else: ?>
                         <?php foreach ($paperInvoices as $pi): ?>
                             <?php
-                            $viewImageUrl = $pi['type'] === 'local'
-                                ? getRelativeUrl('api/local_paper_invoice.php?action=view_image&id=' . (int)$pi['id'])
-                                : getRelativeUrl('api/shipping_company_paper_invoice.php?action=view_image&id=' . (int)$pi['id']);
+                            $viewImageUrl = getRelativeUrl('view_paper_invoice_image.php?type=' . ($pi['type'] === 'local' ? 'local' : 'shipping') . '&id=' . (int)$pi['id']);
                             $typeLabel = $pi['type'] === 'local' ? 'عميل محلي' : 'شركة شحن';
                             ?>
                             <tr>
@@ -488,7 +498,7 @@ if (isset($_GET['id'])) {
                                 <td><?php echo formatCurrency($pi['total_amount']); ?></td>
                                 <td>
                                     <?php if (!empty($pi['image_path'])): ?>
-                                        <a href="<?php echo htmlspecialchars($viewImageUrl); ?>" target="_blank" class="btn btn-outline-primary btn-sm" title="عرض صورة الفاتورة">
+                                        <a href="<?php echo htmlspecialchars($viewImageUrl); ?>" target="_blank" class="btn btn-outline-primary btn-sm" title="عرض صورة الفاتورة كاملة">
                                             <i class="bi bi-image me-1"></i>عرض الفاتورة
                                         </a>
                                     <?php else: ?>
