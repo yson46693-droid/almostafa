@@ -1179,11 +1179,18 @@ function getPaperInvoices($filters = [], $limit = 50, $offset = 0) {
             $params[] = "%{$invoiceNumber}%";
         }
         if ($paperSearch !== '') {
-            $sql .= " AND (p.invoice_number LIKE ? OR CAST(p.id AS CHAR) LIKE ? OR l.name LIKE ? OR CAST(p.total_amount AS CHAR) LIKE ?)";
-            $params[] = "%{$paperSearch}%";
-            $params[] = "%{$paperSearch}%";
-            $params[] = "%{$paperSearch}%";
-            $params[] = "%{$paperSearch}%";
+            if ($hasInvoiceNumber) {
+                $sql .= " AND (p.invoice_number LIKE ? OR CAST(p.id AS CHAR) LIKE ? OR l.name LIKE ? OR CAST(p.total_amount AS CHAR) LIKE ?)";
+                $params[] = "%{$paperSearch}%";
+                $params[] = "%{$paperSearch}%";
+                $params[] = "%{$paperSearch}%";
+                $params[] = "%{$paperSearch}%";
+            } else {
+                $sql .= " AND (CAST(p.id AS CHAR) LIKE ? OR l.name LIKE ? OR CAST(p.total_amount AS CHAR) LIKE ?)";
+                $params[] = "%{$paperSearch}%";
+                $params[] = "%{$paperSearch}%";
+                $params[] = "%{$paperSearch}%";
+            }
         }
         $sql .= " ORDER BY p.created_at DESC";
         $localRows = $db->query($sql, $params) ?: [];
@@ -1278,11 +1285,19 @@ function getPaperInvoicesCount($filters = []) {
             $params[] = "%{$invoiceNumber}%";
         }
         if ($paperSearch !== '') {
-            $sql .= " AND (p.invoice_number LIKE ? OR CAST(p.id AS CHAR) LIKE ? OR l.name LIKE ? OR CAST(p.total_amount AS CHAR) LIKE ?)";
-            $params[] = "%{$paperSearch}%";
-            $params[] = "%{$paperSearch}%";
-            $params[] = "%{$paperSearch}%";
-            $params[] = "%{$paperSearch}%";
+            $hasInvNum = !empty($db->queryOne("SHOW COLUMNS FROM local_customer_paper_invoices LIKE 'invoice_number'"));
+            if ($hasInvNum) {
+                $sql .= " AND (p.invoice_number LIKE ? OR CAST(p.id AS CHAR) LIKE ? OR l.name LIKE ? OR CAST(p.total_amount AS CHAR) LIKE ?)";
+                $params[] = "%{$paperSearch}%";
+                $params[] = "%{$paperSearch}%";
+                $params[] = "%{$paperSearch}%";
+                $params[] = "%{$paperSearch}%";
+            } else {
+                $sql .= " AND (CAST(p.id AS CHAR) LIKE ? OR l.name LIKE ? OR CAST(p.total_amount AS CHAR) LIKE ?)";
+                $params[] = "%{$paperSearch}%";
+                $params[] = "%{$paperSearch}%";
+                $params[] = "%{$paperSearch}%";
+            }
         }
         $r = $db->queryOne($sql, $params);
         $total += (int)($r['c'] ?? 0);

@@ -281,14 +281,6 @@ if (isset($_GET['id'])) {
                     </div>
                 </div>
                 <div class="col-12">
-                    <label class="form-label">بحث متقدم في الفواتير الورقية</label>
-                    <input type="text" class="form-control" name="paper_search" id="paperSearchInput"
-                           value="<?php echo htmlspecialchars($filters['paper_search'] ?? ''); ?>"
-                           placeholder="رقم الفاتورة، اسم العميل/الشركة، أو المبلغ..."
-                           autocomplete="off">
-                    <small class="text-muted">يبحث في رقم الفاتورة واسم العميل/الشركة والمبلغ دفعة واحدة</small>
-                </div>
-                <div class="col-12">
                     <button type="submit" class="btn btn-primary" id="searchButton">
                         <i class="bi bi-search"></i> بحث
                     </button>
@@ -467,6 +459,35 @@ if (isset($_GET['id'])) {
         <h5 class="mb-0"><i class="bi bi-file-earmark-image me-2"></i>الفواتير الورقية (<span id="totalPaperInvoicesCount"><?php echo $totalPaperInvoices; ?></span>)</h5>
     </div>
     <div class="card-body">
+        <form method="GET" id="paperInvoicesSearchForm" class="mb-3">
+            <input type="hidden" name="page" value="invoices">
+            <input type="hidden" name="p" value="<?php echo (int)$page; ?>">
+            <input type="hidden" name="paper_p" value="1">
+            <?php foreach (['invoice_number', 'status', 'customer_id', 'date_exact', 'date_from', 'date_to'] as $k): ?>
+                <?php if (isset($filters[$k]) && $filters[$k] !== ''): ?>
+                    <input type="hidden" name="<?php echo htmlspecialchars($k); ?>" value="<?php echo htmlspecialchars($filters[$k]); ?>">
+                <?php endif; ?>
+            <?php endforeach; ?>
+            <div class="row g-2 align-items-end">
+                <div class="col-md-8 col-lg-9">
+                    <label class="form-label small mb-0">بحث في الفواتير الورقية (رقم، عميل/شركة، مبلغ)</label>
+                    <input type="text" class="form-control form-control-sm" name="paper_search" id="paperSearchInput"
+                           value="<?php echo htmlspecialchars($paperFilters['paper_search'] ?? ''); ?>"
+                           placeholder="ابحث برقم الفاتورة أو اسم العميل/الشركة أو المبلغ..."
+                           autocomplete="off">
+                </div>
+                <div class="col-md-4 col-lg-3 d-flex gap-1">
+                    <button type="submit" class="btn btn-primary btn-sm flex-grow-1">
+                        <i class="bi bi-search me-1"></i>بحث
+                    </button>
+                    <?php if (!empty($paperFilters['paper_search'])): ?>
+                    <a href="?<?php echo http_build_query(array_merge(['page' => 'invoices', 'p' => $page, 'paper_p' => 1], array_diff_key($filters, ['paper_search' => 1]))); ?>" class="btn btn-outline-secondary btn-sm" title="مسح بحث الفواتير الورقية">
+                        <i class="bi bi-x-lg"></i>
+                    </a>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </form>
         <div class="table-responsive dashboard-table-wrapper">
             <table class="table dashboard-table align-middle">
                 <thead>
