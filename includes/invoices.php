@@ -1141,6 +1141,149 @@ function getInvoicesCount($filters = []) {
 }
 
 /**
+ * الحصول على قائمة الفواتير الورقية (محلي + شركات شحن) مع فلترة وترتيب موحد
+ * @param array $filters ['date_from'=>'', 'date_to'=>'', 'invoice_number'=>'']
+ * @param int $limit
+ * @param int $offset
+ * @return array عناصر بصيغة: id, invoice_number, total_amount, date, customer_name, type (local|shipping), image_path, view_image_url
+ */
+function getPaperInvoices($filters = [], $limit = 50, $offset = 0) {
+    $db = db();
+    $merged = [];
+    $dateFrom = $filters['date_from'] ?? null;
+    $dateTo = $filters['date_to'] ?? null;
+    $invoiceNumber = isset($filters['invoice_number']) ? trim($filters['invoice_number']) : '';
+
+    // فواتير ورقية عملاء محليين
+    $localTable = $db->queryOne("SHOW TABLES LIKE 'local_customer_paper_invoices'");
+    if (!empty($localTable)) {
+        $hasInvoiceNumber = !empty($db->queryOne("SHOW COLUMNS FROM local_customer_paper_invoices LIKE 'invoice_number'"));
+        $sql = "SELECT p.id, p.invoice_number, p.total_amount, p.image_path, p.created_at,
+                l.name as customer_name
+                FROM local_customer_paper_invoices p
+                LEFT JOIN local_customers l ON p.customer_id = l.id
+                WHERE 1=1";
+        $params = [];
+        if ($dateFrom) {
+            $sql .= " AND DATE(p.created_at) >= ?";
+            $params[] = $dateFrom;
+        }
+        if ($dateTo) {
+            $sql .= " AND DATE(p.created_at) <= ?";
+            $params[] = $dateTo;
+        }
+        if ($invoiceNumber !== '' && $hasInvoiceNumber) {
+            $sql .= " AND (p.invoice_number LIKE ? OR CAST(p.id AS CHAR) LIKE ?)";
+            $params[] = "%{$invoiceNumber}%";
+            $params[] = "%{$invoiceNumber}%";
+        }
+        $sql .= " ORDER BY p.created_at DESC";
+        $localRows = $db->query($sql, $params) ?: [];
+        foreach ($localRows as $row) {
+            $merged[] = [
+                'id' => (int)$row['id'],
+                'invoice_number' => $row['invoice_number'] ?: ('ورقية-' . $row['id']),
+                'total_amount' => (float)$row['total_amount'],
+                'date' => $row['created_at'],
+                'customer_name' => $row['customer_name'] ?? '-',
+                'type' => 'local',
+                'image_path' => $row['image_path'],
+            ];
+        }
+    }
+
+    // فواتير ورقية شركات الشحن
+    $shippingTable = $db->queryOne("SHOW TABLES LIKE 'shipping_company_paper_invoices'");
+    if (!empty($shippingTable)) {
+        $sql = "SELECT p.id, p.invoice_number, p.total_amount, p.image_path, p.created_at,
+                s.name as customer_name
+                FROM shipping_company_paper_invoices p
+                LEFT JOIN shipping_companies s ON p.shipping_company_id = s.id
+                WHERE 1=1";
+        $params = [];
+        if ($dateFrom) {
+            $sql .= " AND DATE(p.created_at) >= ?";
+            $params[] = $dateFrom;
+        }
+        if ($dateTo) {
+            $sql .= " AND DATE(p.created_at) <= ?";
+            $params[] = $dateTo;
+        }
+        if ($invoiceNumber !== '') {
+            $sql .= " AND (p.invoice_number LIKE ? OR CAST(p.id AS CHAR) LIKE ?)";
+            $params[] = "%{$invoiceNumber}%";
+            $params[] = "%{$invoiceNumber}%";
+        }
+        $sql .= " ORDER BY p.created_at DESC";
+        $shipRows = $db->query($sql, $params) ?: [];
+        foreach ($shipRows as $row) {
+            $merged[] = [
+                'id' => (int)$row['id'],
+                'invoice_number' => $row['invoice_number'] ?: ('ورقية-' . $row['id']),
+                'total_amount' => (float)$row['total_amount'],
+                'date' => $row['created_at'],
+                'customer_name' => $row['customer_name'] ?? '-',
+                'type' => 'shipping',
+                'image_path' => $row['image_path'],
+            ];
+        }
+    }
+
+    // ترتيب موحد حسب التاريخ (الأحدث أولاً) ثم تطبيق الترقيم
+    usort($merged, function ($a, $b) {
+        $t1 = strtotime($a['date'] ?? 0);
+        $t2 = strtotime($b['date'] ?? 0);
+        return $t2 - $t1;
+    });
+
+    return array_slice($merged, $offset, $limit);
+}
+
+/**
+ * عدد الفواتير الورقية الإجمالي (محلي + شركات شحن) مع نفس الفلاتر
+ */
+function getPaperInvoicesCount($filters = []) {
+    $db = db();
+    $total = 0;
+    $dateFrom = $filters['date_from'] ?? null;
+    $dateTo = $filters['date_to'] ?? null;
+    $invoiceNumber = isset($filters['invoice_number']) ? trim($filters['invoice_number']) : '';
+
+    $localTable = $db->queryOne("SHOW TABLES LIKE 'local_customer_paper_invoices'");
+    if (!empty($localTable)) {
+        $hasInvNum = !empty($db->queryOne("SHOW COLUMNS FROM local_customer_paper_invoices LIKE 'invoice_number'"));
+        $sql = "SELECT COUNT(*) as c FROM local_customer_paper_invoices p WHERE 1=1";
+        $params = [];
+        if ($dateFrom) { $sql .= " AND DATE(p.created_at) >= ?"; $params[] = $dateFrom; }
+        if ($dateTo) { $sql .= " AND DATE(p.created_at) <= ?"; $params[] = $dateTo; }
+        if ($invoiceNumber !== '' && $hasInvNum) {
+            $sql .= " AND (p.invoice_number LIKE ? OR CAST(p.id AS CHAR) LIKE ?)";
+            $params[] = "%{$invoiceNumber}%";
+            $params[] = "%{$invoiceNumber}%";
+        }
+        $r = $db->queryOne($sql, $params);
+        $total += (int)($r['c'] ?? 0);
+    }
+
+    $shippingTable = $db->queryOne("SHOW TABLES LIKE 'shipping_company_paper_invoices'");
+    if (!empty($shippingTable)) {
+        $sql = "SELECT COUNT(*) as c FROM shipping_company_paper_invoices p WHERE 1=1";
+        $params = [];
+        if ($dateFrom) { $sql .= " AND DATE(p.created_at) >= ?"; $params[] = $dateFrom; }
+        if ($dateTo) { $sql .= " AND DATE(p.created_at) <= ?"; $params[] = $dateTo; }
+        if ($invoiceNumber !== '') {
+            $sql .= " AND (p.invoice_number LIKE ? OR CAST(p.id AS CHAR) LIKE ?)";
+            $params[] = "%{$invoiceNumber}%";
+            $params[] = "%{$invoiceNumber}%";
+        }
+        $r = $db->queryOne($sql, $params);
+        $total += (int)($r['c'] ?? 0);
+    }
+
+    return $total;
+}
+
+/**
  * حذف فاتورة
  */
 function deleteInvoice($invoiceId, $deletedBy = null) {

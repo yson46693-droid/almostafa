@@ -126,6 +126,15 @@ $totalInvoices = getInvoicesCount($filters);
 $totalPages = ceil($totalInvoices / $perPage);
 $invoices = getInvoices($filters, $perPage, $offset);
 
+// الفواتير الورقية (محلي + شركات شحن) — نفس فلاتر التاريخ ورقم الفاتورة
+$paperFilters = array_intersect_key($filters, array_flip(['date_from', 'date_to', 'invoice_number']));
+$totalPaperInvoices = getPaperInvoicesCount($paperFilters);
+$paperPerPage = 20;
+$paperPage = isset($_GET['paper_p']) ? max(1, intval($_GET['paper_p'])) : 1;
+$paperTotalPages = $totalPaperInvoices > 0 ? ceil($totalPaperInvoices / $paperPerPage) : 0;
+$paperOffset = ($paperPage - 1) * $paperPerPage;
+$paperInvoices = getPaperInvoices($paperFilters, $paperPerPage, $paperOffset);
+
 $customers = $db->query("SELECT id, name FROM customers WHERE status = 'active' ORDER BY name");
 
 // التحقق من وجود عمود unit قبل الاستعلام
@@ -437,6 +446,90 @@ if (isset($_GET['id'])) {
         </nav>
         <?php endif; ?>
         </div>
+    </div>
+</div>
+
+<!-- قائمة الفواتير الورقية -->
+<div class="card shadow-sm mt-4">
+    <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <h5 class="mb-0"><i class="bi bi-file-earmark-image me-2"></i>الفواتير الورقية (<span id="totalPaperInvoicesCount"><?php echo $totalPaperInvoices; ?></span>)</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive dashboard-table-wrapper">
+            <table class="table dashboard-table align-middle">
+                <thead>
+                    <tr>
+                        <th>رقم الفاتورة</th>
+                        <th>العميل / الشركة</th>
+                        <th>النوع</th>
+                        <th>التاريخ</th>
+                        <th>المبلغ الإجمالي</th>
+                        <th>الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody id="paperInvoicesTableBody">
+                    <?php if (empty($paperInvoices)): ?>
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-4">لا توجد فواتير ورقية</td>
+                        </tr>
+                    <?php else: ?>
+                        <?php foreach ($paperInvoices as $pi): ?>
+                            <?php
+                            $viewImageUrl = $pi['type'] === 'local'
+                                ? getRelativeUrl('api/local_paper_invoice.php?action=view_image&id=' . (int)$pi['id'])
+                                : getRelativeUrl('api/shipping_company_paper_invoice.php?action=view_image&id=' . (int)$pi['id']);
+                            $typeLabel = $pi['type'] === 'local' ? 'عميل محلي' : 'شركة شحن';
+                            ?>
+                            <tr>
+                                <td><?php echo htmlspecialchars($pi['invoice_number']); ?></td>
+                                <td><?php echo htmlspecialchars($pi['customer_name']); ?></td>
+                                <td><span class="badge bg-info"><?php echo $typeLabel; ?></span></td>
+                                <td><?php echo formatDate($pi['date']); ?></td>
+                                <td><?php echo formatCurrency($pi['total_amount']); ?></td>
+                                <td>
+                                    <?php if (!empty($pi['image_path'])): ?>
+                                        <a href="<?php echo htmlspecialchars($viewImageUrl); ?>" target="_blank" class="btn btn-outline-primary btn-sm" title="عرض صورة الفاتورة">
+                                            <i class="bi bi-image me-1"></i>عرض الفاتورة
+                                        </a>
+                                    <?php else: ?>
+                                        <span class="text-muted small">لا توجد صورة</span>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+        <?php if ($paperTotalPages > 1): ?>
+        <?php $paperPaginationParams = array_merge(['page' => 'invoices', 'p' => $page], $filters); ?>
+        <nav aria-label="ترقيم الفواتير الورقية" class="mt-3">
+            <ul class="pagination justify-content-center flex-wrap">
+                <li class="page-item <?php echo $paperPage <= 1 ? 'disabled' : ''; ?>">
+                    <a class="page-link" href="?<?php echo http_build_query(array_merge($paperPaginationParams, ['paper_p' => $paperPage - 1])); ?>"><i class="bi bi-chevron-right"></i></a>
+                </li>
+                <?php
+                $paperStart = max(1, $paperPage - 2);
+                $paperEnd = min($paperTotalPages, $paperPage + 2);
+                if ($paperStart > 1): ?>
+                    <li class="page-item"><a class="page-link" href="?<?php echo http_build_query(array_merge($paperPaginationParams, ['paper_p' => 1])); ?>">1</a></li>
+                    <?php if ($paperStart > 2): ?><li class="page-item disabled"><span class="page-link">...</span></li><?php endif; ?>
+                <?php endif; ?>
+                <?php for ($i = $paperStart; $i <= $paperEnd; $i++): ?>
+                    <li class="page-item <?php echo $i === $paperPage ? 'active' : ''; ?>">
+                        <a class="page-link" href="?<?php echo http_build_query(array_merge($paperPaginationParams, ['paper_p' => $i])); ?>"><?php echo $i; ?></a>
+                    </li>
+                <?php endfor; ?>
+                <?php if ($paperEnd < $paperTotalPages): ?>
+                    <?php if ($paperEnd < $paperTotalPages - 1): ?><li class="page-item disabled"><span class="page-link">...</span></li><?php endif; ?>
+                    <li class="page-item"><a class="page-link" href="?<?php echo http_build_query(array_merge($paperPaginationParams, ['paper_p' => $paperTotalPages])); ?>"><?php echo $paperTotalPages; ?></a></li>
+                <?php endif; ?>
+                <li class="page-item <?php echo $paperPage >= $paperTotalPages ? 'disabled' : ''; ?>">
+                    <a class="page-link" href="?<?php echo http_build_query(array_merge($paperPaginationParams, ['paper_p' => $paperPage + 1])); ?>"><i class="bi bi-chevron-left"></i></a>
+                </li>
+            </ul>
+        </nav>
+        <?php endif; ?>
     </div>
 </div>
 
