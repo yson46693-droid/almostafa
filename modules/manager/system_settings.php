@@ -30,11 +30,38 @@ $success = '';
 $maintenanceMode = isMaintenanceMode();
 $configFilePath = __DIR__ . '/../../includes/config.php';
 
+// التحقق من مود رمضان (من جدول system_settings)
+$ramadanMode = false;
+try {
+    $tableCheck = $db->queryOne("SHOW TABLES LIKE 'system_settings'");
+    if (!empty($tableCheck)) {
+        $row = $db->queryOne("SELECT value FROM system_settings WHERE `key` = 'ramadan_mode' LIMIT 1");
+        $ramadanMode = !empty($row['value']) && $row['value'] === '1';
+    }
+} catch (Throwable $e) {
+    error_log('Ramadan mode check: ' . $e->getMessage());
+}
+
 // معالجة عمليات الإعدادات
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     
-    if ($action === 'toggle_maintenance_mode') {
+    if ($action === 'toggle_ramadan_mode') {
+        try {
+            $newValue = !$ramadanMode;
+            $db->execute(
+                "INSERT INTO system_settings (`key`, `value`, updated_at) VALUES ('ramadan_mode', ?, NOW())
+                 ON DUPLICATE KEY UPDATE value = VALUES(value), updated_at = NOW()",
+                [$newValue ? '1' : '0']
+            );
+            logAudit($currentUser['id'], 'toggle_ramadan_mode', 'system_settings', null, ['old' => $ramadanMode ? '1' : '0'], ['new' => $newValue ? '1' : '0']);
+            $success = $newValue ? 'تم تفعيل مود رمضان. مواعيد الحضور والانصراف أصبحت وفق المواعيد المختصرة (توقيت مصر).' : 'تم تعطيل مود رمضان. عودة لمواعيد العمل الاعتيادية.';
+            preventDuplicateSubmission($success, [], null, null, null);
+        } catch (Exception $e) {
+            error_log("Error toggling ramadan mode: " . $e->getMessage());
+            $error = 'حدث خطأ في تحديث مود رمضان: ' . $e->getMessage();
+        }
+    } elseif ($action === 'toggle_maintenance_mode') {
         try {
             $oldValue = $maintenanceMode;
             $newValue = !$maintenanceMode;
@@ -278,6 +305,55 @@ applyPRGPattern($error, $success);
                         <div class="alert alert-warning mt-3">
                             <i class="bi bi-exclamation-triangle me-2"></i>
                             <strong>تنبيه:</strong> وضع الصيانة مفعّل حالياً. جميع المستخدمين (عدا حساب المطور) لن يتمكنوا من استخدام النظام.
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <div class="card h-100 mt-3 mt-md-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-moon-stars me-2"></i>مود رمضان</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-4">
+                        عند تفعيل مود رمضان، تُطبَّق مواعيد الحضور والانصراف المختصرة (بتوقيت مصر):
+                        <br>• <strong>محاسب</strong> و<strong>عامل إنتاج</strong>: من 11:00 صباحاً حتى 4:30 مساءً.
+                        <br>• <strong>سائق</strong> و<strong>مندوب مبيعات</strong>: من 12:00 ظهراً حتى 4:30 مساءً.
+                    </p>
+                    <form method="POST" action="">
+                        <input type="hidden" name="action" value="toggle_ramadan_mode">
+                        <div class="d-flex align-items-center justify-content-between p-3 border rounded">
+                            <div>
+                                <h6 class="mb-1">مود رمضان</h6>
+                                <small class="text-muted d-block mb-2">
+                                    الحالة الحالية:
+                                    <span class="badge <?php echo $ramadanMode ? 'bg-info' : 'bg-secondary'; ?> ms-1">
+                                        <?php echo $ramadanMode ? 'مفعّل' : 'معطّل'; ?>
+                                    </span>
+                                </small>
+                            </div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox"
+                                       id="ramadanModeSwitch"
+                                       <?php echo $ramadanMode ? 'checked' : ''; ?>
+                                       onchange="this.form.submit()"
+                                       style="width: 3rem; height: 1.5rem;">
+                                <label class="form-check-label" for="ramadanModeSwitch">
+                                    <?php echo $ramadanMode ? 'مفعّل' : 'معطّل'; ?>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <button type="submit" class="btn btn-<?php echo $ramadanMode ? 'warning' : 'primary'; ?>">
+                                <i class="bi bi-<?php echo $ramadanMode ? 'x-circle' : 'check-circle'; ?> me-2"></i>
+                                <?php echo $ramadanMode ? 'تعطيل مود رمضان' : 'تفعيل مود رمضان'; ?>
+                            </button>
+                        </div>
+                    </form>
+                    <?php if ($ramadanMode): ?>
+                        <div class="alert alert-info mt-3 mb-0">
+                            <i class="bi bi-moon-stars me-2"></i>
+                            <strong>مود رمضان مفعّل.</strong> مواعيد الحضور والانصراف مطبقة وفق التوقيت المختصر (مصر).
                         </div>
                     <?php endif; ?>
                 </div>

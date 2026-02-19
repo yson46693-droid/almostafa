@@ -46,8 +46,33 @@ if (!function_exists('createNotification')) {
 }
 
 /**
+ * التحقق من تفعيل مود رمضان (مواعيد الحضور والانصراف الخاصة برمضان - توقيت مصر)
+ */
+function isRamadanMode() {
+    static $enabled = null;
+    if ($enabled !== null) {
+        return $enabled;
+    }
+    try {
+        $db = db();
+        $tableCheck = $db->queryOne("SHOW TABLES LIKE 'system_settings'");
+        if (empty($tableCheck)) {
+            $enabled = false;
+            return false;
+        }
+        $row = $db->queryOne("SELECT value FROM system_settings WHERE `key` = 'ramadan_mode' LIMIT 1");
+        $enabled = !empty($row['value']) && $row['value'] === '1';
+    } catch (Throwable $e) {
+        error_log('isRamadanMode: ' . $e->getMessage());
+        $enabled = false;
+    }
+    return $enabled;
+}
+
+/**
  * الحصول على موعد العمل الرسمي للمستخدم
  * المدير ليس له حضور وانصراف
+ * عند تفعيل مود رمضان: محاسب/عامل إنتاج 11:00–16:30، سائق/مندوب مبيعات 12:00–16:30 (توقيت مصر)
  */
 function getOfficialWorkTime($userId) {
     $db = db();
@@ -64,17 +89,28 @@ function getOfficialWorkTime($userId) {
         return null; // لا يوجد موعد عمل للمدير
     }
     
-    // مواعيد العمل الرسمية
+    // مود رمضان (توقيت مصر): مواعيد مخفضة
+    if (isRamadanMode()) {
+        if ($role === 'accountant' || $role === 'production') {
+            // محاسب، عامل إنتاج: 11:00 - 16:30
+            return ['start' => '11:00:00', 'end' => '16:30:00'];
+        }
+        if ($role === 'sales' || $role === 'driver') {
+            // مندوب مبيعات، سائق: 12:00 - 16:30
+            return ['start' => '12:00:00', 'end' => '16:30:00'];
+        }
+        // أدوار أخرى (مثل developer): نفس محاسب/إنتاج
+        return ['start' => '11:00:00', 'end' => '16:30:00'];
+    }
+    
+    // مواعيد العمل الرسمية (غير رمضان)
     if ($role === 'accountant') {
         return ['start' => '10:00:00', 'end' => '19:00:00'];
     } elseif ($role === 'sales') {
-        // المندوبين
         return ['start' => '10:00:00', 'end' => '19:00:00'];
     } elseif ($role === 'driver') {
-        // السائق: من 1 مساءً إلى 10 مساءً
         return ['start' => '13:00:00', 'end' => '22:00:00'];
     } else {
-        // عمال الإنتاج
         return ['start' => '09:00:00', 'end' => '19:00:00'];
     }
 }
