@@ -95,11 +95,7 @@
     justify-content: center;
     filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
 }
-.ramadan-hanging-icon {
-    font-size: 2rem;
-    line-height: 1;
-    animation: ramadan-hang-sway 3s ease-in-out infinite;
-}
+
 @keyframes ramadan-hang-sway {
     0%, 100% { transform: rotate(-3deg); }
     50% { transform: rotate(3deg); }
