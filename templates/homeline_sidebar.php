@@ -303,6 +303,13 @@ switch ($role) {
                 'active' => ($currentPage === 'manager.php' && in_array($currentPageParam, ['security', 'permissions'])),
                 'badge' => null
             ],
+            [
+                'title' => 'إعدادات النظام',
+                'icon' => 'bi-gear',
+                'url' => $baseUrl . 'manager.php?page=system_settings',
+                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'system_settings'),
+                'badge' => null
+            ],
             ['divider' => true, 'title' => 'عام'],
             [
                 'title' => isset($lang['dashboard']) ? $lang['dashboard'] : 'لوحة التحكم',
