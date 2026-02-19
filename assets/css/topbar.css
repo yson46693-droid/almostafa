@@ -82,19 +82,6 @@
     line-height: 1;
 }
 
-/* زينة رمضان المعلقة في نهاية التوب بار (التوب بار position:fixed فالعنصر المعلق يُحدد موضعه بالنسبة له) */
-.ramadan-topbar-hanging {
-    position: absolute;
-    inset-inline-end: 12px;
-    bottom: 0;
-    transform: translateY(100%);
-    pointer-events: none;
-    z-index: 998;
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
-}
 
 @keyframes ramadan-hang-sway {
     0%, 100% { transform: rotate(-3deg); }
