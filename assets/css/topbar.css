@@ -82,6 +82,29 @@
     line-height: 1;
 }
 
+/* زينة رمضان المعلقة في نهاية التوب بار (التوب بار position:fixed فالعنصر المعلق يُحدد موضعه بالنسبة له) */
+.ramadan-topbar-hanging {
+    position: absolute;
+    inset-inline-end: 12px;
+    bottom: 0;
+    transform: translateY(100%);
+    pointer-events: none;
+    z-index: 998;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+}
+.ramadan-hanging-icon {
+    font-size: 2rem;
+    line-height: 1;
+    animation: ramadan-hang-sway 3s ease-in-out infinite;
+}
+@keyframes ramadan-hang-sway {
+    0%, 100% { transform: rotate(-3deg); }
+    50% { transform: rotate(3deg); }
+}
+
 @media (max-width: 768px) {
     .ramadan-topbar-strip {
         --ramadan-strip-height: 32px;
@@ -99,6 +122,12 @@
     }
     .dashboard-body.ramadan-mode .developer-quick-access-bar {
         top: var(--ramadan-strip-height, 32px);
+    }
+    .ramadan-topbar-hanging {
+        inset-inline-end: 8px;
+    }
+    .ramadan-hanging-icon {
+        font-size: 1.5rem;
     }
 }
 

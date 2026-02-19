@@ -3821,6 +3821,12 @@ if (ob_get_level() > 0) {
                     </ul>
                 </div>
             </div>
+            <?php if ($ramadanMode): ?>
+            <!-- زينة رمضان المعلقة في نهاية التوب بار -->
+            <div class="ramadan-topbar-hanging" aria-hidden="true">
+                <span class="ramadan-hanging-icon">🪔</span>
+            </div>
+            <?php endif; ?>
         </div>
         
         
