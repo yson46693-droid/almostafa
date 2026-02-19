@@ -95,18 +95,14 @@
     justify-content: center;
     filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
 }
-.ramadan-hanging-img {
-    display: block;
-    max-height: 90px;
-    width: auto;
-    max-width: min(280px, 50vw);
-    object-fit: contain;
-    object-position: bottom;
-    animation: ramadan-hang-sway 4s ease-in-out infinite;
+.ramadan-hanging-icon {
+    font-size: 2rem;
+    line-height: 1;
+    animation: ramadan-hang-sway 3s ease-in-out infinite;
 }
 @keyframes ramadan-hang-sway {
-    0%, 100% { transform: rotate(-2deg); }
-    50% { transform: rotate(2deg); }
+    0%, 100% { transform: rotate(-3deg); }
+    50% { transform: rotate(3deg); }
 }
 
 @media (max-width: 768px) {
@@ -130,9 +126,8 @@
     .ramadan-topbar-hanging {
         inset-inline-end: 8px;
     }
-    .ramadan-hanging-img {
-        max-height: 56px;
-        max-width: min(180px, 45vw);
+    .ramadan-hanging-icon {
+        font-size: 1.5rem;
     }
 }
 
