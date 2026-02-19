@@ -3824,7 +3824,7 @@ if (ob_get_level() > 0) {
             <?php if ($ramadanMode): ?>
             <!-- زينة رمضان المعلقة في نهاية التوب بار -->
             <div class="ramadan-topbar-hanging" aria-hidden="true">
-                <span class="ramadan-hanging-icon">🪔</span>
+                <img src="<?php echo htmlspecialchars($assetsUrl, ENT_QUOTES, 'UTF-8'); ?>images/ramadan-hanging.png" alt="" class="ramadan-hanging-img" width="280" height="80" loading="lazy">
             </div>
             <?php endif; ?>
         </div>
