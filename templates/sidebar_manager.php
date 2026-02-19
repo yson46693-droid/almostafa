@@ -183,7 +183,7 @@ $baseUrl = getDashboardUrl();
             </li>
                 
             <li class="nav-item">
-                <a class="nav-link" href="<?php echo $baseUrl; ?>manager.php?page=system_settings">
+                <a class="nav-link <?php echo (isset($_GET['page']) && $_GET['page'] === 'system_settings') ? 'active' : ''; ?>" href="<?php echo $baseUrl; ?>manager.php?page=system_settings">
                     <i class="bi bi-gear"></i>
                     <span>إعدادات النظام</span>
                 </a>
