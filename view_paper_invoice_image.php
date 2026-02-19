@@ -3,6 +3,7 @@
  * عرض صورة الفاتورة الورقية في صفحة كاملة (الصورة تظهر كاملة ضمن الشاشة)
  * الاستخدام: view_paper_invoice_image.php?type=local&id=123 أو type=shipping&id=456
  */
+define('ACCESS_ALLOWED', true);
 require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
