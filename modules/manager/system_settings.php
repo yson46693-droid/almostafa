@@ -81,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // البحث عن define MAINTENANCE_MODE مع if (!defined)
             $patternWithIf = "/(if\s*\(\s*!defined\s*\(\s*['\"]MAINTENANCE_MODE['\"]\s*\)\s*\)\s*\{[\s\S]*?define\s*\(\s*['\"]MAINTENANCE_MODE['\"]\s*,\s*)(true|false)(\s*\);\s*\})/";
             
-            // البحث عن define MAINTENANCE_MODE مباشر
+            // البحث عن define  مباشر
             $patternDirect = "/(define\s*\(\s*['\"]MAINTENANCE_MODE['\"]\s*,\s*)(true|false)(\s*\))/";
             
             if (preg_match($patternWithIf, $configContent)) {
