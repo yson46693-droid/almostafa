@@ -3060,15 +3060,19 @@ try {
                 grid-template-columns: repeat(12, 1fr);
                 gap: 1.5rem;
             }
-            /* على سطح المكتب: المنتجات في اليمين والنماذج في اليسار - في نفس الصف */
+            /* على سطح المكتب: بطاقة الخامات ومخزن الشركة في اليمين (نفس العرض)، النماذج في اليسار */
             @media (min-width: 993px) {
+                .pos-content > .pos-raw-materials-fixed-card {
+                    grid-column: 6 / -1; /* نفس عرض مخزن الشركة - العامود الأيمن */
+                    grid-row: 1; /* في البداية فوق مخزن الشركة */
+                }
                 .pos-content > .pos-panel:has(.pos-product-grid) {
-                    grid-column: 6 / -1; /* المنتجات في العامود الأيمن */
-                    grid-row: 1; /* في نفس الصف */
+                    grid-column: 6 / -1; /* مخزن الشركة تحت بطاقة الخامات */
+                    grid-row: 2;
                 }
                 .pos-content > .pos-checkout-panel {
                     grid-column: 1 / 6; /* النماذج في العامود الأيسر */
-                    grid-row: 1; /* في نفس الصف */
+                    grid-row: 1 / 3; /* يمتد على صفين */
                 }
             }
             .pos-panel {
@@ -3079,7 +3083,6 @@ try {
                 border: 1px solid rgba(15, 23, 42, 0.05);
             }
             .pos-raw-materials-fixed-card {
-                grid-column: 1 / -1;
                 border-color: rgba(34, 197, 94, 0.25);
                 background: linear-gradient(to bottom, rgba(34, 197, 94, 0.04), #fff);
             }
@@ -3387,6 +3390,12 @@ try {
             @media (max-width: 992px) {
                 .pos-content {
                     grid-template-columns: 1fr;
+                }
+                .pos-content > .pos-raw-materials-fixed-card,
+                .pos-content > .pos-panel:has(.pos-product-grid),
+                .pos-content > .pos-checkout-panel {
+                    grid-column: 1;
+                    grid-row: auto;
                 }
             }
             
