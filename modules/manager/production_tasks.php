@@ -209,6 +209,34 @@ try {
     $localCustomersForDropdown = [];
 }
 
+// قائمة عملاء المندوبين (مثل صفحة الأسعار المخصصة)
+$repCustomersForTask = [];
+try {
+    $repCustomersForTask = $db->query("
+        SELECT c.id, c.name, c.phone,
+               COALESCE(rep1.full_name, rep2.full_name) AS rep_name
+        FROM customers c
+        LEFT JOIN users rep1 ON c.rep_id = rep1.id AND rep1.role = 'sales'
+        LEFT JOIN users rep2 ON c.created_by = rep2.id AND rep2.role = 'sales'
+        WHERE c.status = 'active'
+          AND ((c.rep_id IS NOT NULL AND c.rep_id IN (SELECT id FROM users WHERE role = 'sales'))
+               OR (c.created_by IS NOT NULL AND c.created_by IN (SELECT id FROM users WHERE role = 'sales')))
+        ORDER BY c.name ASC
+        LIMIT 500
+    ");
+    $repCustomersForTask = array_map(function ($r) {
+        return [
+            'id' => (int)$r['id'],
+            'name' => trim((string)($r['name'] ?? '')),
+            'phone' => trim((string)($r['phone'] ?? '')),
+            'rep_name' => trim((string)($r['rep_name'] ?? '')),
+        ];
+    }, $repCustomersForTask);
+} catch (Throwable $e) {
+    error_log('production_tasks rep customers: ' . $e->getMessage());
+    $repCustomersForTask = [];
+}
+
 /**
  * تأكد من وجود جدول المهام (tasks)
  */
@@ -1762,17 +1790,49 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                             </div>
                             <div class="form-text small">يمكن تحديد أكثر من عامل باستخدام زر CTRL أو SHIFT.</div>
                         </div>
-                        <div class="col-md-2">
-                            <label class="form-label">اسم العميل</label>
-                            <div class="position-relative" id="customerNameComboboxWrap">
-                                <input type="text" class="form-control" name="customer_name" id="customerNameInput" placeholder="بحث أو أدخل اسم العميل" autocomplete="off" aria-autocomplete="list" aria-expanded="false" aria-controls="customerNameDropdown">
-                                <div class="list-group position-absolute w-100 shadow-sm border rounded mt-1 d-none" id="customerNameDropdown" style="max-height: 220px; overflow-y: auto; z-index: 1050;" role="listbox"></div>
+                        <div class="col-md-4">
+                            <label class="form-label">خانة العميل (مثل الأسعار المخصصة)</label>
+                            <div class="customer-type-wrap d-flex flex-wrap gap-3 mb-2">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="customer_type_radio_task" id="ct_task_local" value="local" checked>
+                                    <label class="form-check-label" for="ct_task_local">عميل محلي</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="customer_type_radio_task" id="ct_task_rep" value="rep">
+                                    <label class="form-check-label" for="ct_task_rep">عميل مندوب</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="customer_type_radio_task" id="ct_task_manual" value="manual">
+                                    <label class="form-check-label" for="ct_task_manual">عميل جديد يدوي</label>
+                                </div>
                             </div>
-                            <small class="form-text text-muted">اختر من القائمة أو اكتب اسم عميل جديد</small>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">رقم العميل</label>
-                            <input type="text" class="form-control" name="customer_phone" id="customerPhoneInput" placeholder="أدخل رقم العميل" dir="ltr">
+                            <input type="hidden" name="customer_name" id="submit_customer_name" value="">
+                            <input type="hidden" name="customer_phone" id="submit_customer_phone" value="">
+                            <div id="customer_select_local_task" class="customer-select-block mb-2">
+                                <div class="search-wrap position-relative">
+                                    <input type="text" id="local_customer_search_task" class="form-control form-control-sm" placeholder="اكتب للبحث في قائمة العملاء المحليين..." autocomplete="off">
+                                    <input type="hidden" id="local_customer_id_task" value="">
+                                    <div id="local_customer_dropdown_task" class="search-dropdown-task d-none"></div>
+                                </div>
+                            </div>
+                            <div id="customer_select_rep_task" class="customer-select-block mb-2 d-none">
+                                <div class="search-wrap position-relative">
+                                    <input type="text" id="rep_customer_search_task" class="form-control form-control-sm" placeholder="اكتب للبحث في قائمة عملاء المندوبين..." autocomplete="off">
+                                    <input type="hidden" id="rep_customer_id_task" value="">
+                                    <div id="rep_customer_dropdown_task" class="search-dropdown-task d-none"></div>
+                                </div>
+                            </div>
+                            <div id="customer_manual_block_task" class="customer-select-block mb-2 d-none">
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <input type="text" id="manual_customer_name_task" class="form-control form-control-sm" placeholder="اسم العميل">
+                                    </div>
+                                    <div class="col-6">
+                                        <input type="text" id="manual_customer_phone_task" class="form-control form-control-sm" placeholder="رقم العميل" dir="ltr">
+                                    </div>
+                                </div>
+                            </div>
+                            <small class="form-text text-muted d-block">اختر من العملاء المحليين أو عملاء المندوب أو أدخل اسم عميل جديد يدوياً</small>
                         </div>
                         <div class="col-md-5">
                             <label class="form-label">وصف وتفاصيل و ملاحظات الاوردر</label>
@@ -2329,8 +2389,16 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
     </div>
 </div>
 
+<style>
+.search-wrap.position-relative { position: relative; }
+.search-dropdown-task { position: absolute; left: 0; right: 0; top: 100%; z-index: 1050; max-height: 220px; overflow-y: auto; background: #fff; border: 1px solid #dee2e6; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); margin-top: 2px; }
+.search-dropdown-task .search-dropdown-item-task { padding: 0.5rem 0.75rem; cursor: pointer; border-bottom: 1px solid #f0f0f0; }
+.search-dropdown-task .search-dropdown-item-task:hover { background: #f8f9fa; }
+.search-dropdown-task .search-dropdown-item-task:last-child { border-bottom: none; }
+</style>
 <script>
 var __localCustomersForTask = <?php echo json_encode($localCustomersForDropdown); ?>;
+var __repCustomersForTask = <?php echo json_encode($repCustomersForTask); ?>;
 
 var editProductIndex = 0;
 function buildEditProductRow(idx, product) {
@@ -2488,78 +2556,118 @@ document.addEventListener('DOMContentLoaded', function () {
     const quantityInput = document.getElementById('productQuantityInput');
     const templateSuggestions = document.getElementById('templateSuggestions');
 
-    // دروب داون اسم العميل: قائمة العملاء المحليين + بحث لحظي + تعبئة رقم الهاتف عند الاختيار
-    (function initCustomerNameCombobox() {
+    // خانة العميل مماثلة لصفحة الأسعار المخصصة: عميل محلي / عميل مندوب / عميل جديد يدوي
+    (function initCustomerCardTask() {
         var localCustomers = (typeof __localCustomersForTask !== 'undefined' && Array.isArray(__localCustomersForTask)) ? __localCustomersForTask : [];
-        var customerNameInput = document.getElementById('customerNameInput');
-        var customerPhoneInput = document.getElementById('customerPhoneInput');
-        var customerNameDropdown = document.getElementById('customerNameDropdown');
-        var customerNameWrap = document.getElementById('customerNameComboboxWrap');
-        if (!customerNameInput || !customerNameDropdown) return;
+        var repCustomers = (typeof __repCustomersForTask !== 'undefined' && Array.isArray(__repCustomersForTask)) ? __repCustomersForTask : [];
+        var submitName = document.getElementById('submit_customer_name');
+        var submitPhone = document.getElementById('submit_customer_phone');
+        var localSearch = document.getElementById('local_customer_search_task');
+        var localId = document.getElementById('local_customer_id_task');
+        var localDrop = document.getElementById('local_customer_dropdown_task');
+        var repSearch = document.getElementById('rep_customer_search_task');
+        var repId = document.getElementById('rep_customer_id_task');
+        var repDrop = document.getElementById('rep_customer_dropdown_task');
+        var manualName = document.getElementById('manual_customer_name_task');
+        var manualPhone = document.getElementById('manual_customer_phone_task');
+        if (!submitName || !submitPhone) return;
 
-        function normalizeForMatch(str) {
-            if (typeof str !== 'string') return '';
-            return str.replace(/\s+/g, ' ').trim().toLowerCase();
+        function matchSearch(text, q) {
+            if (!q || !text) return true;
+            var t = (text + '').toLowerCase();
+            var k = (q + '').trim().toLowerCase();
+            return t.indexOf(k) !== -1;
         }
 
-        function filterCustomers(query) {
-            var q = normalizeForMatch(query);
-            if (!q) return localCustomers.slice(0, 50);
-            return localCustomers.filter(function(c) {
-                return normalizeForMatch(c.name).indexOf(q) !== -1;
-            }).slice(0, 50);
+        function setCustomerBlocks() {
+            var v = document.querySelector('input[name="customer_type_radio_task"]:checked');
+            var val = v ? v.value : 'local';
+            document.getElementById('customer_select_local_task').classList.toggle('d-none', val !== 'local');
+            document.getElementById('customer_select_rep_task').classList.toggle('d-none', val !== 'rep');
+            document.getElementById('customer_manual_block_task').classList.toggle('d-none', val !== 'manual');
+            if (val !== 'local') {
+                if (localSearch) localSearch.value = '';
+                if (localId) localId.value = '';
+                if (localDrop) localDrop.classList.add('d-none');
+            }
+            if (val !== 'rep') {
+                if (repSearch) repSearch.value = '';
+                if (repId) repId.value = '';
+                if (repDrop) repDrop.classList.add('d-none');
+            }
+            if (val === 'manual') {
+                submitName.value = manualName ? manualName.value.trim() : '';
+                submitPhone.value = manualPhone ? manualPhone.value.trim() : '';
+            }
         }
 
-        function renderDropdown(items) {
-            customerNameDropdown.innerHTML = '';
-            if (items.length === 0) {
-                customerNameDropdown.classList.add('d-none');
+        document.querySelectorAll('input[name="customer_type_radio_task"]').forEach(function(r) {
+            r.addEventListener('change', setCustomerBlocks);
+        });
+        setCustomerBlocks();
+
+        function showCustomerDropdown(inputEl, hiddenIdEl, dropEl, list, getLabel, onSelect) {
+            if (!inputEl || !dropEl) return;
+            var q = (inputEl.value || '').trim();
+            var filtered = list.filter(function(c) { return matchSearch(getLabel(c), q); });
+            dropEl.innerHTML = '';
+            if (filtered.length === 0) {
+                dropEl.classList.add('d-none');
                 return;
             }
-            items.forEach(function(c) {
-                var phoneText = (c.phone || (c.phones && c.phones[0]) || '').toString();
-                var node = document.createElement('button');
-                node.type = 'button';
-                node.className = 'list-group-item list-group-item-action text-start';
-                node.setAttribute('role', 'option');
-                node.textContent = c.name + (phoneText ? ' — ' + phoneText : '');
-                node.dataset.name = c.name;
-                node.dataset.phone = phoneText;
-                node.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    customerNameInput.value = c.name;
-                    if (customerPhoneInput) customerPhoneInput.value = phoneText;
-                    customerNameDropdown.classList.add('d-none');
-                    customerNameInput.setAttribute('aria-expanded', 'false');
+            filtered.forEach(function(c) {
+                var div = document.createElement('div');
+                div.className = 'search-dropdown-item-task';
+                div.textContent = getLabel(c);
+                div.dataset.id = c.id;
+                div.dataset.name = c.name;
+                div.dataset.phone = (c.phone || '').toString();
+                div.addEventListener('click', function() {
+                    if (hiddenIdEl) hiddenIdEl.value = this.dataset.id;
+                    inputEl.value = this.dataset.name;
+                    submitName.value = this.dataset.name || '';
+                    submitPhone.value = this.dataset.phone || '';
+                    dropEl.classList.add('d-none');
+                    if (onSelect) onSelect(c);
                 });
-                customerNameDropdown.appendChild(node);
+                dropEl.appendChild(div);
             });
-            customerNameDropdown.classList.remove('d-none');
-            customerNameInput.setAttribute('aria-expanded', 'true');
+            dropEl.classList.remove('d-none');
         }
 
-        var blurTimer = null;
-        customerNameInput.addEventListener('input', function() {
-            clearTimeout(blurTimer);
-            var query = customerNameInput.value;
-            var filtered = filterCustomers(query);
-            renderDropdown(filtered);
+        function initCustomerSearch(inputEl, hiddenIdEl, dropEl, list, getLabel) {
+            if (!inputEl || !dropEl) return;
+            inputEl.addEventListener('input', function() {
+                if (hiddenIdEl) hiddenIdEl.value = '';
+                showCustomerDropdown(inputEl, hiddenIdEl, dropEl, list, getLabel);
+            });
+            inputEl.addEventListener('focus', function() {
+                if ((inputEl.value || '').trim()) showCustomerDropdown(inputEl, hiddenIdEl, dropEl, list, getLabel);
+            });
+        }
+
+        initCustomerSearch(localSearch, localId, localDrop, localCustomers, function(c) { return c.name + (c.phone ? ' — ' + c.phone : ''); });
+        initCustomerSearch(repSearch, repId, repDrop, repCustomers, function(c) { return c.rep_name ? c.name + ' (' + c.rep_name + ')' : c.name; });
+
+        if (manualName) manualName.addEventListener('input', function() { submitName.value = this.value.trim(); });
+        if (manualPhone) manualPhone.addEventListener('input', function() { submitPhone.value = this.value.trim(); });
+
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.search-wrap')) {
+                document.querySelectorAll('.search-dropdown-task').forEach(function(d) { d.classList.add('d-none'); });
+            }
         });
-        customerNameInput.addEventListener('focus', function() {
-            clearTimeout(blurTimer);
-            var query = customerNameInput.value;
-            var filtered = filterCustomers(query);
-            renderDropdown(filtered);
-        });
-        customerNameInput.addEventListener('blur', function() {
-            blurTimer = setTimeout(function() {
-                customerNameDropdown.classList.add('d-none');
-                customerNameInput.setAttribute('aria-expanded', 'false');
-            }, 200);
-        });
-        customerNameDropdown.addEventListener('mousedown', function(e) {
-            e.preventDefault();
-        });
+
+        var form = submitName && submitName.closest('form');
+        if (form) {
+            form.addEventListener('submit', function() {
+                var v = document.querySelector('input[name="customer_type_radio_task"]:checked');
+                if (v && v.value === 'manual' && manualName) {
+                    submitName.value = manualName.value.trim();
+                    submitPhone.value = manualPhone ? manualPhone.value.trim() : '';
+                }
+            });
+        }
     })();
 
     function updateTaskTypeUI() {
