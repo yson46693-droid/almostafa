@@ -3066,6 +3066,11 @@ try {
                 box-shadow: 0 16px 35px rgba(15, 23, 42, 0.12);
                 border: 1px solid rgba(15, 23, 42, 0.05);
             }
+            .pos-raw-materials-fixed-card {
+                grid-column: 1 / -1;
+                border-color: rgba(34, 197, 94, 0.25);
+                background: linear-gradient(to bottom, rgba(34, 197, 94, 0.04), #fff);
+            }
             .pos-panel-header {
                 display: flex;
                 flex-wrap: wrap;
@@ -3534,6 +3539,53 @@ try {
             </section>
 
             <section class="pos-content">
+                <!-- بطاقة ثابتة: بيع من مخزن الخامات (أوزان) - كل الاختيارات داخل البطاقة -->
+                <div class="pos-panel pos-raw-materials-fixed-card mb-3">
+                    <div class="pos-panel-header d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                        <h5 class="mb-0"><i class="bi bi-droplet-half me-2"></i>بيع من مخزن الخامات (بالوزن)</h5>
+                    </div>
+                    <div class="row g-2 g-md-3 align-items-end flex-wrap">
+                        <div class="col-6 col-md-2">
+                            <label class="form-label small mb-0">القسم</label>
+                            <select class="form-select form-select-sm" id="posRawSection" name="raw_section">
+                                <option value="">اختر القسم</option>
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-2">
+                            <label class="form-label small mb-0">الخامة</label>
+                            <select class="form-select form-select-sm" id="posRawMaterial" name="raw_material" disabled>
+                                <option value="">اختر الخامة</option>
+                            </select>
+                            <div class="form-text small" id="posRawMaterialAvailable"></div>
+                        </div>
+                        <div class="col-4 col-md-1">
+                            <label class="form-label small mb-0">الوحدة</label>
+                            <select class="form-select form-select-sm" id="posRawUnit" name="raw_unit">
+                                <option value="kg">كجم</option>
+                                <option value="g">جرام</option>
+                            </select>
+                        </div>
+                        <div class="col-4 col-md-1">
+                            <label class="form-label small mb-0">سعر الوحدة</label>
+                            <input type="number" class="form-control form-control-sm" id="posRawUnitPrice" name="raw_unit_price" step="0.01" min="0" placeholder="0" dir="ltr" style="text-align: left;">
+                        </div>
+                        <div class="col-4 col-md-1">
+                            <label class="form-label small mb-0">الوزن</label>
+                            <input type="number" class="form-control form-control-sm" id="posRawWeight" name="raw_weight" step="0.001" min="0" placeholder="0" dir="ltr" style="text-align: left;">
+                            <span class="form-text small" id="posRawWeightUnit">كجم</span>
+                        </div>
+                        <div class="col-6 col-md-2 align-self-center">
+                            <span class="small text-muted">الإجمالي:</span>
+                            <strong class="d-block" id="posRawLineTotal">0</strong>
+                        </div>
+                        <div class="col-6 col-md-2">
+                            <button type="button" class="btn btn-success btn-sm w-100" id="posRawAddToCartBtn" disabled>
+                                <i class="bi bi-cart-plus me-1"></i>إضافة إلى السلة
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="pos-panel">
                     <div class="pos-panel-header">
                         <div>
@@ -3551,15 +3603,6 @@ try {
                                 <i class="bi bi-box"></i>
                                 <h5 class="mt-3 mb-2">لا يوجد مخزون متاح حالياً</h5>
                                 <p class="mb-0">لا توجد منتجات في مخزن الشركة الرئيسي حالياً.</p>
-                            </div>
-                            <div class="pos-product-card pos-raw-materials-card mt-3" id="posRawMaterialsCard" data-raw-materials-trigger>
-                                <div class="pos-product-name"><i class="bi bi-droplet-half me-2"></i>بيع من مخزن الخامات</div>
-                                <div class="pos-product-meta">
-                                    <span class="text-muted small">أوزان محددة من العسل، زيت الزيتون، شمع العسل، المكسرات، وغيرها</span>
-                                </div>
-                                <button type="button" class="btn btn-outline-success pos-select-btn" data-raw-materials-trigger>
-                                    <i class="bi bi-plus-circle me-2"></i>إضافة خامة بالوزن
-                                </button>
                             </div>
                         <?php else: ?>
                             <?php foreach ($companyInventory as $item): ?>
@@ -3592,68 +3635,7 @@ try {
                                     </button>
                                 </div>
                             <?php endforeach; ?>
-                            <div class="pos-product-card pos-raw-materials-card" id="posRawMaterialsCard" data-raw-materials-trigger>
-                                <div class="pos-product-name"><i class="bi bi-droplet-half me-2"></i>بيع من مخزن الخامات</div>
-                                <div class="pos-product-meta">
-                                    <span class="text-muted small">أوزان محددة من العسل، زيت الزيتون، شمع العسل، المكسرات، وغيرها</span>
-                                </div>
-                                <button type="button" class="btn btn-outline-success pos-select-btn" data-raw-materials-trigger>
-                                    <i class="bi bi-plus-circle me-2"></i>إضافة خامة بالوزن
-                                </button>
-                            </div>
                         <?php endif; ?>
-                    </div>
-                </div>
-
-                <!-- نافذة بيع خامة بالوزن -->
-                <div class="modal fade" id="posRawMaterialModal" tabindex="-1" aria-labelledby="posRawMaterialModalLabel" aria-hidden="true" data-bs-backdrop="static">
-                    <div class="modal-dialog modal-dialog-centered">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title" id="posRawMaterialModalLabel"><i class="bi bi-droplet-half me-2"></i>إضافة خامة بالوزن إلى السلة</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
-                            </div>
-                            <div class="modal-body">
-                                <div class="mb-3">
-                                    <label class="form-label">القسم</label>
-                                    <select class="form-select" id="posRawSection" name="raw_section">
-                                        <option value="">اختر القسم</option>
-                                    </select>
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label">الخامة</label>
-                                    <select class="form-select" id="posRawMaterial" name="raw_material" disabled>
-                                        <option value="">اختر الخامة</option>
-                                    </select>
-                                    <div class="form-text" id="posRawMaterialAvailable"></div>
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label">الوحدة</label>
-                                    <select class="form-select" id="posRawUnit" name="raw_unit">
-                                        <option value="kg">كيلوجرام</option>
-                                        <option value="g">جرام</option>
-                                    </select>
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label">سعر الوحدة</label>
-                                    <input type="number" class="form-control" id="posRawUnitPrice" name="raw_unit_price" step="0.01" min="0" placeholder="0" dir="ltr" style="text-align: left;">
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label">الوزن</label>
-                                    <input type="number" class="form-control" id="posRawWeight" name="raw_weight" step="0.001" min="0" placeholder="0" dir="ltr" style="text-align: left;">
-                                    <div class="form-text"><span id="posRawWeightUnit">كجم</span></div>
-                                </div>
-                                <div class="mb-0" id="posRawLineTotalWrap">
-                                    <strong>الإجمالي: <span id="posRawLineTotal">0</span></strong>
-                                </div>
-                            </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-                                <button type="button" class="btn btn-success" id="posRawAddToCartBtn" disabled>
-                                    <i class="bi bi-cart-plus me-1"></i>إضافة إلى السلة
-                                </button>
-                            </div>
-                        </div>
                     </div>
                 </div>
 
@@ -4704,9 +4686,8 @@ try {
     refreshPaymentOptionStates();
     renderCart();
 
-    // نافذة بيع الخامات بالوزن
+    // بطاقة بيع الخامات بالوزن (ثابتة في الصفحة - بدون مودال)
     const posRawMaterialsApiUrl = <?php echo json_encode(getRelativeUrl('api/pos_raw_materials.php'), JSON_UNESCAPED_SLASHES); ?>;
-    const rawMaterialModalEl = document.getElementById('posRawMaterialModal');
     const rawSectionSelect = document.getElementById('posRawSection');
     const rawMaterialSelect = document.getElementById('posRawMaterial');
     const rawMaterialAvailableEl = document.getElementById('posRawMaterialAvailable');
@@ -4776,22 +4757,7 @@ try {
             });
     }
 
-    document.querySelectorAll('[data-raw-materials-trigger]').forEach(function(el) {
-        el.addEventListener('click', function() {
-            if (typeof bootstrap !== 'undefined' && rawMaterialModalEl) {
-                loadRawSections();
-                if (rawSectionSelect) rawSectionSelect.value = '';
-                if (rawMaterialSelect) { rawMaterialSelect.innerHTML = '<option value="">اختر الخامة</option>'; rawMaterialSelect.disabled = true; }
-                rawMaterialAvailableEl && (rawMaterialAvailableEl.textContent = '');
-                if (rawUnitSelect) rawUnitSelect.value = 'kg';
-                if (rawUnitPriceInput) rawUnitPriceInput.value = '';
-                if (rawWeightInput) rawWeightInput.value = '';
-                if (rawWeightUnitEl) rawWeightUnitEl.textContent = 'كجم';
-                updateRawLineTotal();
-                new bootstrap.Modal(rawMaterialModalEl).show();
-            }
-        });
-    });
+    loadRawSections();
 
     if (rawSectionSelect) {
         rawSectionSelect.addEventListener('change', function() {
@@ -4857,9 +4823,8 @@ try {
                 }
             });
             renderCart();
-            if (typeof bootstrap !== 'undefined' && rawMaterialModalEl) {
-                bootstrap.Modal.getInstance(rawMaterialModalEl).hide();
-            }
+            if (rawWeightInput) rawWeightInput.value = '';
+            updateRawLineTotal();
         });
     }
 
