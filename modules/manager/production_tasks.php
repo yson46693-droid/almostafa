@@ -158,54 +158,23 @@ try {
     $productTemplates = [];
 }
 
-// جلب قائمة العملاء المحليين لاستخدامها في نموذج إنشاء الأوردر (دروب داون + بحث لحظي)
+// جلب قائمة العملاء المحليين — نفس الاستعلام والطريقة تماماً كما في صفحة الأسعار المخصصة
 $localCustomersForDropdown = [];
 try {
-    $localCustomersTable = $db->queryOne("SHOW TABLES LIKE 'local_customers'");
-    if (!empty($localCustomersTable)) {
-        $rows = $db->query("
-            SELECT c.id, c.name, c.phone
-            FROM local_customers c
-            WHERE (c.status IS NULL OR c.status = '' OR c.status = 'active')
-            ORDER BY c.name ASC
-            LIMIT 1000
-        ");
-        $customerIds = !empty($rows) ? array_column($rows, 'id') : [];
-        $phonesMap = [];
-        if (!empty($customerIds)) {
-            $placeholders = implode(',', array_fill(0, count($customerIds), '?'));
-            $phonesCheck = $db->queryOne("SHOW TABLES LIKE 'local_customer_phones'");
-            if (!empty($phonesCheck)) {
-                $phonesRows = $db->query(
-                    "SELECT customer_id, phone, is_primary FROM local_customer_phones WHERE customer_id IN ($placeholders) ORDER BY customer_id, is_primary DESC, id ASC",
-                    $customerIds
-                );
-                foreach ($phonesRows as $pr) {
-                    $cid = (int)$pr['customer_id'];
-                    if (!isset($phonesMap[$cid])) {
-                        $phonesMap[$cid] = [];
-                    }
-                    $phonesMap[$cid][] = (string)($pr['phone'] ?? '');
-                }
-            }
-        }
+    $t = $db->queryOne("SHOW TABLES LIKE 'local_customers'");
+    if (!empty($t)) {
+        $rows = $db->query("SELECT id, name FROM local_customers WHERE status = 'active' ORDER BY name ASC");
         foreach ($rows as $r) {
-            $cid = (int)$r['id'];
-            $phones = $phonesMap[$cid] ?? [];
-            if (empty($phones) && !empty(trim((string)($r['phone'] ?? '')))) {
-                $phones = [trim((string)$r['phone'])];
-            }
-            $primaryPhone = $phones[0] ?? trim((string)($r['phone'] ?? '')) ?: '';
             $localCustomersForDropdown[] = [
-                'id' => $cid,
+                'id' => (int)$r['id'],
                 'name' => trim((string)($r['name'] ?? '')),
-                'phone' => $primaryPhone,
-                'phones' => $phones,
+                'phone' => '',
+                'phones' => [],
             ];
         }
     }
-} catch (Exception $e) {
-    error_log('Error fetching local customers for dropdown: ' . $e->getMessage());
+} catch (Throwable $e) {
+    error_log('production_tasks local_customers: ' . $e->getMessage());
     $localCustomersForDropdown = [];
 }
 
