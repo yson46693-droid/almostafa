@@ -90,6 +90,123 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     }
 }
 
+// جدول طلبات التحصيل من العملاء المحليين
+$collectionRequestsTableExists = $db->queryOne("SHOW TABLES LIKE 'user_wallet_local_collection_requests'");
+
+// معالجة الموافقة على طلب تحصيل من عميل محلي
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'approve_local_collection_request' && !empty($collectionRequestsTableExists)) {
+    $requestId = isset($_POST['request_id']) ? (int)$_POST['request_id'] : 0;
+    if ($requestId <= 0) {
+        $error = 'معرف الطلب غير صحيح.';
+    } else {
+        $req = $db->queryOne("SELECT * FROM user_wallet_local_collection_requests WHERE id = ? AND status = 'pending'", [$requestId]);
+        if (empty($req)) {
+            $error = 'الطلب غير موجود أو تمت معالجته مسبقاً.';
+        } else {
+            $customerId = (int)$req['local_customer_id'];
+            $amount = (float)$req['amount'];
+            $userId = (int)$req['user_id'];
+            $customerName = $req['customer_name'] ?? '';
+            try {
+                $db->beginTransaction();
+                $customer = $db->queryOne("SELECT id, name, balance FROM local_customers WHERE id = ? FOR UPDATE", [$customerId]);
+                if (!$customer) {
+                    throw new InvalidArgumentException('العميل غير موجود.');
+                }
+                $currentBalance = (float)($customer['balance'] ?? 0);
+                $newBalance = round($currentBalance - $amount, 2);
+                $db->execute("UPDATE local_customers SET balance = ? WHERE id = ?", [$newBalance, $customerId]);
+                if (function_exists('logAudit')) {
+                    logAudit($currentUser['id'], 'approve_wallet_local_collection', 'local_customer', $customerId, null, ['request_id' => $requestId, 'amount' => $amount, 'previous_balance' => $currentBalance, 'new_balance' => $newBalance]);
+                }
+                $localCollectionsExists = $db->queryOne("SHOW TABLES LIKE 'local_collections'");
+                $collectionId = null;
+                if (!empty($localCollectionsExists)) {
+                    $cols = $db->queryOne("SHOW COLUMNS FROM local_collections LIKE 'status'");
+                    $collColumns = ['customer_id', 'amount', 'date', 'payment_method', 'collected_by'];
+                    $collValues = [$customerId, $amount, date('Y-m-d'), 'cash', $currentUser['id']];
+                    if (!empty($cols)) {
+                        $collColumns[] = 'status';
+                        $collValues[] = 'approved';
+                    }
+                    $ph = implode(',', array_fill(0, count($collColumns), '?'));
+                    $db->execute("INSERT INTO local_collections (" . implode(',', $collColumns) . ") VALUES ($ph)", $collValues);
+                    $collectionId = $db->getLastInsertId();
+                }
+                $accountantTableExists = $db->queryOne("SHOW TABLES LIKE 'accountant_transactions'");
+                if (!empty($accountantTableExists)) {
+                    $desc = 'تحصيل من عميل محلي (محفظة مستخدم): ' . $customerName;
+                    $ref = 'WALLET-LOC-' . $requestId . '-' . date('YmdHis');
+                    $db->execute(
+                        "INSERT INTO accountant_transactions (transaction_type, amount, description, reference_number, payment_method, status, created_by, approved_by, approved_at) VALUES ('income', ?, ?, ?, 'cash', 'approved', ?, ?, NOW())",
+                        [$amount, $desc, $ref, $currentUser['id'], $currentUser['id']]
+                    );
+                }
+                $db->execute(
+                    "INSERT INTO user_wallet_transactions (user_id, type, amount, reason, created_by) VALUES (?, 'deposit', ?, ?, ?)",
+                    [$userId, $amount, 'تحصيل من عميل محلي: ' . $customerName . ' (تمت الموافقة)', $currentUser['id']]
+                );
+                $db->execute(
+                    "UPDATE user_wallet_local_collection_requests SET status = 'approved', approved_by = ?, approved_at = NOW() WHERE id = ?",
+                    [$currentUser['id'], $requestId]
+                );
+                $db->commit();
+                $_SESSION['user_wallets_success'] = 'تمت الموافقة على طلب التحصيل (' . formatCurrency($amount) . ' من ' . htmlspecialchars($customerName) . ') وخصم المبلغ من رصيد العميل وإضافته لخزنة الشركة ومحفظة المستخدم.';
+            } catch (Throwable $e) {
+                if ($db->inTransaction()) {
+                    $db->rollBack();
+                }
+                error_log('approve_local_collection_request: ' . $e->getMessage());
+                $error = $e->getMessage();
+                if (strpos($error, 'InvalidArgumentException') !== false) {
+                    $error = 'العميل غير موجود أو البيانات غير صحيحة.';
+                } else {
+                    $error = 'حدث خطأ أثناء الموافقة. يرجى المحاولة مرة أخرى.';
+                }
+            }
+        }
+    }
+    $redirectUrl = ($_SERVER['PHP_SELF'] ?? 'manager.php') . '?page=user_wallets_control';
+    if ($selectedUserId > 0) {
+        $redirectUrl .= '&user_id=' . $selectedUserId;
+    }
+    if (!headers_sent() && empty($error)) {
+        header('Location: ' . $redirectUrl);
+        exit;
+    }
+}
+
+// معالجة رفض طلب تحصيل من عميل محلي
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'reject_local_collection_request' && !empty($collectionRequestsTableExists)) {
+    $requestId = isset($_POST['request_id']) ? (int)$_POST['request_id'] : 0;
+    $rejectionReason = trim($_POST['rejection_reason'] ?? '');
+    if ($requestId <= 0) {
+        $error = 'معرف الطلب غير صحيح.';
+    } else {
+        $updated = $db->execute("UPDATE user_wallet_local_collection_requests SET status = 'rejected', approved_by = ?, approved_at = NOW(), rejection_reason = ? WHERE id = ? AND status = 'pending'", [$currentUser['id'], $rejectionReason ?: null, $requestId]);
+        if ($updated) {
+            $_SESSION['user_wallets_success'] = 'تم رفض طلب التحصيل.';
+            $redirectUrl = ($_SERVER['PHP_SELF'] ?? 'manager.php') . '?page=user_wallets_control';
+            if ($selectedUserId > 0) {
+                $redirectUrl .= '&user_id=' . $selectedUserId;
+            }
+            if (!headers_sent()) {
+                header('Location: ' . $redirectUrl);
+                exit;
+            }
+        } else {
+            $error = 'الطلب غير موجود أو تمت معالجته مسبقاً.';
+        }
+    }
+}
+
+$pendingLocalCollectionRequests = [];
+if (!empty($collectionRequestsTableExists)) {
+    $pendingLocalCollectionRequests = $db->query(
+        "SELECT r.*, u.full_name AS user_full_name, u.username AS user_username FROM user_wallet_local_collection_requests r LEFT JOIN users u ON u.id = r.user_id WHERE r.status = 'pending' ORDER BY r.created_at ASC"
+    ) ?: [];
+}
+
 // جلب قائمة المستخدمين (سائق، عامل إنتاج) مع أرصدتهم
 $walletUsers = $db->query(
     "SELECT u.id, u.full_name, u.username, u.role FROM users u WHERE u.status = 'active' AND u.role IN ('driver', 'production') ORDER BY u.role, u.full_name ASC, u.username ASC"
@@ -137,6 +254,70 @@ $roleLabels = ['driver' => 'سائق', 'production' => 'عامل إنتاج'];
             <i class="bi bi-check-circle me-2"></i><?php echo $success; ?>
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
+    <?php endif; ?>
+
+    <?php if (!empty($collectionRequestsTableExists) && !empty($pendingLocalCollectionRequests)): ?>
+    <div class="card shadow-sm mb-4 border-warning">
+        <div class="card-header bg-warning bg-opacity-25 fw-bold">
+            <i class="bi bi-hourglass-split me-2"></i>طلبات التحصيل من العملاء المحليين (في انتظار الموافقة)
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>التاريخ</th>
+                            <th>المستخدم</th>
+                            <th>العميل</th>
+                            <th>المبلغ</th>
+                            <th>إجراء</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($pendingLocalCollectionRequests as $req): ?>
+                        <tr>
+                            <td><?php echo date('Y-m-d H:i', strtotime($req['created_at'])); ?></td>
+                            <td><?php echo htmlspecialchars($req['user_full_name'] ?: $req['user_username'] ?? '#' . $req['user_id']); ?></td>
+                            <td><?php echo htmlspecialchars($req['customer_name']); ?></td>
+                            <td class="fw-bold"><?php echo formatCurrency($req['amount']); ?></td>
+                            <td>
+                                <form method="POST" class="d-inline" onsubmit="return confirm('الموافقة على هذا الطلب ستخصم المبلغ من رصيد العميل وتضيفه لخزنة الشركة ومحفظة المستخدم. متأكد؟');">
+                                    <input type="hidden" name="action" value="approve_local_collection_request">
+                                    <input type="hidden" name="request_id" value="<?php echo (int)$req['id']; ?>">
+                                    <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-check-lg me-1"></i>موافقة</button>
+                                </form>
+                                <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#rejectModal<?php echo (int)$req['id']; ?>"><i class="bi bi-x-lg me-1"></i>رفض</button>
+                                <div class="modal fade" id="rejectModal<?php echo (int)$req['id']; ?>" tabindex="-1">
+                                    <div class="modal-dialog modal-dialog-centered">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title">رفض طلب التحصيل</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                            </div>
+                                            <form method="POST">
+                                                <div class="modal-body">
+                                                    <input type="hidden" name="action" value="reject_local_collection_request">
+                                                    <input type="hidden" name="request_id" value="<?php echo (int)$req['id']; ?>">
+                                                    <p class="mb-2">طلب: <?php echo formatCurrency($req['amount']); ?> من <?php echo htmlspecialchars($req['customer_name']); ?></p>
+                                                    <label class="form-label">سبب الرفض (اختياري)</label>
+                                                    <input type="text" class="form-control" name="rejection_reason" placeholder="سبب الرفض">
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                                                    <button type="submit" class="btn btn-danger">رفض الطلب</button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
     <?php endif; ?>
 
     <div class="row">

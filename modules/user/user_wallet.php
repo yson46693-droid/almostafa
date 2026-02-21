@@ -53,6 +53,26 @@ if (empty($tableCheck)) {
     return;
 }
 
+$collectionRequestsTableExists = $db->queryOne("SHOW TABLES LIKE 'user_wallet_local_collection_requests'");
+$localCustomersTableExists = $db->queryOne("SHOW TABLES LIKE 'local_customers'");
+
+// قائمة العملاء المحليين للبحث (نفس الاستعلام كما في الأسعار المخصصة / مهام الإنتاج)
+$localCustomersForWallet = [];
+if (!empty($localCustomersTableExists)) {
+    try {
+        $rows = $db->query("SELECT id, name, COALESCE(balance, 0) AS balance FROM local_customers WHERE status = 'active' ORDER BY name ASC");
+        foreach ($rows as $r) {
+            $localCustomersForWallet[] = [
+                'id' => (int)$r['id'],
+                'name' => trim((string)($r['name'] ?? '')),
+                'balance' => (float)($r['balance'] ?? 0),
+            ];
+        }
+    } catch (Throwable $e) {
+        error_log('user_wallet local_customers: ' . $e->getMessage());
+    }
+}
+
 $error = '';
 $success = '';
 
@@ -120,7 +140,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     }
 }
 
+// معالجة طلب تحصيل من عميل محلي (في انتظار موافقة المحاسب/المدير)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'submit_local_collection' && !empty($collectionRequestsTableExists)) {
+    $customerId = isset($_POST['local_customer_id']) ? (int)$_POST['local_customer_id'] : 0;
+    $customerName = trim($_POST['local_customer_name'] ?? '');
+    $amount = isset($_POST['collection_amount']) ? (float) str_replace(',', '', $_POST['collection_amount']) : 0;
+
+    if ($customerId <= 0 || $customerName === '') {
+        $error = 'يرجى اختيار العميل من نتائج البحث.';
+    } elseif ($amount <= 0) {
+        $error = 'يرجى إدخال مبلغ التحصيل صحيح أكبر من الصفر.';
+    } else {
+        try {
+            $db->execute(
+                "INSERT INTO user_wallet_local_collection_requests (user_id, local_customer_id, customer_name, amount, status) VALUES (?, ?, ?, ?, 'pending')",
+                [$currentUser['id'], $customerId, $customerName, $amount]
+            );
+            $requestId = $db->getLastInsertId();
+            if (function_exists('logAudit')) {
+                logAudit($currentUser['id'], 'wallet_local_collection_request', 'user_wallet_local_collection_requests', $requestId, null, ['local_customer_id' => $customerId, 'amount' => $amount]);
+            }
+            $success = 'تم تسجيل طلب التحصيل (' . formatCurrency($amount) . ' من ' . htmlspecialchars($customerName) . ') في انتظار موافقة المحاسب أو المدير.';
+        } catch (Throwable $e) {
+            error_log('Wallet local collection request failed: ' . $e->getMessage());
+            $error = 'حدث خطأ أثناء تسجيل الطلب. يرجى المحاولة مرة أخرى.';
+        }
+    }
+}
+
 $balance = getWalletBalance($db, $currentUser['id']);
+
+// طلبات التحصيل من العملاء المحليين (في انتظار الموافقة) للمستخدم الحالي
+$pendingLocalCollectionRequests = [];
+if (!empty($collectionRequestsTableExists)) {
+    $pendingLocalCollectionRequests = $db->query(
+        "SELECT * FROM user_wallet_local_collection_requests WHERE user_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 20",
+        [$currentUser['id']]
+    ) ?: [];
+}
 
 // جلب سجل المعاملات
 $transactions = $db->query(
@@ -198,7 +255,7 @@ $typeLabels = [
                 </div>
             </div>
             <!-- بطاقة تحصيل من أوردر -->
-            <div class="card shadow-sm">
+            <div class="card shadow-sm mb-4">
                 <div class="card-header bg-light fw-bold">
                     <i class="bi bi-cart-check me-2"></i>تحصيل من أوردر
                 </div>
@@ -224,6 +281,78 @@ $typeLabels = [
                     </form>
                 </div>
             </div>
+            <?php if (!empty($collectionRequestsTableExists) && !empty($localCustomersTableExists)): ?>
+            <!-- بطاقة تحصيل من عميل محلي (نفس خانة البحث كما في الأسعار المخصصة / مهام الإنتاج) -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light fw-bold">
+                    <i class="bi bi-person-lines-fill me-2"></i>تحصيل من عميل محلي
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">اختر العميل من نتائج البحث، ثم أدخل مبلغ التحصيل. يُسجّل الطلب في انتظار موافقة المحاسب أو المدير.</p>
+                    <form method="POST" id="localCollectionForm">
+                        <input type="hidden" name="action" value="submit_local_collection">
+                        <input type="hidden" name="local_customer_id" id="wallet_local_customer_id" value="">
+                        <input type="hidden" name="local_customer_name" id="wallet_local_customer_name" value="">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-5">
+                                <label class="form-label">ابحث عن العميل المحلي <span class="text-danger">*</span></label>
+                                <div class="search-wrap position-relative">
+                                    <input type="text" id="wallet_local_customer_search" class="form-control" placeholder="اكتب للبحث في قائمة العملاء المحليين..." autocomplete="off">
+                                    <div id="wallet_local_customer_dropdown" class="search-dropdown-wallet d-none"></div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-3">
+                                <label class="form-label">رصيد العميل</label>
+                                <div class="form-control bg-light fw-bold" id="wallet_customer_balance_display">-</div>
+                            </div>
+                            <div class="col-12 col-md-2">
+                                <label for="wallet_collection_amount" class="form-label">مبلغ التحصيل <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <span class="input-group-text">ج.م</span>
+                                    <input type="number" step="0.01" min="0.01" class="form-control" id="wallet_collection_amount" name="collection_amount" required placeholder="0.00">
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-2 d-flex align-items-end">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="bi bi-send-check me-1"></i>تسجيل الطلب
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <?php if (!empty($pendingLocalCollectionRequests)): ?>
+            <div class="card shadow-sm mb-4 border-warning">
+                <div class="card-header bg-warning bg-opacity-25 fw-bold">
+                    <i class="bi bi-hourglass-split me-2"></i>طلبات التحصيل في انتظار الموافقة
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>التاريخ</th>
+                                    <th>العميل</th>
+                                    <th>المبلغ</th>
+                                    <th>الحالة</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($pendingLocalCollectionRequests as $req): ?>
+                                <tr>
+                                    <td><?php echo date('Y-m-d H:i', strtotime($req['created_at'])); ?></td>
+                                    <td><?php echo htmlspecialchars($req['customer_name']); ?></td>
+                                    <td class="fw-bold"><?php echo formatCurrency($req['amount']); ?></td>
+                                    <td><span class="badge bg-warning text-dark">في انتظار الموافقة</span></td>
+                                </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
+            <?php endif; ?>
         </div>
     </div>
 
@@ -265,3 +394,66 @@ $typeLabels = [
         </div>
     </div>
 </div>
+<?php if (!empty($collectionRequestsTableExists) && !empty($localCustomersTableExists) && !empty($localCustomersForWallet)): ?>
+<style>
+.search-wrap.position-relative { position: relative; }
+.search-dropdown-wallet { position: absolute; left: 0; right: 0; top: 100%; z-index: 1050; max-height: 220px; overflow-y: auto; background: #fff; border: 1px solid #dee2e6; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); margin-top: 2px; }
+.search-dropdown-wallet .search-dropdown-item-wallet { padding: 0.5rem 0.75rem; cursor: pointer; border-bottom: 1px solid #f0f0f0; }
+.search-dropdown-wallet .search-dropdown-item-wallet:hover { background: #f8f9fa; }
+.search-dropdown-wallet .search-dropdown-item-wallet:last-child { border-bottom: none; }
+</style>
+<script>
+(function() {
+    var localCustomers = <?php echo json_encode($localCustomersForWallet); ?>;
+    var searchInput = document.getElementById('wallet_local_customer_search');
+    var dropdown = document.getElementById('wallet_local_customer_dropdown');
+    var hiddenId = document.getElementById('wallet_local_customer_id');
+    var hiddenName = document.getElementById('wallet_local_customer_name');
+    var balanceDisplay = document.getElementById('wallet_customer_balance_display');
+    if (!searchInput || !dropdown) return;
+    function matchSearch(text, q) {
+        if (!q || !text) return true;
+        var t = (text + '').toLowerCase();
+        var k = (q + '').trim().toLowerCase();
+        return t.indexOf(k) !== -1;
+    }
+    function showDropdown() {
+        var q = (searchInput.value || '').trim();
+        var filtered = q ? localCustomers.filter(function(c) { return matchSearch(c.name, q); }) : localCustomers.slice(0, 50);
+        dropdown.innerHTML = '';
+        if (filtered.length === 0) {
+            dropdown.classList.add('d-none');
+            return;
+        }
+        filtered.forEach(function(c) {
+            var div = document.createElement('div');
+            div.className = 'search-dropdown-item-wallet';
+            div.textContent = c.name + (c.balance > 0 ? ' — رصيد: ' + parseFloat(c.balance).toFixed(2) + ' ج.م' : '');
+            div.dataset.id = c.id;
+            div.dataset.name = c.name;
+            div.dataset.balance = c.balance;
+            div.addEventListener('click', function() {
+                hiddenId.value = this.dataset.id;
+                hiddenName.value = this.dataset.name;
+                searchInput.value = this.dataset.name;
+                var bal = parseFloat(this.dataset.balance || 0);
+                balanceDisplay.textContent = bal > 0 ? bal.toFixed(2) + ' ج.م (رصيد مدين)' : (bal < 0 ? Math.abs(bal).toFixed(2) + ' ج.م (رصيد دائن)' : '0.00 ج.م');
+                dropdown.classList.add('d-none');
+            });
+            dropdown.appendChild(div);
+        });
+        dropdown.classList.remove('d-none');
+    }
+    searchInput.addEventListener('input', function() {
+        hiddenId.value = '';
+        hiddenName.value = '';
+        balanceDisplay.textContent = '-';
+        showDropdown();
+    });
+    searchInput.addEventListener('focus', function() { showDropdown(); });
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.search-wrap')) dropdown.classList.add('d-none');
+    });
+})();
+</script>
+<?php endif; ?>

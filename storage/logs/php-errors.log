@@ -6,3 +6,6 @@
 [18-Feb-2026 02:32:57 Africa/Cairo] Attendance photos cleanup (automatic daily): 0 files deleted, 0 folders deleted, 0.00 MB freed, 0 errors
 [18-Feb-2026 02:32:57 Africa/Cairo] Database connection error: MySQL connection error: Access denied for user 'osama744444'@'localhost' (using password: YES)
 [18-Feb-2026 02:32:57 Africa/Cairo] Connection details - Host: localhost:3306, Port: 3306, Database: albarakah_db_v2, User: osama744444
+[21-Feb-2026 23:35:50 Africa/Cairo] Attendance photos cleanup (automatic daily): 0 files deleted, 0 folders deleted, 0.00 MB freed, 0 errors
+[21-Feb-2026 23:35:51 Africa/Cairo] Database connection error: MySQL connection error: Connection refused
+[21-Feb-2026 23:35:51 Africa/Cairo] Connection details - Host: localhost:3306, Port: 3306, Database: albarakah_db_v2, User: osama744444
