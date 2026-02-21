@@ -127,10 +127,16 @@ foreach ($taskIds as $taskId) {
     if (!empty($notes)) {
         $displayNotes = preg_replace('/\[ASSIGNED_WORKERS_IDS\]:\s*[0-9,]+/', '', $notes);
         $displayNotes = preg_replace('/\[PRODUCTS_JSON\]:[^\n]*/', '', $displayNotes);
+        $displayNotes = preg_replace('/\[SHIPPING_FEES\]:\s*[0-9.]+/', '', $displayNotes);
         $displayNotes = preg_replace('/المنتج:\s*[^\n]+/', '', $displayNotes);
         $displayNotes = preg_replace('/الكمية:\s*[0-9.]+/', '', $displayNotes);
         $displayNotes = preg_replace('/\n\s*\n\s*\n+/', "\n\n", $displayNotes);
         $displayNotes = trim($displayNotes);
+    }
+
+    $shippingFees = 0;
+    if (!empty($notes) && preg_match('/\[SHIPPING_FEES\]:\s*([0-9.]+)/', $notes, $m)) {
+        $shippingFees = (float) $m[1];
     }
 
     $receipts[] = [
@@ -142,6 +148,7 @@ foreach ($taskIds as $taskId) {
         'products' => $products,
         'unit' => $unit,
         'displayNotes' => $displayNotes,
+        'shippingFees' => $shippingFees,
     ];
 }
 
@@ -597,6 +604,19 @@ $singleReceipt = count($receipts) === 1;
                     <td colspan="2" style="text-align: left; padding: 8px 5px;">الإجمالي</td>
                     <td style="text-align: center; padding: 8px 5px;"><?php echo number_format($grandTotal, 2); ?> ج.م</td>
                 </tr>
+                <?php 
+                $receiptShippingFees = isset($r['shippingFees']) ? (float)$r['shippingFees'] : 0;
+                $finalTotal = $grandTotal + $receiptShippingFees;
+                if ($receiptShippingFees > 0): ?>
+                <tr style="font-weight: 700; background-color: #f8f8f8;">
+                    <td colspan="2" style="text-align: left; padding: 6px 5px;">رسوم الشحن</td>
+                    <td style="text-align: center; padding: 6px 5px;"><?php echo number_format($receiptShippingFees, 2); ?> ج.م</td>
+                </tr>
+                <?php endif; ?>
+                <tr style="font-weight: 700; background-color: #e8f5e9;">
+                    <td colspan="2" style="text-align: left; padding: 8px 5px;">الإجمالي النهائي</td>
+                    <td style="text-align: center; padding: 8px 5px;"><?php echo number_format($finalTotal, 2); ?> ج.م</td>
+                </tr>
             </tfoot>
         </table>
         <?php else: ?>
@@ -605,6 +625,18 @@ $singleReceipt = count($receipts) === 1;
                 <td>لا توجد منتجات</td>
                 <td>-</td>
             </tr>
+            <?php 
+            $receiptShippingFeesEmpty = isset($r['shippingFees']) ? (float)$r['shippingFees'] : 0;
+            if ($receiptShippingFeesEmpty > 0): ?>
+            <tr style="font-weight: 700;">
+                <td>رسوم الشحن</td>
+                <td><?php echo number_format($receiptShippingFeesEmpty, 2); ?> ج.م</td>
+            </tr>
+            <tr style="font-weight: 700; background-color: #e8f5e9;">
+                <td>الإجمالي النهائي</td>
+                <td><?php echo number_format($receiptShippingFeesEmpty, 2); ?> ج.م</td>
+            </tr>
+            <?php endif; ?>
         </table>
         <?php endif; ?>
         <?php if ($displayNotes !== ''): ?>

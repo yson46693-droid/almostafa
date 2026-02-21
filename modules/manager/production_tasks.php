@@ -381,6 +381,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $customerName = trim($_POST['customer_name'] ?? '');
         $customerPhone = trim($_POST['customer_phone'] ?? '');
         $assignees = $_POST['assigned_to'] ?? [];
+        $shippingFees = 0;
+        if (isset($_POST['shipping_fees']) && $_POST['shipping_fees'] !== '') {
+            $shippingFees = (float) str_replace(',', '.', (string) $_POST['shipping_fees']);
+            if ($shippingFees < 0) $shippingFees = 0;
+        }
         
         // الحصول على المنتجات المتعددة
         $products = [];
@@ -688,6 +693,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $assigneesInfo = 'العامل المخصص: ' . ($assigneeNames[0] ?? '');
                     $assigneesInfo .= "\n[ASSIGNED_WORKERS_IDS]:" . $assignees[0];
                     $notesParts[] = $assigneesInfo;
+                }
+                
+                // حفظ رسوم الشحن في notes لعرضها في الإيصال
+                if ($shippingFees > 0) {
+                    $notesParts[] = '[SHIPPING_FEES]:' . $shippingFees;
                 }
                 
                 $notesValue = !empty($notesParts) ? implode("\n\n", $notesParts) : null;
@@ -1889,6 +1899,34 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                                 <small class="text-muted">يمكنك إضافة أكثر من منتج وكمية في نفس المهمة.</small>
                             </div>
                         </div>
+                        <div class="col-12 col-md-6 col-lg-4 mt-2">
+                            <label class="form-label" for="createTaskShippingFees">رسوم الشحن (ج.م)</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" name="shipping_fees" id="createTaskShippingFees" step="0.01" min="0" placeholder="0.00" value="0">
+                                <span class="input-group-text">ج.م</span>
+                            </div>
+                        </div>
+                        <div class="col-12 mt-3">
+                            <div class="card bg-light border-primary border-opacity-25" id="createTaskTotalSummaryCard">
+                                <div class="card-body py-3">
+                                    <h6 class="card-title mb-2"><i class="bi bi-calculator me-2"></i>ملخص الإجمالي النهائي</h6>
+                                    <div class="row g-2 small">
+                                        <div class="col-6 col-md-4">
+                                            <span class="text-muted">إجمالي المنتجات:</span>
+                                            <strong class="d-block" id="createTaskSubtotalDisplay">0.00 ج.م</strong>
+                                        </div>
+                                        <div class="col-6 col-md-4">
+                                            <span class="text-muted">رسوم الشحن:</span>
+                                            <strong class="d-block" id="createTaskShippingDisplay">0.00 ج.م</strong>
+                                        </div>
+                                        <div class="col-12 col-md-4">
+                                            <span class="text-muted">الإجمالي النهائي:</span>
+                                            <strong class="d-block fs-5 text-success" id="createTaskFinalTotalDisplay">0.00 ج.م</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div class="d-flex justify-content-end mt-4 gap-2">                        <button type="submit" class="btn btn-primary"><i class="bi bi-send-check me-1"></i>إرسال المهمة</button>
                     </div>
@@ -2810,7 +2848,9 @@ document.addEventListener('DOMContentLoaded', function () {
         newRow.querySelector('.remove-product-btn').addEventListener('click', function() {
             newRow.remove();
             updateRemoveButtons();
+            if (typeof updateCreateTaskSummary === 'function') updateCreateTaskSummary();
         });
+        if (typeof updateCreateTaskSummary === 'function') updateCreateTaskSummary();
     }
     
     // إضافة منتج جديد
@@ -2867,10 +2907,39 @@ document.addEventListener('DOMContentLoaded', function () {
         } else if (e.target.classList.contains('product-line-total-input')) {
             syncPriceFromLineTotal(row);
         }
+        updateCreateTaskSummary();
     });
     
     // تحديث الإجمالي للصفوف الموجودة عند التحميل
     productsContainer.querySelectorAll('.product-row').forEach(updateProductLineTotal);
+    
+    // ملخص الإجمالي النهائي (إجمالي المنتجات + رسوم الشحن)
+    function updateCreateTaskSummary() {
+        var subtotalEl = document.getElementById('createTaskSubtotalDisplay');
+        var shippingEl = document.getElementById('createTaskShippingDisplay');
+        var finalEl = document.getElementById('createTaskFinalTotalDisplay');
+        var shippingInput = document.getElementById('createTaskShippingFees');
+        if (!subtotalEl || !shippingEl || !finalEl) return;
+        var subtotal = 0;
+        productsContainer.querySelectorAll('.product-line-total-input').forEach(function(inp) {
+            var v = parseFloat(inp.value || '0');
+            if (!isNaN(v) && v >= 0) subtotal += v;
+        });
+        var shipping = 0;
+        if (shippingInput) {
+            var v = parseFloat(shippingInput.value || '0');
+            if (!isNaN(v) && v >= 0) shipping = v;
+        }
+        var finalTotal = subtotal + shipping;
+        subtotalEl.textContent = subtotal.toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ج.م';
+        shippingEl.textContent = shipping.toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ج.م';
+        finalEl.textContent = finalTotal.toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ج.م';
+    }
+    if (document.getElementById('createTaskShippingFees')) {
+        document.getElementById('createTaskShippingFees').addEventListener('input', updateCreateTaskSummary);
+        document.getElementById('createTaskShippingFees').addEventListener('change', updateCreateTaskSummary);
+    }
+    updateCreateTaskSummary();
 });
 
 // دالة لتحديث step حقل الكمية بناءً على الوحدة المختارة
