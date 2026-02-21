@@ -30,7 +30,7 @@ try {
     error_log('custom_prices local_customers: ' . $e->getMessage());
 }
 
-// قائمة عملاء المندوبين (مبسطة للاختيار)
+// قائمة عملاء المندوبين فقط (مرتبطون بمندوب مبيعات - من جدول customers وليس المحليين)
 $repCustomers = [];
 try {
     $repCustomers = $db->query("
@@ -40,6 +40,8 @@ try {
         LEFT JOIN users rep1 ON c.rep_id = rep1.id AND rep1.role = 'sales'
         LEFT JOIN users rep2 ON c.created_by = rep2.id AND rep2.role = 'sales'
         WHERE c.status = 'active'
+          AND ((c.rep_id IS NOT NULL AND c.rep_id IN (SELECT id FROM users WHERE role = 'sales'))
+               OR (c.created_by IS NOT NULL AND c.created_by IN (SELECT id FROM users WHERE role = 'sales')))
         ORDER BY c.name ASC
         LIMIT 500
     ");
@@ -56,9 +58,14 @@ $units = ['كرتونه', 'عبوة', 'كيلو', 'جرام', 'شرينك', 'ج�
 .custom-prices-page .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .custom-prices-page .price-row td { vertical-align: middle; }
 .custom-prices-page .saved-list .list-group-item { border-radius: 8px; margin-bottom: 6px; }
+.custom-prices-page .search-wrap { position: relative; }
+.custom-prices-page .search-dropdown { position: absolute; left: 0; right: 0; top: 100%; z-index: 100; max-height: 220px; overflow-y: auto; background: #fff; border: 1px solid #dee2e6; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+.custom-prices-page .search-dropdown-item { padding: 0.5rem 0.75rem; cursor: pointer; border-bottom: 1px solid #f0f0f0; }
+.custom-prices-page .search-dropdown-item:hover { background: #f8f9fa; }
+.custom-prices-page .search-dropdown-item:last-child { border-bottom: none; }
 @media (max-width: 768px) {
     .custom-prices-page .customer-type-wrap { flex-direction: column; align-items: stretch; }
-    .custom-prices-page .product-row select { font-size: 0.9rem; }
+    .custom-prices-page .product-row input.form-control { font-size: 0.9rem; }
 }
 </style>
 
@@ -94,22 +101,20 @@ $units = ['كرتونه', 'عبوة', 'كيلو', 'جرام', 'شرينك', 'ج�
                     </div>
 
                     <div id="customer_select_local" class="customer-select-block mb-3">
-                        <label class="form-label">اختر العميل المحلي</label>
-                        <select id="local_customer_id" class="form-select">
-                            <option value="">-- اختر عميلًا --</option>
-                            <?php foreach ($localCustomers as $c): ?>
-                                <option value="<?php echo (int)$c['id']; ?>"><?php echo htmlspecialchars($c['name']); ?></option>
-                            <?php endforeach; ?>
-                        </select>
+                        <label class="form-label">ابحث عن العميل المحلي</label>
+                        <div class="search-wrap">
+                            <input type="text" id="local_customer_search" class="form-control" placeholder="اكتب للبحث في قائمة العملاء المحليين..." autocomplete="off">
+                            <input type="hidden" id="local_customer_id" value="">
+                            <div id="local_customer_dropdown" class="search-dropdown d-none"></div>
+                        </div>
                     </div>
                     <div id="customer_select_rep" class="customer-select-block mb-3 d-none">
-                        <label class="form-label">اختر عميل المندوب</label>
-                        <select id="rep_customer_id" class="form-select">
-                            <option value="">-- اختر عميلًا --</option>
-                            <?php foreach ($repCustomers as $c): ?>
-                                <option value="<?php echo (int)$c['id']; ?>"><?php echo htmlspecialchars($c['name']); ?><?php if (!empty($c['rep_name'])) echo ' (' . htmlspecialchars($c['rep_name']) . ')'; ?></option>
-                            <?php endforeach; ?>
-                        </select>
+                        <label class="form-label">ابحث عن عميل المندوب</label>
+                        <div class="search-wrap">
+                            <input type="text" id="rep_customer_search" class="form-control" placeholder="اكتب للبحث في قائمة عملاء المندوبين..." autocomplete="off">
+                            <input type="hidden" id="rep_customer_id" value="">
+                            <div id="rep_customer_dropdown" class="search-dropdown d-none"></div>
+                        </div>
                     </div>
                     <div id="customer_manual_block" class="customer-select-block mb-3 d-none">
                         <label class="form-label">اسم العميل الجديد</label>
@@ -147,9 +152,10 @@ $units = ['كرتونه', 'عبوة', 'كيلو', 'جرام', 'شرينك', 'ج�
                             <tbody id="product_rows">
                                 <tr class="price-row">
                                     <td>
-                                        <select class="form-select form-select-sm product-name-select">
-                                            <option value="">-- اختر منتجًا --</option>
-                                        </select>
+                                        <div class="search-wrap position-relative">
+                                            <input type="text" class="form-control form-control-sm product-name-input" placeholder="اكتب للبحث عن المنتج..." autocomplete="off">
+                                            <div class="search-dropdown product-dropdown d-none"></div>
+                                        </div>
                                     </td>
                                     <td>
                                         <select class="form-select form-select-sm unit-select">
@@ -223,11 +229,25 @@ $units = ['كرتونه', 'عبوة', 'كيلو', 'جرام', 'شرينك', 'ج�
     if (!apiBase) apiBase = basePath ? basePath + '/api' : 'api';
 
     var units = <?php echo json_encode($units); ?>;
+    var localCustomers = <?php echo json_encode(array_map(function($c) { return ['id' => (int)$c['id'], 'name' => $c['name']]; }, $localCustomers)); ?>;
+    var repCustomers = <?php echo json_encode(array_map(function($c) { return ['id' => (int)$c['id'], 'name' => $c['name'], 'rep_name' => isset($c['rep_name']) ? $c['rep_name'] : '']; }, $repCustomers)); ?>;
     var productTemplates = [];
 
     function apiUrl(path) {
         var p = path.indexOf('/') === 0 ? path.slice(1) : path;
         return apiBase.indexOf('/') === 0 ? apiBase + '/' + p : apiBase + '/' + p;
+    }
+    function escapeHtml(s) {
+        if (!s) return '';
+        var d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+    function matchSearch(text, q) {
+        if (!q || !text) return true;
+        var t = (text + '').toLowerCase();
+        var k = (q + '').trim().toLowerCase();
+        return t.indexOf(k) !== -1;
     }
 
     function setCustomerBlocks() {
@@ -236,52 +256,121 @@ $units = ['كرتونه', 'عبوة', 'كيلو', 'جرام', 'شرينك', 'ج�
         document.getElementById('customer_select_local').classList.toggle('d-none', val !== 'local');
         document.getElementById('customer_select_rep').classList.toggle('d-none', val !== 'rep');
         document.getElementById('customer_manual_block').classList.toggle('d-none', val !== 'manual');
+        if (val !== 'local') {
+            document.getElementById('local_customer_search').value = '';
+            document.getElementById('local_customer_id').value = '';
+            document.getElementById('local_customer_dropdown').classList.add('d-none');
+        }
+        if (val !== 'rep') {
+            document.getElementById('rep_customer_search').value = '';
+            document.getElementById('rep_customer_id').value = '';
+            document.getElementById('rep_customer_dropdown').classList.add('d-none');
+        }
     }
     document.querySelectorAll('input[name="customer_type_radio"]').forEach(function(r) {
         r.addEventListener('change', setCustomerBlocks);
     });
     setCustomerBlocks();
 
+    function showCustomerDropdown(inputId, hiddenId, dropdownId, list, getLabel) {
+        var input = document.getElementById(inputId);
+        var hidden = document.getElementById(hiddenId);
+        var drop = document.getElementById(dropdownId);
+        if (!input || !hidden || !drop) return;
+        var q = (input.value || '').trim();
+        var filtered = list.filter(function(c) { return matchSearch(getLabel(c), q); });
+        drop.innerHTML = '';
+        if (filtered.length === 0) {
+            drop.classList.add('d-none');
+            return;
+        }
+        filtered.forEach(function(c) {
+            var div = document.createElement('div');
+            div.className = 'search-dropdown-item';
+            div.textContent = getLabel(c);
+            div.dataset.id = c.id;
+            div.dataset.name = c.name;
+            div.addEventListener('click', function() {
+                hidden.value = this.dataset.id;
+                input.value = this.dataset.name;
+                drop.classList.add('d-none');
+            });
+            drop.appendChild(div);
+        });
+        drop.classList.remove('d-none');
+    }
+    function initCustomerSearch(inputId, hiddenId, dropdownId, list, getLabel) {
+        var input = document.getElementById(inputId);
+        var drop = document.getElementById(dropdownId);
+        if (!input || !drop) return;
+        input.addEventListener('input', function() {
+            document.getElementById(hiddenId).value = '';
+            showCustomerDropdown(inputId, hiddenId, dropdownId, list, getLabel);
+        });
+        input.addEventListener('focus', function() {
+            if ((input.value || '').trim()) showCustomerDropdown(inputId, hiddenId, dropdownId, list, getLabel);
+        });
+    }
+    initCustomerSearch('local_customer_search', 'local_customer_id', 'local_customer_dropdown', localCustomers, function(c) { return c.name; });
+    initCustomerSearch('rep_customer_search', 'rep_customer_id', 'rep_customer_dropdown', repCustomers, function(c) { return c.rep_name ? c.name + ' (' + c.rep_name + ')' : c.name; });
+
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.search-wrap')) {
+            document.querySelectorAll('.search-dropdown').forEach(function(d) { d.classList.add('d-none'); });
+        }
+    });
+
     function loadTemplates() {
         fetch(apiUrl('get_product_templates.php'))
             .then(function(res) { return res.json(); })
             .then(function(data) {
                 productTemplates = (data && data.templates) ? data.templates : [];
-                var opts = '<option value="">-- اختر منتجًا --</option>';
-                productTemplates.forEach(function(name) {
-                    opts += '<option value="' + escapeHtml(name) + '">' + escapeHtml(name) + '</option>';
-                });
-                document.querySelectorAll('.product-name-select').forEach(function(sel) {
-                    var cur = sel.value;
-                    sel.innerHTML = opts;
-                    if (cur) sel.value = cur;
-                });
             })
             .catch(function() { productTemplates = []; });
     }
-    function escapeHtml(s) {
-        if (!s) return '';
-        var d = document.createElement('div');
-        d.textContent = s;
-        return d.innerHTML;
-    }
     loadTemplates();
+
+    function bindProductSearch(inputEl, dropdownEl) {
+        if (!inputEl || !dropdownEl) return;
+        inputEl.addEventListener('input', function() {
+            var q = (inputEl.value || '').trim();
+            var filtered = productTemplates.filter(function(n) { return matchSearch(n, q); });
+            dropdownEl.innerHTML = '';
+            if (filtered.length === 0) {
+                dropdownEl.classList.add('d-none');
+                return;
+            }
+            filtered.forEach(function(name) {
+                var div = document.createElement('div');
+                div.className = 'search-dropdown-item';
+                div.textContent = name;
+                div.addEventListener('click', function() {
+                    inputEl.value = this.textContent;
+                    dropdownEl.classList.add('d-none');
+                });
+                dropdownEl.appendChild(div);
+            });
+            dropdownEl.classList.remove('d-none');
+        });
+        inputEl.addEventListener('focus', function() {
+            if ((inputEl.value || '').trim()) inputEl.dispatchEvent(new Event('input'));
+        });
+    }
 
     function addProductRow() {
         var tbody = document.getElementById('product_rows');
         var tr = document.createElement('tr');
         tr.className = 'price-row';
-        var optHtml = '<option value="">-- اختر منتجًا --</option>';
-        productTemplates.forEach(function(name) {
-            optHtml += '<option value="' + escapeHtml(name) + '">' + escapeHtml(name) + '</option>';
-        });
         var unitOpts = units.map(function(u) { return '<option value="' + escapeHtml(u) + '">' + escapeHtml(u) + '</option>'; }).join('');
         tr.innerHTML =
-            '<td><select class="form-select form-select-sm product-name-select">' + optHtml + '</select></td>' +
+            '<td><div class="search-wrap position-relative">' +
+            '<input type="text" class="form-control form-control-sm product-name-input" placeholder="اكتب للبحث عن المنتج..." autocomplete="off">' +
+            '<div class="search-dropdown product-dropdown d-none"></div></div></td>' +
             '<td><select class="form-select form-select-sm unit-select">' + unitOpts + '</select></td>' +
             '<td><input type="number" class="form-control form-control-sm price-input" placeholder="0" min="0" step="0.01" value=""></td>' +
             '<td><button type="button" class="btn btn-sm btn-outline-danger remove-row" title="حذف"><i class="bi bi-trash"></i></button></td>';
         tbody.appendChild(tr);
+        bindProductSearch(tr.querySelector('.product-name-input'), tr.querySelector('.product-dropdown'));
         tr.querySelector('.remove-row').addEventListener('click', function() {
             if (tbody.querySelectorAll('.price-row').length > 1) tr.remove();
         });
@@ -292,6 +381,10 @@ $units = ['كرتونه', 'عبوة', 'كيلو', 'جرام', 'شرينك', 'ج�
             e.target.closest('tr').remove();
         }
     });
+    bindProductSearch(
+        document.querySelector('#product_rows .price-row .product-name-input'),
+        document.querySelector('#product_rows .price-row .product-dropdown')
+    );
 
     function getFormPayload() {
         var v = document.querySelector('input[name="customer_type_radio"]:checked');
@@ -309,10 +402,10 @@ $units = ['كرتونه', 'عبوة', 'كيلو', 'جرام', 'شرينك', 'ج�
         }
         var items = [];
         document.querySelectorAll('#product_rows .price-row').forEach(function(row) {
-            var sel = row.querySelector('.product-name-select');
+            var inp = row.querySelector('.product-name-input');
             var unitSel = row.querySelector('.unit-select');
             var priceInp = row.querySelector('.price-input');
-            var productName = sel ? sel.value.trim() : '';
+            var productName = inp ? inp.value.trim() : '';
             var unit = unitSel ? unitSel.value : 'قطعة';
             var price = priceInp && priceInp.value !== '' ? parseFloat(priceInp.value) : 0;
             if (productName) items.push({ product_name: productName, unit: unit, price: price });
@@ -365,6 +458,10 @@ $units = ['كرتونه', 'عبوة', 'كيلو', 'جرام', 'شرينك', 'ج�
                     loadSavedList();
                     document.getElementById('manual_customer_name').value = '';
                     document.getElementById('manual_phone').value = '';
+                    document.getElementById('local_customer_search').value = '';
+                    document.getElementById('local_customer_id').value = '';
+                    document.getElementById('rep_customer_search').value = '';
+                    document.getElementById('rep_customer_id').value = '';
                 }
             })
             .catch(function() {
