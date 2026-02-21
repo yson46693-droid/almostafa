@@ -113,7 +113,22 @@ try {
                 $materials[] = [
                     'stock_id' => (int)$row['id'],
                     'sub_type' => null,
+                    'stock_source' => 'sesame',
                     'label' => 'سمسم #' . $row['id'] . ' (' . number_format((float)$row['quantity'], 2) . ' كجم)',
+                    'available_kg' => round((float)$row['quantity'], 3),
+                ];
+            }
+        }
+        $tahiniCheck = $db->queryOne("SHOW TABLES LIKE 'tahini_stock'");
+        if (!empty($tahiniCheck)) {
+            $t = $db->query("SELECT ts.id, ts.quantity, s.name as supplier_name FROM tahini_stock ts LEFT JOIN suppliers s ON ts.supplier_id = s.id WHERE ts.quantity > 0");
+            foreach ($t as $row) {
+                $name = !empty($row['supplier_name']) ? 'طحينة - ' . $row['supplier_name'] : 'طحينة #' . $row['id'];
+                $materials[] = [
+                    'stock_id' => (int)$row['id'],
+                    'sub_type' => null,
+                    'stock_source' => 'tahini',
+                    'label' => $name . ' (' . number_format((float)$row['quantity'], 2) . ' كجم)',
                     'available_kg' => round((float)$row['quantity'], 3),
                 ];
             }

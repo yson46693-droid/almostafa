@@ -674,10 +674,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $availableKg = $st ? (float)($st['quantity'] ?? 0) : 0;
                             }
                         } elseif ($section === 'sesame') {
-                            $t = $db->queryOne("SHOW TABLES LIKE 'sesame_stock'");
-                            if (!empty($t)) {
-                                $st = $db->queryOne("SELECT id, quantity FROM sesame_stock WHERE id = ?", [$stockId]);
-                                $availableKg = $st ? (float)($st['quantity'] ?? 0) : 0;
+                            if (($stockSource ?? '') === 'tahini') {
+                                $t = $db->queryOne("SHOW TABLES LIKE 'tahini_stock'");
+                                if (!empty($t)) {
+                                    $st = $db->queryOne("SELECT id, quantity FROM tahini_stock WHERE id = ?", [$stockId]);
+                                    $availableKg = $st ? (float)($st['quantity'] ?? 0) : 0;
+                                }
+                            } else {
+                                $t = $db->queryOne("SHOW TABLES LIKE 'sesame_stock'");
+                                if (!empty($t)) {
+                                    $st = $db->queryOne("SELECT id, quantity FROM sesame_stock WHERE id = ?", [$stockId]);
+                                    $availableKg = $st ? (float)($st['quantity'] ?? 0) : 0;
+                                }
                             }
                         } elseif ($section === 'date') {
                             $t = $db->queryOne("SHOW TABLES LIKE 'date_stock'");
@@ -1408,7 +1416,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $db->execute("UPDATE nuts_stock SET quantity = GREATEST(COALESCE(quantity,0) - ?, 0), updated_at = NOW() WHERE id = ?", [$qtyKg, $stockId]);
                             }
                         } elseif ($section === 'sesame' && $stockId > 0) {
-                            $db->execute("UPDATE sesame_stock SET quantity = GREATEST(COALESCE(quantity,0) - ?, 0), updated_at = NOW() WHERE id = ?", [$qtyKg, $stockId]);
+                            if (($stockSource ?? '') === 'tahini') {
+                                $db->execute("UPDATE tahini_stock SET quantity = GREATEST(COALESCE(quantity,0) - ?, 0), updated_at = NOW() WHERE id = ?", [$qtyKg, $stockId]);
+                            } else {
+                                $db->execute("UPDATE sesame_stock SET quantity = GREATEST(COALESCE(quantity,0) - ?, 0), updated_at = NOW() WHERE id = ?", [$qtyKg, $stockId]);
+                            }
                         } elseif ($section === 'date' && $stockId > 0) {
                             $db->execute("UPDATE date_stock SET quantity = GREATEST(COALESCE(quantity,0) - ?, 0), updated_at = NOW() WHERE id = ?", [$qtyKg, $stockId]);
                         } elseif ($section === 'turbines' && $stockId > 0) {
