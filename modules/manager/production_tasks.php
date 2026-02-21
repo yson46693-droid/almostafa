@@ -1792,7 +1792,7 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                         <div class="col-md-3">
                             <label class="form-label">اختر العمال المستهدفين</label>
                             <div style="max-height: 120px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 0.375rem;">
-                                <select class="form-select form-select-sm border-0" name="assigned_to[]" multiple required style="max-height: 100px;">
+                                <select class="form-select form-select-sm border-0" name="assigned_to[]" multiple style="max-height: 100px;">
                                     <?php foreach ($productionUsers as $worker): ?>
                                         <option value="<?php echo (int)$worker['id']; ?>"><?php echo htmlspecialchars($worker['full_name']); ?></option>
                                     <?php endforeach; ?>
@@ -1801,7 +1801,7 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                             <div class="form-text small">يمكن تحديد أكثر من عامل باستخدام زر CTRL أو SHIFT.</div>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">خانة العميل (مثل الأسعار المخصصة)</label>
+                            <label class="form-label">العميل</label>
                             <div class="customer-type-wrap d-flex flex-wrap gap-3 mb-2">
                                 <div class="form-check">
                                     <input class="form-check-input" type="radio" name="customer_type_radio_task" id="ct_task_local" value="local" checked>
@@ -2610,11 +2610,34 @@ document.addEventListener('DOMContentLoaded', function () {
         var manualPhone = document.getElementById('manual_customer_phone_task');
         if (!submitName || !submitPhone) return;
 
-        function matchSearch(text, q) {
-            if (!q || !text) return true;
-            var t = (text + '').toLowerCase();
-            var k = (q + '').trim().toLowerCase();
-            return t.indexOf(k) !== -1;
+        // مطابقة متقدمة: كل كلمة من المدخلات يجب أن تظهر في النص (اسم أو هاتف)
+        function matchSearchAdvanced(searchText, query) {
+            if (!searchText && !query) return true;
+            var text = (searchText + '').toLowerCase().trim();
+            var q = (query + '').trim().toLowerCase();
+            if (!q) return true;
+            var words = q.split(/\s+/).filter(Boolean);
+            if (words.length === 0) return true;
+            return words.every(function(word) { return text.indexOf(word) !== -1; });
+        }
+        // للعميل المحلي: البحث في الاسم + كل أرقام الهاتف (أي جزء مطابق للكلمة المدخلة)
+        function matchLocalCustomer(c, query) {
+            query = (query + '').trim();
+            if (!query) return false;
+            var name = (c.name || '').toLowerCase();
+            var phones = (c.phones && c.phones.length) ? c.phones.join(' ') : ((c.phone || '') + '').toLowerCase();
+            var searchText = name + ' ' + phones;
+            return matchSearchAdvanced(searchText, query);
+        }
+        // لعميل المندوب: البحث في الاسم + اسم المندوب + الهاتف
+        function matchRepCustomer(c, query) {
+            query = (query + '').trim();
+            if (!query) return false;
+            var name = (c.name || '').toLowerCase();
+            var repName = (c.rep_name || '').toLowerCase();
+            var phone = (c.phone || '').toLowerCase();
+            var searchText = name + ' ' + repName + ' ' + phone;
+            return matchSearchAdvanced(searchText, query);
         }
 
         function setCustomerBlocks() {
@@ -2644,10 +2667,11 @@ document.addEventListener('DOMContentLoaded', function () {
         });
         setCustomerBlocks();
 
-        function showCustomerDropdown(inputEl, hiddenIdEl, dropEl, list, getLabel, onSelect) {
+        function showCustomerDropdown(inputEl, hiddenIdEl, dropEl, list, getLabel, matcher, onSelect) {
             if (!inputEl || !dropEl) return;
             var q = (inputEl.value || '').trim();
-            var filtered = list.filter(function(c) { return matchSearch(getLabel(c), q); });
+            var filterFn = (typeof matcher === 'function') ? function(c) { return matcher(c, q); } : function(c) { return matchSearchAdvanced(getLabel(c), q); };
+            var filtered = list.filter(filterFn);
             dropEl.innerHTML = '';
             if (filtered.length === 0) {
                 dropEl.classList.add('d-none');
@@ -2673,19 +2697,20 @@ document.addEventListener('DOMContentLoaded', function () {
             dropEl.classList.remove('d-none');
         }
 
-        function initCustomerSearch(inputEl, hiddenIdEl, dropEl, list, getLabel) {
+        function initCustomerSearch(inputEl, hiddenIdEl, dropEl, list, getLabel, matcher) {
             if (!inputEl || !dropEl) return;
+            function show() { showCustomerDropdown(inputEl, hiddenIdEl, dropEl, list, getLabel, matcher); }
             inputEl.addEventListener('input', function() {
                 if (hiddenIdEl) hiddenIdEl.value = '';
-                showCustomerDropdown(inputEl, hiddenIdEl, dropEl, list, getLabel);
+                show();
             });
             inputEl.addEventListener('focus', function() {
-                if ((inputEl.value || '').trim()) showCustomerDropdown(inputEl, hiddenIdEl, dropEl, list, getLabel);
+                show();
             });
         }
 
-        initCustomerSearch(localSearch, localId, localDrop, localCustomers, function(c) { return c.name + (c.phone ? ' — ' + c.phone : ''); });
-        initCustomerSearch(repSearch, repId, repDrop, repCustomers, function(c) { return c.rep_name ? c.name + ' (' + c.rep_name + ')' : c.name; });
+        initCustomerSearch(localSearch, localId, localDrop, localCustomers, function(c) { return c.name + (c.phone ? ' — ' + c.phone : ''); }, matchLocalCustomer);
+        initCustomerSearch(repSearch, repId, repDrop, repCustomers, function(c) { return c.rep_name ? c.name + ' (' + c.rep_name + ')' : c.name; }, matchRepCustomer);
 
         if (manualName) manualName.addEventListener('input', function() { submitName.value = this.value.trim(); });
         if (manualPhone) manualPhone.addEventListener('input', function() { submitPhone.value = this.value.trim(); });
