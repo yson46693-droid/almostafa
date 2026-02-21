@@ -558,8 +558,15 @@ $singleReceipt = count($receipts) === 1;
                     $productQty = $product['quantity'] ?? null;
                     $productUnit = !empty($product['unit']) ? $product['unit'] : $unit;
                     $productPrice = isset($product['price']) && $product['price'] !== null && $product['price'] !== '' ? (float)$product['price'] : null;
-                    if ($productPrice !== null) {
-                        $grandTotal += $productPrice;
+                    // الإجمالي = القيمة المحفوظة من النموذج (line_total) أو الكمية × السعر
+                    $lineTotal = null;
+                    if (isset($product['line_total']) && $product['line_total'] !== '' && $product['line_total'] !== null && is_numeric($product['line_total'])) {
+                        $lineTotal = (float)$product['line_total'];
+                    } elseif ($productQty !== null && $productQty > 0 && $productPrice !== null) {
+                        $lineTotal = round((float)$productQty * $productPrice, 2);
+                    }
+                    if ($lineTotal !== null) {
+                        $grandTotal += $lineTotal;
                     }
                 ?>
                 <tr>
@@ -575,8 +582,8 @@ $singleReceipt = count($receipts) === 1;
                     </td>
                     <td class="product-quantity" style="text-align: center; font-weight: 600;">
                         <?php 
-                        if ($productPrice !== null) {
-                            echo number_format($productPrice, 2);
+                        if ($lineTotal !== null) {
+                            echo number_format($lineTotal, 2);
                         } else {
                             echo '<span style="color: #999;">-</span>';
                         }

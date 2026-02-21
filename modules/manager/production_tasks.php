@@ -414,11 +414,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $productPrice = null;
                     }
                 }
+                $productLineTotal = null;
+                $lineTotalInput = isset($productData['line_total']) ? trim((string)$productData['line_total']) : '';
+                if ($lineTotalInput !== '' && is_numeric(str_replace(',', '.', $lineTotalInput))) {
+                    $productLineTotal = (float)str_replace(',', '.', $lineTotalInput);
+                    if ($productLineTotal < 0) {
+                        $productLineTotal = null;
+                    }
+                }
                 $products[] = [
                     'name' => $productName,
                     'quantity' => $productQuantity,
                     'unit' => $productUnit,
-                    'price' => $productPrice
+                    'price' => $productPrice,
+                    'line_total' => $productLineTotal
                 ];
             }
         }
@@ -969,7 +978,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $qty = isset($p['quantity']) && $p['quantity'] !== '' ? (float)str_replace(',', '.', $p['quantity']) : null;
                             $unit = in_array(trim($p['unit'] ?? 'قطعة'), ['قطعة','كرتونة','عبوة','شرينك','جرام','كيلو'], true) ? trim($p['unit']) : 'قطعة';
                             $price = isset($p['price']) && $p['price'] !== '' ? (float)str_replace(',', '.', $p['price']) : null;
-                            $products[] = ['name' => $name, 'quantity' => $qty, 'unit' => $unit, 'price' => $price];
+                            $lineTotal = isset($p['line_total']) && $p['line_total'] !== '' ? (float)str_replace(',', '.', $p['line_total']) : null;
+                            $products[] = ['name' => $name, 'quantity' => $qty, 'unit' => $unit, 'price' => $price, 'line_total' => $lineTotal];
                         }
                     }
                     $notesParts = [];
