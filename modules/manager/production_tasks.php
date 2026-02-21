@@ -2610,34 +2610,28 @@ document.addEventListener('DOMContentLoaded', function () {
         var manualPhone = document.getElementById('manual_customer_phone_task');
         if (!submitName || !submitPhone) return;
 
-        // مطابقة متقدمة: كل كلمة من المدخلات يجب أن تظهر في النص (اسم أو هاتف)
-        function matchSearchAdvanced(searchText, query) {
-            if (!searchText && !query) return true;
-            var text = (searchText + '').toLowerCase().trim();
-            var q = (query + '').trim().toLowerCase();
-            if (!q) return true;
-            var words = q.split(/\s+/).filter(Boolean);
-            if (words.length === 0) return true;
-            return words.every(function(word) { return text.indexOf(word) !== -1; });
+        // نفس منطق matchSearch في صفحة الأسعار المخصصة: عند الفراغ نعرض الكل، وإلا بحث بسيط (نص يحتوي على الاستعلام)
+        function matchSearch(text, q) {
+            if (!q || !text) return true;
+            var t = (text + '').toLowerCase();
+            var k = (q + '').trim().toLowerCase();
+            return t.indexOf(k) !== -1;
         }
-        // للعميل المحلي: البحث في الاسم + كل أرقام الهاتف (أي جزء مطابق للكلمة المدخلة)
+        // للعميل المحلي: نفس سلوك custom_prices — البحث في الاسم (والهاتف اختياري)
         function matchLocalCustomer(c, query) {
-            query = (query + '').trim();
-            if (!query) return false;
-            var name = (c.name || '').toLowerCase();
-            var phones = (c.phones && c.phones.length) ? c.phones.join(' ') : ((c.phone || '') + '').toLowerCase();
-            var searchText = name + ' ' + phones;
-            return matchSearchAdvanced(searchText, query);
+            var q = (query + '').trim();
+            if (!q) return true;
+            var name = (c.name || '') + '';
+            var extra = (c.phones && c.phones.length) ? c.phones.join(' ') : ((c.phone || '') + '');
+            var text = (name + ' ' + extra).trim();
+            return matchSearch(text, q);
         }
         // لعميل المندوب: البحث في الاسم + اسم المندوب + الهاتف
         function matchRepCustomer(c, query) {
-            query = (query + '').trim();
-            if (!query) return false;
-            var name = (c.name || '').toLowerCase();
-            var repName = (c.rep_name || '').toLowerCase();
-            var phone = (c.phone || '').toLowerCase();
-            var searchText = name + ' ' + repName + ' ' + phone;
-            return matchSearchAdvanced(searchText, query);
+            var q = (query + '').trim();
+            if (!q) return true;
+            var text = (c.name || '') + ' ' + (c.rep_name || '') + ' ' + (c.phone || '');
+            return matchSearch(text, q);
         }
 
         function setCustomerBlocks() {
@@ -2670,7 +2664,7 @@ document.addEventListener('DOMContentLoaded', function () {
         function showCustomerDropdown(inputEl, hiddenIdEl, dropEl, list, getLabel, matcher, onSelect) {
             if (!inputEl || !dropEl) return;
             var q = (inputEl.value || '').trim();
-            var filterFn = (typeof matcher === 'function') ? function(c) { return matcher(c, q); } : function(c) { return matchSearchAdvanced(getLabel(c), q); };
+            var filterFn = (typeof matcher === 'function') ? function(c) { return matcher(c, q); } : function(c) { return matchSearch(getLabel(c), q); };
             var filtered = list.filter(filterFn);
             dropEl.innerHTML = '';
             if (filtered.length === 0) {
