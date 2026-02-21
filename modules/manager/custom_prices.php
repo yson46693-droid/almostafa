@@ -132,7 +132,7 @@ $units = ['كرتونه', 'عبوة', 'كيلو', 'جرام', 'شرينك', 'ج�
             </div>
         </div>
 
-        <div class="col-lg-6 mb-4">
+        <div class="col-lg-6 mb-4" id="custom_prices_products_section">
             <div class="card h-100">
                 <div class="card-header bg-light d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <h5 class="mb-0"><i class="bi bi-box-seam me-2"></i>المنتجات والأسعار</h5>
@@ -494,14 +494,21 @@ $units = ['كرتونه', 'عبوة', 'كيلو', 'جرام', 'شرينك', 'ج�
                 data.list.forEach(function(item) {
                     html += '<div class="list-group-item d-flex justify-content-between align-items-center flex-wrap gap-2">';
                     html += '<span><strong>' + escapeHtml(item.customer_name) + '</strong> <span class="text-muted small">(' + item.items_count + ' منتج)</span></span>';
+                    html += '<div class="d-flex flex-wrap gap-1">';
+                    html += '<button type="button" class="btn btn-sm btn-outline-secondary edit-prices-btn" data-type="' + escapeHtml(item.customer_type) + '" data-id="' + item.customer_id + '" data-name="' + escapeHtml(item.customer_name) + '"><i class="bi bi-pencil me-1"></i>تعديل</button>';
                     html += '<button type="button" class="btn btn-sm btn-outline-primary view-prices-btn" data-type="' + escapeHtml(item.customer_type) + '" data-id="' + item.customer_id + '" data-name="' + escapeHtml(item.customer_name) + '"><i class="bi bi-eye me-1"></i>عرض الأسعار</button>';
-                    html += '</div>';
+                    html += '</div></div>';
                 });
                 wrap.innerHTML = html;
                 wrap.classList.remove('d-none');
                 wrap.querySelectorAll('.view-prices-btn').forEach(function(btn) {
                     btn.addEventListener('click', function() {
                         showPricesCard(this.getAttribute('data-type'), parseInt(this.getAttribute('data-id'), 10), this.getAttribute('data-name'));
+                    });
+                });
+                wrap.querySelectorAll('.edit-prices-btn').forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        loadForEdit(this.getAttribute('data-type'), parseInt(this.getAttribute('data-id'), 10), this.getAttribute('data-name'));
                     });
                 });
             })
@@ -539,6 +546,64 @@ $units = ['كرتونه', 'عبوة', 'كيلو', 'جرام', 'شرينك', 'ج�
             })
             .catch(function() {
                 tbody.innerHTML = '<tr><td colspan="3" class="text-center text-danger">فشل التحميل.</td></tr>';
+            });
+    }
+
+    function loadForEdit(customerType, customerId, customerName) {
+        var radio = document.querySelector('input[name="customer_type_radio"][value="' + customerType + '"]');
+        if (radio) radio.checked = true;
+        setCustomerBlocks();
+        document.getElementById('local_customer_id').value = '';
+        document.getElementById('local_customer_search').value = '';
+        document.getElementById('rep_customer_id').value = '';
+        document.getElementById('rep_customer_search').value = '';
+        if (customerType === 'local') {
+            document.getElementById('local_customer_id').value = customerId;
+            document.getElementById('local_customer_search').value = customerName || '';
+        } else if (customerType === 'rep') {
+            document.getElementById('rep_customer_id').value = customerId;
+            document.getElementById('rep_customer_search').value = customerName || '';
+        }
+        var url = apiUrl('get_custom_prices_by_customer.php') + '?customer_type=' + encodeURIComponent(customerType) + '&customer_id=' + encodeURIComponent(customerId);
+        fetch(url, { credentials: 'same-origin' })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                var tbody = document.getElementById('product_rows');
+                tbody.innerHTML = '';
+                var items = (data.success && data.items) ? data.items : [];
+                if (items.length === 0) {
+                    addProductRow();
+                    return;
+                }
+                items.forEach(function(item) {
+                    addProductRow();
+                    var rows = tbody.querySelectorAll('.price-row');
+                    var row = rows[rows.length - 1];
+                    if (row) {
+                        var nameInp = row.querySelector('.product-name-input');
+                        var unitSel = row.querySelector('.unit-select');
+                        var priceInp = row.querySelector('.price-input');
+                        if (nameInp) nameInp.value = item.product_name || '';
+                        if (unitSel) {
+                            if ([].slice.call(unitSel.options).some(function(o) { return o.value === (item.unit || 'قطعة'); })) {
+                                unitSel.value = item.unit || 'قطعة';
+                            } else if (item.unit) {
+                                var opt = document.createElement('option');
+                                opt.value = item.unit;
+                                opt.textContent = item.unit;
+                                unitSel.appendChild(opt);
+                                unitSel.value = item.unit;
+                            }
+                        }
+                        if (priceInp) priceInp.value = item.price != null ? item.price : '';
+                    }
+                });
+                document.getElementById('save_message').classList.add('d-none');
+                var anchor = document.getElementById('custom_prices_products_section');
+                if (anchor) anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            })
+            .catch(function() {
+                alert('فشل تحميل البيانات للتعديل.');
             });
     }
 
