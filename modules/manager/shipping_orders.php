@@ -814,7 +814,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 $productIds[] = $originalProductId;
-                $lineTotal = round($quantity * $unitPrice, 2);
+                $lineTotal = isset($itemRow['line_total']) && (float)$itemRow['line_total'] >= 0
+                    ? round((float)$itemRow['line_total'], 2)
+                    : round($quantity * $unitPrice, 2);
                 $totalAmountFromItems += $lineTotal;
 
                 $normalizedItems[] = [
@@ -3313,9 +3315,10 @@ $hasShippingCompanies = !empty($shippingCompanies);
                             <tr>
                                 <th style="min-width: 220px;">المنتج</th>
                                 <th style="width: 110px;">المتاح</th>
-                                <th style="width: 140px;">الكمية <span class="text-danger">*</span></th>
-                                <th style="width: 160px;">سعر الوحدة <span class="text-danger">*</span></th>
-                                <th style="width: 160px;">الإجمالي</th>
+                                <th style="width: 100px;">الوحدة</th>
+                                <th style="width: 120px;">الكمية <span class="text-danger">*</span></th>
+                                <th style="width: 140px;">سعر الوحدة <span class="text-danger">*</span></th>
+                                <th style="width: 160px;">الإجمالي (قابل للتحكم)</th>
                                 <th style="width: 80px;">حذف</th>
                             </tr>
                         </thead>
@@ -4608,6 +4611,7 @@ function closeAddLocalCustomerCard() {
                 <option value="${product.id}" 
                         data-available="${available}" 
                         data-unit-price="${unitPrice}"
+                        data-unit="${unit}"
                         data-batch-id="${batchId}"
                         data-product-type="${productType}">
                     ${name} (المتاح: ${available} ${unit})
@@ -4616,7 +4620,7 @@ function closeAddLocalCustomerCard() {
         }).join('');
     };
 
-    const recalculateTotals = () => {
+    const recalculateTotals = (skipLineTotalUpdate) => {
         const rows = itemsBody.querySelectorAll('tr');
         let totalItems = 0;
         let totalAmount = 0;
@@ -4624,7 +4628,7 @@ function closeAddLocalCustomerCard() {
         rows.forEach(row => {
             const quantityInput = row.querySelector('input[name$="[quantity]"]');
             const unitPriceInput = row.querySelector('input[name$="[unit_price]"]');
-            const lineTotalEl = row.querySelector('.line-total');
+            const lineTotalInput = row.querySelector('.line-total-input');
 
             const quantity = parseFloat(quantityInput?.value || '0');
             const unitPrice = parseFloat(unitPriceInput?.value || '0');
@@ -4633,10 +4637,13 @@ function closeAddLocalCustomerCard() {
             if (quantity > 0) {
                 totalItems += quantity;
             }
-            totalAmount += lineTotal;
-
-            if (lineTotalEl) {
-                lineTotalEl.textContent = formatCurrency(lineTotal);
+            if (lineTotalInput) {
+                if (!skipLineTotalUpdate) {
+                    lineTotalInput.value = lineTotal > 0 ? lineTotal.toFixed(2) : '';
+                }
+                totalAmount += parseFloat(lineTotalInput.value || '0') || 0;
+            } else {
+                totalAmount += lineTotal;
             }
         });
 
@@ -4645,6 +4652,10 @@ function closeAddLocalCustomerCard() {
         }
         if (orderTotalEl) {
             orderTotalEl.textContent = formatCurrency(totalAmount);
+        }
+        const customTotalInput = document.getElementById('customTotalAmount');
+        if (customTotalInput && !customTotalInput.dataset.manual) {
+            customTotalInput.value = totalAmount > 0 ? totalAmount.toFixed(2) : '';
         }
     };
 
@@ -4659,6 +4670,7 @@ function closeAddLocalCustomerCard() {
             const selectedOption = productSelect?.selectedOptions?.[0];
             const available = parseFloat(selectedOption?.dataset?.available || '0');
             const unitPrice = parseFloat(selectedOption?.dataset?.unitPrice || '0');
+            const unit = selectedOption?.dataset?.unit || '-';
             const batchId = selectedOption?.dataset?.batchId || '';
             const productType = selectedOption?.dataset?.productType || 'external';
 
@@ -4670,6 +4682,12 @@ function closeAddLocalCustomerCard() {
             }
             if (productTypeInput) {
                 productTypeInput.value = productType;
+            }
+
+            // تحديث عرض الوحدة حسب المنتج المختار
+            const unitLabel = row.querySelector('.unit-label');
+            if (unitLabel) {
+                unitLabel.textContent = unit;
             }
 
             if (quantityInput) {
@@ -4685,7 +4703,7 @@ function closeAddLocalCustomerCard() {
 
             if (availableBadges.length) {
                 const message = selectedOption && available > 0
-                    ? `المتاح: ${available.toLocaleString('ar-EG')} وحدة`
+                    ? `المتاح: ${available.toLocaleString('ar-EG')} ${unit}`
                     : 'لا توجد كمية متاحة';
                 availableBadges.forEach((badge) => {
                     badge.textContent = message;
@@ -4695,6 +4713,18 @@ function closeAddLocalCustomerCard() {
 
             recalculateTotals();
         };
+
+        const lineTotalInput = row.querySelector('.line-total-input');
+        if (lineTotalInput) {
+            lineTotalInput.addEventListener('input', function() {
+                const qty = parseFloat(quantityInput?.value || '0');
+                const totalVal = parseFloat(this.value || '0');
+                if (qty > 0 && totalVal >= 0 && unitPriceInput) {
+                    unitPriceInput.value = (totalVal / qty).toFixed(2);
+                }
+                recalculateTotals(true);
+            });
+        }
 
         productSelect?.addEventListener('change', updateAvailability);
         quantityInput?.addEventListener('input', recalculateTotals);
@@ -4724,13 +4754,21 @@ function closeAddLocalCustomerCard() {
             <td class="text-muted fw-semibold">
                 <span class="available-qty d-inline-block">-</span>
             </td>
-            <td>
-                <input type="number" class="form-control" name="items[${rowIndex}][quantity]" step="1" min="0" value="1" required>
+            <td class="text-muted small row-unit">
+                <span class="unit-label">-</span>
             </td>
             <td>
-                <input type="number" class="form-control" name="items[${rowIndex}][unit_price]" step="0.1" min="0" required>
+                <input type="number" class="form-control" name="items[${rowIndex}][quantity]" step="any" min="0" value="1" required>
             </td>
-            <td class="fw-semibold line-total">${formatCurrency(0)}</td>
+            <td>
+                <input type="number" class="form-control" name="items[${rowIndex}][unit_price]" step="0.01" min="0" required>
+            </td>
+            <td>
+                <div class="input-group input-group-sm">
+                    <input type="number" class="form-control fw-semibold line-total-input" name="items[${rowIndex}][line_total]" step="0.01" min="0" placeholder="0.00" title="الإجمالي = الكمية × سعر الوحدة (قابل للتعديل)">
+                    <span class="input-group-text">ج.م</span>
+                </div>
+            </td>
             <td>
                 <button type="button" class="btn btn-outline-danger btn-sm remove-item" title="حذف المنتج">
                     <i class="bi bi-trash"></i>
