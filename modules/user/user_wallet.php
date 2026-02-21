@@ -294,22 +294,22 @@ $typeLabels = [
                         <input type="hidden" name="local_customer_id" id="wallet_local_customer_id" value="">
                         <input type="hidden" name="local_customer_name" id="wallet_local_customer_name" value="">
                         <div class="row g-3">
-                            <div class="col-12 col-md-5">
-                                <label class="form-label">ابحث عن العميل المحلي <span class="text-danger">*</span></label>
+                            <div class="col-12 col-md-4">
+                                <label class="form-label small">ابحث عن العميل المحلي <span class="text-danger">*</span></label>
                                 <div class="search-wrap position-relative">
-                                    <input type="text" id="wallet_local_customer_search" class="form-control" placeholder="اكتب للبحث في قائمة العملاء المحليين..." autocomplete="off">
+                                    <input type="text" id="wallet_local_customer_search" class="form-control form-control-sm" placeholder="اكتب للبحث..." autocomplete="off">
                                     <div id="wallet_local_customer_dropdown" class="search-dropdown-wallet d-none"></div>
                                 </div>
                             </div>
-                            <div class="col-12 col-md-3">
-                                <label class="form-label">رصيد العميل</label>
-                                <div class="form-control bg-light fw-bold" id="wallet_customer_balance_display">-</div>
-                            </div>
                             <div class="col-12 col-md-2">
+                                <label class="form-label small">رصيد العميل</label>
+                                <div class="form-control form-control-sm bg-light fw-bold small py-2" id="wallet_customer_balance_display">-</div>
+                            </div>
+                            <div class="col-12 col-md-4">
                                 <label for="wallet_collection_amount" class="form-label">مبلغ التحصيل <span class="text-danger">*</span></label>
-                                <div class="input-group">
+                                <div class="input-group input-group-lg">
                                     <span class="input-group-text">ج.م</span>
-                                    <input type="number" step="0.01" min="0.01" class="form-control" id="wallet_collection_amount" name="collection_amount" required placeholder="0.00">
+                                    <input type="number" step="0.01" min="0.01" class="form-control form-control-lg" id="wallet_collection_amount" name="collection_amount" required placeholder="0.00">
                                 </div>
                             </div>
                             <div class="col-12 col-md-2 d-flex align-items-end">
