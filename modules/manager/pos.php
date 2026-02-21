@@ -629,6 +629,107 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $productId = isset($row['product_id']) ? (int) $row['product_id'] : 0;
                 $quantity = isset($row['quantity']) ? (float) $row['quantity'] : 0;
                 $unitPrice = isset($row['unit_price']) ? round((float) $row['unit_price'], 2) : 0;
+                $rawMaterial = isset($row['raw_material']) && is_array($row['raw_material']) ? $row['raw_material'] : null;
+
+                if ($productId === 0 && $rawMaterial) {
+                    $section = $rawMaterial['section'] ?? '';
+                    $stockId = isset($rawMaterial['stock_id']) ? (int) $rawMaterial['stock_id'] : 0;
+                    $subType = $rawMaterial['sub_type'] ?? null;
+                    $stockSource = $rawMaterial['stock_source'] ?? null;
+                    $label = $rawMaterial['label'] ?? 'خامة';
+                    if ($quantity <= 0) {
+                        $validationErrors[] = 'الوزن المحدد للخامة رقم ' . ($index + 1) . ' غير صالح.';
+                        continue;
+                    }
+                    if ($unitPrice < 0) {
+                        $validationErrors[] = 'سعر الوحدة للخامة رقم ' . ($index + 1) . ' غير صالح.';
+                        continue;
+                    }
+                    $availableKg = 0.0;
+                    $validSection = in_array($section, ['honey', 'olive_oil', 'beeswax', 'nuts', 'sesame', 'date', 'turbines', 'herbal'], true);
+                    if (!$validSection || $stockId <= 0) {
+                        $validationErrors[] = 'الخامة المحددة رقم ' . ($index + 1) . ' غير صالحة.';
+                        continue;
+                    }
+                    try {
+                        if ($section === 'honey') {
+                            $st = $db->queryOne("SELECT id, raw_honey_quantity, filtered_honey_quantity FROM honey_stock WHERE id = ?", [$stockId]);
+                            if (!$st) {
+                                $validationErrors[] = 'سجل العسل المحدد غير موجود.';
+                                continue;
+                            }
+                            $availableKg = $subType === 'filtered' ? (float)($st['filtered_honey_quantity'] ?? 0) : (float)($st['raw_honey_quantity'] ?? 0);
+                        } elseif ($section === 'olive_oil') {
+                            $st = $db->queryOne("SELECT id, quantity FROM olive_oil_stock WHERE id = ?", [$stockId]);
+                            $availableKg = $st ? (float)($st['quantity'] ?? 0) : 0;
+                        } elseif ($section === 'beeswax') {
+                            $st = $db->queryOne("SELECT id, weight FROM beeswax_stock WHERE id = ?", [$stockId]);
+                            $availableKg = $st ? (float)($st['weight'] ?? 0) : 0;
+                        } elseif ($section === 'nuts') {
+                            if ($stockSource === 'mixed') {
+                                $st = $db->queryOne("SELECT id, total_quantity FROM mixed_nuts WHERE id = ?", [$stockId]);
+                                $availableKg = $st ? (float)($st['total_quantity'] ?? 0) : 0;
+                            } else {
+                                $st = $db->queryOne("SELECT id, quantity FROM nuts_stock WHERE id = ?", [$stockId]);
+                                $availableKg = $st ? (float)($st['quantity'] ?? 0) : 0;
+                            }
+                        } elseif ($section === 'sesame') {
+                            $t = $db->queryOne("SHOW TABLES LIKE 'sesame_stock'");
+                            if (!empty($t)) {
+                                $st = $db->queryOne("SELECT id, quantity FROM sesame_stock WHERE id = ?", [$stockId]);
+                                $availableKg = $st ? (float)($st['quantity'] ?? 0) : 0;
+                            }
+                        } elseif ($section === 'date') {
+                            $t = $db->queryOne("SHOW TABLES LIKE 'date_stock'");
+                            if (!empty($t)) {
+                                $st = $db->queryOne("SELECT id, quantity FROM date_stock WHERE id = ?", [$stockId]);
+                                $availableKg = $st ? (float)($st['quantity'] ?? 0) : 0;
+                            }
+                        } elseif ($section === 'turbines') {
+                            $t = $db->queryOne("SHOW TABLES LIKE 'turbine_stock'");
+                            if (!empty($t)) {
+                                $st = $db->queryOne("SELECT id, quantity FROM turbine_stock WHERE id = ?", [$stockId]);
+                                $availableKg = $st ? (float)($st['quantity'] ?? 0) : 0;
+                            }
+                        } elseif ($section === 'herbal') {
+                            $t = $db->queryOne("SHOW TABLES LIKE 'herbal_stock'");
+                            if (!empty($t)) {
+                                $st = $db->queryOne("SELECT id, quantity FROM herbal_stock WHERE id = ?", [$stockId]);
+                                $availableKg = $st ? (float)($st['quantity'] ?? 0) : 0;
+                            }
+                        }
+                    } catch (Throwable $e) {
+                        error_log('POS raw material validation: ' . $e->getMessage());
+                        $validationErrors[] = 'تعذر التحقق من الخامة رقم ' . ($index + 1) . '.';
+                        continue;
+                    }
+                    if ($quantity > $availableKg) {
+                        $validationErrors[] = 'الوزن المطلوب للخامة رقم ' . ($index + 1) . ' يتجاوز المتاح (' . number_format($availableKg, 3) . ' كجم).';
+                        continue;
+                    }
+                    $lineTotal = round($unitPrice * $quantity, 2);
+                    $subtotal += $lineTotal;
+                    $normalizedCart[] = [
+                        'product_id' => 0,
+                        'batch_id' => null,
+                        'product_type' => 'raw_material',
+                        'name' => $label . ' (' . number_format($quantity, 3) . ' كجم)',
+                        'category' => 'خامة بالوزن',
+                        'quantity' => $quantity,
+                        'available' => $availableKg,
+                        'unit_price' => $unitPrice,
+                        'line_total' => $lineTotal,
+                        'is_raw_material' => true,
+                        'raw_material' => [
+                            'section' => $section,
+                            'stock_id' => $stockId,
+                            'sub_type' => $subType,
+                            'stock_source' => $stockSource,
+                            'label' => $label,
+                        ],
+                    ];
+                    continue;
+                }
 
                 if ($productId <= 0 || !isset($inventoryByProduct[$productId])) {
                     $validationErrors[] = 'المنتج المحدد رقم ' . ($index + 1) . ' غير متاح في مخزن الشركة.';
@@ -934,7 +1035,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                     
                     $invoiceItems[] = [
-                        'product_id' => $item['product_id'],
+                        'product_id' => !empty($item['is_raw_material']) ? null : $item['product_id'],
                         'description' => $item['name'],
                         'quantity' => $item['quantity'],
                         'unit_price' => $item['unit_price'],
@@ -1282,13 +1383,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $quantity = $item['quantity'];
                     $unitPrice = $item['unit_price'];
                     $lineTotal = $item['line_total'];
-                    // تحويل batch_id إلى int بشكل صريح - إذا كان 0 أو null، نتركه null
                     $batchIdRaw = $item['batch_id'] ?? null;
                     $batchId = ($batchIdRaw !== null && $batchIdRaw !== '' && (int)$batchIdRaw > 0) ? (int)$batchIdRaw : null;
                     $productType = $item['product_type'] ?? 'external';
 
-                    // تعطيل التسجيل الروتيني
-                    // error_log("Manager POS: Processing sale item - product_id: $productId, batch_id_raw: " . ($batchIdRaw ?? 'NULL') . ", batch_id: " . ($batchId ?? 'NULL') . ", quantity: $quantity, product_type: $productType");
+                    if (!empty($item['is_raw_material']) && !empty($item['raw_material'])) {
+                        $rm = $item['raw_material'];
+                        $section = $rm['section'] ?? '';
+                        $stockId = (int)($rm['stock_id'] ?? 0);
+                        $subType = $rm['sub_type'] ?? null;
+                        $stockSource = $rm['stock_source'] ?? null;
+                        $qtyKg = (float)$quantity;
+                        if ($section === 'honey' && $stockId > 0) {
+                            $col = $subType === 'filtered' ? 'filtered_honey_quantity' : 'raw_honey_quantity';
+                            $db->execute("UPDATE honey_stock SET {$col} = GREATEST(COALESCE({$col},0) - ?, 0), updated_at = NOW() WHERE id = ?", [$qtyKg, $stockId]);
+                        } elseif ($section === 'olive_oil' && $stockId > 0) {
+                            $db->execute("UPDATE olive_oil_stock SET quantity = GREATEST(COALESCE(quantity,0) - ?, 0), updated_at = NOW() WHERE id = ?", [$qtyKg, $stockId]);
+                        } elseif ($section === 'beeswax' && $stockId > 0) {
+                            $db->execute("UPDATE beeswax_stock SET weight = GREATEST(COALESCE(weight,0) - ?, 0), updated_at = NOW() WHERE id = ?", [$qtyKg, $stockId]);
+                        } elseif ($section === 'nuts' && $stockId > 0) {
+                            if ($stockSource === 'mixed') {
+                                $db->execute("UPDATE mixed_nuts SET total_quantity = GREATEST(COALESCE(total_quantity,0) - ?, 0), updated_at = NOW() WHERE id = ?", [$qtyKg, $stockId]);
+                            } else {
+                                $db->execute("UPDATE nuts_stock SET quantity = GREATEST(COALESCE(quantity,0) - ?, 0), updated_at = NOW() WHERE id = ?", [$qtyKg, $stockId]);
+                            }
+                        } elseif ($section === 'sesame' && $stockId > 0) {
+                            $db->execute("UPDATE sesame_stock SET quantity = GREATEST(COALESCE(quantity,0) - ?, 0), updated_at = NOW() WHERE id = ?", [$qtyKg, $stockId]);
+                        } elseif ($section === 'date' && $stockId > 0) {
+                            $db->execute("UPDATE date_stock SET quantity = GREATEST(COALESCE(quantity,0) - ?, 0), updated_at = NOW() WHERE id = ?", [$qtyKg, $stockId]);
+                        } elseif ($section === 'turbines' && $stockId > 0) {
+                            $db->execute("UPDATE turbine_stock SET quantity = GREATEST(COALESCE(quantity,0) - ?, 0), updated_at = NOW() WHERE id = ?", [$qtyKg, $stockId]);
+                        } elseif ($section === 'herbal' && $stockId > 0) {
+                            $db->execute("UPDATE herbal_stock SET quantity = GREATEST(COALESCE(quantity,0) - ?, 0), updated_at = NOW() WHERE id = ?", [$qtyKg, $stockId]);
+                        }
+                        continue;
+                    }
 
                     // التحقق من الكمية مباشرة من finished_products قبل البيع (مثل نقطة بيع المندوب)
                     // هذا مهم جداً لضمان أن الكمية متاحة فعلياً
@@ -3423,6 +3552,15 @@ try {
                                 <h5 class="mt-3 mb-2">لا يوجد مخزون متاح حالياً</h5>
                                 <p class="mb-0">لا توجد منتجات في مخزن الشركة الرئيسي حالياً.</p>
                             </div>
+                            <div class="pos-product-card pos-raw-materials-card mt-3" id="posRawMaterialsCard" data-raw-materials-trigger>
+                                <div class="pos-product-name"><i class="bi bi-droplet-half me-2"></i>بيع من مخزن الخامات</div>
+                                <div class="pos-product-meta">
+                                    <span class="text-muted small">أوزان محددة من العسل، زيت الزيتون، شمع العسل، المكسرات، وغيرها</span>
+                                </div>
+                                <button type="button" class="btn btn-outline-success pos-select-btn" data-raw-materials-trigger>
+                                    <i class="bi bi-plus-circle me-2"></i>إضافة خامة بالوزن
+                                </button>
+                            </div>
                         <?php else: ?>
                             <?php foreach ($companyInventory as $item): ?>
                                 <div class="pos-product-card" data-product-card data-product-id="<?php echo (int) $item['product_id']; ?>" data-name="<?php echo htmlspecialchars($item['product_name'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" data-category="<?php echo htmlspecialchars($item['category'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
@@ -3454,7 +3592,68 @@ try {
                                     </button>
                                 </div>
                             <?php endforeach; ?>
+                            <div class="pos-product-card pos-raw-materials-card" id="posRawMaterialsCard" data-raw-materials-trigger>
+                                <div class="pos-product-name"><i class="bi bi-droplet-half me-2"></i>بيع من مخزن الخامات</div>
+                                <div class="pos-product-meta">
+                                    <span class="text-muted small">أوزان محددة من العسل، زيت الزيتون، شمع العسل، المكسرات، وغيرها</span>
+                                </div>
+                                <button type="button" class="btn btn-outline-success pos-select-btn" data-raw-materials-trigger>
+                                    <i class="bi bi-plus-circle me-2"></i>إضافة خامة بالوزن
+                                </button>
+                            </div>
                         <?php endif; ?>
+                    </div>
+                </div>
+
+                <!-- نافذة بيع خامة بالوزن -->
+                <div class="modal fade" id="posRawMaterialModal" tabindex="-1" aria-labelledby="posRawMaterialModalLabel" aria-hidden="true" data-bs-backdrop="static">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="posRawMaterialModalLabel"><i class="bi bi-droplet-half me-2"></i>إضافة خامة بالوزن إلى السلة</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="mb-3">
+                                    <label class="form-label">القسم</label>
+                                    <select class="form-select" id="posRawSection" name="raw_section">
+                                        <option value="">اختر القسم</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">الخامة</label>
+                                    <select class="form-select" id="posRawMaterial" name="raw_material" disabled>
+                                        <option value="">اختر الخامة</option>
+                                    </select>
+                                    <div class="form-text" id="posRawMaterialAvailable"></div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">الوحدة</label>
+                                    <select class="form-select" id="posRawUnit" name="raw_unit">
+                                        <option value="kg">كيلوجرام</option>
+                                        <option value="g">جرام</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">سعر الوحدة</label>
+                                    <input type="number" class="form-control" id="posRawUnitPrice" name="raw_unit_price" step="0.01" min="0" placeholder="0" dir="ltr" style="text-align: left;">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">الوزن</label>
+                                    <input type="number" class="form-control" id="posRawWeight" name="raw_weight" step="0.001" min="0" placeholder="0" dir="ltr" style="text-align: left;">
+                                    <div class="form-text"><span id="posRawWeightUnit">كجم</span></div>
+                                </div>
+                                <div class="mb-0" id="posRawLineTotalWrap">
+                                    <strong>الإجمالي: <span id="posRawLineTotal">0</span></strong>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                                <button type="button" class="btn btn-success" id="posRawAddToCartBtn" disabled>
+                                    <i class="bi bi-cart-plus me-1"></i>إضافة إلى السلة
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -3836,11 +4035,17 @@ try {
     }
 
     function syncCartData() {
-        const payload = cart.map((item) => ({
-            product_id: item.product_id,
-            quantity: sanitizeNumber(item.quantity),
-            unit_price: sanitizeNumber(item.unit_price),
-        }));
+        const payload = cart.map((item) => {
+            const base = {
+                product_id: item.product_id,
+                quantity: sanitizeNumber(item.quantity),
+                unit_price: sanitizeNumber(item.unit_price),
+            };
+            if (item.raw_material) {
+                base.raw_material = item.raw_material;
+            }
+            return base;
+        });
         elements.cartData.value = JSON.stringify(payload);
     }
 
@@ -3995,11 +4200,28 @@ try {
         elements.cartEmpty.classList.add('d-none');
         elements.cartEmpty.style.display = 'none';
 
-        const rows = cart.map((item) => {
+        const rows = cart.map((item, idx) => {
+            if (item.raw_material) {
+                const sanitizedQty = sanitizeNumber(item.quantity);
+                const sanitizedPrice = sanitizeNumber(item.unit_price);
+                const total = sanitizedQty * sanitizedPrice;
+                return `
+                <tr data-cart-row data-cart-raw-index="${idx}">
+                    <td data-label="المنتج">
+                        <div class="fw-semibold">${escapeHtml(item.name)}</div>
+                        <div class="text-muted small">خامة بالوزن</div>
+                    </td>
+                    <td data-label="الكمية">${sanitizedQty.toFixed(3)} كجم</td>
+                    <td data-label="سعر الوحدة">${formatCurrency(sanitizedPrice)}</td>
+                    <td data-label="الإجمالي" class="fw-semibold">${formatCurrency(total)}</td>
+                    <td data-label="إجراءات" class="text-end">
+                        <button type="button" class="btn btn-link text-danger p-0" data-action="remove-raw" data-cart-raw-index="${idx}"><i class="bi bi-x-circle"></i></button>
+                    </td>
+                </tr>`;
+            }
             const sanitizedQty = sanitizeNumber(item.quantity);
             const sanitizedPrice = sanitizeNumber(item.unit_price);
             const sanitizedAvailable = sanitizeNumber(item.available);
-            // عرض السعر بصيغة عشرية صحيحة (مثل 1.25)
             const priceDisplay = sanitizedPrice % 1 === 0 ? sanitizedPrice.toString() : sanitizedPrice.toFixed(2);
             return `
                 <tr data-cart-row data-product-id="${item.product_id}">
@@ -4056,6 +4278,13 @@ try {
     function removeFromCart(productId) {
         const index = cart.findIndex((item) => item.product_id === productId);
         if (index >= 0) {
+            cart.splice(index, 1);
+            renderCart();
+        }
+    }
+
+    function removeRawFromCartByIndex(index) {
+        if (index >= 0 && index < cart.length && cart[index].raw_material) {
             cart.splice(index, 1);
             renderCart();
         }
@@ -4162,6 +4391,11 @@ try {
         elements.cartBody.addEventListener('click', function (event) {
             const action = event.target.closest('[data-action]');
             if (!action) return;
+            if (action.dataset.action === 'remove-raw') {
+                const idx = parseInt(action.dataset.cartRawIndex, 10);
+                if (!isNaN(idx)) removeRawFromCartByIndex(idx);
+                return;
+            }
             const productId = parseInt(action.dataset.productId, 10);
             switch (action.dataset.action) {
                 case 'increase': adjustQuantity(productId, 1); break;
@@ -4469,9 +4703,167 @@ try {
     // تهيئة أولية للقيم
     refreshPaymentOptionStates();
     renderCart();
-    
+
+    // نافذة بيع الخامات بالوزن
+    const posRawMaterialsApiUrl = <?php echo json_encode(getRelativeUrl('api/pos_raw_materials.php'), JSON_UNESCAPED_SLASHES); ?>;
+    const rawMaterialModalEl = document.getElementById('posRawMaterialModal');
+    const rawSectionSelect = document.getElementById('posRawSection');
+    const rawMaterialSelect = document.getElementById('posRawMaterial');
+    const rawMaterialAvailableEl = document.getElementById('posRawMaterialAvailable');
+    const rawUnitSelect = document.getElementById('posRawUnit');
+    const rawUnitPriceInput = document.getElementById('posRawUnitPrice');
+    const rawWeightInput = document.getElementById('posRawWeight');
+    const rawWeightUnitEl = document.getElementById('posRawWeightUnit');
+    const rawLineTotalEl = document.getElementById('posRawLineTotal');
+    const posRawAddToCartBtn = document.getElementById('posRawAddToCartBtn');
+
+    let rawMaterialsCache = { section: null, materials: [] };
+
+    function updateRawLineTotal() {
+        const unit = rawUnitSelect && rawUnitSelect.value ? rawUnitSelect.value : 'kg';
+        const price = sanitizeNumber(rawUnitPriceInput && rawUnitPriceInput.value ? rawUnitPriceInput.value : 0);
+        const weight = sanitizeNumber(rawWeightInput && rawWeightInput.value ? rawWeightInput.value : 0);
+        let total = 0;
+        if (unit === 'kg') {
+            total = weight * price;
+        } else {
+            total = (weight / 1000) * price * 1000;
+        }
+        if (rawLineTotalEl) rawLineTotalEl.textContent = formatCurrency(total);
+        if (posRawAddToCartBtn) {
+            const hasMaterial = rawMaterialSelect && rawMaterialSelect.value;
+            const ok = hasMaterial && weight > 0 && price >= 0;
+            posRawAddToCartBtn.disabled = !ok;
+        }
+    }
+
+    function loadRawSections() {
+        fetch(posRawMaterialsApiUrl)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.success && data.sections && rawSectionSelect) {
+                    rawSectionSelect.innerHTML = '<option value="">اختر القسم</option>' +
+                        data.sections.map(function(s) { return '<option value="' + escapeHtml(s.id) + '">' + escapeHtml(s.name) + '</option>'; }).join('');
+                }
+            })
+            .catch(function() { if (rawSectionSelect) rawSectionSelect.innerHTML = '<option value="">خطأ في التحميل</option>'; });
+    }
+
+    function loadRawMaterials(section) {
+        if (!section) {
+            if (rawMaterialSelect) { rawMaterialSelect.innerHTML = '<option value="">اختر الخامة</option>'; rawMaterialSelect.disabled = true; }
+            if (rawMaterialAvailableEl) rawMaterialAvailableEl.textContent = '';
+            return;
+        }
+        if (rawMaterialSelect) rawMaterialSelect.disabled = true;
+        if (rawMaterialAvailableEl) rawMaterialAvailableEl.textContent = 'جاري التحميل...';
+        fetch(posRawMaterialsApiUrl + (posRawMaterialsApiUrl.indexOf('?') >= 0 ? '&' : '?') + 'section=' + encodeURIComponent(section))
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.success && data.materials && rawMaterialSelect) {
+                    rawMaterialSelect.innerHTML = '<option value="">اختر الخامة</option>' +
+                        data.materials.map(function(m) {
+                            const val = JSON.stringify({ stock_id: m.stock_id, sub_type: m.sub_type || null, stock_source: m.stock_source || null, label: m.label, available_kg: m.available_kg });
+                            return '<option value="' + String(val).replace(/"/g, '&quot;') + '" data-available="' + m.available_kg + '">' + escapeHtml(m.label) + '</option>';
+                        }).join('');
+                    rawMaterialSelect.disabled = false;
+                }
+                if (rawMaterialAvailableEl) rawMaterialAvailableEl.textContent = '';
+            })
+            .catch(function() {
+                if (rawMaterialAvailableEl) rawMaterialAvailableEl.textContent = 'حدث خطأ في التحميل';
+                if (rawMaterialSelect) rawMaterialSelect.disabled = false;
+            });
+    }
+
+    document.querySelectorAll('[data-raw-materials-trigger]').forEach(function(el) {
+        el.addEventListener('click', function() {
+            if (typeof bootstrap !== 'undefined' && rawMaterialModalEl) {
+                loadRawSections();
+                if (rawSectionSelect) rawSectionSelect.value = '';
+                if (rawMaterialSelect) { rawMaterialSelect.innerHTML = '<option value="">اختر الخامة</option>'; rawMaterialSelect.disabled = true; }
+                rawMaterialAvailableEl && (rawMaterialAvailableEl.textContent = '');
+                if (rawUnitSelect) rawUnitSelect.value = 'kg';
+                if (rawUnitPriceInput) rawUnitPriceInput.value = '';
+                if (rawWeightInput) rawWeightInput.value = '';
+                if (rawWeightUnitEl) rawWeightUnitEl.textContent = 'كجم';
+                updateRawLineTotal();
+                new bootstrap.Modal(rawMaterialModalEl).show();
+            }
+        });
+    });
+
+    if (rawSectionSelect) {
+        rawSectionSelect.addEventListener('change', function() {
+            loadRawMaterials(this.value);
+            if (rawMaterialAvailableEl) rawMaterialAvailableEl.textContent = '';
+        });
+    }
+    if (rawMaterialSelect) {
+        rawMaterialSelect.addEventListener('change', function() {
+            const opt = this.options[this.selectedIndex];
+            if (rawMaterialAvailableEl && opt && opt.value) {
+                try {
+                    const m = JSON.parse(opt.value.replace(/&quot;/g, '"'));
+                    rawMaterialAvailableEl.textContent = 'متاح: ' + (m.available_kg != null ? Number(m.available_kg).toFixed(3) : '-') + ' كجم';
+                } catch (e) { rawMaterialAvailableEl.textContent = ''; }
+            } else if (rawMaterialAvailableEl) rawMaterialAvailableEl.textContent = '';
+            updateRawLineTotal();
+        });
+    }
+    if (rawUnitSelect) {
+        rawUnitSelect.addEventListener('change', function() {
+            if (rawWeightUnitEl) rawWeightUnitEl.textContent = this.value === 'g' ? 'جرام' : 'كجم';
+            updateRawLineTotal();
+        });
+    }
+    if (rawUnitPriceInput) rawUnitPriceInput.addEventListener('input', updateRawLineTotal);
+    if (rawWeightInput) rawWeightInput.addEventListener('input', updateRawLineTotal);
+
+    if (posRawAddToCartBtn) {
+        posRawAddToCartBtn.addEventListener('click', function() {
+            const section = rawSectionSelect && rawSectionSelect.value;
+            const materialOpt = rawMaterialSelect && rawMaterialSelect.options[rawMaterialSelect.selectedIndex];
+            if (!section || !materialOpt || !materialOpt.value) return;
+            let mat;
+            try {
+                mat = JSON.parse(materialOpt.value.replace(/&quot;/g, '"'));
+            } catch (e) { return; }
+            const unit = (rawUnitSelect && rawUnitSelect.value) || 'kg';
+            const pricePerUnit = sanitizeNumber(rawUnitPriceInput && rawUnitPriceInput.value ? rawUnitPriceInput.value : 0);
+            const weightInput = sanitizeNumber(rawWeightInput && rawWeightInput.value ? rawWeightInput.value : 0);
+            const weightKg = unit === 'kg' ? weightInput : weightInput / 1000;
+            if (weightKg <= 0) return;
+            if (weightKg > (mat.available_kg || 0)) {
+                alert('الوزن المدخل يتجاوز الكمية المتاحة (' + Number(mat.available_kg).toFixed(3) + ' كجم).');
+                return;
+            }
+            const total = unit === 'kg' ? weightKg * pricePerUnit : (weightKg * 1000) * pricePerUnit;
+            const unitPriceForCart = weightKg > 0 ? total / weightKg : 0;
+            const weightDisplay = unit === 'kg' ? weightKg.toFixed(3) + ' كجم' : (weightKg * 1000).toFixed(0) + ' جم';
+            cart.push({
+                product_id: 0,
+                name: (mat.label || 'خامة') + ' (' + weightDisplay + ')',
+                category: 'خامة بالوزن',
+                quantity: weightKg,
+                available: mat.available_kg,
+                unit_price: unitPriceForCart,
+                raw_material: {
+                    section: section,
+                    stock_id: mat.stock_id,
+                    sub_type: mat.sub_type || null,
+                    stock_source: mat.stock_source || null,
+                    label: mat.label || 'خامة'
+                }
+            });
+            renderCart();
+            if (typeof bootstrap !== 'undefined' && rawMaterialModalEl) {
+                bootstrap.Modal.getInstance(rawMaterialModalEl).hide();
+            }
+        });
+    }
+
     // عرض معلومات العميل المالية عند تحميل الصفحة
-    // استخدام setTimeout لضمان تحميل جميع العناصر
     setTimeout(function() {
         updateCustomerBalance();
     }, 500);
