@@ -1550,15 +1550,22 @@ $typeColorMap = [
 
 <?php
 $custodyList = [];
+$custodyTotal = 0;
+$custodyPage = max(1, (int)($_GET['custody_page'] ?? 1));
+$custodyPerPage = 2;
 $custodyTableExists = $db->queryOne("SHOW TABLES LIKE 'company_custody'");
 if (!empty($custodyTableExists)) {
+    $custodyTotal = (int) ($db->queryOne("SELECT COUNT(*) AS n FROM company_custody")['n'] ?? 0);
+    $custodyOffset = ($custodyPage - 1) * $custodyPerPage;
     $custodyList = $db->query("
         SELECT c.id, c.person_name, c.amount, c.source, c.remaining_amount, c.created_at, u.full_name as created_by_name
         FROM company_custody c
         LEFT JOIN users u ON c.created_by = u.id
         ORDER BY c.created_at DESC
+        LIMIT " . (int)$custodyPerPage . " OFFSET " . (int)$custodyOffset . "
     ") ?: [];
 }
+$custodyTotalPages = $custodyTotal > 0 ? (int) ceil($custodyTotal / $custodyPerPage) : 0;
 $userRoleForCustody = strtolower($currentUser['role'] ?? '');
 $canEditCustody = in_array($userRoleForCustody, ['manager', 'accountant', 'developer'], true);
 ?>
@@ -1620,6 +1627,29 @@ $canEditCustody = in_array($userRoleForCustody, ['manager', 'accountant', 'devel
                     </tbody>
                 </table>
             </div>
+            <?php if ($custodyTotalPages > 1): ?>
+                <nav class="d-flex flex-wrap justify-content-center align-items-center gap-2 mt-3 pt-2 border-top" aria-label="ترقيم سجل عهدة الأموال">
+                    <span class="text-muted small me-2">صفحة <?php echo $custodyPage; ?> من <?php echo $custodyTotalPages; ?> (<?php echo $custodyTotal; ?> سجل)</span>
+                    <ul class="pagination pagination-sm mb-0 flex-wrap justify-content-center">
+                        <?php if ($custodyPage > 1): ?>
+                            <li class="page-item">
+                                <?php $qPrev = $_GET; $qPrev['custody_page'] = $custodyPage - 1; ?>
+                                <a class="page-link" href="?<?php echo http_build_query($qPrev); ?>"><i class="bi bi-chevron-right"></i> السابقة</a>
+                            </li>
+                        <?php endif; ?>
+                        <?php for ($p = 1; $p <= $custodyTotalPages; $p++): ?>
+                            <li class="page-item <?php echo $p === $custodyPage ? 'active' : ''; ?>">
+                                <a class="page-link" href="?<?php $q = $_GET; $q['custody_page'] = $p; echo http_build_query($q); ?>"><?php echo $p; ?></a>
+                            </li>
+                        <?php endfor; ?>
+                        <?php if ($custodyPage < $custodyTotalPages): ?>
+                            <li class="page-item">
+                                <a class="page-link" href="?<?php $q = $_GET; $q['custody_page'] = $custodyPage + 1; echo http_build_query($q); ?>">التالية <i class="bi bi-chevron-left"></i></a>
+                            </li>
+                        <?php endif; ?>
+                    </ul>
+                </nav>
+            <?php endif; ?>
         <?php endif; ?>
     </div>
 </div>
