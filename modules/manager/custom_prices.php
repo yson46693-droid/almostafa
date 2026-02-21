@@ -63,8 +63,11 @@ $units = ['كرتونه', 'عبوة', 'كيلو', 'جرام', 'شرينك', 'ج�
 .custom-prices-page .search-dropdown-item { padding: 0.5rem 0.75rem; cursor: pointer; border-bottom: 1px solid #f0f0f0; }
 .custom-prices-page .search-dropdown-item:hover { background: #f8f9fa; }
 .custom-prices-page .search-dropdown-item:last-child { border-bottom: none; }
-.view-prices-card .modal-body { max-height: 70vh; overflow-y: auto; }
-.view-prices-card .table-responsive { max-height: 40vh; overflow-y: auto; }
+.view-prices-table { font-size: 0.8rem; }
+.view-prices-table th,
+.view-prices-table td { padding: 0.25rem 0.4rem; vertical-align: middle; white-space: nowrap; }
+.view-prices-table td:first-child { white-space: normal; }
+.view-prices-table thead th { font-weight: 600; }
 @media (max-width: 768px) {
     .custom-prices-page .customer-type-wrap { flex-direction: column; align-items: stretch; }
     .custom-prices-page .product-row input.form-control { font-size: 0.9rem; }
@@ -195,42 +198,38 @@ $units = ['كرتونه', 'عبوة', 'كيلو', 'جرام', 'شرينك', 'ج�
             </div>
         </div>
     </div>
-</div>
 
-<!-- بطاقة عرض الأسعار المخصصة (مودال كبطاقة مع بحث) -->
-<div class="modal fade" id="viewPricesModal" tabindex="-1" aria-labelledby="viewPricesModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content view-prices-card shadow-lg border-0 rounded-3 overflow-hidden">
-            <div class="modal-header border-0 pb-0 bg-light">
-                <h5 class="modal-title fw-bold" id="viewPricesModalLabel"><i class="bi bi-tag-fill me-2 text-primary"></i>عرض الأسعار المخصصة</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
-            </div>
-            <div class="modal-body pt-2">
-                <div class="card border rounded-3 mb-3">
-                    <div class="card-body py-2">
-                        <p id="view_prices_customer_name" class="fw-bold mb-0 text-primary"></p>
+    <!-- بطاقة عرض الأسعار المخصصة (داخل الصفحة وليست مودال) -->
+    <div class="row mt-3 d-none" id="view_prices_card_wrap">
+        <div class="col-12">
+            <div class="card view-prices-card shadow-sm border rounded-3 overflow-hidden" id="view_prices_card">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center flex-wrap gap-2 py-2">
+                    <h5 class="mb-0 fw-bold"><i class="bi bi-tag-fill me-2 text-primary"></i>عرض الأسعار المخصصة</h5>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="view_prices_close_btn" aria-label="إغلاق"><i class="bi bi-x-lg me-1"></i>إغلاق</button>
+                </div>
+                <div class="card-body py-2">
+                    <p id="view_prices_customer_name" class="fw-bold mb-2 text-primary small"></p>
+                    <div class="mb-2">
+                        <label class="form-label small text-muted mb-0">بحث عن منتج</label>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-white py-1"><i class="bi bi-search small"></i></span>
+                            <input type="text" id="view_prices_search" class="form-control form-control-sm py-1" placeholder="اكتب اسم المنتج للتصفية..." autocomplete="off">
+                        </div>
                     </div>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label small text-muted mb-1">بحث عن منتج داخل البطاقة</label>
-                    <div class="input-group">
-                        <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-                        <input type="text" id="view_prices_search" class="form-control" placeholder="اكتب اسم المنتج للتصفية..." autocomplete="off">
+                    <div class="table-responsive border rounded">
+                        <table class="table table-bordered table-hover table-sm view-prices-table mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>المنتج</th>
+                                    <th class="text-nowrap">الوحدة</th>
+                                    <th class="text-nowrap">السعر</th>
+                                </tr>
+                            </thead>
+                            <tbody id="view_prices_tbody"></tbody>
+                        </table>
                     </div>
+                    <p id="view_prices_no_results" class="text-muted small mt-1 mb-0 d-none">لا توجد نتائج تطابق البحث.</p>
                 </div>
-                <div class="table-responsive rounded-3 border">
-                    <table class="table table-bordered table-hover mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th>المنتج</th>
-                                <th class="text-nowrap" style="width:100px">الوحدة</th>
-                                <th class="text-nowrap" style="width:110px">السعر</th>
-                            </tr>
-                        </thead>
-                        <tbody id="view_prices_tbody"></tbody>
-                    </table>
-                </div>
-                <p id="view_prices_no_results" class="text-muted small mt-2 mb-0 d-none">لا توجد نتائج تطابق البحث.</p>
             </div>
         </div>
     </div>
@@ -551,27 +550,24 @@ $units = ['كرتونه', 'عبوة', 'كيلو', 'جرام', 'شرينك', 'ج�
     }
 
     function showPricesCard(customerType, customerId, customerName) {
-        var modal = document.getElementById('viewPricesModal');
+        var wrap = document.getElementById('view_prices_card_wrap');
         var tbody = document.getElementById('view_prices_tbody');
         var nameEl = document.getElementById('view_prices_customer_name');
         var searchInput = document.getElementById('view_prices_search');
         var noResults = document.getElementById('view_prices_no_results');
+        if (wrap) wrap.classList.remove('d-none');
         if (searchInput) searchInput.value = '';
         if (noResults) noResults.classList.add('d-none');
-        nameEl.textContent = 'العميل: ' + (customerName || '');
-        tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">جاري التحميل...</td></tr>';
-        if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-            (new bootstrap.Modal(modal)).show();
-        } else {
-            modal.classList.add('show');
-            modal.style.display = 'block';
-        }
+        if (nameEl) nameEl.textContent = 'العميل: ' + (customerName || '');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-1">جاري التحميل...</td></tr>';
+        if (wrap) wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
         var url = apiUrl('get_custom_prices_by_customer.php') + '?customer_type=' + encodeURIComponent(customerType) + '&customer_id=' + encodeURIComponent(customerId);
         fetch(url, { credentials: 'same-origin' })
             .then(function(res) { return res.json(); })
             .then(function(data) {
+                if (!tbody) return;
                 if (!data.success || !data.items || data.items.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">لا توجد أسعار مسجلة.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-1">لا توجد أسعار مسجلة.</td></tr>';
                     return;
                 }
                 var html = '';
@@ -584,11 +580,17 @@ $units = ['كرتونه', 'عبوة', 'كيلو', 'جرام', 'شرينك', 'ج�
                 filterViewPricesTable();
             })
             .catch(function() {
-                tbody.innerHTML = '<tr><td colspan="3" class="text-center text-danger">فشل التحميل.</td></tr>';
+                if (tbody) tbody.innerHTML = '<tr><td colspan="3" class="text-center text-danger py-1">فشل التحميل.</td></tr>';
             });
     }
 
+    function hideViewPricesCard() {
+        var wrap = document.getElementById('view_prices_card_wrap');
+        if (wrap) wrap.classList.add('d-none');
+    }
+
     document.getElementById('view_prices_search') && document.getElementById('view_prices_search').addEventListener('input', filterViewPricesTable);
+    document.getElementById('view_prices_close_btn') && document.getElementById('view_prices_close_btn').addEventListener('click', hideViewPricesCard);
 
     function loadForEdit(customerType, customerId, customerName) {
         var radio = document.querySelector('input[name="customer_type_radio"][value="' + customerType + '"]');
