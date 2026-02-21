@@ -2457,6 +2457,16 @@ if ($isAjaxNavigation) {
                     echo '<div class="alert alert-warning">صفحة العملاء المحليين غير متاحة حالياً</div>';
                 }
                 ?>
+
+            <?php elseif ($page === 'custom_prices'): ?>
+                <?php
+                $modulePath = __DIR__ . '/../modules/manager/custom_prices.php';
+                if (file_exists($modulePath)) {
+                    include $modulePath;
+                } else {
+                    echo '<div class="alert alert-warning">صفحة الأسعار المخصصة غير متاحة حالياً</div>';
+                }
+                ?>
                 
             <?php elseif ($page === 'shipping_orders'): ?>
                 <!-- صفحة طلبات الشحن -->

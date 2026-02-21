@@ -75,13 +75,27 @@ if (isset($_GET['action']) && $_GET['action'] === 'view_image' && isset($_GET['i
         echo 'File not found';
         exit;
     }
+    $mtime = filemtime($realPath);
+    $fsize = filesize($realPath);
+    $etag = '"' . md5('shipping-paper-' . $id . '-' . $mtime . '-' . $fsize) . '"';
+    $lastModified = gmdate('D, d M Y H:i:s', $mtime) . ' GMT';
+    header('Cache-Control: private, max-age=2592000, immutable');
+    header('ETag: ' . $etag);
+    header('Last-Modified: ' . $lastModified);
+    if (isset($_SERVER['HTTP_IF_NONE_MATCH']) && trim($_SERVER['HTTP_IF_NONE_MATCH']) === $etag) {
+        http_response_code(304);
+        exit;
+    }
+    if (isset($_SERVER['HTTP_IF_MODIFIED_SINCE']) && @strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']) >= $mtime) {
+        http_response_code(304);
+        exit;
+    }
     $ext = strtolower(pathinfo($realPath, PATHINFO_EXTENSION));
     $mime = 'image/jpeg';
     if ($ext === 'png') $mime = 'image/png';
     elseif ($ext === 'gif') $mime = 'image/gif';
     elseif ($ext === 'webp') $mime = 'image/webp';
     header('Content-Type: ' . $mime);
-    header('Cache-Control: private, max-age=3600');
     header('Content-Disposition: inline; filename="shipping-paper-inv-' . $id . '.' . $ext . '"');
     readfile($realPath);
     exit;

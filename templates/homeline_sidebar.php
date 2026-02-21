@@ -106,6 +106,13 @@ switch ($role) {
                 'badge' => null
             ],
             [
+                'title' => 'الأسعار المخصصة',
+                'icon' => 'bi-tag',
+                'url' => $baseUrl . 'manager.php?page=custom_prices',
+                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'custom_prices'),
+                'badge' => null
+            ],
+            [
                 'title' => 'خزنة الشركة',
                 'icon' => 'bi-bank',
                 'url' => $baseUrl . 'manager.php?page=company_cash',
@@ -343,6 +350,13 @@ switch ($role) {
                 'icon' => 'bi-people-fill',
                 'url' => $baseUrl . 'accountant.php?page=representatives_customers',
                 'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'representatives_customers'),
+                'badge' => null
+            ],
+            [
+                'title' => 'الأسعار المخصصة',
+                'icon' => 'bi-tag',
+                'url' => $baseUrl . 'accountant.php?page=custom_prices',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'custom_prices'),
                 'badge' => null
             ],
             [
