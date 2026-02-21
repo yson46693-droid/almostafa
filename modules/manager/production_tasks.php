@@ -1773,7 +1773,7 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                             <div id="productsContainer">
                                 <div class="product-row mb-3 p-3 border rounded" data-product-index="0">
                                     <div class="row g-2">
-                                        <div class="col-md-4">
+                                        <div class="col-md-3">
                                             <label class="form-label small">اسم المنتج</label>
                                             <input type="text" class="form-control product-name-input" name="products[0][name]" placeholder="أدخل اسم المنتج أو القالب" list="templateSuggestions" autocomplete="off">
                                         </div>
@@ -1794,9 +1794,16 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                                         </div>
                                         <div class="col-md-2">
                                             <label class="form-label small">السعر</label>
-                                            <input type="number" class="form-control" name="products[0][price]" step="0.01" min="0" placeholder="0.00" id="product-price-0">
+                                            <input type="number" class="form-control product-price-input" name="products[0][price]" step="0.01" min="0" placeholder="0.00" id="product-price-0">
                                         </div>
-                                        <div class="col-md-2 d-flex align-items-end">
+                                        <div class="col-md-2">
+                                            <label class="form-label small">الإجمالي (قابل للتحكم)</label>
+                                            <div class="input-group input-group-sm">
+                                                <input type="number" class="form-control product-line-total-input" name="products[0][line_total]" step="0.01" min="0" placeholder="0.00" id="product-line-total-0" title="الإجمالي = الكمية × السعر حسب الوحدة">
+                                                <span class="input-group-text">ج.م</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-1 d-flex align-items-end">
                                             <button type="button" class="btn btn-danger btn-sm w-100 remove-product-btn" style="display: none;">
                                                 <i class="bi bi-trash"></i>
                                             </button>
@@ -2640,7 +2647,7 @@ document.addEventListener('DOMContentLoaded', function () {
         newRow.setAttribute('data-product-index', productIndex);
         newRow.innerHTML = `
             <div class="row g-2">
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label small">اسم المنتج</label>
                     <input type="text" class="form-control product-name-input" name="products[${productIndex}][name]" placeholder="أدخل اسم المنتج أو القالب" list="templateSuggestions" autocomplete="off">
                 </div>
@@ -2661,9 +2668,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 </div>
                 <div class="col-md-2">
                     <label class="form-label small">السعر</label>
-                    <input type="number" class="form-control" name="products[${productIndex}][price]" step="0.01" min="0" placeholder="0.00" id="product-price-${productIndex}">
+                    <input type="number" class="form-control product-price-input" name="products[${productIndex}][price]" step="0.01" min="0" placeholder="0.00" id="product-price-${productIndex}">
                 </div>
-                <div class="col-md-2 d-flex align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small">الإجمالي (قابل للتحكم)</label>
+                    <div class="input-group input-group-sm">
+                        <input type="number" class="form-control product-line-total-input" name="products[${productIndex}][line_total]" step="0.01" min="0" placeholder="0.00" id="product-line-total-${productIndex}" title="الإجمالي = الكمية × السعر حسب الوحدة">
+                        <span class="input-group-text">ج.م</span>
+                    </div>
+                </div>
+                <div class="col-md-1 d-flex align-items-end">
                     <button type="button" class="btn btn-danger btn-sm w-100 remove-product-btn">
                         <i class="bi bi-trash"></i>
                     </button>
@@ -2702,6 +2716,43 @@ document.addEventListener('DOMContentLoaded', function () {
         const index = unitSelect.id.replace('product-unit-', '');
         updateQuantityStep(index);
     });
+    
+    // حساب الإجمالي تلقائياً: الإجمالي = الكمية × السعر (حسب الوحدة والكمية)
+    function updateProductLineTotal(row) {
+        const qtyInput = row.querySelector('.product-quantity-input');
+        const priceInput = row.querySelector('.product-price-input');
+        const totalInput = row.querySelector('.product-line-total-input');
+        if (!qtyInput || !priceInput || !totalInput) return;
+        const qty = parseFloat(qtyInput.value || '0');
+        const price = parseFloat(priceInput.value || '0');
+        const total = qty * price;
+        totalInput.value = total > 0 ? total.toFixed(2) : '';
+    }
+    
+    function syncPriceFromLineTotal(row) {
+        const qtyInput = row.querySelector('.product-quantity-input');
+        const priceInput = row.querySelector('.product-price-input');
+        const totalInput = row.querySelector('.product-line-total-input');
+        if (!qtyInput || !priceInput || !totalInput) return;
+        const qty = parseFloat(qtyInput.value || '0');
+        const totalVal = parseFloat(totalInput.value || '0');
+        if (qty > 0 && totalVal >= 0) {
+            priceInput.value = (totalVal / qty).toFixed(2);
+        }
+    }
+    
+    productsContainer.addEventListener('input', function(e) {
+        const row = e.target.closest('.product-row');
+        if (!row) return;
+        if (e.target.classList.contains('product-quantity-input') || e.target.classList.contains('product-price-input')) {
+            updateProductLineTotal(row);
+        } else if (e.target.classList.contains('product-line-total-input')) {
+            syncPriceFromLineTotal(row);
+        }
+    });
+    
+    // تحديث الإجمالي للصفوف الموجودة عند التحميل
+    productsContainer.querySelectorAll('.product-row').forEach(updateProductLineTotal);
 });
 
 // دالة لتحديث step حقل الكمية بناءً على الوحدة المختارة
