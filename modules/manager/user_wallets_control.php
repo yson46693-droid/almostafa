@@ -711,6 +711,7 @@ $roleLabels = ['driver' => 'سائق', 'production' => 'عامل إنتاج'];
             })
             .finally(function() {
                 if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
+                if (typeof window.hidePageLoading === 'function') window.hidePageLoading();
             });
     }
 

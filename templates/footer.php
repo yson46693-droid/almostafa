@@ -684,6 +684,8 @@ if (!defined('ACCESS_ALLOWED')) {
     
     <!-- Main JS -->
     <script src="<?php echo $assetsUrl; ?>js/main.js?v=<?php echo $cacheVersion; ?>" defer></script>
+    <!-- شاشة التحميل الديناميكية التفاعلية (جميع الصفحات) -->
+    <script src="<?php echo $assetsUrl; ?>js/global-loading.js?v=<?php echo $cacheVersion; ?>" defer></script>
     <script src="<?php echo $assetsUrl; ?>js/sidebar.js?v=<?php echo $cacheVersion; ?>" defer></script>
     
     <!-- Auto Refresh Navigation - إعادة تحميل تلقائي للتنقل (مدير، مندوب مبيعات، عامل إنتاج) -->
