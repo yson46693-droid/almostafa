@@ -800,12 +800,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // يتم استدعاؤه بعد الالتزام لمنع أي مشاكل في المعاملة
                 enforceTasksRetentionLimit($db, $tasksRetentionLimit);
 
-                // استخدام preventDuplicateSubmission لإعادة التوجيه مع cache-busting
-                // إضافة timestamp فريد لضمان تحديث الصفحة مباشرة
+                // التوجيه إلى صفحة طباعة إيصال الأوردر مع فتح نافذة الطباعة تلقائياً (معاينة المتصفح)
                 $successMessage = 'تم إرسال المهمة بنجاح إلى ' . count($assignees) . ' من عمال الإنتاج.';
-                // تحديد role بناءً على المستخدم الحالي
                 $userRole = ($currentUser['role'] ?? '') === 'accountant' ? 'accountant' : 'manager';
-                preventDuplicateSubmission($successMessage, ['page' => 'production_tasks', '_refresh' => time()], null, $userRole);
+                $printReceiptUrl = getRelativeUrl('print_task_receipt.php?id=' . (int) $taskId . '&print=1');
+                preventDuplicateSubmission($successMessage, [], $printReceiptUrl, $userRole);
                 exit; // منع تنفيذ باقي الكود بعد إعادة التوجيه
             } catch (Exception $e) {
                 $db->rollback();
