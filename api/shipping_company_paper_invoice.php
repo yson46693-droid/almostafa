@@ -164,9 +164,9 @@ if ($invoiceNumber === '') {
 }
 
 $totalAmount = str_replace(',', '.', $totalAmount);
-if (!is_numeric($totalAmount) || (float)$totalAmount <= 0) {
+if (!is_numeric($totalAmount) || (float)$totalAmount === 0) {
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(['success' => false, 'message' => 'يرجى إدخال إجمالي صحيح للفاتورة'], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['success' => false, 'message' => 'يرجى إدخال إجمالي صحيح (موجب لزيادة الديون، سالب لتقليل الديون)'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -233,10 +233,13 @@ try {
         "UPDATE shipping_companies SET balance = balance + ?, updated_by = ?, updated_at = NOW() WHERE id = ?",
         [$totalAmount, $currentUser['id'], $companyId]
     );
+    $balanceMessage = $totalAmount >= 0
+        ? 'تم تسجيل الفاتورة الورقية وإضافة الإجمالي إلى ديون الشركة.'
+        : 'تم تسجيل الفاتورة الورقية وتقليل ديون الشركة بالمبلغ المدخل.';
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode([
         'success' => true,
-        'message' => 'تم تسجيل الفاتورة الورقية وإضافة الإجمالي إلى ديون الشركة.',
+        'message' => $balanceMessage,
         'paper_invoice_id' => $paperInvoiceId,
     ], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {

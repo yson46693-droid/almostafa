@@ -3506,7 +3506,8 @@ $hasShippingCompanies = !empty($shippingCompanies);
                 </div>
                 <div class="mb-3">
                     <label class="form-label">إجمالي الفاتورة (ج.م) <span class="text-danger">*</span></label>
-                    <input type="number" step="0.01" min="0.01" class="form-control" id="companyPaperInvoiceAddTotal" placeholder="0.00">
+                    <input type="number" step="0.01" class="form-control" id="companyPaperInvoiceAddTotal" placeholder="موجب = زيادة الديون، سالب = تقليل الديون">
+                    <div class="form-text">موجب لزيادة ديون الشركة، سالب لتقليل الديون.</div>
                 </div>
                 <div id="companyPaperInvoiceAddMessage" class="alert d-none mb-0"></div>
                 <button type="button" class="btn btn-primary" id="companyPaperInvoiceAddSubmitBtn" onclick="submitCompanyPaperInvoice()">
@@ -5246,7 +5247,8 @@ function submitCompanyPaperInvoice() {
     var submitBtn = document.getElementById('companyPaperInvoiceAddSubmitBtn');
     if (!companyId) { alert('لم يتم تحديد الشركة'); return; }
     if (!invoiceNumber) { alert('يرجى إدخال رقم الفاتورة'); return; }
-    if (!total || isNaN(parseFloat(total)) || parseFloat(total) <= 0) { alert('يرجى إدخال إجمالي صحيح'); return; }
+    var totalNum = parseFloat(total);
+    if (total === '' || isNaN(totalNum) || totalNum === 0) { alert('يرجى إدخال إجمالي صحيح (موجب أو سالب، غير صفر)'); return; }
     if (!file) { alert('يرجى اختيار صورة الفاتورة الورقية'); return; }
     if (msgEl) { msgEl.classList.add('d-none'); msgEl.innerHTML = ''; }
     if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جاري الحفظ...'; }
