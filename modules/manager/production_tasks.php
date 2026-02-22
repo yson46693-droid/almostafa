@@ -17,6 +17,24 @@ if (!$isGetTaskForEdit && !headers_sent()) {
 mb_internal_encoding('UTF-8');
 mb_http_output('UTF-8');
 
+// منع انقطاع التحميل على الأجهزة أو الشبكات البطيئة (timeout / memory)
+if (function_exists('set_time_limit')) {
+    @set_time_limit(120);
+}
+if (function_exists('ini_set')) {
+    $cur = @ini_get('memory_limit');
+    if ($cur !== false && $cur !== '-1') {
+        $curBytes = $cur === '' ? 0 : (int) $cur;
+        $suffix = strtolower(substr(trim($cur), -1));
+        if ($suffix === 'g') $curBytes *= 1024 * 1024 * 1024;
+        elseif ($suffix === 'm') $curBytes *= 1024 * 1024;
+        elseif ($suffix === 'k') $curBytes *= 1024;
+        if ($curBytes > 0 && $curBytes < 256 * 1024 * 1024) {
+            @ini_set('memory_limit', '256M');
+        }
+    }
+}
+
 if (!defined('ACCESS_ALLOWED')) {
     die('Direct access not allowed');
 }
