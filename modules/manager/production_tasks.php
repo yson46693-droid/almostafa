@@ -2411,6 +2411,10 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
 .search-dropdown-task .search-dropdown-item-task { padding: 0.5rem 0.75rem; cursor: pointer; border-bottom: 1px solid #f0f0f0; }
 .search-dropdown-task .search-dropdown-item-task:hover { background: #f8f9fa; }
 .search-dropdown-task .search-dropdown-item-task:last-child { border-bottom: none; }
+/* إخفاء خانة العميل اليدوي إن وُجدت (كاش قديم) */
+#customer_manual_block_task { display: none !important; }
+input[name="customer_type_radio_task"][value="manual"] { display: none !important; }
+label[for="ct_task_manual"], .form-check:has(#ct_task_manual) { display: none !important; }
 </style>
 <script>
 var __localCustomersForTask = <?php echo json_encode($localCustomersForDropdown); ?>;
@@ -2631,6 +2635,16 @@ document.addEventListener('DOMContentLoaded', function () {
             r.addEventListener('change', setCustomerBlocks);
         });
         setCustomerBlocks();
+
+        // إخفاء أي بقايا لخانة العميل اليدوي (إن وُجدت من كاش قديم)
+        (function hideManualCustomerBlock() {
+            var manualBlock = document.getElementById('customer_manual_block_task');
+            if (manualBlock) { manualBlock.style.display = 'none'; manualBlock.remove(); }
+            document.querySelectorAll('input[name="customer_type_radio_task"][value="manual"]').forEach(function(r) {
+                var wrap = r.closest('.form-check');
+                if (wrap) wrap.style.display = 'none';
+            });
+        })();
 
         function showCustomerDropdown(inputEl, hiddenIdEl, dropEl, list, getLabel, matcher, onSelect) {
             if (!inputEl || !dropEl) return;
