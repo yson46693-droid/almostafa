@@ -2821,10 +2821,14 @@ document.addEventListener('DOMContentLoaded', function() {
         <input type="hidden" id="paperInvoiceCardCustomerId" value="">
         <div class="mb-3">
             <label class="form-label">صورة الفاتورة <span class="text-danger">*</span></label>
+            <input type="file" id="paperInvoiceCardImageInput" class="d-none" accept="image/jpeg,image/png,image/gif,image/webp" capture="environment">
+            <input type="file" id="paperInvoiceCardImageInputFile" class="d-none" accept="image/jpeg,image/png,image/gif,image/webp">
             <div class="d-flex gap-2 flex-wrap align-items-center">
-                <input type="file" id="paperInvoiceCardImageInput" class="form-control form-control-sm" accept="image/jpeg,image/png,image/gif,image/webp" capture="environment">
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="paperInvoiceCardCaptureBtn" title="فتح الكاميرا">
-                    <i class="bi bi-camera me-1"></i>التقاط
+                <button type="button" class="btn btn-outline-primary btn-sm" id="paperInvoiceCardSelectFileBtn" title="اختيار من الملفات أو معرض الصور">
+                    <i class="bi bi-folder2-open me-1"></i>من الملفات أو الصور
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="paperInvoiceCardCaptureBtn" title="التقاط بالكاميرا">
+                    <i class="bi bi-camera me-1"></i>التقاط بالكاميرا
                 </button>
             </div>
             <div id="paperInvoiceCardImagePreview" class="mt-2 text-center" style="display: none;">
@@ -2865,10 +2869,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 <input type="hidden" id="paperInvoiceCustomerId" value="">
                 <div class="mb-3">
                     <label class="form-label">صورة الفاتورة <span class="text-danger">*</span></label>
+                    <input type="file" id="paperInvoiceImageInput" class="d-none" accept="image/jpeg,image/png,image/gif,image/webp" capture="environment">
+                    <input type="file" id="paperInvoiceImageInputFile" class="d-none" accept="image/jpeg,image/png,image/gif,image/webp">
                     <div class="d-flex gap-2 flex-wrap align-items-center">
-                        <input type="file" id="paperInvoiceImageInput" class="form-control form-control-sm" accept="image/jpeg,image/png,image/gif,image/webp" capture="environment">
-                        <button type="button" class="btn btn-outline-secondary btn-sm" id="paperInvoiceCaptureBtn" title="فتح الكاميرا">
-                            <i class="bi bi-camera me-1"></i>التقاط
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="paperInvoiceSelectFileBtn" title="اختيار من الملفات أو معرض الصور">
+                            <i class="bi bi-folder2-open me-1"></i>من الملفات أو الصور
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="paperInvoiceCaptureBtn" title="التقاط بالكاميرا">
+                            <i class="bi bi-camera me-1"></i>التقاط بالكاميرا
                         </button>
                     </div>
                     <div id="paperInvoiceImagePreview" class="mt-2 text-center" style="display: none;">
@@ -2935,7 +2943,12 @@ document.addEventListener('DOMContentLoaded', function() {
         <input type="hidden" id="paperInvoiceReturnCardCustomerId" value="">
         <div class="mb-3">
             <label class="form-label">صورة الفاتورة / المرتجع <span class="text-danger">*</span></label>
-            <input type="file" id="paperInvoiceReturnCardImageInput" class="form-control form-control-sm" accept="image/jpeg,image/png,image/gif,image/webp" capture="environment">
+            <input type="file" id="paperInvoiceReturnCardImageInput" class="d-none" accept="image/jpeg,image/png,image/gif,image/webp" capture="environment">
+            <input type="file" id="paperInvoiceReturnCardImageInputFile" class="d-none" accept="image/jpeg,image/png,image/gif,image/webp">
+            <div class="d-flex gap-2 flex-wrap align-items-center">
+                <button type="button" class="btn btn-outline-primary btn-sm" id="paperInvoiceReturnCardSelectFileBtn" title="اختيار من الملفات أو معرض الصور"><i class="bi bi-folder2-open me-1"></i>من الملفات أو الصور</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="paperInvoiceReturnCardCaptureBtn" title="التقاط بالكاميرا"><i class="bi bi-camera me-1"></i>التقاط بالكاميرا</button>
+            </div>
             <div id="paperInvoiceReturnCardImagePreview" class="mt-2 text-center" style="display: none;"><img id="paperInvoiceReturnCardPreviewImg" src="" alt="معاينة" class="img-fluid rounded border" style="max-height: 200px;"></div>
         </div>
         <div class="mb-3">
@@ -2967,7 +2980,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 <input type="hidden" id="paperInvoiceReturnCustomerId" value="">
                 <div class="mb-3">
                     <label class="form-label">صورة الفاتورة / المرتجع <span class="text-danger">*</span></label>
-                    <input type="file" id="paperInvoiceReturnImageInput" class="form-control form-control-sm" accept="image/jpeg,image/png,image/gif,image/webp" capture="environment">
+                    <input type="file" id="paperInvoiceReturnImageInput" class="d-none" accept="image/jpeg,image/png,image/gif,image/webp" capture="environment">
+                    <input type="file" id="paperInvoiceReturnImageInputFile" class="d-none" accept="image/jpeg,image/png,image/gif,image/webp">
+                    <div class="d-flex gap-2 flex-wrap align-items-center">
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="paperInvoiceReturnSelectFileBtn" title="اختيار من الملفات أو معرض الصور"><i class="bi bi-folder2-open me-1"></i>من الملفات أو الصور</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="paperInvoiceReturnCaptureBtn" title="التقاط بالكاميرا"><i class="bi bi-camera me-1"></i>التقاط بالكاميرا</button>
+                    </div>
                     <div id="paperInvoiceReturnImagePreview" class="mt-2 text-center" style="display: none;"><img id="paperInvoiceReturnPreviewImg" src="" alt="معاينة" class="img-fluid rounded border" style="max-height: 200px;"></div>
                 </div>
                 <div class="mb-3">
@@ -3651,7 +3669,10 @@ function showPaperInvoiceModal(button) {
     setEl('paperInvoiceCustomerName', customerName);
     setEl('paperInvoiceInvoiceNumber', '');
     setEl('paperInvoiceTotalAmount', '');
-    setEl('paperInvoiceImageInput', '');
+    var piInput = document.getElementById('paperInvoiceImageInput');
+    if (piInput) piInput.value = '';
+    var piInputFile = document.getElementById('paperInvoiceImageInputFile');
+    if (piInputFile) piInputFile.value = '';
     var preview = document.getElementById('paperInvoiceImagePreview');
     var previewImg = document.getElementById('paperInvoicePreviewImg');
     if (preview) preview.style.display = 'none';
@@ -3664,6 +3685,8 @@ function showPaperInvoiceModal(button) {
     setEl('paperInvoiceCardTotalAmount', '');
     var cardInput = document.getElementById('paperInvoiceCardImageInput');
     if (cardInput) cardInput.value = '';
+    var cardInputFile = document.getElementById('paperInvoiceCardImageInputFile');
+    if (cardInputFile) cardInputFile.value = '';
     var cardPreview = document.getElementById('paperInvoiceCardImagePreview');
     var cardPreviewImg = document.getElementById('paperInvoiceCardPreviewImg');
     if (cardPreview) cardPreview.style.display = 'none';
@@ -3684,9 +3707,9 @@ function showPaperInvoiceModal(button) {
     }
 }
 
-// معاينة صورة الفاتورة الورقية عند اختيار ملف (مودال + بطاقة)
+// معاينة صورة الفاتورة الورقية عند اختيار ملف (مودال + بطاقة) — دعم: من الملفات/الصور + التقاط بالكاميرا
 document.addEventListener('DOMContentLoaded', function() {
-    function setupFilePreview(inputId, previewId, previewImgId, captureBtnId) {
+    function setupFilePreview(inputId, previewId, previewImgId, triggerBtnId) {
         var input = document.getElementById(inputId);
         if (!input) return;
         input.addEventListener('change', function() {
@@ -3698,25 +3721,20 @@ document.addEventListener('DOMContentLoaded', function() {
             reader.onload = function(e) { previewImg.src = e.target.result; preview.style.display = 'block'; };
             reader.readAsDataURL(file);
         });
-        var captureBtn = document.getElementById(captureBtnId);
-        if (captureBtn) captureBtn.addEventListener('click', function() { input.click(); });
+        var btn = document.getElementById(triggerBtnId);
+        if (btn) btn.addEventListener('click', function() { input.click(); });
     }
+    // فاتورة ورقية: مودال (من الملفات + كاميرا)
     setupFilePreview('paperInvoiceImageInput', 'paperInvoiceImagePreview', 'paperInvoicePreviewImg', 'paperInvoiceCaptureBtn');
+    setupFilePreview('paperInvoiceImageInputFile', 'paperInvoiceImagePreview', 'paperInvoicePreviewImg', 'paperInvoiceSelectFileBtn');
+    // فاتورة ورقية: بطاقة موبايل
     setupFilePreview('paperInvoiceCardImageInput', 'paperInvoiceCardImagePreview', 'paperInvoiceCardPreviewImg', 'paperInvoiceCardCaptureBtn');
-    var retInput = document.getElementById('paperInvoiceReturnImageInput');
-    if (retInput) retInput.addEventListener('change', function() {
-        var file = this.files && this.files[0];
-        var preview = document.getElementById('paperInvoiceReturnImagePreview');
-        var previewImg = document.getElementById('paperInvoiceReturnPreviewImg');
-        if (file && preview && previewImg) { var r = new FileReader(); r.onload = function(e) { previewImg.src = e.target.result; preview.style.display = 'block'; }; r.readAsDataURL(file); }
-    });
-    var retCardInput = document.getElementById('paperInvoiceReturnCardImageInput');
-    if (retCardInput) retCardInput.addEventListener('change', function() {
-        var file = this.files && this.files[0];
-        var preview = document.getElementById('paperInvoiceReturnCardImagePreview');
-        var previewImg = document.getElementById('paperInvoiceReturnCardPreviewImg');
-        if (file && preview && previewImg) { var r = new FileReader(); r.onload = function(e) { previewImg.src = e.target.result; preview.style.display = 'block'; }; r.readAsDataURL(file); }
-    });
+    setupFilePreview('paperInvoiceCardImageInputFile', 'paperInvoiceCardImagePreview', 'paperInvoiceCardPreviewImg', 'paperInvoiceCardSelectFileBtn');
+    // مرتجع فاتورة ورقية: مودال + بطاقة
+    setupFilePreview('paperInvoiceReturnImageInput', 'paperInvoiceReturnImagePreview', 'paperInvoiceReturnPreviewImg', 'paperInvoiceReturnCaptureBtn');
+    setupFilePreview('paperInvoiceReturnImageInputFile', 'paperInvoiceReturnImagePreview', 'paperInvoiceReturnPreviewImg', 'paperInvoiceReturnSelectFileBtn');
+    setupFilePreview('paperInvoiceReturnCardImageInput', 'paperInvoiceReturnCardImagePreview', 'paperInvoiceReturnCardPreviewImg', 'paperInvoiceReturnCardCaptureBtn');
+    setupFilePreview('paperInvoiceReturnCardImageInputFile', 'paperInvoiceReturnCardImagePreview', 'paperInvoiceReturnCardPreviewImg', 'paperInvoiceReturnCardSelectFileBtn');
 });
 
 // إرسال فاتورة ورقية (صورة + إجمالي) - يدعم البطاقة (موبايل) أو المودال (كمبيوتر)
@@ -3729,7 +3747,8 @@ function submitPaperInvoice() {
     var totalEl = useCard ? document.getElementById('paperInvoiceCardTotalAmount') : document.getElementById('paperInvoiceTotalAmount');
     var totalAmount = totalEl ? totalEl.value.replace(',', '.').trim() : '';
     var fileInput = useCard ? document.getElementById('paperInvoiceCardImageInput') : document.getElementById('paperInvoiceImageInput');
-    var file = fileInput && fileInput.files && fileInput.files[0];
+    var fileInputFile = useCard ? document.getElementById('paperInvoiceCardImageInputFile') : document.getElementById('paperInvoiceImageInputFile');
+    var file = (fileInputFile && fileInputFile.files && fileInputFile.files[0]) || (fileInput && fileInput.files && fileInput.files[0]);
     var msgEl = useCard ? document.getElementById('paperInvoiceCardMessage') : document.getElementById('paperInvoiceMessage');
     var submitBtn = useCard ? document.getElementById('paperInvoiceCardSubmitBtn') : document.getElementById('paperInvoiceSubmitBtn');
 
@@ -3745,8 +3764,7 @@ function submitPaperInvoice() {
         return;
     }
     if (!file) {
-        alert('يرجى اختيار أو تصوير صورة الفاتورة الورقية');
-        if (fileInput) fileInput.focus();
+        alert('يرجى اختيار صورة من الملفات/الصور أو التقاط صورة بالكاميرا');
         return;
     }
 
@@ -3770,11 +3788,12 @@ function submitPaperInvoice() {
                 msgEl.className = data.success ? 'alert alert-success mb-0' : 'alert alert-danger mb-0';
                 msgEl.textContent = data.message || (data.success ? 'تم الحفظ.' : 'حدث خطأ.');
             }
-            if (data.success) {
+                if (data.success) {
                 if (useCard) {
                     if (invoiceNumberEl) invoiceNumberEl.value = '';
                     if (totalEl) totalEl.value = '';
                     if (fileInput) fileInput.value = '';
+                    if (fileInputFile) fileInputFile.value = '';
                     var cardPreview = document.getElementById('paperInvoiceCardImagePreview');
                     var cardPreviewImg = document.getElementById('paperInvoiceCardPreviewImg');
                     if (cardPreview) cardPreview.style.display = 'none';
@@ -3784,6 +3803,8 @@ function submitPaperInvoice() {
                     document.getElementById('paperInvoiceInvoiceNumber').value = '';
                     document.getElementById('paperInvoiceTotalAmount').value = '';
                     document.getElementById('paperInvoiceImageInput').value = '';
+                    var piFileEl = document.getElementById('paperInvoiceImageInputFile');
+                    if (piFileEl) piFileEl.value = '';
                     var preview = document.getElementById('paperInvoiceImagePreview');
                     var previewImg = document.getElementById('paperInvoicePreviewImg');
                     if (preview) preview.style.display = 'none';
@@ -3852,13 +3873,18 @@ function showPaperInvoiceReturnModal(button) {
     setEl('paperInvoiceReturnCustomerName', customerName);
     setEl('paperInvoiceReturnInvoiceNumber', '');
     setEl('paperInvoiceReturnReturnAmount', '');
-    setEl('paperInvoiceReturnImageInput', '');
+    var retInput = document.getElementById('paperInvoiceReturnImageInput');
+    if (retInput) retInput.value = '';
+    var retInputFile = document.getElementById('paperInvoiceReturnImageInputFile');
+    if (retInputFile) retInputFile.value = '';
     setEl('paperInvoiceReturnCardCustomerId', customerId);
     setEl('paperInvoiceReturnCardCustomerName', customerName);
     setEl('paperInvoiceReturnCardInvoiceNumber', '');
     setEl('paperInvoiceReturnCardReturnAmount', '');
     var cardInput = document.getElementById('paperInvoiceReturnCardImageInput');
     if (cardInput) cardInput.value = '';
+    var cardInputFile = document.getElementById('paperInvoiceReturnCardImageInputFile');
+    if (cardInputFile) cardInputFile.value = '';
     var previews = ['paperInvoiceReturnImagePreview', 'paperInvoiceReturnCardImagePreview'];
     previews.forEach(function(id) { var p = document.getElementById(id); if (p) p.style.display = 'none'; });
     var msgs = [document.getElementById('paperInvoiceReturnMessage'), document.getElementById('paperInvoiceReturnCardMessage')];
@@ -3883,13 +3909,14 @@ function submitPaperInvoiceReturn() {
     var amountEl = useCard ? document.getElementById('paperInvoiceReturnCardReturnAmount') : document.getElementById('paperInvoiceReturnReturnAmount');
     var returnAmount = amountEl ? amountEl.value.replace(',', '.').trim() : '';
     var fileInput = useCard ? document.getElementById('paperInvoiceReturnCardImageInput') : document.getElementById('paperInvoiceReturnImageInput');
-    var file = fileInput && fileInput.files && fileInput.files[0];
+    var fileInputFile = useCard ? document.getElementById('paperInvoiceReturnCardImageInputFile') : document.getElementById('paperInvoiceReturnImageInputFile');
+    var file = (fileInputFile && fileInputFile.files && fileInputFile.files[0]) || (fileInput && fileInput.files && fileInput.files[0]);
     var msgEl = useCard ? document.getElementById('paperInvoiceReturnCardMessage') : document.getElementById('paperInvoiceReturnMessage');
     var submitBtn = useCard ? document.getElementById('paperInvoiceReturnCardSubmitBtn') : document.getElementById('paperInvoiceReturnSubmitBtn');
     if (!customerId) { alert('لم يتم تحديد العميل'); return; }
     if (!invoiceNumber) { alert('يرجى إدخال رقم الفاتورة'); if (invoiceNumberEl) invoiceNumberEl.focus(); return; }
     if (!returnAmount || isNaN(parseFloat(returnAmount)) || parseFloat(returnAmount) <= 0) { alert('يرجى إدخال مبلغ مرتجع صحيح'); if (amountEl) amountEl.focus(); return; }
-    if (!file) { alert('يرجى اختيار صورة الفاتورة/المرتجع'); if (fileInput) fileInput.focus(); return; }
+    if (!file) { alert('يرجى اختيار صورة من الملفات/الصور أو التقاط صورة بالكاميرا'); return; }
     if (msgEl) { msgEl.classList.add('d-none'); msgEl.innerHTML = ''; }
     if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جاري الحفظ...'; }
     var formData = new FormData();
@@ -3909,6 +3936,7 @@ function submitPaperInvoiceReturn() {
                     if (invoiceNumberEl) invoiceNumberEl.value = '';
                     if (amountEl) amountEl.value = '';
                     if (fileInput) fileInput.value = '';
+                    if (fileInputFile) fileInputFile.value = '';
                     var cardPreview = document.getElementById('paperInvoiceReturnCardImagePreview');
                     if (cardPreview) cardPreview.style.display = 'none';
                     setTimeout(function() { closePaperInvoiceReturnCard(); }, 1500);
@@ -3916,6 +3944,8 @@ function submitPaperInvoiceReturn() {
                     document.getElementById('paperInvoiceReturnInvoiceNumber').value = '';
                     document.getElementById('paperInvoiceReturnReturnAmount').value = '';
                     document.getElementById('paperInvoiceReturnImageInput').value = '';
+                    var retFileEl = document.getElementById('paperInvoiceReturnImageInputFile');
+                    if (retFileEl) retFileEl.value = '';
                     var preview = document.getElementById('paperInvoiceReturnImagePreview');
                     if (preview) preview.style.display = 'none';
                     var modalEl = document.getElementById('paperInvoiceReturnModal');
