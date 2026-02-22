@@ -1613,16 +1613,32 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
 ?>
 
 <script>
-// منع عرض كاش قديم: إجبار تحديث من السيرفر عند استعادة الصفحة (bfcache) أو بعد redirect
+// حل نهائي لمنع الكاش القديم: الطلب الأول قد يعيد كاش، فنجبر طلباً ثانياً بعنوان فريد (_t) لضمان جلب بيانات حية دائماً
 (function() {
     'use strict';
-    var urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.has('_refresh')) {
-        urlParams.delete('_refresh');
-        var newUrl = window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : '');
-        window.history.replaceState({}, '', newUrl);
+    var search = window.location.search || '';
+    var hasBust = /[?&]_t=|[?&]_nocache=|[?&]_v=/.test(search);
+    if (!hasBust) {
+        var sep = search.length ? '&' : '?';
+        var newUrl = window.location.pathname + search + sep + '_t=' + Date.now();
+        if (window.location.hash) newUrl += window.location.hash;
+        window.location.replace(newUrl);
+        return;
     }
-    // عند استعادة الصفحة من back-forward cache نعيد التحميل لضمان بيانات حية من قاعدة البيانات
+    // إزالة معاملات cache-bust من شريط العنوان بعد التحميل الناجح
+    var urlParams = new URLSearchParams(window.location.search);
+    var changed = false;
+    ['_t', '_nocache', '_v', '_refresh'].forEach(function(p) {
+        if (urlParams.has(p)) {
+            urlParams.delete(p);
+            changed = true;
+        }
+    });
+    if (changed) {
+        var qs = urlParams.toString();
+        var cleanUrl = window.location.pathname + (qs ? '?' + qs : '') + (window.location.hash || '');
+        window.history.replaceState({}, '', cleanUrl);
+    }
     window.addEventListener('pageshow', function(event) {
         if (event.persisted) {
             window.location.reload();
@@ -1784,38 +1800,27 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                                     <input class="form-check-input" type="radio" name="customer_type_radio_task" id="ct_task_rep" value="rep">
                                     <label class="form-check-label" for="ct_task_rep">عميل مندوب</label>
                                 </div>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="customer_type_radio_task" id="ct_task_manual" value="manual">
-                                    <label class="form-check-label" for="ct_task_manual">عميل جديد يدوي</label>
-                                </div>
                             </div>
                             <input type="hidden" name="customer_name" id="submit_customer_name" value="">
-                            <input type="hidden" name="customer_phone" id="submit_customer_phone" value="">
                             <div id="customer_select_local_task" class="customer-select-block mb-2">
                                 <div class="search-wrap position-relative">
-                                    <input type="text" id="local_customer_search_task" class="form-control form-control-sm" placeholder="اكتب للبحث في قائمة العملاء المحليين..." autocomplete="off">
+                                    <input type="text" id="local_customer_search_task" class="form-control form-control-sm" placeholder="اكتب للبحث أو أدخل اسم عميل جديد..." autocomplete="off">
                                     <input type="hidden" id="local_customer_id_task" value="">
                                     <div id="local_customer_dropdown_task" class="search-dropdown-task d-none"></div>
                                 </div>
                             </div>
                             <div id="customer_select_rep_task" class="customer-select-block mb-2 d-none">
                                 <div class="search-wrap position-relative">
-                                    <input type="text" id="rep_customer_search_task" class="form-control form-control-sm" placeholder="اكتب للبحث في قائمة عملاء المندوبين..." autocomplete="off">
+                                    <input type="text" id="rep_customer_search_task" class="form-control form-control-sm" placeholder="اكتب للبحث أو أدخل اسم عميل جديد..." autocomplete="off">
                                     <input type="hidden" id="rep_customer_id_task" value="">
                                     <div id="rep_customer_dropdown_task" class="search-dropdown-task d-none"></div>
                                 </div>
                             </div>
-                            <div id="customer_manual_block_task" class="customer-select-block mb-2 d-none">
-                                <div class="row g-2">
-                                    <div class="col-6">
-                                        <input type="text" id="manual_customer_name_task" class="form-control form-control-sm" placeholder="اسم العميل">
-                                    </div>
-                                    <div class="col-6">
-                                        <input type="text" id="manual_customer_phone_task" class="form-control form-control-sm" placeholder="رقم العميل" dir="ltr">
-                                    </div>
-                                </div>
+                            <div class="mb-2">
+                                <label class="form-label small">رقم العميل</label>
+                                <input type="text" name="customer_phone" id="submit_customer_phone" class="form-control form-control-sm" placeholder="رقم الهاتف" dir="ltr" value="">
                             </div>
-                            <small class="form-text text-muted d-block">اختر من العملاء المحليين أو عملاء المندوب أو أدخل اسم عميل جديد يدوياً</small>
+                            <small class="form-text text-muted d-block">اختر عميلاً مسجلاً أو اكتب اسماً جديداً—يُحفظ تلقائياً كعميل جديد إن لم يكن مسجلاً</small>
                         </div>
                         <div class="col-md-5">
                             <label class="form-label">وصف وتفاصيل و ملاحظات الاوردر</label>
@@ -2567,7 +2572,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const quantityInput = document.getElementById('productQuantityInput');
     const templateSuggestions = document.getElementById('templateSuggestions');
 
-    // خانة العميل مماثلة لصفحة الأسعار المخصصة: عميل محلي / عميل مندوب / عميل جديد يدوي
+    // خانة العميل: عميل محلي / عميل مندوب — اسم من البحث (أو المُدخل) ورقم العميل ظاهر دائماً ويُملأ تلقائياً عند اختيار عميل مسجل
     (function initCustomerCardTask() {
         var localCustomers = (typeof __localCustomersForTask !== 'undefined' && Array.isArray(__localCustomersForTask)) ? __localCustomersForTask : [];
         var repCustomers = (typeof __repCustomersForTask !== 'undefined' && Array.isArray(__repCustomersForTask)) ? __repCustomersForTask : [];
@@ -2579,8 +2584,6 @@ document.addEventListener('DOMContentLoaded', function () {
         var repSearch = document.getElementById('rep_customer_search_task');
         var repId = document.getElementById('rep_customer_id_task');
         var repDrop = document.getElementById('rep_customer_dropdown_task');
-        var manualName = document.getElementById('manual_customer_name_task');
-        var manualPhone = document.getElementById('manual_customer_phone_task');
         if (!submitName || !submitPhone) return;
 
         // نفس منطق matchSearch في صفحة الأسعار المخصصة: عند الفراغ نعرض الكل، وإلا بحث بسيط (نص يحتوي على الاستعلام)
@@ -2612,7 +2615,6 @@ document.addEventListener('DOMContentLoaded', function () {
             var val = v ? v.value : 'local';
             document.getElementById('customer_select_local_task').classList.toggle('d-none', val !== 'local');
             document.getElementById('customer_select_rep_task').classList.toggle('d-none', val !== 'rep');
-            document.getElementById('customer_manual_block_task').classList.toggle('d-none', val !== 'manual');
             if (val !== 'local') {
                 if (localSearch) localSearch.value = '';
                 if (localId) localId.value = '';
@@ -2622,10 +2624,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (repSearch) repSearch.value = '';
                 if (repId) repId.value = '';
                 if (repDrop) repDrop.classList.add('d-none');
-            }
-            if (val === 'manual') {
-                submitName.value = manualName ? manualName.value.trim() : '';
-                submitPhone.value = manualPhone ? manualPhone.value.trim() : '';
             }
         }
 
@@ -2679,22 +2677,22 @@ document.addEventListener('DOMContentLoaded', function () {
         initCustomerSearch(localSearch, localId, localDrop, localCustomers, function(c) { return c.name + (c.phone ? ' — ' + c.phone : ''); }, matchLocalCustomer);
         initCustomerSearch(repSearch, repId, repDrop, repCustomers, function(c) { return c.rep_name ? c.name + ' (' + c.rep_name + ')' : c.name; }, matchRepCustomer);
 
-        if (manualName) manualName.addEventListener('input', function() { submitName.value = this.value.trim(); });
-        if (manualPhone) manualPhone.addEventListener('input', function() { submitPhone.value = this.value.trim(); });
-
         document.addEventListener('click', function(e) {
             if (!e.target.closest('.search-wrap')) {
                 document.querySelectorAll('.search-dropdown-task').forEach(function(d) { d.classList.add('d-none'); });
             }
         });
 
+        // عند الإرسال: أخذ اسم العميل من حقل البحث النشط (محلي أو مندوب) — إن لم يُختر من القائمة يُرسل النص المُدخل ويُحفظ كعميل جديد في الخادم إن لم يكن مسجلاً
         var form = submitName && submitName.closest('form');
         if (form) {
             form.addEventListener('submit', function() {
                 var v = document.querySelector('input[name="customer_type_radio_task"]:checked');
-                if (v && v.value === 'manual' && manualName) {
-                    submitName.value = manualName.value.trim();
-                    submitPhone.value = manualPhone ? manualPhone.value.trim() : '';
+                var val = v ? v.value : 'local';
+                if (val === 'local' && localSearch) {
+                    submitName.value = localSearch.value.trim();
+                } else if (val === 'rep' && repSearch) {
+                    submitName.value = repSearch.value.trim();
                 }
             });
         }
