@@ -217,6 +217,16 @@ if ($page === 'driver_tracking' && $_SERVER['REQUEST_METHOD'] === 'GET' && isset
     }
 }
 
+// معالجة AJAX لمحافظ المستخدمين - قبل أي إخراج
+if ($page === 'user_wallets_control' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
+    while (ob_get_level() > 0) ob_end_clean();
+    $modulePath = __DIR__ . '/../modules/manager/user_wallets_control.php';
+    if (file_exists($modulePath)) {
+        include $modulePath;
+        exit;
+    }
+}
+
 // توجيه صفحة الخزنة (financial) إلى خزنة المحاسب (accountant_cash) لتفادي تعطّل الصفحة
 if ($page === 'financial' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     $redirectUrl = getDashboardUrl() . 'accountant.php?page=accountant_cash';

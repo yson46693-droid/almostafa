@@ -76,6 +76,134 @@ if (!empty($localCustomersTableExists)) {
 $error = '';
 $success = '';
 
+$isWalletAjax = (
+    isset($_SERVER['HTTP_X_REQUESTED_WITH']) &&
+    strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest' &&
+    $_SERVER['REQUEST_METHOD'] === 'POST' &&
+    isset($_POST['action'])
+);
+
+if ($isWalletAjax) {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-cache, must-revalidate');
+    $action = $_POST['action'] ?? '';
+    $ajaxError = '';
+    $ajaxSuccess = '';
+    if ($action === 'add_deposit') {
+        $amount = isset($_POST['amount']) ? (float) str_replace(',', '', $_POST['amount']) : 0;
+        $reason = trim($_POST['reason'] ?? '');
+        if ($amount <= 0) {
+            $ajaxError = 'يرجى إدخال مبلغ صحيح أكبر من الصفر.';
+        } elseif (empty($reason)) {
+            $ajaxError = 'يرجى ذكر سبب الإضافة إلى المحفظة.';
+        } else {
+            try {
+                $db->execute(
+                    "INSERT INTO user_wallet_transactions (user_id, type, amount, reason, created_by) VALUES (?, 'deposit', ?, ?, ?)",
+                    [$currentUser['id'], $amount, $reason, $currentUser['id']]
+                );
+                logAudit($currentUser['id'], 'wallet_deposit', 'user_wallet_transactions', $db->getLastInsertId(), null, ['amount' => $amount, 'reason' => $reason]);
+                $ajaxSuccess = 'تم إضافة ' . formatCurrency($amount) . ' إلى محفظتك بنجاح.';
+            } catch (Throwable $e) {
+                error_log('Wallet deposit failed: ' . $e->getMessage());
+                $ajaxError = 'حدث خطأ أثناء الإضافة. يرجى المحاولة مرة أخرى.';
+            }
+        }
+    } elseif ($action === 'add_order_collection') {
+        $amount = isset($_POST['order_amount']) ? (float) str_replace(',', '', $_POST['order_amount']) : 0;
+        $orderNumber = trim($_POST['order_number'] ?? '');
+        if ($amount <= 0) {
+            $ajaxError = 'يرجى إدخال مبلغ التحصيل صحيح أكبر من الصفر.';
+        } elseif (empty($orderNumber)) {
+            $ajaxError = 'يرجى إدخال رقم الأوردر.';
+        } else {
+            $reason = 'تحصيل من أوردر #' . $orderNumber;
+            try {
+                $db->execute(
+                    "INSERT INTO user_wallet_transactions (user_id, type, amount, reason, created_by) VALUES (?, 'deposit', ?, ?, ?)",
+                    [$currentUser['id'], $amount, $reason, $currentUser['id']]
+                );
+                logAudit($currentUser['id'], 'wallet_order_collection', 'user_wallet_transactions', $db->getLastInsertId(), null, ['amount' => $amount, 'order_number' => $orderNumber]);
+                $ajaxSuccess = 'تم إضافة تحصيل ' . formatCurrency($amount) . ' من أوردر #' . htmlspecialchars($orderNumber) . ' إلى محفظتك بنجاح.';
+            } catch (Throwable $e) {
+                error_log('Wallet order collection failed: ' . $e->getMessage());
+                $ajaxError = 'حدث خطأ أثناء الإضافة. يرجى المحاولة مرة أخرى.';
+            }
+        }
+    } elseif ($action === 'submit_local_collection' && !empty($collectionRequestsTableExists)) {
+        $customerId = isset($_POST['local_customer_id']) ? (int)$_POST['local_customer_id'] : 0;
+        $customerName = trim($_POST['local_customer_name'] ?? '');
+        $amount = isset($_POST['collection_amount']) ? (float) str_replace(',', '', $_POST['collection_amount']) : 0;
+        if ($customerId <= 0 || $customerName === '') {
+            $ajaxError = 'يرجى اختيار العميل من نتائج البحث.';
+        } elseif ($amount <= 0) {
+            $ajaxError = 'يرجى إدخال مبلغ التحصيل صحيح أكبر من الصفر.';
+        } else {
+            try {
+                $db->execute(
+                    "INSERT INTO user_wallet_local_collection_requests (user_id, local_customer_id, customer_name, amount, status) VALUES (?, ?, ?, ?, 'pending')",
+                    [$currentUser['id'], $customerId, $customerName, $amount]
+                );
+                $requestId = $db->getLastInsertId();
+                if (function_exists('logAudit')) {
+                    logAudit($currentUser['id'], 'wallet_local_collection_request', 'user_wallet_local_collection_requests', $requestId, null, ['local_customer_id' => $customerId, 'amount' => $amount]);
+                }
+                $ajaxSuccess = 'تم تسجيل طلب التحصيل (' . formatCurrency($amount) . ' من ' . htmlspecialchars($customerName) . ') في انتظار موافقة المحاسب أو المدير.';
+            } catch (Throwable $e) {
+                error_log('Wallet local collection request failed: ' . $e->getMessage());
+                $ajaxError = 'حدث خطأ أثناء تسجيل الطلب. يرجى المحاولة مرة أخرى.';
+            }
+        }
+    } else {
+        $ajaxError = 'إجراء غير صحيح.';
+    }
+    $balance = getWalletBalance($db, $currentUser['id']);
+    $transactions = $db->query(
+        "SELECT t.*, u.full_name as created_by_name FROM user_wallet_transactions t LEFT JOIN users u ON u.id = t.created_by WHERE t.user_id = ? ORDER BY t.created_at DESC LIMIT 100",
+        [$currentUser['id']]
+    ) ?: [];
+    $pendingLocalCollectionRequests = [];
+    if (!empty($collectionRequestsTableExists)) {
+        $pendingLocalCollectionRequests = $db->query(
+            "SELECT * FROM user_wallet_local_collection_requests WHERE user_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 20",
+            [$currentUser['id']]
+        ) ?: [];
+    }
+    $typeLabels = ['deposit' => 'إيداع', 'withdrawal' => 'سحب', 'custody_add' => 'عهدة', 'custody_retrieve' => 'استرجاع عهدة'];
+    $out = [
+        'success' => ($ajaxError === ''),
+        'message' => $ajaxError ?: $ajaxSuccess,
+        'balance' => $balance,
+        'balance_formatted' => formatCurrency($balance),
+        'transactions' => [],
+        'pending_requests' => []
+    ];
+    foreach ($transactions as $t) {
+        $type = $t['type'] ?? '';
+        $isCredit = in_array($type, ['deposit', 'custody_add']);
+        $out['transactions'][] = [
+            'created_at' => date('Y-m-d H:i', strtotime($t['created_at'])),
+            'type' => $type,
+            'type_label' => $typeLabels[$type] ?? $type,
+            'amount' => (float)$t['amount'],
+            'amount_formatted' => ($isCredit ? '+' : '-') . formatCurrency($t['amount']),
+            'reason' => $t['reason'] ?? '-',
+            'is_credit' => $isCredit
+        ];
+    }
+    foreach ($pendingLocalCollectionRequests as $req) {
+        $out['pending_requests'][] = [
+            'id' => (int)$req['id'],
+            'created_at' => date('Y-m-d H:i', strtotime($req['created_at'])),
+            'customer_name' => $req['customer_name'] ?? '',
+            'amount' => (float)$req['amount'],
+            'amount_formatted' => formatCurrency($req['amount'])
+        ];
+    }
+    echo json_encode($out, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 /**
  * حساب رصيد المحفظة للمستخدم
  */
@@ -202,6 +330,7 @@ $typeLabels = [
         <h2><i class="bi bi-wallet2 me-2"></i>محفظة المستخدم</h2>
     </div>
 
+    <div id="wallet-alert-container"></div>
     <?php if ($error): ?>
         <div class="alert alert-danger alert-dismissible fade show">
             <i class="bi bi-exclamation-circle me-2"></i><?php echo htmlspecialchars($error); ?>
@@ -222,7 +351,7 @@ $typeLabels = [
                     <h5 class="mb-0"><i class="bi bi-cash-stack me-2"></i>رصيد المحفظة</h5>
                 </div>
                 <div class="card-body text-center py-4">
-                    <p class="display-5 fw-bold text-primary mb-0"><?php echo formatCurrency($balance); ?></p>
+                    <p class="display-5 fw-bold text-primary mb-0" id="wallet-balance-display"><?php echo formatCurrency($balance); ?></p>
                 </div>
             </div>
         </div>
@@ -233,7 +362,7 @@ $typeLabels = [
                     <i class="bi bi-plus-circle me-2"></i>إضافة مبلغ للمحفظة
                 </div>
                 <div class="card-body">
-                    <form method="POST" class="row g-3">
+                    <form method="POST" class="row g-3" id="wallet-form-deposit" data-wallet-ajax>
                         <input type="hidden" name="action" value="add_deposit">
                         <div class="col-12 col-md-4">
                             <label for="walletAmount" class="form-label">المبلغ <span class="text-danger">*</span></label>
@@ -260,7 +389,7 @@ $typeLabels = [
                     <i class="bi bi-cart-check me-2"></i>تحصيل من أوردر
                 </div>
                 <div class="card-body">
-                    <form method="POST" class="row g-3">
+                    <form method="POST" class="row g-3" id="wallet-form-order" data-wallet-ajax>
                         <input type="hidden" name="action" value="add_order_collection">
                         <div class="col-12 col-md-4">
                             <label for="orderAmount" class="form-label">مبلغ التحصيل <span class="text-danger">*</span></label>
@@ -289,7 +418,7 @@ $typeLabels = [
                 </div>
                 <div class="card-body">
                     <p class="text-muted small mb-3">اختر العميل من نتائج البحث، ثم أدخل مبلغ التحصيل. يُسجّل الطلب في انتظار موافقة المحاسب أو المدير.</p>
-                    <form method="POST" id="localCollectionForm">
+                    <form method="POST" id="localCollectionForm" data-wallet-ajax>
                         <input type="hidden" name="action" value="submit_local_collection">
                         <input type="hidden" name="local_customer_id" id="wallet_local_customer_id" value="">
                         <input type="hidden" name="local_customer_name" id="wallet_local_customer_name" value="">
@@ -337,7 +466,7 @@ $typeLabels = [
                                     <th>الحالة</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody id="wallet-pending-tbody">
                                 <?php foreach ($pendingLocalCollectionRequests as $req): ?>
                                 <tr>
                                     <td><?php echo date('Y-m-d H:i', strtotime($req['created_at'])); ?></td>
@@ -371,7 +500,7 @@ $typeLabels = [
                             <th>السبب / الوصف</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="wallet-transactions-tbody">
                         <?php if (empty($transactions)): ?>
                             <tr>
                                 <td colspan="4" class="text-center text-muted py-4">لا توجد معاملات بعد</td>
@@ -457,3 +586,74 @@ $typeLabels = [
 })();
 </script>
 <?php endif; ?>
+
+<script>
+(function() {
+    var alertContainer = document.getElementById('wallet-alert-container');
+    var balanceEl = document.getElementById('wallet-balance-display');
+    var transactionsTbody = document.getElementById('wallet-transactions-tbody');
+    var pendingTbody = document.getElementById('wallet-pending-tbody');
+    function showAlert(msg, isSuccess) {
+        if (!alertContainer) return;
+        alertContainer.innerHTML = '<div class="alert alert-' + (isSuccess ? 'success' : 'danger') + ' alert-dismissible fade show"><i class="bi bi-' + (isSuccess ? 'check-circle' : 'exclamation-circle') + ' me-2"></i>' + (msg || '') + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>';
+        if (typeof window.bootstrap !== 'undefined' && alertContainer.querySelector('.alert')) {
+            setTimeout(function() {
+                var al = alertContainer.querySelector('.alert');
+                if (al && al.offsetParent) new bootstrap.Alert(al);
+            }, 10);
+        }
+    }
+    function applyResponse(data) {
+        if (data.balance_formatted && balanceEl) balanceEl.textContent = data.balance_formatted;
+        if (data.transactions && transactionsTbody) {
+            if (data.transactions.length === 0) {
+                transactionsTbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-4">لا توجد معاملات بعد</td></tr>';
+            } else {
+                var html = '';
+                data.transactions.forEach(function(t) {
+                    var badgeClass = t.is_credit ? 'success' : 'danger';
+                    var textClass = t.is_credit ? 'text-success' : 'text-danger';
+                    html += '<tr><td>' + (t.created_at || '') + '</td><td><span class="badge bg-' + badgeClass + '">' + (t.type_label || '') + '</span></td><td class="fw-bold ' + textClass + '">' + (t.amount_formatted || '') + '</td><td>' + (t.reason || '-') + '</td></tr>';
+                });
+                transactionsTbody.innerHTML = html;
+            }
+        }
+        if (pendingTbody && data.pending_requests) {
+            if (data.pending_requests.length === 0) {
+                pendingTbody.innerHTML = '';
+            } else {
+                var ph = '';
+                data.pending_requests.forEach(function(r) {
+                    ph += '<tr><td>' + (r.created_at || '') + '</td><td>' + (r.customer_name || '') + '</td><td class="fw-bold">' + (r.amount_formatted || '') + '</td><td><span class="badge bg-warning text-dark">في انتظار الموافقة</span></td></tr>';
+                });
+                pendingTbody.innerHTML = ph;
+            }
+        }
+    }
+    document.querySelectorAll('form[data-wallet-ajax]').forEach(function(form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var btn = form.querySelector('button[type="submit"]');
+            var origHtml = btn ? btn.innerHTML : '';
+            if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>جاري الحفظ...'; }
+            var fd = new FormData(form);
+            fetch(window.location.href, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: fd, credentials: 'same-origin' })
+                .then(function(r) { return r.json().then(function(j) { return { ok: r.ok, json: j }; }); })
+                .then(function(res) {
+                    var d = res.json;
+                    showAlert(d.message || (d.success ? 'تمت العملية بنجاح.' : 'حدث خطأ.'), d.success);
+                    if (d.success) {
+                        applyResponse(d);
+                        form.reset();
+                    }
+                })
+                .catch(function(err) {
+                    showAlert('حدث خطأ في الاتصال. يرجى المحاولة مرة أخرى.', false);
+                })
+                .finally(function() {
+                    if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
+                });
+        });
+    });
+})();
+</script>

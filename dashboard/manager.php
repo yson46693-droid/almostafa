@@ -158,6 +158,22 @@ if ($page === 'driver_tracking' && $_SERVER['REQUEST_METHOD'] === 'GET' && isset
     }
 }
 
+// معالجة AJAX لمحافظ المستخدمين - قبل أي إخراج
+if ($page === 'user_wallets_control' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
+    while (ob_get_level() > 0) ob_end_clean();
+    require_once __DIR__ . '/../includes/config.php';
+    require_once __DIR__ . '/../includes/db.php';
+    require_once __DIR__ . '/../includes/auth.php';
+    require_once __DIR__ . '/../includes/audit_log.php';
+    require_once __DIR__ . '/../includes/path_helper.php';
+    requireRole(['manager', 'accountant', 'developer']);
+    $modulePath = __DIR__ . '/../modules/manager/user_wallets_control.php';
+    if (file_exists($modulePath)) {
+        include $modulePath;
+        exit;
+    }
+}
+
 // بدء output buffering لضمان عدم وجود محتوى قبل DOCTYPE
 if (!ob_get_level()) {
     ob_start();
