@@ -165,12 +165,13 @@ $localCustomersForDropdown = [];
 try {
     $t = $db->queryOne("SHOW TABLES LIKE 'local_customers'");
     if (!empty($t)) {
-        $rows = $db->query("SELECT id, name FROM local_customers WHERE status = 'active' ORDER BY name ASC");
+        $hasPhone = $db->queryOne("SHOW COLUMNS FROM local_customers LIKE 'phone'");
+        $rows = $db->query("SELECT id, name" . (!empty($hasPhone) ? ", phone" : "") . " FROM local_customers WHERE status = 'active' ORDER BY name ASC");
         foreach ($rows as $r) {
             $localCustomersForDropdown[] = [
                 'id' => (int)$r['id'],
                 'name' => trim((string)($r['name'] ?? '')),
-                'phone' => '',
+                'phone' => !empty($hasPhone) ? trim((string)($r['phone'] ?? '')) : '',
                 'phones' => [],
             ];
         }
