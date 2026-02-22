@@ -704,14 +704,24 @@ $roleLabels = ['driver' => 'سائق', 'production' => 'عامل إنتاج'];
                         var bsModal = bootstrap.Modal.getInstance(modal);
                         if (bsModal) bsModal.hide();
                     }
+                    function hideAfterPaint() {
+                        requestAnimationFrame(function() {
+                            requestAnimationFrame(function() {
+                                if (typeof window.hidePageLoading === 'function') window.hidePageLoading();
+                            });
+                        });
+                    }
+                    hideAfterPaint();
+                } else {
+                    if (typeof window.hidePageLoading === 'function') window.hidePageLoading();
                 }
             })
             .catch(function(err) {
                 showAlert('حدث خطأ في الاتصال. يرجى المحاولة مرة أخرى.', false);
+                if (typeof window.hidePageLoading === 'function') window.hidePageLoading();
             })
             .finally(function() {
                 if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
-                if (typeof window.hidePageLoading === 'function') window.hidePageLoading();
             });
     }
 

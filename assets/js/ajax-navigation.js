@@ -1090,11 +1090,16 @@
 
         // التحقق من Cache المحلي أولاً (الأسرع) - مع استثناء الصفحات التي يجب أن تكون دائماً محدثة
         if (CONFIG.cacheEnabled && !isNoCachePage(url) && pageCache.has(url)) {
+            if (typeof window.showPageLoading === 'function') window.showPageLoading();
             const cachedData = pageCache.get(url);
-            // تحديث URL أولاً لتحديث حالة active بشكل صحيح
             currentUrl = url;
             updatePageContent(cachedData);
             updateHistory(url);
+            requestAnimationFrame(function() {
+                requestAnimationFrame(function() {
+                    if (typeof window.hidePageLoading === 'function') window.hidePageLoading();
+                });
+            });
             return true;
         }
 
@@ -1172,6 +1177,7 @@
 
         isLoading = true;
         showLoading();
+        if (typeof window.showPageLoading === 'function') window.showPageLoading();
 
         let timeoutId = null;
         try {
@@ -1277,18 +1283,18 @@
             );
             
             // إذا تم redirect إلى صفحة تسجيل الدخول وكان المحتوى يؤكد ذلك، نعيد التوجيه الكامل
-            // لكن فقط إذا كان URL يشير فعلاً إلى index.php والمحتوى يؤكد أنه صفحة تسجيل دخول
             if (response.redirected && isLoginPageUrl && isLoginPageContent) {
                 hideLoading();
+                if (typeof window.hidePageLoading === 'function') window.hidePageLoading();
                 isLoading = false;
                 window.location.href = responseUrl;
                 return false;
             }
-            
+
             // إذا كان المحتوى يشير إلى صفحة تسجيل دخول (حتى بدون redirect)، نعيد التوجيه
-            // لكن فقط إذا كان URL يشير فعلاً إلى index.php
             if (isLoginPageContent && isLoginPageUrl && !hasMainContent) {
                 hideLoading();
+                if (typeof window.hidePageLoading === 'function') window.hidePageLoading();
                 isLoading = false;
                 window.location.href = responseUrl;
                 return false;
@@ -1304,16 +1310,16 @@
             const data = extractContent(html);
 
             if (!data) {
-                // إذا فشل استخراج المحتوى وكانت هناك redirect إلى صفحة تسجيل الدخول، نعيد التوجيه الكامل
                 if (response.redirected && isLoginPageUrl && isLoginPageContent) {
                     hideLoading();
+                    if (typeof window.hidePageLoading === 'function') window.hidePageLoading();
                     isLoading = false;
                     window.location.href = responseUrl;
                     return false;
                 }
-                // إذا كان المحتوى لا يحتوي على <main> وURL يشير إلى index.php، قد تكون صفحة تسجيل دخول
                 if (!hasMainContent && isLoginPageUrl) {
                     hideLoading();
+                    if (typeof window.hidePageLoading === 'function') window.hidePageLoading();
                     isLoading = false;
                     window.location.href = responseUrl;
                     return false;
@@ -1337,15 +1343,22 @@
             updatePageContent(data);
             updateHistory(url);
 
+            // إخفاء شاشة التحميل العامة بعد رسم المحتوى المحدث
+            requestAnimationFrame(function() {
+                requestAnimationFrame(function() {
+                    if (typeof window.hidePageLoading === 'function') window.hidePageLoading();
+                });
+            });
+
             return true;
         } catch (error) {
             if (timeoutId) {
                 clearTimeout(timeoutId);
             }
             console.error('AJAX navigation error:', error);
-            
-            // إخفاء loading قبل fallback
+
             hideLoading();
+            if (typeof window.hidePageLoading === 'function') window.hidePageLoading();
             
             // إذا كان timeout، أظهر رسالة خطأ قبل fallback
             if (error.name === 'AbortError' || error.message.includes('timeout')) {
@@ -1372,6 +1385,7 @@
         } finally {
             isLoading = false;
             hideLoading();
+            // ملاحظة: hidePageLoading يُستدعى بعد رسم المحتوى في مسار النجاح، أو في catch/redirect أعلاه
         }
     }
 
