@@ -3,7 +3,7 @@
 // ============================================
 // Configuration
 // ============================================
-const CACHE_VERSION = 'v2.2.0'; // تحديث الإصدار لإضافة الكاش المحسّن
+const CACHE_VERSION = 'v2.2.1'; // إصلاح redirect لصفحة أوردرات الإنتاج في كروم
 const PRECACHE_NAME = `albarakah-precache-${CACHE_VERSION}`;
 const STATIC_CACHE_NAME = `albarakah-static-${CACHE_VERSION}`;
 const CDN_CACHE_NAME = `albarakah-cdn-${CACHE_VERSION}`;
@@ -146,11 +146,12 @@ function fetchWithTimeout(request, timeout = NETWORK_TIMEOUT) {
   const url = new URL(request.url);
   const isPhpPage = url.pathname.endsWith('.php');
   const actualTimeout = isPhpPage ? NETWORK_TIMEOUT : STATIC_NETWORK_TIMEOUT;
-  
+  // redirect: 'follow' ضروري لطلبات قد يرد عليها الخادم بـ 302 (مثل صفحة أوردرات الإنتاج)
   return Promise.race([
     fetch(request, {
       cache: 'no-store',
-      credentials: 'same-origin'
+      credentials: 'same-origin',
+      redirect: 'follow'
     }),
     new Promise((_, reject) =>
       setTimeout(() => reject(new Error('Request timeout')), actualTimeout)
@@ -492,7 +493,7 @@ self.addEventListener('fetch', (event) => {
   const cleanedUrl = normalizeUrl(request.url);
   const url = new URL(cleanedUrl);
   
-  // إذا تغير URL، أنشئ request جديد
+  // إذا تغير URL، أنشئ request جديد (استخدام redirect: 'follow' لتجنب خطأ في كروم عند 302)
   if (cleanedUrl !== request.url) {
     event.respondWith(
       fetch(cleanedUrl, {
@@ -502,7 +503,7 @@ self.addEventListener('fetch', (event) => {
         mode: request.mode,
         credentials: request.credentials,
         cache: request.cache,
-        redirect: request.redirect,
+        redirect: 'follow',
         referrer: request.referrer,
         integrity: request.integrity
       })
@@ -537,6 +538,13 @@ self.addEventListener('fetch', (event) => {
   
   if (isIndexPage) {
     // لا نعترض index.php - نتركه للبrowser مباشرة
+    return;
+  }
+
+  // ============================================
+  // استثناء صفحة أوردرات الإنتاج - الخادم يرد بـ 302 (إضافة _t) وكروم يفشل إن لم يكن redirect: follow
+  // ============================================
+  if (url.searchParams.get('page') === 'production_tasks') {
     return;
   }
 
