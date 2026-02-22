@@ -147,6 +147,11 @@ $isManager = ($currentUser['role'] ?? '') === 'manager';
 $isDeveloper = ($currentUser['role'] ?? '') === 'developer';
 $canPrintTasks = $isAccountant || $isManager || $isDeveloper;
 
+// إرسال أول بايت للمتصفح فوراً (خاصة كروم) لتفادي "This site can't be reached" بسبب تأخر الاستجابة
+if (ob_get_level() && function_exists('flush')) {
+    @flush();
+}
+
 // جلب القوالب (templates) لعرضها في القائمة المنسدلة
 $productTemplates = [];
 try {
