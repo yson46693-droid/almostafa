@@ -1393,6 +1393,14 @@
             return false;
         }
 
+        // صفحة أوردرات الإنتاج: فتح كتحميل عادي (لا AJAX) لتجنب timeout في Chrome وبعض المتصفحات
+        try {
+            const u = (link.href || '').toString();
+            if (u.indexOf('page=production_tasks') !== -1) {
+                return false;
+            }
+        } catch (e) {}
+
         // التحقق من أن الرابط في نفس النطاق
         try {
             const linkUrl = new URL(link.href, window.location.origin);
