@@ -5,12 +5,14 @@
 
 $isGetTaskForEdit = ($_SERVER['REQUEST_METHOD'] ?? '') === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get_task_for_edit' && isset($_GET['task_id']);
 
-// عدم إرسال headers للـ HTML عند طلب AJAX (get_task_for_edit) للحفاظ على إرجاع JSON نظيف
-if (!$isGetTaskForEdit && !headers_sent()) {
-    header('Content-Type: text/html; charset=UTF-8');
+// إرسال Cache-Control دائماً عند الإمكان لمنع أي كاش قديم (صفحة كاملة أو طلب get_task_for_edit)
+if (!headers_sent()) {
     header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0, private');
     header('Pragma: no-cache');
     header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
+}
+if (!$isGetTaskForEdit && !headers_sent()) {
+    header('Content-Type: text/html; charset=UTF-8');
 }
 mb_internal_encoding('UTF-8');
 mb_http_output('UTF-8');
@@ -1611,18 +1613,21 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
 ?>
 
 <script>
-// إجبار تحديث الصفحة عند تحميلها بعد redirect لمنع cache
+// منع عرض كاش قديم: إجبار تحديث من السيرفر عند استعادة الصفحة (bfcache) أو بعد redirect
 (function() {
     'use strict';
-    
-    // التحقق من وجود معامل _refresh في URL
-    const urlParams = new URLSearchParams(window.location.search);
+    var urlParams = new URLSearchParams(window.location.search);
     if (urlParams.has('_refresh')) {
-        // إزالة معامل _refresh من URL بدون إعادة تحميل
         urlParams.delete('_refresh');
-        const newUrl = window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : '');
+        var newUrl = window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : '');
         window.history.replaceState({}, '', newUrl);
     }
+    // عند استعادة الصفحة من back-forward cache نعيد التحميل لضمان بيانات حية من قاعدة البيانات
+    window.addEventListener('pageshow', function(event) {
+        if (event.persisted) {
+            window.location.reload();
+        }
+    });
 })();
 </script>
 

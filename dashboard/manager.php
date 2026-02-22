@@ -127,6 +127,13 @@ if ($page === 'production_tasks' &&
     exit;
 }
 
+// منع تخزين صفحة أوردرات الإنتاج في الكاش لضمان عرض أحدث البيانات من قاعدة البيانات فقط
+if ($page === 'production_tasks' && !headers_sent()) {
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0, private');
+    header('Pragma: no-cache');
+    header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
+}
+
 // معالجة AJAX لتتبع السائقين - عبر نفس الصفحة لضمان مشاركة الجلسة
 if ($page === 'driver_tracking' && $_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['ajax']) && $_GET['ajax'] === 'driver_location') {
     $apiPath = __DIR__ . '/../api/driver_location.php';

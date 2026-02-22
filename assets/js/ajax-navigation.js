@@ -46,6 +46,17 @@
         showLoading: true
     };
 
+    // صفحات لا تُخزَّن في الكاش أبداً (بيانات حية من قاعدة البيانات)
+    function isNoCachePage(url) {
+        if (!url) return false;
+        try {
+            const u = typeof url === 'string' ? url : (url.url || '');
+            return u.indexOf('page=production_tasks') !== -1;
+        } catch (e) {
+            return false;
+        }
+    }
+
     // Cache للصفحات
     const pageCache = new Map();
     let currentUrl = window.location.href;
@@ -1077,8 +1088,8 @@
             return false;
         }
 
-        // التحقق من Cache المحلي أولاً (الأسرع)
-        if (CONFIG.cacheEnabled && pageCache.has(url)) {
+        // التحقق من Cache المحلي أولاً (الأسرع) - مع استثناء الصفحات التي يجب أن تكون دائماً محدثة
+        if (CONFIG.cacheEnabled && !isNoCachePage(url) && pageCache.has(url)) {
             const cachedData = pageCache.get(url);
             // تحديث URL أولاً لتحديث حالة active بشكل صحيح
             currentUrl = url;
@@ -1086,10 +1097,14 @@
             updateHistory(url);
             return true;
         }
+
+        // إزالة صفحة أوردرات الإنتاج من الكاش إن وُجدت لضمان جلب بيانات جديدة
+        if (isNoCachePage(url)) {
+            pageCache.delete(url);
+        }
         
-        // في PWA، محاولة استخدام Service Worker cache فوراً قبل network
-        // هذا يسرع التحميل بشكل كبير في أول فتح PWA
-        if ('caches' in window && window.matchMedia('(display-mode: standalone)').matches) {
+        // في PWA، محاولة استخدام Service Worker cache فوراً قبل network (ما عدا صفحات no-cache)
+        if (!isNoCachePage(url) && 'caches' in window && window.matchMedia('(display-mode: standalone)').matches) {
             try {
                 const cacheNames = ['albarakah-static-v2.0.0', 'albarakah-precache-v2.0.0'];
                 
@@ -1160,10 +1175,9 @@
 
         let timeoutId = null;
         try {
-            // محاولة استخدام Service Worker cache أولاً (لتحسين الأداء في PWA)
-            // هذا مهم جداً لأول فتح PWA - يقلل وقت التحميل من دقيقة إلى ثواني
+            // محاولة استخدام Service Worker cache أولاً (لتحسين الأداء في PWA) - ما عدا صفحات no-cache
             let response = null;
-            if ('caches' in window) {
+            if (!isNoCachePage(url) && 'caches' in window) {
                 try {
                     // محاولة فتح جميع caches المحتملة
                     const cacheNames = ['albarakah-static-v2.0.0', 'albarakah-precache-v2.0.0'];
@@ -1221,7 +1235,7 @@
                         'X-Requested-With': 'XMLHttpRequest',
                         'Accept': 'text/html'
                     },
-                    cache: 'default',
+                    cache: isNoCachePage(url) ? 'no-store' : 'default',
                     signal: controller.signal,
                     redirect: 'follow'
                 });
@@ -1307,8 +1321,8 @@
                 throw new Error('Failed to extract content from response');
             }
 
-            // حفظ في Cache
-            if (CONFIG.cacheEnabled) {
+            // حفظ في Cache (ما عدا الصفحات التي يجب أن تبقى دائماً محدثة)
+            if (CONFIG.cacheEnabled && !isNoCachePage(url)) {
                 // تنظيف Cache إذا تجاوز الحد الأقصى
                 if (pageCache.size >= CONFIG.cacheMaxSize) {
                     const firstKey = pageCache.keys().next().value;
