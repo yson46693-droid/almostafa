@@ -2222,16 +2222,6 @@ document.addEventListener('DOMContentLoaded', function() {
                                                     <i class="bi bi-receipt-cutoff me-2"></i>فاتورة ورقية
                                                 </button>
                                             </li>
-                                            <li>
-                                                <button type="button" class="dropdown-item" onclick="showPaperInvoiceReturnModal(this)" data-customer-id="<?php echo $custId; ?>" data-customer-name="<?php echo $custName; ?>">
-                                                    <i class="bi bi-arrow-return-left me-2"></i>مرتجع من فاتورة ورقية
-                                                </button>
-                                            </li>
-                                            <li>
-                                                <button type="button" class="dropdown-item local-customer-return-btn" onclick="showLocalCustomerReturnModal(this)" data-customer-id="<?php echo $custId; ?>" data-customer-name="<?php echo $custName; ?>" data-customer-phone="<?php echo $custPhone; ?>" data-customer-address="<?php echo $custAddress; ?>">
-                                                    <i class="bi bi-arrow-return-left me-2"></i>مرتجع
-                                                </button>
-                                            </li>
                                             <?php if ($currentRole === 'manager'): ?>
                                             <li><hr class="dropdown-divider"></li>
                                             <li>

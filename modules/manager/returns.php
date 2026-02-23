@@ -290,6 +290,14 @@ if (!empty($localReturnsTableExists)) {
 
     <!-- بطاقات ثابتة لتسجيل مرتجعات العملاء المحليين -->
     <?php if (!empty($localReturnsTableExists)): ?>
+    <script>
+    window.returnsPageLocalCustomersList = <?php echo json_encode(array_map(function($c) { return ['id' => (int)$c['id'], 'name' => $c['name']]; }, $localCustomersForReturns)); ?>;
+    </script>
+    <style>
+    .returns-page-autocomplete-dropdown { top: 100%; left: 0; right: 0; margin-top: 2px; border-radius: 0.375rem; border: 1px solid rgba(0,0,0,.125); }
+    .returns-page-autocomplete-dropdown .list-group-item { cursor: pointer; font-size: 0.9rem; }
+    .returns-page-autocomplete-dropdown .list-group-item:hover { background-color: var(--bs-primary-bg-subtle, #e7f1ff); }
+    </style>
     <div class="row mb-4">
         <div class="col-12 col-lg-6 mb-3 mb-lg-0">
             <div class="card shadow-sm border-warning h-100">
@@ -302,14 +310,10 @@ if (!empty($localReturnsTableExists)) {
                     <?php endif; ?>
                     <p class="text-muted small">اختر العميل ثم ارفع صورة الفاتورة/المرتجع وأدخل رقم الفاتورة ومبلغ المرتجع. يُخصم المبلغ من الرصيد المدين.</p>
                     <input type="hidden" id="returnsPagePaperCustomerId" value="">
-                    <div class="mb-3">
+                    <div class="mb-3 position-relative">
                         <label class="form-label">العميل <span class="text-danger">*</span></label>
-                        <select class="form-select" id="returnsPagePaperCustomerSelect">
-                            <option value="">-- اختر العميل --</option>
-                            <?php foreach ($localCustomersForReturns as $lc): ?>
-                                <option value="<?php echo (int)$lc['id']; ?>"><?php echo htmlspecialchars($lc['name']); ?></option>
-                            <?php endforeach; ?>
-                        </select>
+                        <input type="text" class="form-control" id="returnsPagePaperCustomerInput" placeholder="ابحث بالاسم..." autocomplete="off">
+                        <div class="list-group position-absolute shadow-sm returns-page-autocomplete-dropdown" id="returnsPagePaperCustomerDropdown" style="display: none; z-index: 1050; max-height: 220px; overflow-y: auto; width: 100%;"></div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">صورة الفاتورة / المرتجع <span class="text-danger">*</span></label>
@@ -339,15 +343,12 @@ if (!empty($localReturnsTableExists)) {
                         <div class="alert alert-info small py-2">لا يوجد عملاء محليون. يمكنك إضافتهم من صفحة <a href="?page=local_customers">العملاء المحليين</a>.</div>
                     <?php endif; ?>
                     <p class="text-muted small">اختر العميل ثم أدخل رقم الفاتورة لتحميل المنتجات وتحديد الكميات المراد إرجاعها.</p>
-                    <div class="mb-3">
+                    <div class="mb-3 position-relative">
                         <label class="form-label">العميل <span class="text-danger">*</span></label>
-                        <select class="form-select" id="returnsPageLocalCustomerSelect">
-                            <option value="">-- اختر العميل --</option>
-                            <?php foreach ($localCustomersForReturns as $lc): ?>
-                                <option value="<?php echo (int)$lc['id']; ?>" data-name="<?php echo htmlspecialchars($lc['name']); ?>"><?php echo htmlspecialchars($lc['name']); ?></option>
-                            <?php endforeach; ?>
-                        </select>
+                        <input type="text" class="form-control" id="returnsPageLocalCustomerInput" placeholder="ابحث بالاسم..." autocomplete="off">
+                        <div class="list-group position-absolute shadow-sm returns-page-autocomplete-dropdown" id="returnsPageLocalCustomerDropdown" style="display: none; z-index: 1050; max-height: 220px; overflow-y: auto; width: 100%;"></div>
                     </div>
+                    <input type="hidden" id="returnsPageLocalCustomerId" value="">
                     <div class="card mb-3 border-primary border-2">
                         <div class="card-body py-2">
                             <label class="form-label fw-bold mb-1 text-primary"><i class="bi bi-receipt me-2"></i>رقم الفاتورة</label>
@@ -920,15 +921,70 @@ function closeReturnDetailsCard() {
 
 const basePath = '<?php echo $basePath; ?>';
 
+// ----- حقول البحث التلقائي عن العميل (صفحة المرتجعات) -----
+function initReturnsPageCustomerAutocomplete(inputId, hiddenId, dropdownId) {
+    var list = window.returnsPageLocalCustomersList || [];
+    var input = document.getElementById(inputId);
+    var hidden = document.getElementById(hiddenId);
+    var dropdown = document.getElementById(dropdownId);
+    if (!input || !hidden || !dropdown) return;
+    var hideTimer = null;
+    function showDropdown(items) {
+        dropdown.innerHTML = '';
+        if (items.length === 0) {
+            dropdown.style.display = 'none';
+            return;
+        }
+        items.slice(0, 15).forEach(function(c) {
+            var a = document.createElement('a');
+            a.href = '#';
+            a.className = 'list-group-item list-group-item-action py-2';
+            a.textContent = c.name;
+            a.dataset.id = String(c.id);
+            a.dataset.name = c.name;
+            a.addEventListener('click', function(e) {
+                e.preventDefault();
+                input.value = c.name;
+                hidden.value = String(c.id);
+                dropdown.style.display = 'none';
+            });
+            dropdown.appendChild(a);
+        });
+        dropdown.style.display = 'block';
+    }
+    function filterList(q) {
+        q = (q || '').trim().toLowerCase();
+        if (q.length === 0) return list.slice(0, 15);
+        return list.filter(function(c) { return (c.name || '').toLowerCase().indexOf(q) !== -1; });
+    }
+    input.addEventListener('input', function() {
+        if (hideTimer) clearTimeout(hideTimer);
+        var q = input.value.trim();
+        if (q.length === 0) { hidden.value = ''; }
+        showDropdown(filterList(q));
+    });
+    input.addEventListener('focus', function() {
+        if (hideTimer) clearTimeout(hideTimer);
+        showDropdown(filterList(input.value));
+    });
+    input.addEventListener('blur', function() {
+        hideTimer = setTimeout(function() { dropdown.style.display = 'none'; }, 200);
+    });
+    dropdown.addEventListener('mousedown', function(e) { e.preventDefault(); }); // منع blur قبل النقر
+}
+if (window.returnsPageLocalCustomersList && window.returnsPageLocalCustomersList.length > 0) {
+    (function runAutocompleteInit() {
+        if (document.getElementById('returnsPagePaperCustomerInput')) {
+            initReturnsPageCustomerAutocomplete('returnsPagePaperCustomerInput', 'returnsPagePaperCustomerId', 'returnsPagePaperCustomerDropdown');
+            initReturnsPageCustomerAutocomplete('returnsPageLocalCustomerInput', 'returnsPageLocalCustomerId', 'returnsPageLocalCustomerDropdown');
+        } else {
+            setTimeout(runAutocompleteInit, 50);
+        }
+    })();
+}
+
 // ----- بطاقة مرتجع من فاتورة ورقية (صفحة المرتجعات) -----
 (function() {
-    var paperCustomerSelect = document.getElementById('returnsPagePaperCustomerSelect');
-    var paperCustomerIdEl = document.getElementById('returnsPagePaperCustomerId');
-    if (paperCustomerSelect && paperCustomerIdEl) {
-        paperCustomerSelect.addEventListener('change', function() {
-            paperCustomerIdEl.value = this.value || '';
-        });
-    }
     var paperFileInput = document.getElementById('returnsPagePaperImageInput');
     var paperPreview = document.getElementById('returnsPagePaperImagePreview');
     var paperPreviewImg = document.getElementById('returnsPagePaperPreviewImg');
@@ -948,8 +1004,7 @@ const basePath = '<?php echo $basePath; ?>';
 })();
 function submitReturnsPagePaperReturn() {
     var customerIdEl = document.getElementById('returnsPagePaperCustomerId');
-    var customerSelect = document.getElementById('returnsPagePaperCustomerSelect');
-    var customerId = (customerSelect && customerSelect.value) ? customerSelect.value.trim() : (customerIdEl && customerIdEl.value) || '';
+    var customerId = (customerIdEl && customerIdEl.value) ? customerIdEl.value.trim() : '';
     var invoiceNumber = (document.getElementById('returnsPagePaperInvoiceNumber') && document.getElementById('returnsPagePaperInvoiceNumber').value) ? document.getElementById('returnsPagePaperInvoiceNumber').value.trim() : '';
     var amountEl = document.getElementById('returnsPagePaperReturnAmount');
     var returnAmount = amountEl ? amountEl.value.replace(',', '.').trim() : '';
@@ -989,10 +1044,11 @@ function submitReturnsPagePaperReturn() {
 // ----- بطاقة مرتجع منتجات (صفحة المرتجعات) -----
 var returnsPageLocalLoadedData = null;
 function loadReturnsPageLocalInvoice() {
-    var customerSelect = document.getElementById('returnsPageLocalCustomerSelect');
-    var customerId = customerSelect ? customerSelect.value : '';
-    var customerName = customerSelect && customerSelect.selectedOptions && customerSelect.selectedOptions[0] ? (customerSelect.selectedOptions[0].getAttribute('data-name') || customerSelect.selectedOptions[0].textContent) : '';
-    if (!customerId) { alert('يرجى اختيار العميل'); return; }
+    var customerIdEl = document.getElementById('returnsPageLocalCustomerId');
+    var customerInput = document.getElementById('returnsPageLocalCustomerInput');
+    var customerId = customerIdEl ? customerIdEl.value : '';
+    var customerName = (customerInput && customerInput.value) ? customerInput.value.trim() : '';
+    if (!customerId) { alert('يرجى اختيار العميل من نتائج البحث'); return; }
     var invoiceNumber = (document.getElementById('returnsPageLocalInvoiceNumber') && document.getElementById('returnsPageLocalInvoiceNumber').value) ? document.getElementById('returnsPageLocalInvoiceNumber').value.trim() : '';
     if (!invoiceNumber) { alert('يرجى إدخال رقم الفاتورة'); return; }
     var loadError = document.getElementById('returnsPageLocalInvoiceLoadError');
@@ -1078,9 +1134,9 @@ function returnsPageLocalRecalcTotal() {
     if (cardEl) cardEl.textContent = total.toFixed(2) + ' ج.م';
 }
 function submitReturnsPageLocalReturn() {
-    var customerSelect = document.getElementById('returnsPageLocalCustomerSelect');
-    var customerId = customerSelect ? customerSelect.value : '';
-    if (!customerId) { alert('يرجى اختيار العميل'); return; }
+    var customerIdEl = document.getElementById('returnsPageLocalCustomerId');
+    var customerId = customerIdEl ? customerIdEl.value : '';
+    if (!customerId) { alert('يرجى اختيار العميل من نتائج البحث'); return; }
     var items = [];
     document.querySelectorAll('#returnsPageLocalItemsList tr').forEach(function(tr) {
         var qtyInput = tr.querySelector('.returns-page-local-qty');
