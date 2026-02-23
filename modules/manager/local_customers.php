@@ -644,6 +644,13 @@ $success = '';
 // قراءة الرسائل من session
 applyPRGPattern($error, $success);
 
+// رسالة التحصيل القابلة للنسخ (بعد كل تحصيل من عميل محلي)
+$collectionCopyableText = null;
+if (!empty($_SESSION['local_collection_copyable']['full_text'])) {
+    $collectionCopyableText = $_SESSION['local_collection_copyable']['full_text'];
+    unset($_SESSION['local_collection_copyable']);
+}
+
 $customerStats = [
     'total_count' => 0,
     'debtor_count' => 0,
@@ -897,19 +904,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $db->commit();
                 $transactionStarted = false;
 
-                $messageParts = ['تم تحصيل المبلغ بنجاح.'];
+                $shortMessage = 'تم التحصيل بنجاح.';
+                $copyableLines = [
+                    'تم التحصيل بنجاح',
+                    'المبلغ المحصل: ' . formatCurrency($amount),
+                    'المتبقي بعد التحصيل: ' . formatCurrency($newBalance),
+                ];
                 if ($collectionNumber !== null) {
-                    $messageParts[] = 'رقم التحصيل: ' . $collectionNumber . '.';
+                    $copyableLines[] = 'رقم التحصيل: ' . $collectionNumber;
                 }
+                $_SESSION['local_collection_copyable'] = [
+                    'lines' => $copyableLines,
+                    'full_text' => implode("\n", $copyableLines),
+                ];
 
-                $_SESSION['success_message'] = implode(' ', array_filter($messageParts));
-
-                redirectAfterPost(
-                    'local_customers',
-                    [],
-                    [],
+                preventDuplicateSubmission(
+                    $shortMessage,
+                    ['page' => 'local_customers'],
+                    null,
                     $currentRole
                 );
+                exit;
             } catch (InvalidArgumentException $userError) {
                 if ($transactionStarted) {
                     $db->rollback();
@@ -1881,6 +1896,63 @@ var dashboardWrapper = null;
         <?php echo htmlspecialchars($success); ?>
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
+    <?php if (!empty($collectionCopyableText)): ?>
+    <div class="card border-success shadow-sm mb-4" id="localCollectionCopyableCard">
+        <div class="card-body py-3">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                <span class="text-muted small"><i class="bi bi-clipboard me-1"></i>نسخ الرسالة</span>
+                <button type="button" class="btn btn-outline-success btn-sm" id="localCollectionCopyBtn" title="نسخ">
+                    <i class="bi bi-clipboard-plus me-1"></i>نسخ
+                </button>
+            </div>
+            <pre id="localCollectionCopyableText" class="mb-0 p-3 bg-light rounded border user-select-all" style="white-space: pre-wrap; word-break: break-word; font-family: inherit; font-size: 0.95rem;"><?php echo htmlspecialchars($collectionCopyableText); ?></pre>
+        </div>
+    </div>
+    <script>
+    (function() {
+        var btn = document.getElementById('localCollectionCopyBtn');
+        var pre = document.getElementById('localCollectionCopyableText');
+        if (btn && pre) {
+            btn.addEventListener('click', function() {
+                var text = pre.textContent;
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).then(function() {
+                        btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>تم النسخ';
+                        btn.classList.remove('btn-outline-success');
+                        btn.classList.add('btn-success');
+                        setTimeout(function() {
+                            btn.innerHTML = '<i class="bi bi-clipboard-plus me-1"></i>نسخ';
+                            btn.classList.remove('btn-success');
+                            btn.classList.add('btn-outline-success');
+                        }, 2000);
+                    });
+                } else {
+                    var ta = document.createElement('textarea');
+                    ta.value = text;
+                    ta.setAttribute('readonly', '');
+                    ta.style.position = 'absolute';
+                    ta.style.left = '-9999px';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    try {
+                        document.execCommand('copy');
+                        btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>تم النسخ';
+                        btn.classList.remove('btn-outline-success');
+                        btn.classList.add('btn-success');
+                        setTimeout(function() {
+                            btn.innerHTML = '<i class="bi bi-clipboard-plus me-1"></i>نسخ';
+                            btn.classList.remove('btn-success');
+                            btn.classList.add('btn-outline-success');
+                        }, 2000);
+                    } finally {
+                        document.body.removeChild(ta);
+                    }
+                }
+            });
+        }
+    })();
+    </script>
+    <?php endif; ?>
 <?php endif; ?>
 
 <!-- شريط البحث المتقدم - نتائج لحظية فور التوقف عن الكتابة -->
