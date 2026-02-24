@@ -148,6 +148,13 @@ $baseUrl = getDashboardUrl();
                     <span>العملاء المحليين</span>
                 </a>
             </li>
+            <li class="nav-item">
+                <a class="nav-link <?php echo (isset($_GET['page']) && $_GET['page'] === 'daily_collection_schedules') ? 'active' : ''; ?>" 
+                   href="<?php echo $baseUrl; ?>manager.php?page=daily_collection_schedules">
+                    <i class="bi bi-calendar2-range"></i>
+                    <span>جداول التحصيل اليومية</span>
+                </a>
+            </li>
             
             <li class="nav-item">
                 <a class="nav-link <?php echo (isset($_GET['page']) && $_GET['page'] === 'regions') ? 'active' : ''; ?>" 

@@ -52,6 +52,13 @@ $baseUrl = getDashboardUrl();
                     <span><?php echo isset($lang['menu_tasks']) ? $lang['menu_tasks'] : 'أوردرات'; ?></span>
                 </a>
             </li>
+            <li class="nav-item">
+                <a class="nav-link <?php echo (isset($_GET['page']) && $_GET['page'] === 'daily_collection_my_tables') ? 'active' : ''; ?>" 
+                   href="<?php echo $baseUrl; ?>production.php?page=daily_collection_my_tables">
+                    <i class="bi bi-calendar2-range"></i>
+                    <span>جداول التحصيل اليومية</span>
+                </a>
+            </li>
 
             <li class="nav-item">
                 <a class="nav-link" href="<?php echo $baseUrl; ?>production.php?page=inventory">

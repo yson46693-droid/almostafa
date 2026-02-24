@@ -3532,6 +3532,10 @@ $hasShippingCompanies = !empty($shippingCompanies);
                 <tbody id="companyPaperInvoicesTableBody"></tbody>
             </table>
         </div>
+        <nav id="companyPaperInvoicesPaginationWrap" class="mt-2 d-flex flex-wrap justify-content-between align-items-center gap-2" style="display: none !important;" aria-label="تقسيم سجل الفواتير الورقية">
+            <div class="text-muted small" id="companyPaperInvoicesPaginationInfo"></div>
+            <ul class="pagination pagination-sm mb-0 flex-wrap" id="companyPaperInvoicesPagination"></ul>
+        </nav>
         <div id="companyPaperInvoicesEmpty" class="text-center py-4 text-muted" style="display: none;">
             <i class="bi bi-inbox fs-1"></i>
             <p class="mb-0">لا توجد فواتير ورقية مسجلة لهذه الشركة بعد.</p>
@@ -5103,6 +5107,10 @@ function confirmCancelOrderWithDeductedAmount() {
                 <tbody id="shippingInvoiceLogTableBody"></tbody>
             </table>
         </div>
+        <nav id="shippingInvoiceLogPaginationWrap" class="mt-2 d-flex flex-wrap justify-content-between align-items-center gap-2" style="display: none !important;" aria-label="تقسيم سجل الفواتير">
+            <div class="text-muted small" id="shippingInvoiceLogPaginationInfo"></div>
+            <ul class="pagination pagination-sm mb-0 flex-wrap" id="shippingInvoiceLogPagination"></ul>
+        </nav>
         <div id="shippingInvoiceLogEmpty" class="text-center py-4 text-muted" style="display: none;">
             <i class="bi bi-inbox fs-1"></i>
             <p class="mb-0" id="shippingInvoiceLogEmptyText">لا توجد فواتير مسجلة لهذا العميل بعد.</p>
@@ -5206,10 +5214,28 @@ function displayCompanyPaperInvoices(list) {
     tbody.innerHTML = '';
     if (!list || list.length === 0) {
         document.getElementById('companyPaperInvoicesEmpty').style.display = 'block';
+        document.getElementById('companyPaperInvoicesPaginationWrap').style.display = 'none';
         return;
     }
-    document.getElementById('companyPaperInvoicesTableWrap').style.display = 'block';
-    list.forEach(function(pi) {
+    window._companyPaperInvoicesFullList = list;
+    window._companyPaperInvoicesPage = 1;
+    window._companyPaperInvoicesPerPage = 15;
+    goToCompanyPaperInvoicesPage(1);
+}
+
+function goToCompanyPaperInvoicesPage(page) {
+    var list = window._companyPaperInvoicesFullList;
+    if (!list || !list.length) return;
+    var perPage = window._companyPaperInvoicesPerPage || 15;
+    var totalPages = Math.ceil(list.length / perPage);
+    page = Math.max(1, Math.min(page, totalPages));
+    window._companyPaperInvoicesPage = page;
+    var start = (page - 1) * perPage;
+    var slice = list.slice(start, start + perPage);
+    var tbody = document.getElementById('companyPaperInvoicesTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    slice.forEach(function(pi) {
         var safeNum = (pi.invoice_number || 'ورقية-' + pi.id).replace(/</g, '&lt;').replace(/>/g, '&gt;');
         var dateStr = (pi.created_at || '-').toString().substring(0, 10);
         var viewBtn = pi.image_path
@@ -5219,6 +5245,36 @@ function displayCompanyPaperInvoices(list) {
         tr.innerHTML = '<td>' + safeNum + '</td><td>' + parseFloat(pi.total_amount || 0).toFixed(2) + ' ج.م</td><td>' + dateStr + '</td><td>' + viewBtn + '</td>';
         tbody.appendChild(tr);
     });
+    document.getElementById('companyPaperInvoicesTableWrap').style.display = 'block';
+    var wrap = document.getElementById('companyPaperInvoicesPaginationWrap');
+    if (totalPages <= 1) {
+        wrap.style.display = 'none';
+        return;
+    }
+    wrap.style.display = 'flex';
+    var from = start + 1;
+    var to = Math.min(start + perPage, list.length);
+    document.getElementById('companyPaperInvoicesPaginationInfo').textContent = 'عرض ' + from + '-' + to + ' من ' + list.length;
+    var ul = document.getElementById('companyPaperInvoicesPagination');
+    ul.innerHTML = '';
+    var prevLi = document.createElement('li');
+    prevLi.className = 'page-item' + (page <= 1 ? ' disabled' : '');
+    prevLi.innerHTML = '<a class="page-link" href="#" onclick="goToCompanyPaperInvoicesPage(' + (page - 1) + '); return false;" aria-label="السابق"><i class="bi bi-chevron-right"></i></a>';
+    ul.appendChild(prevLi);
+    var maxVisible = 5;
+    var fromPage = Math.max(1, page - Math.floor(maxVisible / 2));
+    var toPage = Math.min(totalPages, fromPage + maxVisible - 1);
+    if (toPage - fromPage < maxVisible - 1) fromPage = Math.max(1, toPage - maxVisible + 1);
+    for (var p = fromPage; p <= toPage; p++) {
+        var li = document.createElement('li');
+        li.className = 'page-item' + (p === page ? ' active' : '');
+        li.innerHTML = '<a class="page-link" href="#" onclick="goToCompanyPaperInvoicesPage(' + p + '); return false;">' + p + '</a>';
+        ul.appendChild(li);
+    }
+    var nextLi = document.createElement('li');
+    nextLi.className = 'page-item' + (page >= totalPages ? ' disabled' : '');
+    nextLi.innerHTML = '<a class="page-link" href="#" onclick="goToCompanyPaperInvoicesPage(' + (page + 1) + '); return false;" aria-label="التالي"><i class="bi bi-chevron-left"></i></a>';
+    ul.appendChild(nextLi);
 }
 
 function openCompanyPaperInvoiceForm() {
@@ -5419,21 +5475,10 @@ function displayShippingInvoiceLog(history, paperInvoices, paperInvoiceReturns) 
     if (!tbody) return;
     tbody.innerHTML = '';
     var invoices = groupShippingHistoryByInvoice(history);
-    var hasAny = invoices.length > 0 || paperInvoices.length > 0 || paperInvoiceReturns.length > 0;
-    var isLocal = document.getElementById('shippingInvoiceLogIsLocal');
-    isLocal = isLocal ? (parseInt(isLocal.value, 10) !== 0) : true;
-    if (!hasAny) {
-        document.getElementById('shippingInvoiceLogEmpty').style.display = 'block';
-        var emptyText = document.getElementById('shippingInvoiceLogEmptyText');
-        if (emptyText && !isLocal) emptyText.textContent = 'العميل غير مسجل كعميل محلي. سجل الفواتير والفاتورة الورقية متاح للعملاء المحليين فقط.';
-        return;
-    }
-    document.getElementById('shippingInvoiceLogTableWrap').style.display = 'block';
+    var rows = [];
     invoices.forEach(function(inv) {
         var safeNum = (inv.invoice_number || '-').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        var tr = document.createElement('tr');
-        tr.innerHTML = '<td>' + safeNum + '</td><td>' + parseFloat(inv.total_amount || 0).toFixed(2) + ' ج.م</td><td>' + (inv.invoice_date || '-') + '</td><td><span class="text-muted small">فاتورة نظام</span></td>';
-        tbody.appendChild(tr);
+        rows.push('<td>' + safeNum + '</td><td>' + parseFloat(inv.total_amount || 0).toFixed(2) + ' ج.م</td><td>' + (inv.invoice_date || '-') + '</td><td><span class="text-muted small">فاتورة نظام</span></td>');
     });
     paperInvoices.forEach(function(pi) {
         var safeNum = (pi.invoice_number || 'ورقية-' + pi.id).replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -5441,9 +5486,7 @@ function displayShippingInvoiceLog(history, paperInvoices, paperInvoiceReturns) 
         var viewBtn = pi.image_path
             ? '<button type="button" class="btn btn-sm btn-outline-primary" onclick="showShippingPaperInvoiceImage(' + parseInt(pi.id, 10) + ')" title="عرض صورة الفاتورة"><i class="bi bi-image me-1"></i>عرض الفاتورة</button>'
             : '<span class="text-muted small">لا توجد صورة</span>';
-        var tr = document.createElement('tr');
-        tr.innerHTML = '<td>' + safeNum + '</td><td>' + parseFloat(pi.total_amount || 0).toFixed(2) + ' ج.م</td><td>' + dateStr + '</td><td>' + viewBtn + '</td>';
-        tbody.appendChild(tr);
+        rows.push('<td>' + safeNum + '</td><td>' + parseFloat(pi.total_amount || 0).toFixed(2) + ' ج.م</td><td>' + dateStr + '</td><td>' + viewBtn + '</td>');
     });
     paperInvoiceReturns.forEach(function(pr) {
         var safeNum = ('مرتجع ورقية - ' + (pr.invoice_number || pr.id)).replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -5451,10 +5494,71 @@ function displayShippingInvoiceLog(history, paperInvoices, paperInvoiceReturns) 
         var viewBtn = pr.image_path
             ? '<button type="button" class="btn btn-sm btn-outline-warning" onclick="showShippingPaperInvoiceReturnImage(' + parseInt(pr.id, 10) + ')" title="عرض صورة المرتجع"><i class="bi bi-image me-1"></i>عرض المرتجع</button>'
             : '<span class="text-muted small">لا توجد صورة</span>';
+        rows.push('<td>' + safeNum + '</td><td class="text-warning">-' + parseFloat(pr.return_amount || 0).toFixed(2) + ' ج.م</td><td>' + dateStr + '</td><td>' + viewBtn + '</td>');
+    });
+    var hasAny = rows.length > 0;
+    var isLocal = document.getElementById('shippingInvoiceLogIsLocal');
+    isLocal = isLocal ? (parseInt(isLocal.value, 10) !== 0) : true;
+    if (!hasAny) {
+        document.getElementById('shippingInvoiceLogEmpty').style.display = 'block';
+        document.getElementById('shippingInvoiceLogPaginationWrap').style.display = 'none';
+        var emptyText = document.getElementById('shippingInvoiceLogEmptyText');
+        if (emptyText && !isLocal) emptyText.textContent = 'العميل غير مسجل كعميل محلي. سجل الفواتير والفاتورة الورقية متاح للعملاء المحليين فقط.';
+        return;
+    }
+    window._shippingInvoiceLogRows = rows;
+    window._shippingInvoiceLogPage = 1;
+    window._shippingInvoiceLogPerPage = 15;
+    document.getElementById('shippingInvoiceLogTableWrap').style.display = 'block';
+    goToShippingInvoiceLogPage(1);
+}
+
+function goToShippingInvoiceLogPage(page) {
+    var rows = window._shippingInvoiceLogRows;
+    if (!rows || !rows.length) return;
+    var perPage = window._shippingInvoiceLogPerPage || 15;
+    var totalPages = Math.ceil(rows.length / perPage);
+    page = Math.max(1, Math.min(page, totalPages));
+    window._shippingInvoiceLogPage = page;
+    var start = (page - 1) * perPage;
+    var slice = rows.slice(start, start + perPage);
+    var tbody = document.getElementById('shippingInvoiceLogTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    slice.forEach(function(rowHtml) {
         var tr = document.createElement('tr');
-        tr.innerHTML = '<td>' + safeNum + '</td><td class="text-warning">-' + parseFloat(pr.return_amount || 0).toFixed(2) + ' ج.م</td><td>' + dateStr + '</td><td>' + viewBtn + '</td>';
+        tr.innerHTML = rowHtml;
         tbody.appendChild(tr);
     });
+    var wrap = document.getElementById('shippingInvoiceLogPaginationWrap');
+    if (totalPages <= 1) {
+        wrap.style.display = 'none';
+        return;
+    }
+    wrap.style.display = 'flex';
+    var from = start + 1;
+    var to = Math.min(start + perPage, rows.length);
+    document.getElementById('shippingInvoiceLogPaginationInfo').textContent = 'عرض ' + from + '-' + to + ' من ' + rows.length;
+    var ul = document.getElementById('shippingInvoiceLogPagination');
+    ul.innerHTML = '';
+    var prevLi = document.createElement('li');
+    prevLi.className = 'page-item' + (page <= 1 ? ' disabled' : '');
+    prevLi.innerHTML = '<a class="page-link" href="#" onclick="goToShippingInvoiceLogPage(' + (page - 1) + '); return false;" aria-label="السابق"><i class="bi bi-chevron-right"></i></a>';
+    ul.appendChild(prevLi);
+    var maxVisible = 5;
+    var fromPage = Math.max(1, page - Math.floor(maxVisible / 2));
+    var toPage = Math.min(totalPages, fromPage + maxVisible - 1);
+    if (toPage - fromPage < maxVisible - 1) fromPage = Math.max(1, toPage - maxVisible + 1);
+    for (var p = fromPage; p <= toPage; p++) {
+        var li = document.createElement('li');
+        li.className = 'page-item' + (p === page ? ' active' : '');
+        li.innerHTML = '<a class="page-link" href="#" onclick="goToShippingInvoiceLogPage(' + p + '); return false;">' + p + '</a>';
+        ul.appendChild(li);
+    }
+    var nextLi = document.createElement('li');
+    nextLi.className = 'page-item' + (page >= totalPages ? ' disabled' : '');
+    nextLi.innerHTML = '<a class="page-link" href="#" onclick="goToShippingInvoiceLogPage(' + (page + 1) + '); return false;" aria-label="التالي"><i class="bi bi-chevron-left"></i></a>';
+    ul.appendChild(nextLi);
 }
 
 function openShippingPaperInvoiceForm() {

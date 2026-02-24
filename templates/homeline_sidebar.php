@@ -99,6 +99,13 @@ switch ($role) {
                 'badge' => null
             ],
             [
+                'title' => 'جداول التحصيل اليومية',
+                'icon' => 'bi-calendar2-range',
+                'url' => $baseUrl . 'manager.php?page=daily_collection_schedules',
+                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'daily_collection_schedules'),
+                'badge' => null
+            ],
+            [
                 'title' => 'عملاء المندوبين',
                 'icon' => 'bi-people-fill',
                 'url' => $baseUrl . 'manager.php?page=representatives_customers',
@@ -343,6 +350,13 @@ switch ($role) {
                 'icon' => 'bi-people',
                 'url' => $baseUrl . 'accountant.php?page=local_customers',
                 'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'local_customers'),
+                'badge' => null
+            ],
+            [
+                'title' => 'جداول التحصيل اليومية',
+                'icon' => 'bi-calendar2-range',
+                'url' => $baseUrl . 'accountant.php?page=daily_collection_schedules',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'daily_collection_schedules'),
                 'badge' => null
             ],
             [
@@ -761,6 +775,13 @@ switch ($role) {
                 'badge' => null
             ],
             [
+                'title' => 'جداول التحصيل اليومية',
+                'icon' => 'bi-calendar2-range',
+                'url' => $baseUrl . 'production.php?page=daily_collection_my_tables',
+                'active' => ($currentPage === 'production.php' && $currentPageParam === 'daily_collection_my_tables'),
+                'badge' => null
+            ],
+            [
                 'title' => 'مخزن أدوات التعبئة',
                 'icon' => 'bi-box-seam',
                 'url' => $baseUrl . 'production.php?page=packaging_warehouse',
@@ -878,6 +899,13 @@ switch ($role) {
                 'active' => ($currentPage === 'driver.php' && $currentPageParam === 'vehicle_maintenance'),
                 'badge' => null
             ],
+            [
+                'title' => 'جداول التحصيل اليومية',
+                'icon' => 'bi-calendar2-range',
+                'url' => $baseUrl . 'driver.php?page=daily_collection_my_tables',
+                'active' => ($currentPage === 'driver.php' && $currentPageParam === 'daily_collection_my_tables'),
+                'badge' => null
+            ],
         ];
         break;
 }
@@ -920,6 +948,13 @@ if (empty($menuItems)) {
                 'icon' => 'bi-journal-text',
                 'url' => $baseUrl . 'sales.php?page=my_records',
                 'active' => ($currentPage === 'sales.php' && $currentPageParam === 'my_records'),
+                'badge' => null
+            ],
+            [
+                'title' => 'جداول التحصيل اليومية',
+                'icon' => 'bi-calendar2-range',
+                'url' => $baseUrl . 'sales.php?page=daily_collection_my_tables',
+                'active' => ($currentPage === 'sales.php' && $currentPageParam === 'daily_collection_my_tables'),
                 'badge' => null
             ],
             [

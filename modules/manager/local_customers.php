@@ -940,6 +940,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif ($action === 'edit_customer') {
         $customerId = isset($_POST['customer_id']) ? (int)$_POST['customer_id'] : 0;
+        $name = trim($_POST['name'] ?? '');
         $phone = trim($_POST['phone'] ?? '');
         $address = trim($_POST['address'] ?? '');
         $regionId = isset($_POST['region_id']) && $_POST['region_id'] !== '' ? (int)$_POST['region_id'] : null;
@@ -958,13 +959,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $allowedFields = [];
                     
                     if (in_array($currentRole, ['manager', 'developer'], true)) {
-                        // المدير والمطور يعدلون جميع البيانات ما عدا اسم العميل
+                        // المدير والمطور يعدلون جميع البيانات بما فيها اسم العميل
                         $canEdit = true;
-                        $allowedFields = ['phone', 'address', 'region_id', 'balance'];
+                        $allowedFields = ['name', 'phone', 'address', 'region_id', 'balance'];
                     } elseif (in_array($currentRole, ['accountant', 'sales'], true)) {
-                        // المحاسب والمندوب يعدلون فقط (العنوان – الهاتف – المنطقة)
+                        // المحاسب والمندوب يعدلون (الاسم – العنوان – الهاتف – المنطقة)
                         $canEdit = true;
-                        $allowedFields = ['phone', 'address', 'region_id'];
+                        $allowedFields = ['name', 'phone', 'address', 'region_id'];
                     }
                     
                     if (!$canEdit) {
@@ -973,7 +974,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $updateFields = [];
                         $updateValues = [];
                         
-                        if (in_array('phone', $allowedFields)) {
+                        if (in_array('name', $allowedFields)) {
+                            if (empty($name)) {
+                                $error = 'يجب إدخال اسم العميل';
+                            } else {
+                                $updateFields[] = 'name = ?';
+                                $updateValues[] = $name;
+                            }
+                        }
+                        
+                        if (empty($error) && in_array('phone', $allowedFields)) {
                             $updateFields[] = 'phone = ?';
                             $updateValues[] = $phone ?: null;
                             
@@ -1005,7 +1015,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             }
                         }
                         
-                        if (in_array('address', $allowedFields)) {
+                        if (empty($error) && in_array('address', $allowedFields)) {
                             $updateFields[] = 'address = ?';
                             $updateValues[] = $address ?: null;
                         }
@@ -1024,7 +1034,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             }
                         }
                         
-                        if (!empty($updateFields)) {
+                        if (empty($error) && !empty($updateFields)) {
                             $updateValues[] = $customerId;
                             $db->execute(
                                 "UPDATE local_customers SET " . implode(', ', $updateFields) . " WHERE id = ?",
@@ -1033,6 +1043,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             
                             logAudit($currentUser['id'], 'edit_local_customer', 'local_customer', $customerId, null, [
                                 'name' => $customer['name'],
+                                'new_name' => in_array('name', $allowedFields) ? $name : null,
                                 'updated_fields' => $allowedFields
                             ]);
                             
@@ -1044,7 +1055,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 [],
                                 $currentRole
                             );
-                        } else {
+                        } elseif (empty($error)) {
                             $error = 'لم يتم تحديد أي حقول للتعديل';
                         }
                     }
@@ -2682,6 +2693,10 @@ document.addEventListener('DOMContentLoaded', function() {
                             </tbody>
                         </table>
                     </div>
+                    <nav id="localPurchaseHistoryPaginationWrap" class="mt-2 d-flex flex-wrap justify-content-between align-items-center gap-2" style="display: none !important;" aria-label="تقسيم سجل المشتريات">
+                        <div class="text-muted small" id="localPurchaseHistoryPaginationInfo"></div>
+                        <ul class="pagination pagination-sm mb-0 flex-wrap" id="localPurchaseHistoryPagination"></ul>
+                    </nav>
                 </div>
             </div>
             <div class="modal-footer">
@@ -2776,6 +2791,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     </tbody>
                 </table>
             </div>
+            <nav id="localPurchaseHistoryCardPaginationWrap" class="mt-2 d-flex flex-wrap justify-content-between align-items-center gap-2" style="display: none !important;" aria-label="تقسيم سجل المشتريات">
+                <div class="text-muted small" id="localPurchaseHistoryCardPaginationInfo"></div>
+                <ul class="pagination pagination-sm mb-0 flex-wrap" id="localPurchaseHistoryCardPagination"></ul>
+            </nav>
         </div>
         
         <div class="d-flex gap-2 mt-3">
@@ -6167,51 +6186,127 @@ function displayLocalPurchaseHistory(history, paperInvoices, paperInvoiceReturns
     if (tableBodyModal) tableBodyModal.innerHTML = '';
     
     const invoices = (history && history.length) ? groupLocalPurchaseHistoryByInvoice(history) : [];
-    const hasInvoices = invoices.length > 0 || paperInvoices.length > 0 || paperInvoiceReturns.length > 0;
+    const rows = [];
+    
+    if (invoices.length > 0 || paperInvoices.length > 0 || paperInvoiceReturns.length > 0) {
+        invoices.forEach(function(inv) {
+            const safeNum = (inv.invoice_number || '-').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            rows.push('<td>' + safeNum + '</td><td>' + parseFloat(inv.total_amount || 0).toFixed(2) + ' ج.م</td><td>' + (inv.invoice_date || '-') + '</td><td><button type="button" class="btn btn-sm btn-outline-primary" onclick="showLocalInvoiceDetailsModal(\'' + String(inv.invoice_number || '').replace(/'/g, "\\'") + '\')" title="عرض الفاتورة"><i class="bi bi-eye me-1"></i>عرض الفاتورة</button></td>');
+        });
+        paperInvoices.forEach(function(pi) {
+            const safeNum = (pi.invoice_number || 'ورقية-' + pi.id).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const dateStr = (pi.invoice_date || pi.created_at || '-').toString().substring(0, 10);
+            const viewBtn = pi.image_path
+                ? '<button type="button" class="btn btn-sm btn-outline-primary" onclick="showPaperInvoiceImage(' + parseInt(pi.id, 10) + ')" title="عرض صورة الفاتورة الورقية"><i class="bi bi-image me-1"></i>عرض الفاتورة</button>'
+                : '<span class="text-muted small">لا توجد صورة</span>';
+            rows.push('<td>' + safeNum + '</td><td>' + parseFloat(pi.total_amount || 0).toFixed(2) + ' ج.م</td><td>' + dateStr + '</td><td>' + viewBtn + '</td>');
+        });
+        paperInvoiceReturns.forEach(function(pr) {
+            const safeNum = ('مرتجع ورقية - ' + (pr.invoice_number || pr.id)).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const dateStr = (pr.return_date || pr.created_at || '-').toString().substring(0, 10);
+            const viewBtn = pr.image_path
+                ? '<button type="button" class="btn btn-sm btn-outline-warning" onclick="showPaperInvoiceReturnImage(' + parseInt(pr.id, 10) + ')" title="عرض صورة المرتجع"><i class="bi bi-image me-1"></i>عرض المرتجع</button>'
+                : '<span class="text-muted small">لا توجد صورة</span>';
+            rows.push('<td>' + safeNum + '</td><td class="text-warning">-' + parseFloat(pr.return_amount || 0).toFixed(2) + ' ج.م</td><td>' + dateStr + '</td><td>' + viewBtn + '</td>');
+        });
+    }
+    
+    const hasInvoices = rows.length > 0;
     
     if (!hasInvoices) {
         var emptyRow = '<tr><td colspan="4" class="text-center text-muted py-4"><i class="bi bi-info-circle me-2"></i>لا توجد مشتريات مسجلة لهذا العميل</td></tr>';
         if (tableBodyCard) tableBodyCard.innerHTML = emptyRow;
         if (tableBodyModal) tableBodyModal.innerHTML = emptyRow;
+        document.getElementById('localPurchaseHistoryPaginationWrap').style.display = 'none';
+        if (document.getElementById('localPurchaseHistoryCardPaginationWrap')) document.getElementById('localPurchaseHistoryCardPaginationWrap').style.display = 'none';
         console.log('No purchase history found for customer ID:', currentLocalCustomerId);
         return;
     }
     
-    try {
-        invoices.forEach(function(inv) {
-            const safeNum = (inv.invoice_number || '-').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            const row = document.createElement('tr');
-            row.innerHTML = '<td>' + safeNum + '</td><td>' + parseFloat(inv.total_amount || 0).toFixed(2) + ' ج.م</td><td>' + (inv.invoice_date || '-') + '</td><td><button type="button" class="btn btn-sm btn-outline-primary" onclick="showLocalInvoiceDetailsModal(\'' + String(inv.invoice_number || '').replace(/'/g, "\\'") + '\')" title="عرض الفاتورة"><i class="bi bi-eye me-1"></i>عرض الفاتورة</button></td>';
-            if (tableBodyCard) tableBodyCard.appendChild(row);
-            if (tableBodyModal) tableBodyModal.appendChild(row.cloneNode(true));
+    window._localPurchaseHistoryRows = rows;
+    window._localPurchaseHistoryPage = 1;
+    window._localPurchaseHistoryPerPage = 15;
+    goToLocalPurchaseHistoryPage(1);
+}
+
+function goToLocalPurchaseHistoryPage(page) {
+    var rows = window._localPurchaseHistoryRows;
+    if (!rows || !rows.length) return;
+    var perPage = window._localPurchaseHistoryPerPage || 15;
+    var totalPages = Math.ceil(rows.length / perPage);
+    page = Math.max(1, Math.min(page, totalPages));
+    window._localPurchaseHistoryPage = page;
+    var start = (page - 1) * perPage;
+    var slice = rows.slice(start, start + perPage);
+    var tableBodyCard = document.getElementById('localPurchaseHistoryCardTableBody');
+    var tableBodyModal = document.getElementById('localPurchaseHistoryTableBody');
+    function fillBody(tbody) {
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        slice.forEach(function(rowHtml) {
+            var tr = document.createElement('tr');
+            tr.innerHTML = rowHtml;
+            tbody.appendChild(tr);
         });
-        paperInvoices.forEach(function(pi) {
-            const safeNum = (pi.invoice_number || 'ورقية-' + pi.id).replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            const row = document.createElement('tr');
-            const dateStr = (pi.invoice_date || pi.created_at || '-').toString().substring(0, 10);
-            const viewBtn = pi.image_path
-                ? '<button type="button" class="btn btn-sm btn-outline-primary" onclick="showPaperInvoiceImage(' + parseInt(pi.id, 10) + ')" title="عرض صورة الفاتورة الورقية"><i class="bi bi-image me-1"></i>عرض الفاتورة</button>'
-                : '<span class="text-muted small">لا توجد صورة</span>';
-            row.innerHTML = '<td>' + safeNum + '</td><td>' + parseFloat(pi.total_amount || 0).toFixed(2) + ' ج.م</td><td>' + dateStr + '</td><td>' + viewBtn + '</td>';
-            if (tableBodyCard) tableBodyCard.appendChild(row);
-            if (tableBodyModal) tableBodyModal.appendChild(row.cloneNode(true));
-        });
-        paperInvoiceReturns.forEach(function(pr) {
-            const safeNum = ('مرتجع ورقية - ' + (pr.invoice_number || pr.id)).replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            const row = document.createElement('tr');
-            const dateStr = (pr.return_date || pr.created_at || '-').toString().substring(0, 10);
-            const viewBtn = pr.image_path
-                ? '<button type="button" class="btn btn-sm btn-outline-warning" onclick="showPaperInvoiceReturnImage(' + parseInt(pr.id, 10) + ')" title="عرض صورة المرتجع"><i class="bi bi-image me-1"></i>عرض المرتجع</button>'
-                : '<span class="text-muted small">لا توجد صورة</span>';
-            row.innerHTML = '<td>' + safeNum + '</td><td class="text-warning">-' + parseFloat(pr.return_amount || 0).toFixed(2) + ' ج.م</td><td>' + dateStr + '</td><td>' + viewBtn + '</td>';
-            if (tableBodyCard) tableBodyCard.appendChild(row);
-            if (tableBodyModal) tableBodyModal.appendChild(row.cloneNode(true));
-        });
-    } catch (error) {
-        console.error('Error displaying purchase history:', error);
-        var errRow = '<tr><td colspan="4" class="text-center text-danger py-4"><i class="bi bi-exclamation-triangle-fill me-2"></i>حدث خطأ أثناء عرض البيانات</td></tr>';
-        if (tableBodyCard) tableBodyCard.innerHTML = errRow;
-        if (tableBodyModal) tableBodyModal.innerHTML = errRow;
+    }
+    fillBody(tableBodyCard);
+    fillBody(tableBodyModal);
+    var from = start + 1;
+    var to = Math.min(start + perPage, rows.length);
+    var infoText = 'عرض ' + from + '-' + to + ' من ' + rows.length;
+    var wrapModal = document.getElementById('localPurchaseHistoryPaginationWrap');
+    var wrapCard = document.getElementById('localPurchaseHistoryCardPaginationWrap');
+    if (totalPages <= 1) {
+        if (wrapModal) wrapModal.style.display = 'none';
+        if (wrapCard) wrapCard.style.display = 'none';
+        return;
+    }
+    if (wrapModal) {
+        wrapModal.style.display = 'flex';
+        document.getElementById('localPurchaseHistoryPaginationInfo').textContent = infoText;
+        var ul = document.getElementById('localPurchaseHistoryPagination');
+        ul.innerHTML = '';
+        var prevLi = document.createElement('li');
+        prevLi.className = 'page-item' + (page <= 1 ? ' disabled' : '');
+        prevLi.innerHTML = '<a class="page-link" href="#" onclick="goToLocalPurchaseHistoryPage(' + (page - 1) + '); return false;" aria-label="السابق"><i class="bi bi-chevron-right"></i></a>';
+        ul.appendChild(prevLi);
+        var maxVisible = 5;
+        var fromPage = Math.max(1, page - Math.floor(maxVisible / 2));
+        var toPage = Math.min(totalPages, fromPage + maxVisible - 1);
+        if (toPage - fromPage < maxVisible - 1) fromPage = Math.max(1, toPage - maxVisible + 1);
+        for (var p = fromPage; p <= toPage; p++) {
+            var li = document.createElement('li');
+            li.className = 'page-item' + (p === page ? ' active' : '');
+            li.innerHTML = '<a class="page-link" href="#" onclick="goToLocalPurchaseHistoryPage(' + p + '); return false;">' + p + '</a>';
+            ul.appendChild(li);
+        }
+        var nextLi = document.createElement('li');
+        nextLi.className = 'page-item' + (page >= totalPages ? ' disabled' : '');
+        nextLi.innerHTML = '<a class="page-link" href="#" onclick="goToLocalPurchaseHistoryPage(' + (page + 1) + '); return false;" aria-label="التالي"><i class="bi bi-chevron-left"></i></a>';
+        ul.appendChild(nextLi);
+    }
+    if (wrapCard) {
+        wrapCard.style.display = 'flex';
+        document.getElementById('localPurchaseHistoryCardPaginationInfo').textContent = infoText;
+        var ulCard = document.getElementById('localPurchaseHistoryCardPagination');
+        ulCard.innerHTML = '';
+        var prevLiC = document.createElement('li');
+        prevLiC.className = 'page-item' + (page <= 1 ? ' disabled' : '');
+        prevLiC.innerHTML = '<a class="page-link" href="#" onclick="goToLocalPurchaseHistoryPage(' + (page - 1) + '); return false;" aria-label="السابق"><i class="bi bi-chevron-right"></i></a>';
+        ulCard.appendChild(prevLiC);
+        var fromPageC = Math.max(1, page - Math.floor(5 / 2));
+        var toPageC = Math.min(totalPages, fromPageC + 5 - 1);
+        if (toPageC - fromPageC < 4) fromPageC = Math.max(1, toPageC - 4);
+        for (var p = fromPageC; p <= toPageC; p++) {
+            var liC = document.createElement('li');
+            liC.className = 'page-item' + (p === page ? ' active' : '');
+            liC.innerHTML = '<a class="page-link" href="#" onclick="goToLocalPurchaseHistoryPage(' + p + '); return false;">' + p + '</a>';
+            ulCard.appendChild(liC);
+        }
+        var nextLiC = document.createElement('li');
+        nextLiC.className = 'page-item' + (page >= totalPages ? ' disabled' : '');
+        nextLiC.innerHTML = '<a class="page-link" href="#" onclick="goToLocalPurchaseHistoryPage(' + (page + 1) + '); return false;" aria-label="التالي"><i class="bi bi-chevron-left"></i></a>';
+        ulCard.appendChild(nextLiC);
     }
 }
 
@@ -6821,9 +6916,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 <input type="hidden" name="customer_id" id="editLocalCustomerId">
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label class="form-label">اسم العميل</label>
+                        <label class="form-label">اسم العميل <?php if (in_array($currentRole, ['manager', 'developer', 'accountant', 'sales'], true)): ?><span class="text-danger">*</span><?php endif; ?></label>
+                        <?php if (in_array($currentRole, ['manager', 'developer', 'accountant', 'sales'], true)): ?>
+                        <input type="text" class="form-control" name="name" id="editLocalCustomerName" required placeholder="اسم العميل">
+                        <?php else: ?>
                         <input type="text" class="form-control" id="editLocalCustomerName" disabled>
                         <small class="text-muted">لا يمكن تعديل اسم العميل</small>
+                        <?php endif; ?>
                     </div>
                     <?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
                     <div class="mb-3">
@@ -6892,9 +6991,13 @@ document.addEventListener('DOMContentLoaded', function() {
             <input type="hidden" name="action" value="edit_customer">
             <input type="hidden" name="customer_id" id="editLocalCustomerCardId">
             <div class="mb-3">
-                <label class="form-label">اسم العميل</label>
+                <label class="form-label">اسم العميل <?php if (in_array($currentRole, ['manager', 'developer', 'accountant', 'sales'], true)): ?><span class="text-danger">*</span><?php endif; ?></label>
+                <?php if (in_array($currentRole, ['manager', 'developer', 'accountant', 'sales'], true)): ?>
+                <input type="text" class="form-control" name="name" id="editLocalCustomerCardName" required placeholder="اسم العميل">
+                <?php else: ?>
                 <input type="text" class="form-control" id="editLocalCustomerCardName" disabled>
                 <small class="text-muted">لا يمكن تعديل اسم العميل</small>
+                <?php endif; ?>
             </div>
             <?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
             <div class="mb-3">

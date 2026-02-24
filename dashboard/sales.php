@@ -2639,6 +2639,16 @@ if ($isAjaxNavigation) {
                 }
                 ?>
                 
+            <?php elseif ($page === 'daily_collection_my_tables'): ?>
+                <?php
+                $modulePath = __DIR__ . '/../modules/shared/daily_collection_my_tables.php';
+                if (file_exists($modulePath)) {
+                    include $modulePath;
+                } else {
+                    echo '<div class="alert alert-warning">صفحة جداول التحصيل اليومية غير متاحة حالياً</div>';
+                }
+                ?>
+                
             <?php elseif ($page === 'batch_reader'): ?>
                 <!-- صفحة قارئ أرقام التشغيلات -->
                 <div class="container-fluid p-0" style="height: 100vh; overflow: hidden;">
