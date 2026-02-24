@@ -15,8 +15,7 @@ require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/audit_log.php';
 require_once __DIR__ . '/../../includes/path_helper.php';
 
-requireRole(['manager', 'accountant', 'developer']);
-
+// الصلاحيات يتحقق منها manager.php / accountant.php قبل تضمين هذا الملف - لا نكرر requireRole لتجنب إعادة التوجيه الخاطئة (خاصة مع AJAX)
 $currentUser = getCurrentUser();
 $db = db();
 
