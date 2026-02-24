@@ -15,9 +15,17 @@ require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/audit_log.php';
 require_once __DIR__ . '/../../includes/path_helper.php';
 
-// الصلاحيات يتحقق منها manager.php / accountant.php قبل تضمين هذا الملف - لا نكرر requireRole لتجنب إعادة التوجيه الخاطئة (خاصة مع AJAX)
-$currentUser = getCurrentUser();
-$db = db();
+// الصلاحيات يتحقق منها manager.php / accountant.php قبل تضمين هذا الملف - لا نكرر requireRole لتجنب إعادة التوجيه
+$currentUser = null;
+$db = null;
+try {
+    $currentUser = getCurrentUser();
+    $db = db();
+} catch (Throwable $e) {
+    error_log('Daily collection schedules init: ' . $e->getMessage());
+    echo '<div class="container-fluid"><div class="alert alert-danger">تعذر تحميل الصفحة. تأكد من تسجيل الدخول.</div></div>';
+    return;
+}
 
 /**
  * التأكد من وجود جداول التحصيل اليومية (إنشاء الناقص منها فقط)
@@ -47,20 +55,26 @@ function ensureDailyCollectionTables($db) {
     }
 }
 
-ensureDailyCollectionTables($db);
+try {
+    ensureDailyCollectionTables($db);
 
-$localCustomersTableExists = $db->queryOne("SHOW TABLES LIKE 'local_customers'");
-if (empty($localCustomersTableExists)) {
-    echo '<div class="container-fluid"><div class="alert alert-warning">جدول العملاء المحليين غير موجود. يرجى استخدام صفحة العملاء المحليين أولاً.</div></div>';
-    return;
-}
-
-foreach (['daily_collection_schedules', 'daily_collection_schedule_items', 'daily_collection_schedule_assignments', 'daily_collection_daily_records'] as $t) {
-    $exists = $db->queryOne("SHOW TABLES LIKE ?", [$t]);
-    if (empty($exists)) {
-        echo '<div class="container-fluid"><div class="alert alert-danger">جدول ' . htmlspecialchars($t) . ' غير موجود. يرجى تشغيل ملف <code>database/migrations/daily_collection_schedules.sql</code> من phpMyAdmin أو سطر الأوامر.</div></div>';
+    $localCustomersTableExists = $db->queryOne("SHOW TABLES LIKE 'local_customers'");
+    if (empty($localCustomersTableExists)) {
+        echo '<div class="container-fluid"><div class="alert alert-warning">جدول العملاء المحليين غير موجود. يرجى استخدام صفحة العملاء المحليين أولاً.</div></div>';
         return;
     }
+
+    foreach (['daily_collection_schedules', 'daily_collection_schedule_items', 'daily_collection_schedule_assignments', 'daily_collection_daily_records'] as $t) {
+        $exists = $db->queryOne("SHOW TABLES LIKE ?", [$t]);
+        if (empty($exists)) {
+            echo '<div class="container-fluid"><div class="alert alert-danger">جدول ' . htmlspecialchars($t) . ' غير موجود. يرجى تشغيل ملف <code>database/migrations/daily_collection_schedules.sql</code> من phpMyAdmin أو سطر الأوامر.</div></div>';
+            return;
+        }
+    }
+} catch (Throwable $e) {
+    error_log('Daily collection schedules load: ' . $e->getMessage());
+    echo '<div class="container-fluid"><div class="alert alert-danger">حدث خطأ أثناء تحميل الصفحة. يرجى تشغيل ملف <code>database/migrations/daily_collection_schedules.sql</code> أو مراجعة سجل الأخطاء.</div></div>';
+    return;
 }
 
 $error = '';
@@ -71,6 +85,7 @@ $baseUrl = (strpos($_SERVER['PHP_SELF'] ?? '', 'accountant.php') !== false)
     : (getDashboardUrl() . 'manager.php');
 $pageParam = (strpos($_SERVER['PHP_SELF'] ?? '', 'accountant.php') !== false) ? 'accountant' : 'manager';
 
+try {
 if (isset($_SESSION['daily_collection_success'])) {
     $success = $_SESSION['daily_collection_success'];
     unset($_SESSION['daily_collection_success']);
@@ -213,6 +228,19 @@ if ($editId > 0) {
     } else {
         $editId = 0;
     }
+}
+} catch (Throwable $e) {
+    error_log('Daily collection schedules data: ' . $e->getMessage());
+    $error = 'حدث خطأ أثناء تحميل البيانات. يرجى تشغيل ملف database/migrations/daily_collection_schedules.sql أو مراجعة سجل الأخطاء.';
+    $schedules = [];
+    $itemsCount = [];
+    $assignmentsBySchedule = [];
+    $localCustomers = [];
+    $assignableUsers = [];
+    $roleLabels = ['driver' => 'سائق', 'sales' => 'مندوب مبيعات', 'production' => 'عامل إنتاج'];
+    $editSchedule = null;
+    $editItems = [];
+    $editAssignments = [];
 }
 ?>
 <div class="container-fluid">
