@@ -21,24 +21,27 @@ $currentUser = getCurrentUser();
 $db = db();
 
 /**
- * التأكد من وجود جداول التحصيل اليومية
+ * التأكد من وجود جداول التحصيل اليومية (إنشاء الناقص منها فقط)
  */
 function ensureDailyCollectionTables($db) {
     $tables = ['daily_collection_schedules', 'daily_collection_schedule_items', 'daily_collection_schedule_assignments', 'daily_collection_daily_records'];
     foreach ($tables as $t) {
         $exists = $db->queryOne("SHOW TABLES LIKE ?", [$t]);
-        if (empty($exists)) {
-            $migrationPath = __DIR__ . '/../../database/migrations/daily_collection_schedules.sql';
-            if (file_exists($migrationPath)) {
-                $sql = file_get_contents($migrationPath);
-                foreach (array_filter(array_map('trim', explode(';', $sql))) as $stmt) {
-                    if (empty($stmt) || strpos($stmt, '--') === 0) continue;
-                    try {
-                        $db->rawQuery($stmt);
-                    } catch (Throwable $e) {
-                        error_log('Daily collection migration: ' . $e->getMessage());
-                    }
-                }
+        if (!empty($exists)) continue;
+        $migrationPath = __DIR__ . '/../../database/migrations/daily_collection_schedules.sql';
+        if (!file_exists($migrationPath)) continue;
+        $sql = file_get_contents($migrationPath);
+        $statements = array_filter(array_map('trim', explode(';', $sql)));
+        foreach ($statements as $stmt) {
+            if ($stmt === '' || strpos($stmt, '--') === 0) continue;
+            if (stripos($stmt, 'CREATE TABLE') === false) continue;
+            $tableName = null;
+            if (preg_match('/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`]?(\w+)[`]?/i', $stmt, $m)) $tableName = $m[1];
+            if ($tableName && $tableName !== $t) continue;
+            try {
+                $db->rawQuery($stmt . ';');
+            } catch (Throwable $e) {
+                error_log('Daily collection migration (' . $tableName . '): ' . $e->getMessage());
             }
             break;
         }
@@ -51,6 +54,14 @@ $localCustomersTableExists = $db->queryOne("SHOW TABLES LIKE 'local_customers'")
 if (empty($localCustomersTableExists)) {
     echo '<div class="container-fluid"><div class="alert alert-warning">جدول العملاء المحليين غير موجود. يرجى استخدام صفحة العملاء المحليين أولاً.</div></div>';
     return;
+}
+
+foreach (['daily_collection_schedules', 'daily_collection_schedule_items', 'daily_collection_schedule_assignments', 'daily_collection_daily_records'] as $t) {
+    $exists = $db->queryOne("SHOW TABLES LIKE ?", [$t]);
+    if (empty($exists)) {
+        echo '<div class="container-fluid"><div class="alert alert-danger">جدول ' . htmlspecialchars($t) . ' غير موجود. يرجى تشغيل ملف <code>database/migrations/daily_collection_schedules.sql</code> من phpMyAdmin أو سطر الأوامر.</div></div>';
+        return;
+    }
 }
 
 $error = '';
