@@ -33,7 +33,8 @@ try {
 function ensureDailyCollectionTables($db) {
     $tables = ['daily_collection_schedules', 'daily_collection_schedule_items', 'daily_collection_schedule_assignments', 'daily_collection_daily_records'];
     foreach ($tables as $t) {
-        $exists = $db->queryOne("SHOW TABLES LIKE ?", [$t]);
+        $safeName = str_replace("'", "''", $t);
+        $exists = $db->queryOne("SHOW TABLES LIKE '" . $safeName . "'");
         if (!empty($exists)) continue;
         $migrationPath = __DIR__ . '/../../database/migrations/daily_collection_schedules.sql';
         if (!file_exists($migrationPath)) continue;
@@ -65,7 +66,8 @@ try {
     }
 
     foreach (['daily_collection_schedules', 'daily_collection_schedule_items', 'daily_collection_schedule_assignments', 'daily_collection_daily_records'] as $t) {
-        $exists = $db->queryOne("SHOW TABLES LIKE ?", [$t]);
+        $safeName = str_replace("'", "''", $t);
+        $exists = $db->queryOne("SHOW TABLES LIKE '" . $safeName . "'");
         if (empty($exists)) {
             echo '<div class="container-fluid"><div class="alert alert-danger">جدول ' . htmlspecialchars($t) . ' غير موجود. يرجى تشغيل ملف <code>database/migrations/daily_collection_schedules.sql</code> من phpMyAdmin أو سطر الأوامر.</div></div>';
             return;
