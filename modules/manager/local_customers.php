@@ -734,22 +734,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $hasCollectionNumberColumn = !empty($db->queryOne("SHOW COLUMNS FROM local_collections LIKE 'collection_number'"));
                     $hasNotesColumn = !empty($db->queryOne("SHOW COLUMNS FROM local_collections LIKE 'notes'"));
 
-                    // توليد رقم التحصيل
+                    // توليد رقم التحصيل (٦ أرقام عشوائية)
                     if ($hasCollectionNumberColumn) {
-                        $year = date('Y');
-                        $month = date('m');
-                        $lastCollection = $db->queryOne(
-                            "SELECT collection_number FROM local_collections WHERE collection_number LIKE ? ORDER BY collection_number DESC LIMIT 1 FOR UPDATE",
-                            ["LOC-COL-{$year}{$month}-%"]
-                        );
-
-                        $serial = 1;
-                        if (!empty($lastCollection['collection_number'])) {
-                            $parts = explode('-', $lastCollection['collection_number']);
-                            $serial = intval($parts[3] ?? 0) + 1;
+                        $maxAttempts = 10;
+                        for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
+                            $candidate = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+                            $exists = $db->queryOne("SELECT 1 FROM local_collections WHERE collection_number = ?", [$candidate]);
+                            if (empty($exists)) {
+                                $collectionNumber = $candidate;
+                                break;
+                            }
                         }
-
-                        $collectionNumber = sprintf("LOC-COL-%s%s-%04d", $year, $month, $serial);
                     }
 
                     $collectionDate = date('Y-m-d');
@@ -905,11 +900,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $transactionStarted = false;
 
                 $shortMessage = 'تم التحصيل بنجاح.';
+                $customerName = isset($customer['name']) ? $customer['name'] : '';
                 $copyableLines = [
                     'تم التحصيل بنجاح',
                     'المبلغ المحصل: ' . formatCurrency($amount),
                     'المتبقي بعد التحصيل: ' . formatCurrency($newBalance),
                 ];
+                if ($customerName !== '') {
+                    $copyableLines[] = 'العميل: ' . $customerName;
+                }
                 if ($collectionNumber !== null) {
                     $copyableLines[] = 'رقم التحصيل: ' . $collectionNumber;
                 }

@@ -71,6 +71,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && isset($_
     }
 }
 
+// المناطق (للفلتر)
+$regions = [];
+$regionsTableExists = $db->queryOne("SHOW TABLES LIKE 'regions'");
+$lcHasRegion = $db->queryOne("SHOW COLUMNS FROM local_customers LIKE 'region_id'");
+if (!empty($regionsTableExists) && !empty($lcHasRegion)) {
+    $regions = $db->query("SELECT id, name FROM regions ORDER BY name ASC") ?: [];
+}
+
+// فلتر الحالة والمنطقة
+$statusFilter = isset($_GET['status']) && in_array($_GET['status'], ['collected', 'pending'], true) ? $_GET['status'] : 'all';
+$regionFilter = isset($_GET['region_id']) && $_GET['region_id'] !== '' ? (int)$_GET['region_id'] : null;
+
 // الجداول المخصصة للمستخدم الحالي (أو كل الجداول للمدير/المحاسب)
 $isControlRole = in_array(strtolower($currentUser['role'] ?? ''), ['manager', 'accountant', 'developer'], true);
 if ($isControlRole) {
@@ -86,32 +98,68 @@ if ($isControlRole) {
     ) ?: [];
 }
 
-$schedulesWithItems = [];
+// بناء قائمة مسطحة من كل البنود مع الجدول والمنطقة (إن وُجدت) والحالة
+$allItems = [];
+$useRegion = !empty($lcHasRegion) && !empty($regionsTableExists);
 foreach ($schedules as $s) {
-    $items = $db->query(
-        "SELECT si.id AS item_id, si.daily_amount, lc.id AS customer_id, lc.name AS customer_name
-         FROM daily_collection_schedule_items si
-         LEFT JOIN local_customers lc ON lc.id = si.local_customer_id
-         WHERE si.schedule_id = ? ORDER BY si.sort_order, si.id",
-        [$s['id']]
-    ) ?: [];
+    if ($useRegion) {
+        $sql = "SELECT si.id AS item_id, si.schedule_id, si.daily_amount, lc.id AS customer_id, lc.name AS customer_name, lc.region_id, r.name AS region_name
+                FROM daily_collection_schedule_items si
+                LEFT JOIN local_customers lc ON lc.id = si.local_customer_id
+                LEFT JOIN regions r ON r.id = lc.region_id
+                WHERE si.schedule_id = ?";
+    } else {
+        $sql = "SELECT si.id AS item_id, si.schedule_id, si.daily_amount, lc.id AS customer_id, lc.name AS customer_name
+                FROM daily_collection_schedule_items si
+                LEFT JOIN local_customers lc ON lc.id = si.local_customer_id
+                WHERE si.schedule_id = ?";
+    }
+    $params = [$s['id']];
+    if ($useRegion && $regionFilter !== null) {
+        $sql .= " AND lc.region_id = ?";
+        $params[] = $regionFilter;
+    }
+    $sql .= " ORDER BY si.sort_order, si.id";
+    $items = $db->query($sql, $params) ?: [];
     $itemIds = array_column($items, 'item_id');
     $records = [];
     if (!empty($itemIds)) {
         $ph = implode(',', array_fill(0, count($itemIds), '?'));
-        $params = array_merge($itemIds, [$viewDate]);
-        $rows = $db->query("SELECT schedule_item_id, status, collected_at FROM daily_collection_daily_records WHERE schedule_item_id IN ($ph) AND record_date = ?", $params);
+        $paramsR = array_merge($itemIds, [$viewDate]);
+        $rows = $db->query("SELECT schedule_item_id, status, collected_at FROM daily_collection_daily_records WHERE schedule_item_id IN ($ph) AND record_date = ?", $paramsR);
         foreach ($rows ?: [] as $r) {
             $records[$r['schedule_item_id']] = $r;
         }
     }
-    foreach ($items as &$it) {
-        $it['record'] = $records[$it['item_id']] ?? null;
-        $it['status'] = ($it['record']['status'] ?? 'pending') === 'collected' ? 'collected' : 'pending';
+    foreach ($items as $it) {
+        $rec = $records[$it['item_id']] ?? null;
+        $status = ($rec['status'] ?? 'pending') === 'collected' ? 'collected' : 'pending';
+        if ($statusFilter !== 'all' && $status !== $statusFilter) continue;
+        $allItems[] = [
+            'schedule_id' => $s['id'],
+            'schedule_name' => $s['name'],
+            'item_id' => $it['item_id'],
+            'customer_name' => $it['customer_name'] ?? '—',
+            'daily_amount' => $it['daily_amount'],
+            'region_name' => $useRegion ? ($it['region_name'] ?? '—') : '—',
+            'status' => $status,
+            'record' => $rec
+        ];
     }
-    unset($it);
-    $schedulesWithItems[] = ['schedule' => $s, 'items' => $items];
 }
+
+// الترقيم (pagination)
+$perPage = 15;
+$totalItems = count($allItems);
+$page = isset($_GET['p']) ? max(1, (int)$_GET['p']) : 1;
+$totalPages = $totalItems > 0 ? (int)ceil($totalItems / $perPage) : 1;
+$page = min($page, $totalPages);
+$offset = ($page - 1) * $perPage;
+$itemsPage = array_slice($allItems, $offset, $perPage);
+
+$queryBase = ['page' => 'daily_collection_my_tables', 'date' => $viewDate];
+if ($statusFilter !== 'all') $queryBase['status'] = $statusFilter;
+if ($regionFilter !== null) $queryBase['region_id'] = $regionFilter;
 
 $baseUrl = getDashboardUrl();
 $dashboardScript = 'driver.php';
@@ -140,71 +188,128 @@ $pageName = 'daily_collection_my_tables';
         </div>
     <?php endif; ?>
 
-    <div class="mb-3 d-flex flex-wrap gap-2 align-items-center">
-        <label class="form-label mb-0">التاريخ:</label>
-        <input type="date" id="view-date-picker" class="form-control form-control-sm" style="max-width:160px" value="<?php echo htmlspecialchars($viewDate); ?>">
-    </div>
+    <form method="get" action="" id="daily-collection-filters" class="mb-4">
+        <input type="hidden" name="page" value="daily_collection_my_tables">
+        <div class="row g-2 align-items-end flex-wrap">
+            <div class="col-auto">
+                <label class="form-label small mb-0">التاريخ</label>
+                <input type="date" name="date" class="form-control form-control-sm" style="max-width:160px" value="<?php echo htmlspecialchars($viewDate); ?>">
+            </div>
+            <div class="col-auto">
+                <label class="form-label small mb-0">الحالة</label>
+                <select name="status" class="form-select form-select-sm" style="max-width:160px">
+                    <option value="all" <?php echo $statusFilter === 'all' ? 'selected' : ''; ?>>الكل</option>
+                    <option value="collected" <?php echo $statusFilter === 'collected' ? 'selected' : ''; ?>>تم التحصيل</option>
+                    <option value="pending" <?php echo $statusFilter === 'pending' ? 'selected' : ''; ?>>قيد التحصيل</option>
+                </select>
+            </div>
+            <?php if ($useRegion): ?>
+            <div class="col-auto">
+                <label class="form-label small mb-0">المنطقة</label>
+                <select name="region_id" class="form-select form-select-sm" style="max-width:180px">
+                    <option value="">الكل</option>
+                    <?php foreach ($regions as $reg): ?>
+                        <option value="<?php echo (int)$reg['id']; ?>" <?php echo $regionFilter === (int)$reg['id'] ? 'selected' : ''; ?>><?php echo htmlspecialchars($reg['name']); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <?php endif; ?>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-funnel me-1"></i>عرض</button>
+            </div>
+        </div>
+    </form>
 
-    <?php if (empty($schedulesWithItems)): ?>
+    <?php if (empty($schedules)): ?>
         <div class="alert alert-info">لا توجد جداول مخصصة لك. تواصل مع المدير أو المحاسب لربطك بجدول تحصيل.</div>
+    <?php elseif ($totalItems === 0): ?>
+        <div class="alert alert-info">لا توجد بنود تطابق الفلتر المحدد.</div>
     <?php else: ?>
-        <?php foreach ($schedulesWithItems as $row): ?>
-            <?php $sch = $row['schedule']; $items = $row['items']; ?>
-            <div class="card shadow-sm mb-4">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="bi bi-table me-1"></i><?php echo htmlspecialchars($sch['name']); ?></h5>
-                </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>العميل</th>
-                                    <th>مبلغ التحصيل اليومي</th>
-                                    <th>الحالة</th>
+        <div class="card shadow-sm mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <h5 class="mb-0"><i class="bi bi-table me-1"></i>بنود التحصيل</h5>
+                <span class="text-muted small"><?php echo $totalItems; ?> بند</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>الجدول</th>
+                                <th>العميل</th>
+                                <?php if ($useRegion): ?><th>المنطقة</th><?php endif; ?>
+                                <th>مبلغ التحصيل اليومي</th>
+                                <th>الحالة</th>
+                                <?php if (!$isControlRole): ?>
+                                    <th class="text-end">إجراءات</th>
+                                <?php endif; ?>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($itemsPage as $it): ?>
+                                <tr class="<?php echo $it['status'] === 'collected' ? 'table-success' : ''; ?>">
+                                    <td><?php echo htmlspecialchars($it['schedule_name']); ?></td>
+                                    <td><?php echo htmlspecialchars($it['customer_name']); ?></td>
+                                    <?php if ($useRegion): ?><td><?php echo htmlspecialchars($it['region_name']); ?></td><?php endif; ?>
+                                    <td><?php echo function_exists('formatCurrency') ? formatCurrency($it['daily_amount']) : number_format($it['daily_amount'], 2); ?></td>
+                                    <td>
+                                        <?php if ($it['status'] === 'collected'): ?>
+                                            <span class="badge bg-success">تم التحصيل</span>
+                                            <?php if (!empty($it['record']['collected_at'])): ?>
+                                                <small class="text-muted d-block"><?php echo date('H:i', strtotime($it['record']['collected_at'])); ?></small>
+                                            <?php endif; ?>
+                                        <?php else: ?>
+                                            <span class="badge bg-warning text-dark">قيد التحصيل</span>
+                                        <?php endif; ?>
+                                    </td>
                                     <?php if (!$isControlRole): ?>
-                                        <th class="text-end">إجراءات</th>
-                                    <?php endif; ?>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($items as $it): ?>
-                                    <tr class="<?php echo $it['status'] === 'collected' ? 'table-success' : ''; ?>">
-                                        <td><?php echo htmlspecialchars($it['customer_name'] ?? '—'); ?></td>
-                                        <td><?php echo function_exists('formatCurrency') ? formatCurrency($it['daily_amount']) : number_format($it['daily_amount'], 2); ?></td>
-                                        <td>
-                                            <?php if ($it['status'] === 'collected'): ?>
-                                                <span class="badge bg-success">تم التحصيل</span>
-                                                <?php if (!empty($it['record']['collected_at'])): ?>
-                                                    <small class="text-muted d-block"><?php echo date('H:i', strtotime($it['record']['collected_at'])); ?></small>
-                                                <?php endif; ?>
-                                            <?php else: ?>
-                                                <span class="badge bg-warning text-dark">قيد التحصيل</span>
+                                        <td class="text-end">
+                                            <?php if ($it['status'] !== 'collected'): ?>
+                                            <form method="post" class="d-inline form-daily-collection-action" data-item="<?php echo $it['item_id']; ?>" data-date="<?php echo $viewDate; ?>">
+                                                <input type="hidden" name="record_date" value="<?php echo $viewDate; ?>">
+                                                <input type="hidden" name="item_id" value="<?php echo $it['item_id']; ?>">
+                                                <input type="hidden" name="action" value="mark_collected">
+                                                <button type="submit" class="btn btn-sm btn-success">تم التحصيل</button>
+                                            </form>
                                             <?php endif; ?>
                                         </td>
-                                        <?php if (!$isControlRole): ?>
-                                            <td class="text-end">
-                                                <form method="post" class="d-inline form-daily-collection-action" data-item="<?php echo $it['item_id']; ?>" data-date="<?php echo $viewDate; ?>">
-                                                    <input type="hidden" name="record_date" value="<?php echo $viewDate; ?>">
-                                                    <input type="hidden" name="item_id" value="<?php echo $it['item_id']; ?>">
-                                                    <?php if ($it['status'] === 'collected'): ?>
-                                                        <input type="hidden" name="action" value="mark_pending">
-                                                        <button type="submit" class="btn btn-sm btn-outline-secondary">إلغاء التحصيل</button>
-                                                    <?php else: ?>
-                                                        <input type="hidden" name="action" value="mark_collected">
-                                                        <button type="submit" class="btn btn-sm btn-success">تم التحصيل</button>
-                                                    <?php endif; ?>
-                                                </form>
-                                            </td>
-                                        <?php endif; ?>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
+                                    <?php endif; ?>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
                 </div>
             </div>
-        <?php endforeach; ?>
+            <?php if ($totalPages > 1): ?>
+            <div class="card-footer d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <span class="small text-muted">صفحة <?php echo $page; ?> من <?php echo $totalPages; ?></span>
+                <nav aria-label="ترقيم البنود">
+                    <ul class="pagination pagination-sm mb-0">
+                        <?php
+                        $q = $queryBase;
+                        $qStr = http_build_query($q);
+                        $sep = $qStr ? '&' : '';
+                        if ($page > 1):
+                            $q['p'] = $page - 1;
+                        ?>
+                        <li class="page-item"><a class="page-link" href="?<?php echo http_build_query($q); ?>"><i class="bi bi-chevron-right"></i></a></li>
+                        <?php endif; ?>
+                        <?php
+                        $start = max(1, $page - 2);
+                        $end = min($totalPages, $page + 2);
+                        for ($i = $start; $i <= $end; $i++):
+                            $q['p'] = $i;
+                        ?>
+                        <li class="page-item <?php echo $i === $page ? 'active' : ''; ?>"><a class="page-link" href="?<?php echo http_build_query($q); ?>"><?php echo $i; ?></a></li>
+                        <?php endfor; ?>
+                        <?php if ($page < $totalPages): $q['p'] = $page + 1; ?>
+                        <li class="page-item"><a class="page-link" href="?<?php echo http_build_query($q); ?>"><i class="bi bi-chevron-left"></i></a></li>
+                        <?php endif; ?>
+                    </ul>
+                </nav>
+            </div>
+            <?php endif; ?>
+        </div>
     <?php endif; ?>
 </div>
 <script>
