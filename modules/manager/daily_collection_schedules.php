@@ -3,6 +3,7 @@
  * صفحة جداول التحصيل اليومية المتعددة - واجهة التحكم
  * للمدير والمحاسب: إنشاء/تعديل/حذف الجداول، وتحديد من يظهر له كل جدول، وتخصيص التحصيلات المرتبطة بالعملاء.
  * لا تؤثر على رصيد الخزنة أو محفظة المستخدم - للتتبع فقط.
+ * ملاحظة: الأخطاء تُسجّل عبر error_log() فقط (إعداد log في php.ini إن لزم).
  */
 
 if (!defined('ACCESS_ALLOWED')) {
@@ -27,15 +28,22 @@ try {
     return;
 }
 
+/** التحقق من وجود جدول باستخدام rawQuery (تجنب مشكلة prepared مع SHOW TABLES في MariaDB) */
+function dailyCollectionTableExists($db, $tableName) {
+    $safe = str_replace("'", "''", $tableName);
+    $r = @$db->rawQuery("SHOW TABLES LIKE '" . $safe . "'");
+    $exists = $r && ($r instanceof mysqli_result) && $r->num_rows > 0;
+    if ($r && $r instanceof mysqli_result) $r->free();
+    return $exists;
+}
+
 /**
  * التأكد من وجود جداول التحصيل اليومية (إنشاء الناقص منها فقط)
  */
 function ensureDailyCollectionTables($db) {
     $tables = ['daily_collection_schedules', 'daily_collection_schedule_items', 'daily_collection_schedule_assignments', 'daily_collection_daily_records'];
     foreach ($tables as $t) {
-        $safeName = str_replace("'", "''", $t);
-        $exists = $db->queryOne("SHOW TABLES LIKE '" . $safeName . "'");
-        if (!empty($exists)) continue;
+        if (dailyCollectionTableExists($db, $t)) continue;
         $migrationPath = __DIR__ . '/../../database/migrations/daily_collection_schedules.sql';
         if (!file_exists($migrationPath)) continue;
         $sql = file_get_contents($migrationPath);
@@ -59,16 +67,13 @@ function ensureDailyCollectionTables($db) {
 try {
     ensureDailyCollectionTables($db);
 
-    $localCustomersTableExists = $db->queryOne("SHOW TABLES LIKE 'local_customers'");
-    if (empty($localCustomersTableExists)) {
+    if (!dailyCollectionTableExists($db, 'local_customers')) {
         echo '<div class="container-fluid"><div class="alert alert-warning">جدول العملاء المحليين غير موجود. يرجى استخدام صفحة العملاء المحليين أولاً.</div></div>';
         return;
     }
 
     foreach (['daily_collection_schedules', 'daily_collection_schedule_items', 'daily_collection_schedule_assignments', 'daily_collection_daily_records'] as $t) {
-        $safeName = str_replace("'", "''", $t);
-        $exists = $db->queryOne("SHOW TABLES LIKE '" . $safeName . "'");
-        if (empty($exists)) {
+        if (!dailyCollectionTableExists($db, $t)) {
             echo '<div class="container-fluid"><div class="alert alert-danger">جدول ' . htmlspecialchars($t) . ' غير موجود. يرجى تشغيل ملف <code>database/migrations/daily_collection_schedules.sql</code> من phpMyAdmin أو سطر الأوامر.</div></div>';
             return;
         }
@@ -86,6 +91,27 @@ $baseUrl = (strpos($_SERVER['PHP_SELF'] ?? '', 'accountant.php') !== false)
     ? (getDashboardUrl() . 'accountant.php')
     : (getDashboardUrl() . 'manager.php');
 $pageParam = (strpos($_SERVER['PHP_SELF'] ?? '', 'accountant.php') !== false) ? 'accountant' : 'manager';
+
+// AJAX: بحث العملاء المحليين للإدخال اليدوي (autocomplete)
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['ajax']) && $_GET['ajax'] === 'search_local_customers') {
+    $q = trim($_GET['q'] ?? '');
+    header('Content-Type: application/json; charset=utf-8');
+    if ($q === '') {
+        echo json_encode(['success' => true, 'customers' => []], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    try {
+        $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%';
+        $list = $db->query(
+            "SELECT id, name, phone FROM local_customers WHERE status = 'active' AND (name LIKE ? OR phone LIKE ?) ORDER BY name ASC LIMIT 25",
+            [$like, $like]
+        );
+        echo json_encode(['success' => true, 'customers' => $list ?: []], JSON_UNESCAPED_UNICODE);
+    } catch (Throwable $e) {
+        echo json_encode(['success' => false, 'customers' => []], JSON_UNESCAPED_UNICODE);
+    }
+    exit;
+}
 
 try {
 if (isset($_SESSION['daily_collection_success'])) {
@@ -274,7 +300,7 @@ if ($editId > 0) {
                     <?php endif; ?>
                 </div>
                 <div class="card-body">
-                    <form method="post" action="" id="daily-collection-form">
+                    <form method="post" action="" id="daily-collection-form" novalidate>
                         <input type="hidden" name="action" value="<?php echo $editId ? 'update_schedule' : 'create_schedule'; ?>">
                         <?php if ($editId): ?><input type="hidden" name="schedule_id" value="<?php echo $editId; ?>"><?php endif; ?>
                         <div class="mb-3">
@@ -285,19 +311,19 @@ if ($editId > 0) {
                         </div>
                         <div class="mb-3">
                             <label class="form-label">العملاء المحليون ومبلغ التحصيل اليومي <span class="text-danger">*</span></label>
+                            <small class="text-muted d-block mb-1">اكتب اسم العميل أو رقم الهاتف لعرض التطابقات من جدول العملاء المحليين</small>
                             <div id="schedule-items-container" class="border rounded p-2 bg-light">
                                 <?php
                                 if (!empty($editItems)) {
                                     foreach ($editItems as $idx => $item) {
+                                        $custName = $item['customer_name'] ?? '';
+                                        $custId = (int)($item['local_customer_id'] ?? 0);
                                         ?>
                                         <div class="row g-2 mb-2 schedule-item-row">
-                                            <div class="col-12 col-md-6">
-                                                <select name="customer_ids[]" class="form-select form-select-sm">
-                                                    <option value="">-- اختر العميل --</option>
-                                                    <?php foreach ($localCustomers as $c): ?>
-                                                        <option value="<?php echo $c['id']; ?>" <?php echo (int)($item['local_customer_id'] ?? 0) === (int)$c['id'] ? 'selected' : ''; ?>><?php echo htmlspecialchars($c['name']); ?></option>
-                                                    <?php endforeach; ?>
-                                                </select>
+                                            <div class="col-12 col-md-6 position-relative">
+                                                <input type="text" class="form-control form-control-sm customer-search-input" placeholder="ابحث أو اكتب اسم العميل..." value="<?php echo htmlspecialchars($custName); ?>" autocomplete="off">
+                                                <input type="hidden" name="customer_ids[]" class="customer-id-input" value="<?php echo $custId ?: ''; ?>">
+                                                <div class="customer-search-results list-group position-absolute w-100" style="z-index:1050;display:none;max-height:200px;overflow-y:auto;"></div>
                                             </div>
                                             <div class="col-8 col-md-4">
                                                 <input type="text" name="amounts[]" class="form-control form-control-sm" placeholder="مبلغ يومي" value="<?php echo htmlspecialchars($item['daily_amount'] ?? ''); ?>">
@@ -310,13 +336,10 @@ if ($editId > 0) {
                                 } else {
                                     ?>
                                     <div class="row g-2 mb-2 schedule-item-row">
-                                        <div class="col-12 col-md-6">
-                                            <select name="customer_ids[]" class="form-select form-select-sm">
-                                                <option value="">-- اختر العميل --</option>
-                                                <?php foreach ($localCustomers as $c): ?>
-                                                    <option value="<?php echo $c['id']; ?>"><?php echo htmlspecialchars($c['name']); ?></option>
-                                                <?php endforeach; ?>
-                                            </select>
+                                        <div class="col-12 col-md-6 position-relative">
+                                            <input type="text" class="form-control form-control-sm customer-search-input" placeholder="ابحث أو اكتب اسم العميل..." autocomplete="off">
+                                            <input type="hidden" name="customer_ids[]" class="customer-id-input" value="">
+                                            <div class="customer-search-results list-group position-absolute w-100" style="z-index:1050;display:none;max-height:200px;overflow-y:auto;"></div>
                                         </div>
                                         <div class="col-8 col-md-4">
                                             <input type="text" name="amounts[]" class="form-control form-control-sm" placeholder="مبلغ يومي">
@@ -401,17 +424,69 @@ if ($editId > 0) {
     var container = document.getElementById('schedule-items-container');
     var addBtn = document.getElementById('add-schedule-item');
     if (!container || !addBtn) return;
-    var customerOptions = <?php echo json_encode(array_map(function ($c) { return ['id' => $c['id'], 'name' => $c['name']]; }, $localCustomers)); ?>;
+
+    function buildSearchUrl() {
+        var base = (window.location.pathname || '') + (window.location.search || '');
+        if (base.indexOf('page=daily_collection_schedules') === -1) base += (base.indexOf('?') >= 0 ? '&' : '?') + 'page=daily_collection_schedules';
+        return base + (base.indexOf('?') >= 0 ? '&' : '?') + 'ajax=search_local_customers';
+    }
+
+    var searchUrl = buildSearchUrl();
+    var searchTimeout = null;
+
+    function attachAutocomplete(wrap) {
+        var input = wrap.querySelector('.customer-search-input');
+        var hidden = wrap.querySelector('.customer-id-input');
+        var resultsDiv = wrap.querySelector('.customer-search-results');
+        if (!input || !hidden || !resultsDiv) return;
+        input.addEventListener('input', function() {
+            var q = (input.value || '').trim();
+            if (q.length < 1) { resultsDiv.style.display = 'none'; resultsDiv.innerHTML = ''; hidden.value = ''; return; }
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(function() {
+                fetch(searchUrl + '&q=' + encodeURIComponent(q)).then(function(r) { return r.json(); }).then(function(data) {
+                    resultsDiv.innerHTML = '';
+                    if (!data.success || !data.customers || data.customers.length === 0) {
+                        resultsDiv.innerHTML = '<div class="list-group-item list-group-item-secondary small">لا توجد تطابقات</div>';
+                    } else {
+                        data.customers.forEach(function(c) {
+                            var el = document.createElement('button');
+                            el.type = 'button';
+                            el.className = 'list-group-item list-group-item-action list-group-item-light text-start small';
+                            el.textContent = (c.name || '') + (c.phone ? ' - ' + c.phone : '');
+                            el.addEventListener('click', function() {
+                                hidden.value = c.id;
+                                input.value = c.name || '';
+                                resultsDiv.style.display = 'none';
+                                resultsDiv.innerHTML = '';
+                            });
+                            resultsDiv.appendChild(el);
+                        });
+                    }
+                    resultsDiv.style.display = 'block';
+                }).catch(function() { resultsDiv.innerHTML = '<div class="list-group-item list-group-item-danger small">خطأ في البحث</div>'; resultsDiv.style.display = 'block'; });
+            }, 250);
+        });
+        input.addEventListener('focus', function() { if (resultsDiv.innerHTML) resultsDiv.style.display = 'block'; });
+        input.addEventListener('blur', function() { setTimeout(function() { resultsDiv.style.display = 'none'; }, 200); });
+    }
+
+    container.querySelectorAll('.schedule-item-row').forEach(function(row) {
+        var wrap = row.querySelector('.position-relative');
+        if (wrap) attachAutocomplete(wrap);
+    });
 
     function addRow() {
         var row = document.createElement('div');
         row.className = 'row g-2 mb-2 schedule-item-row';
-        var sel = '<option value="">-- اختر العميل --</option>';
-        customerOptions.forEach(function(c) { sel += '<option value="' + c.id + '">' + (c.name || '').replace(/</g,'&lt;') + '</option>'; });
-        row.innerHTML = '<div class="col-12 col-md-6"><select name="customer_ids[]" class="form-select form-select-sm">' + sel + '</select></div>' +
+        row.innerHTML = '<div class="col-12 col-md-6 position-relative">' +
+            '<input type="text" class="form-control form-control-sm customer-search-input" placeholder="ابحث أو اكتب اسم العميل..." autocomplete="off">' +
+            '<input type="hidden" name="customer_ids[]" class="customer-id-input" value="">' +
+            '<div class="customer-search-results list-group position-absolute w-100" style="z-index:1050;display:none;max-height:200px;overflow-y:auto;"></div></div>' +
             '<div class="col-8 col-md-4"><input type="text" name="amounts[]" class="form-control form-control-sm" placeholder="مبلغ يومي"></div>' +
             '<div class="col-4 col-md-2"><button type="button" class="btn btn-outline-danger btn-sm w-100 remove-item" title="حذف"><i class="bi bi-trash"></i></button></div>';
         container.appendChild(row);
+        attachAutocomplete(row.querySelector('.position-relative'));
         row.querySelector('.remove-item').addEventListener('click', function() {
             if (container.querySelectorAll('.schedule-item-row').length <= 1) return;
             row.remove();
@@ -421,6 +496,16 @@ if ($editId > 0) {
     container.addEventListener('click', function(e) {
         if (e.target.closest('.remove-item') && container.querySelectorAll('.schedule-item-row').length > 1) {
             e.target.closest('.schedule-item-row').remove();
+        }
+    });
+
+    document.getElementById('daily-collection-form').addEventListener('submit', function(e) {
+        var ids = container.querySelectorAll('.customer-id-input');
+        var hasOne = false;
+        for (var i = 0; i < ids.length; i++) { if (ids[i].value && parseInt(ids[i].value, 10) > 0) { hasOne = true; break; } }
+        if (!hasOne) {
+            e.preventDefault();
+            alert('يرجى اختيار عميل واحد على الأقل من خلال البحث واختيار نتيجة من القائمة.');
         }
     });
 })();
