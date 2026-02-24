@@ -71,17 +71,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && isset($_
     }
 }
 
-// المناطق (للفلتر)
-$regions = [];
-$regionsTableExists = $db->queryOne("SHOW TABLES LIKE 'regions'");
-$lcHasRegion = $db->queryOne("SHOW COLUMNS FROM local_customers LIKE 'region_id'");
-if (!empty($regionsTableExists) && !empty($lcHasRegion)) {
-    $regions = $db->query("SELECT id, name FROM regions ORDER BY name ASC") ?: [];
-}
-
-// فلتر الحالة والمنطقة
+// فلتر الحالة
 $statusFilter = isset($_GET['status']) && in_array($_GET['status'], ['collected', 'pending'], true) ? $_GET['status'] : 'all';
-$regionFilter = isset($_GET['region_id']) && $_GET['region_id'] !== '' ? (int)$_GET['region_id'] : null;
 
 // الجداول المخصصة للمستخدم الحالي (أو كل الجداول للمدير/المحاسب)
 $isControlRole = in_array(strtolower($currentUser['role'] ?? ''), ['manager', 'accountant', 'developer'], true);
@@ -98,29 +89,14 @@ if ($isControlRole) {
     ) ?: [];
 }
 
-// بناء قائمة مسطحة من كل البنود مع الجدول والمنطقة (إن وُجدت) والحالة
+// بناء قائمة مسطحة من كل البنود مع اسم الجدول والحالة
 $allItems = [];
-$useRegion = !empty($lcHasRegion) && !empty($regionsTableExists);
 foreach ($schedules as $s) {
-    if ($useRegion) {
-        $sql = "SELECT si.id AS item_id, si.schedule_id, si.daily_amount, lc.id AS customer_id, lc.name AS customer_name, lc.region_id, r.name AS region_name
-                FROM daily_collection_schedule_items si
-                LEFT JOIN local_customers lc ON lc.id = si.local_customer_id
-                LEFT JOIN regions r ON r.id = lc.region_id
-                WHERE si.schedule_id = ?";
-    } else {
-        $sql = "SELECT si.id AS item_id, si.schedule_id, si.daily_amount, lc.id AS customer_id, lc.name AS customer_name
-                FROM daily_collection_schedule_items si
-                LEFT JOIN local_customers lc ON lc.id = si.local_customer_id
-                WHERE si.schedule_id = ?";
-    }
-    $params = [$s['id']];
-    if ($useRegion && $regionFilter !== null) {
-        $sql .= " AND lc.region_id = ?";
-        $params[] = $regionFilter;
-    }
-    $sql .= " ORDER BY si.sort_order, si.id";
-    $items = $db->query($sql, $params) ?: [];
+    $sql = "SELECT si.id AS item_id, si.schedule_id, si.daily_amount, lc.id AS customer_id, lc.name AS customer_name
+            FROM daily_collection_schedule_items si
+            LEFT JOIN local_customers lc ON lc.id = si.local_customer_id
+            WHERE si.schedule_id = ? ORDER BY si.sort_order, si.id";
+    $items = $db->query($sql, [$s['id']]) ?: [];
     $itemIds = array_column($items, 'item_id');
     $records = [];
     if (!empty($itemIds)) {
@@ -141,7 +117,6 @@ foreach ($schedules as $s) {
             'item_id' => $it['item_id'],
             'customer_name' => $it['customer_name'] ?? '—',
             'daily_amount' => $it['daily_amount'],
-            'region_name' => $useRegion ? ($it['region_name'] ?? '—') : '—',
             'status' => $status,
             'record' => $rec
         ];
@@ -159,7 +134,6 @@ $itemsPage = array_slice($allItems, $offset, $perPage);
 
 $queryBase = ['page' => 'daily_collection_my_tables', 'date' => $viewDate];
 if ($statusFilter !== 'all') $queryBase['status'] = $statusFilter;
-if ($regionFilter !== null) $queryBase['region_id'] = $regionFilter;
 
 $baseUrl = getDashboardUrl();
 $dashboardScript = 'driver.php';
@@ -203,17 +177,6 @@ $pageName = 'daily_collection_my_tables';
                     <option value="pending" <?php echo $statusFilter === 'pending' ? 'selected' : ''; ?>>قيد التحصيل</option>
                 </select>
             </div>
-            <?php if ($useRegion): ?>
-            <div class="col-auto">
-                <label class="form-label small mb-0">المنطقة</label>
-                <select name="region_id" class="form-select form-select-sm" style="max-width:180px">
-                    <option value="">الكل</option>
-                    <?php foreach ($regions as $reg): ?>
-                        <option value="<?php echo (int)$reg['id']; ?>" <?php echo $regionFilter === (int)$reg['id'] ? 'selected' : ''; ?>><?php echo htmlspecialchars($reg['name']); ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <?php endif; ?>
             <div class="col-auto">
                 <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-funnel me-1"></i>عرض</button>
             </div>
@@ -237,7 +200,6 @@ $pageName = 'daily_collection_my_tables';
                             <tr>
                                 <th>الجدول</th>
                                 <th>العميل</th>
-                                <?php if ($useRegion): ?><th>المنطقة</th><?php endif; ?>
                                 <th>مبلغ التحصيل اليومي</th>
                                 <th>الحالة</th>
                                 <?php if (!$isControlRole): ?>
@@ -250,7 +212,6 @@ $pageName = 'daily_collection_my_tables';
                                 <tr class="<?php echo $it['status'] === 'collected' ? 'table-success' : ''; ?>">
                                     <td><?php echo htmlspecialchars($it['schedule_name']); ?></td>
                                     <td><?php echo htmlspecialchars($it['customer_name']); ?></td>
-                                    <?php if ($useRegion): ?><td><?php echo htmlspecialchars($it['region_name']); ?></td><?php endif; ?>
                                     <td><?php echo function_exists('formatCurrency') ? formatCurrency($it['daily_amount']) : number_format($it['daily_amount'], 2); ?></td>
                                     <td>
                                         <?php if ($it['status'] === 'collected'): ?>
