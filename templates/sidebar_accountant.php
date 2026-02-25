@@ -84,6 +84,13 @@ $baseUrl = getDashboardUrl();
                 </a>
             </li>
             <li class="nav-item">
+                <a class="nav-link <?php echo (isset($_GET['page']) && $_GET['page'] === 'daily_collection_my_tables') ? 'active' : ''; ?>" 
+                   href="<?php echo $baseUrl; ?>accountant.php?page=daily_collection_my_tables">
+                    <i class="bi bi-calendar-check"></i>
+                    <span>عرض وتحديث التحصيل اليومي</span>
+                </a>
+            </li>
+            <li class="nav-item">
                 <a class="nav-link" href="<?php echo $baseUrl; ?>accountant.php?page=invoices">
                     <i class="bi bi-receipt"></i>
                     <span>الفواتير</span>

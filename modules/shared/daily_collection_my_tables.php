@@ -32,21 +32,29 @@ $viewDate = isset($_GET['date']) ? date('Y-m-d', strtotime($_GET['date'])) : $to
 $success = '';
 $error = '';
 
-// معالجة تسجيل التحصيل أو إلغائه (للمستخدمين المعينين فقط)
+// معالجة تسجيل التحصيل أو إلغائه (المدير/المحاسب/المطور يمكنهم تعديل أي بند؛ غيرهم فقط المعينون)
+$isControlRole = in_array(strtolower(getCurrentUser()['role'] ?? ''), ['manager', 'accountant', 'developer'], true);
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && isset($_POST['item_id'])) {
     $itemId = (int)$_POST['item_id'];
     $recordDate = isset($_POST['record_date']) ? date('Y-m-d', strtotime($_POST['record_date'])) : $today;
     $action = $_POST['action'];
 
-    $item = $db->queryOne(
-        "SELECT si.id, si.schedule_id, si.local_customer_id
-         FROM daily_collection_schedule_items si
-         INNER JOIN daily_collection_schedule_assignments a ON a.schedule_id = si.schedule_id AND a.user_id = ?
-         WHERE si.id = ?",
-        [$userId, $itemId]
-    );
+    if ($isControlRole) {
+        $item = $db->queryOne(
+            "SELECT si.id, si.schedule_id, si.local_customer_id FROM daily_collection_schedule_items si WHERE si.id = ?",
+            [$itemId]
+        );
+    } else {
+        $item = $db->queryOne(
+            "SELECT si.id, si.schedule_id, si.local_customer_id
+             FROM daily_collection_schedule_items si
+             INNER JOIN daily_collection_schedule_assignments a ON a.schedule_id = si.schedule_id AND a.user_id = ?
+             WHERE si.id = ?",
+            [$userId, $itemId]
+        );
+    }
     if (!$item) {
-        $error = 'البند غير موجود أو غير مخصص لك.';
+        $error = $isControlRole ? 'البند غير موجود.' : 'البند غير موجود أو غير مخصص لك.';
     } else {
         if ($action === 'mark_collected') {
             $existing = $db->queryOne("SELECT id, status FROM daily_collection_daily_records WHERE schedule_item_id = ? AND record_date = ?", [$itemId, $recordDate]);
@@ -71,11 +79,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && isset($_
     }
 }
 
-// فلتر الحالة
+// فلتر الحالة وفلتر اسم الجدول
 $statusFilter = isset($_GET['status']) && in_array($_GET['status'], ['collected', 'pending'], true) ? $_GET['status'] : 'all';
+$scheduleFilter = isset($_GET['schedule_id']) && $_GET['schedule_id'] !== '' ? (int)$_GET['schedule_id'] : null;
 
 // الجداول المخصصة للمستخدم الحالي (أو كل الجداول للمدير/المحاسب)
-$isControlRole = in_array(strtolower($currentUser['role'] ?? ''), ['manager', 'accountant', 'developer'], true);
 if ($isControlRole) {
     $schedules = $db->query(
         "SELECT s.id, s.name FROM daily_collection_schedules s ORDER BY s.name ASC"
@@ -88,6 +96,7 @@ if ($isControlRole) {
         [$userId]
     ) ?: [];
 }
+$isControlRole = in_array(strtolower($currentUser['role'] ?? ''), ['manager', 'accountant', 'developer'], true);
 
 // بناء قائمة مسطحة من كل البنود مع اسم الجدول والحالة
 $allItems = [];
@@ -111,6 +120,7 @@ foreach ($schedules as $s) {
         $rec = $records[$it['item_id']] ?? null;
         $status = ($rec['status'] ?? 'pending') === 'collected' ? 'collected' : 'pending';
         if ($statusFilter !== 'all' && $status !== $statusFilter) continue;
+        if ($scheduleFilter !== null && $s['id'] != $scheduleFilter) continue;
         $allItems[] = [
             'schedule_id' => $s['id'],
             'schedule_name' => $s['name'],
@@ -134,6 +144,7 @@ $itemsPage = array_slice($allItems, $offset, $perPage);
 
 $queryBase = ['page' => 'daily_collection_my_tables', 'date' => $viewDate];
 if ($statusFilter !== 'all') $queryBase['status'] = $statusFilter;
+if ($scheduleFilter !== null) $queryBase['schedule_id'] = $scheduleFilter;
 
 $baseUrl = getDashboardUrl();
 $dashboardScript = 'driver.php';
@@ -175,6 +186,15 @@ $pageName = 'daily_collection_my_tables';
                     <option value="all" <?php echo $statusFilter === 'all' ? 'selected' : ''; ?>>الكل</option>
                     <option value="collected" <?php echo $statusFilter === 'collected' ? 'selected' : ''; ?>>تم التحصيل</option>
                     <option value="pending" <?php echo $statusFilter === 'pending' ? 'selected' : ''; ?>>قيد التحصيل</option>
+                </select>
+            </div>
+            <div class="col-auto">
+                <label class="form-label small mb-0">اسم الجدول</label>
+                <select name="schedule_id" class="form-select form-select-sm" style="max-width:200px">
+                    <option value="">الكل</option>
+                    <?php foreach ($schedules as $sch): ?>
+                        <option value="<?php echo (int)$sch['id']; ?>" <?php echo $scheduleFilter === (int)$sch['id'] ? 'selected' : ''; ?>><?php echo htmlspecialchars($sch['name']); ?></option>
+                    <?php endforeach; ?>
                 </select>
             </div>
             <div class="col-auto">
@@ -223,18 +243,16 @@ $pageName = 'daily_collection_my_tables';
                                             <span class="badge bg-warning text-dark">قيد التحصيل</span>
                                         <?php endif; ?>
                                     </td>
-                                    <?php if (!$isControlRole): ?>
-                                        <td class="text-end">
-                                            <?php if ($it['status'] !== 'collected'): ?>
-                                            <form method="post" class="d-inline form-daily-collection-action" data-item="<?php echo $it['item_id']; ?>" data-date="<?php echo $viewDate; ?>">
-                                                <input type="hidden" name="record_date" value="<?php echo $viewDate; ?>">
-                                                <input type="hidden" name="item_id" value="<?php echo $it['item_id']; ?>">
-                                                <input type="hidden" name="action" value="mark_collected">
-                                                <button type="submit" class="btn btn-sm btn-success">تم التحصيل</button>
-                                            </form>
-                                            <?php endif; ?>
-                                        </td>
-                                    <?php endif; ?>
+                                    <td class="text-end">
+                                        <?php if ($it['status'] !== 'collected'): ?>
+                                        <form method="post" class="d-inline form-daily-collection-action" data-item="<?php echo $it['item_id']; ?>" data-date="<?php echo $viewDate; ?>">
+                                            <input type="hidden" name="record_date" value="<?php echo $viewDate; ?>">
+                                            <input type="hidden" name="item_id" value="<?php echo $it['item_id']; ?>">
+                                            <input type="hidden" name="action" value="mark_collected">
+                                            <button type="submit" class="btn btn-sm btn-success">تم التحصيل</button>
+                                        </form>
+                                        <?php endif; ?>
+                                    </td>
                                 </tr>
                             <?php endforeach; ?>
                         </tbody>
