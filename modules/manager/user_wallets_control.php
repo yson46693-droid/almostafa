@@ -223,9 +223,16 @@ if ($isWalletControlAjax) {
     foreach ($userBalancesAjax as $uid => $bal) {
         $out['user_balances'][(string)$uid] = formatCurrency($bal);
     }
+    $printReceiptBaseAjax = getRelativeUrl('print_task_receipt.php');
     foreach ($selectedTransactionsAjax as $t) {
         $type = $t['type'] ?? '';
         $isCredit = in_array($type, ['deposit', 'custody_add']);
+        $reason = (string)($t['reason'] ?? '');
+        $orderIdForPrint = null;
+        if ($type === 'deposit' && (strpos($reason, 'أوردر') !== false || strpos($reason, 'اوردر') !== false) && preg_match('/#\s*(\d+)/u', $reason, $orderMatch)) {
+            $orderIdForPrint = (int)$orderMatch[1];
+        }
+        $printReceiptUrl = $orderIdForPrint > 0 ? ($printReceiptBaseAjax . (strpos($printReceiptBaseAjax, '?') !== false ? '&' : '?') . 'id=' . $orderIdForPrint) : '';
         $out['transactions'][] = [
             'created_at' => date('Y-m-d H:i', strtotime($t['created_at'])),
             'type' => $type,
@@ -234,7 +241,9 @@ if ($isWalletControlAjax) {
             'amount_formatted' => ($isCredit ? '+' : '-') . formatCurrency($t['amount']),
             'reason' => $t['reason'] ?? '-',
             'created_by_name' => $t['created_by_name'] ?? '-',
-            'is_credit' => $isCredit
+            'is_credit' => $isCredit,
+            'order_id_for_print' => $orderIdForPrint,
+            'print_receipt_url' => $printReceiptUrl
         ];
     }
     foreach ($pendingLocalCollectionRequestsAjax as $req) {
@@ -589,15 +598,25 @@ $roleLabels = ['driver' => 'سائق', 'production' => 'عامل إنتاج'];
                                         <th>المبلغ</th>
                                         <th>السبب / الوصف</th>
                                         <th>بواسطة</th>
+                                        <th>إجراء</th>
                                     </tr>
                                 </thead>
                                 <tbody id="wallets-control-transactions-tbody">
                                     <?php if (empty($selectedTransactions)): ?>
                                         <tr>
-                                            <td colspan="5" class="text-center text-muted py-4">لا توجد معاملات</td>
+                                            <td colspan="6" class="text-center text-muted py-4">لا توجد معاملات</td>
                                         </tr>
                                     <?php else: ?>
-                                        <?php foreach ($selectedTransactions as $t): ?>
+                                        <?php
+                                        $printReceiptBase = getRelativeUrl('print_task_receipt.php');
+                                        foreach ($selectedTransactions as $t):
+                                            $reason = (string)($t['reason'] ?? '');
+                                            $isOrderCollection = ($t['type'] ?? '') === 'deposit' && (strpos($reason, 'أوردر') !== false || strpos($reason, 'اوردر') !== false);
+                                            $orderIdForPrint = null;
+                                            if ($isOrderCollection && preg_match('/#\s*(\d+)/u', $reason, $orderMatch)) {
+                                                $orderIdForPrint = (int)$orderMatch[1];
+                                            }
+                                        ?>
                                             <tr>
                                                 <td><?php echo date('Y-m-d H:i', strtotime($t['created_at'])); ?></td>
                                                 <td><span class="badge bg-<?php echo in_array($t['type'], ['deposit', 'custody_add']) ? 'success' : 'danger'; ?>"><?php echo htmlspecialchars($typeLabels[$t['type']] ?? $t['type']); ?></span></td>
@@ -606,6 +625,15 @@ $roleLabels = ['driver' => 'سائق', 'production' => 'عامل إنتاج'];
                                                 </td>
                                                 <td><?php echo htmlspecialchars($t['reason'] ?? '-'); ?></td>
                                                 <td><?php echo htmlspecialchars($t['created_by_name'] ?? '-'); ?></td>
+                                                <td>
+                                                    <?php if ($orderIdForPrint > 0): ?>
+                                                        <a href="<?php echo htmlspecialchars($printReceiptBase . (strpos($printReceiptBase, '?') !== false ? '&' : '?') . 'id=' . $orderIdForPrint); ?>" target="_blank" class="btn btn-outline-primary btn-sm" title="طباعة الأوردر #<?php echo $orderIdForPrint; ?>">
+                                                            <i class="bi bi-printer me-1"></i>طباعة الأوردر
+                                                        </a>
+                                                    <?php else: ?>
+                                                        <span class="text-muted">—</span>
+                                                    <?php endif; ?>
+                                                </td>
                                             </tr>
                                         <?php endforeach; ?>
                                     <?php endif; ?>
@@ -666,13 +694,19 @@ $roleLabels = ['driver' => 'سائق', 'production' => 'عامل إنتاج'];
         }
         if (data.transactions && transactionsTbody) {
             if (data.transactions.length === 0) {
-                transactionsTbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">لا توجد معاملات</td></tr>';
+                transactionsTbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">لا توجد معاملات</td></tr>';
             } else {
                 var html = '';
                 data.transactions.forEach(function(t) {
                     var badgeClass = t.is_credit ? 'success' : 'danger';
                     var textClass = t.is_credit ? 'text-success' : 'text-danger';
-                    html += '<tr><td>' + (t.created_at || '') + '</td><td><span class="badge bg-' + badgeClass + '">' + (t.type_label || '') + '</span></td><td class="fw-bold ' + textClass + '">' + (t.amount_formatted || '') + '</td><td>' + (t.reason || '-') + '</td><td>' + (t.created_by_name || '-') + '</td></tr>';
+                    var actionCell = '';
+                    if (t.print_receipt_url) {
+                        actionCell = '<a href="' + (t.print_receipt_url || '') + '" target="_blank" class="btn btn-outline-primary btn-sm" title="طباعة الأوردر #' + (t.order_id_for_print || '') + '"><i class="bi bi-printer me-1"></i>طباعة الأوردر</a>';
+                    } else {
+                        actionCell = '<span class="text-muted">—</span>';
+                    }
+                    html += '<tr><td>' + (t.created_at || '') + '</td><td><span class="badge bg-' + badgeClass + '">' + (t.type_label || '') + '</span></td><td class="fw-bold ' + textClass + '">' + (t.amount_formatted || '') + '</td><td>' + (t.reason || '-') + '</td><td>' + (t.created_by_name || '-') + '</td><td>' + actionCell + '</td></tr>';
                 });
                 transactionsTbody.innerHTML = html;
             }
