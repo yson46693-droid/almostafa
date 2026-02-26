@@ -5,11 +5,12 @@
 
 $isGetTaskForEdit = ($_SERVER['REQUEST_METHOD'] ?? '') === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get_task_for_edit' && isset($_GET['task_id']);
 
-// إرسال Cache-Control دائماً عند الإمكان لمنع أي كاش قديم (صفحة كاملة أو طلب get_task_for_edit)
+// منع الكاش عند التبديل بين الأوردرات/الحسابات لضمان عدم رجوع أي كاش قديم
 if (!headers_sent()) {
     header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0, private');
+    header('Cache-Control: post-check=0, pre-check=0', false);
     header('Pragma: no-cache');
-    header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
+    header('Expires: 0');
 }
 if (!$isGetTaskForEdit && !headers_sent()) {
     header('Content-Type: text/html; charset=UTF-8');
