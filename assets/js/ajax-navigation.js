@@ -1407,10 +1407,10 @@
             return false;
         }
 
-        // صفحة أوردرات الإنتاج: فتح كتحميل عادي (لا AJAX) لتجنب timeout في Chrome وبعض المتصفحات
+        // صفحات تُفتح كتحميل عادي (لا AJAX) لضمان عمل النماذج والتوجيه بشكل صحيح (CSS + إنشاء البيانات)
         try {
             const u = (link.href || '').toString();
-            if (u.indexOf('page=production_tasks') !== -1) {
+            if (u.indexOf('page=production_tasks') !== -1 || u.indexOf('page=daily_collection_schedules') !== -1) {
                 return false;
             }
         } catch (e) {}

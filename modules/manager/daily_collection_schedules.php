@@ -311,7 +311,7 @@ if ($editId > 0) {
                     <?php endif; ?>
                 </div>
                 <div class="card-body">
-                    <form method="post" action="<?php echo htmlspecialchars($baseUrl . '?page=daily_collection_schedules'); ?>" id="daily-collection-form" novalidate>
+                    <form method="post" action="<?php echo htmlspecialchars($baseUrl . '?page=daily_collection_schedules'); ?>" id="daily-collection-form" novalidate data-no-loading="true" target="_top">
                         <input type="hidden" name="action" value="<?php echo $editId ? 'update_schedule' : 'create_schedule'; ?>">
                         <?php if ($editId): ?><input type="hidden" name="schedule_id" value="<?php echo $editId; ?>"><?php endif; ?>
                         <div class="mb-3">
