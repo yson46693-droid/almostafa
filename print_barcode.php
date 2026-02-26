@@ -11,6 +11,14 @@ require_once __DIR__ . '/includes/batch_numbers.php';
 
 requireRole(['production', 'accountant', 'manager']);
 
+// منع الكاش عند التبديل بين الصفحات لضمان عدم رجوع أي كاش قديم
+if (!headers_sent()) {
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Cache-Control: post-check=0, pre-check=0', false);
+    header('Pragma: no-cache');
+    header('Expires: 0');
+}
+
 $batchNumber = $_GET['batch'] ?? '';
 $quantity = isset($_GET['quantity']) ? max(1, intval($_GET['quantity'])) : 1;
 $format = 'single';

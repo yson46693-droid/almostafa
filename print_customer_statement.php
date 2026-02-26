@@ -13,6 +13,14 @@ require_once __DIR__ . '/includes/customer_history.php';
 
 requireRole(['accountant', 'sales', 'manager']);
 
+// منع الكاش عند التبديل بين الصفحات لضمان عدم رجوع أي كاش قديم
+if (!headers_sent()) {
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Cache-Control: post-check=0, pre-check=0', false);
+    header('Pragma: no-cache');
+    header('Expires: 0');
+}
+
 $customerId = isset($_GET['customer_id']) ? intval($_GET['customer_id']) : 0;
 $customerType = isset($_GET['type']) ? trim($_GET['type']) : 'normal'; // 'normal' or 'local'
 

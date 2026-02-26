@@ -19,6 +19,14 @@ if (!defined('SKIP_DAILY_BACKUP')) {
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
 
+// منع الكاش عند التبديل بين الصفحات/التقارير لضمان عدم رجوع أي كاش قديم
+if (!headers_sent()) {
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Cache-Control: post-check=0, pre-check=0', false);
+    header('Pragma: no-cache');
+    header('Expires: 0');
+}
+
 $reportsBaseDir = null;
 if (defined('REPORTS_PRIVATE_PATH')) {
     $reportsBaseDir = rtrim(str_replace('\\', '/', REPORTS_PRIVATE_PATH), '/');

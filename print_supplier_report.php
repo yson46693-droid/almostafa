@@ -12,6 +12,14 @@ require_once __DIR__ . '/includes/path_helper.php';
 
 requireRole(['accountant', 'manager']);
 
+// منع الكاش عند التبديل بين الصفحات لضمان عدم رجوع أي كاش قديم
+if (!headers_sent()) {
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Cache-Control: post-check=0, pre-check=0', false);
+    header('Pragma: no-cache');
+    header('Expires: 0');
+}
+
 $supplierId = isset($_GET['supplier_id']) ? intval($_GET['supplier_id']) : 0;
 $dateFrom = isset($_GET['date_from']) ? trim($_GET['date_from']) : date('Y-m-01');
 $dateTo = isset($_GET['date_to']) ? trim($_GET['date_to']) : date('Y-m-d');

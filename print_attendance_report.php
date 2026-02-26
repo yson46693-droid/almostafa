@@ -13,6 +13,14 @@ require_once __DIR__ . '/includes/path_helper.php';
 
 requireRole(['accountant', 'manager', 'developer']);
 
+// منع الكاش عند التبديل بين الصفحات لضمان عدم رجوع أي كاش قديم
+if (!headers_sent()) {
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Cache-Control: post-check=0, pre-check=0', false);
+    header('Pragma: no-cache');
+    header('Expires: 0');
+}
+
 $userId = isset($_GET['user_id']) ? (int) $_GET['user_id'] : 0;
 $month = isset($_GET['month']) ? trim((string) $_GET['month']) : date('Y-m');
 

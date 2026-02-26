@@ -12,6 +12,14 @@ require_once __DIR__ . '/includes/path_helper.php';
 
 requireRole(['production', 'accountant', 'manager', 'driver']);
 
+// منع الكاش عند التبديل بين الصفحات لضمان عدم رجوع أي كاش قديم
+if (!headers_sent()) {
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Cache-Control: post-check=0, pre-check=0', false);
+    header('Pragma: no-cache');
+    header('Expires: 0');
+}
+
 // دعم طباعة إيصال واحد (id=) أو عدة إيصالات (ids=1,2,3)
 $taskIds = [];
 if (!empty($_GET['ids'])) {

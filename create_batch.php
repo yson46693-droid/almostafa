@@ -8,6 +8,12 @@ require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/batch_creation.php';
 
 header('Content-Type: application/json; charset=utf-8');
+if (!headers_sent()) {
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Cache-Control: post-check=0, pre-check=0', false);
+    header('Pragma: no-cache');
+    header('Expires: 0');
+}
 
 function respondWithJson(array $payload, int $statusCode = 200): void
 {

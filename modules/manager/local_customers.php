@@ -8,8 +8,13 @@ if (!defined('ACCESS_ALLOWED')) {
     die('Direct access not allowed');
 }
 
-// ملاحظة: Headers يتم إرسالها من dashboard/accountant.php أو dashboard/manager.php
-// لا حاجة لإرسالها هنا لتجنب مشاكل headers already sent
+// منع الكاش عند التبديل بين تبويبات الشريط الجانبي لضمان عدم رجوع أي كاش قديم
+if (!headers_sent()) {
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Cache-Control: post-check=0, pre-check=0', false);
+    header('Pragma: no-cache');
+    header('Expires: 0');
+}
 
 if (!defined('LOCAL_CUSTOMERS_MODULE_BOOTSTRAPPED')) {
     define('LOCAL_CUSTOMERS_MODULE_BOOTSTRAPPED', true);
