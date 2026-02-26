@@ -4009,7 +4009,7 @@ $hasShippingCompanies = !empty($shippingCompanies);
                 <h5 class="modal-title"><i class="bi bi-cash-coin me-2"></i>تحصيل من شركة الشحن</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
             </div>
-            <form method="POST">
+            <form method="POST" data-no-loading="true">
                 <input type="hidden" name="action" value="collect_from_shipping_company">
                 <input type="hidden" name="company_id" id="collectCompanyId">
                 <div class="modal-body">
@@ -4128,7 +4128,7 @@ $hasShippingCompanies = !empty($shippingCompanies);
         <h5 class="mb-0"><i class="bi bi-cash-coin me-2"></i>تحصيل من شركة الشحن</h5>
     </div>
     <div class="card-body">
-        <form method="POST">
+        <form method="POST" data-no-loading="true">
             <input type="hidden" name="action" value="collect_from_shipping_company">
             <input type="hidden" name="company_id" id="collectCardCompanyId">
             <div class="mb-3">
@@ -5945,6 +5945,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                     if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = 'تحصيل المبلغ'; }
+                    if (typeof window.hidePageLoading === 'function') window.hidePageLoading();
                     if (data.success) {
                         var msg = data.message || 'تم التحصيل بنجاح.';
                         if (data.amount_collected != null) {
@@ -5966,6 +5967,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 })
                 .catch(function() {
                     if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = 'تحصيل المبلغ'; }
+                    if (typeof window.hidePageLoading === 'function') window.hidePageLoading();
                     showShippingToast('حدث خطأ في الاتصال.', 'danger');
                 });
             return false;
@@ -5984,6 +5986,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                     if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = 'تحصيل المبلغ'; }
+                    if (typeof window.hidePageLoading === 'function') window.hidePageLoading();
                     if (data.success) {
                         var msg = data.message || 'تم التحصيل بنجاح.';
                         if (data.amount_collected != null) {
@@ -6002,6 +6005,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 })
                 .catch(function() {
                     if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = 'تحصيل المبلغ'; }
+                    if (typeof window.hidePageLoading === 'function') window.hidePageLoading();
                     showShippingToast('حدث خطأ في الاتصال.', 'danger');
                 });
             return false;

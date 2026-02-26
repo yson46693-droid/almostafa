@@ -6993,25 +6993,26 @@ function updateTotalHours() {
     }, true);
 })();
 
-// إعادة تحميل الصفحة تلقائياً بعد أي رسالة (نجاح أو خطأ) لمنع تكرار الطلبات
+// إعادة تحميل الصفحة مرة واحدة فقط بعد رسالة النجاح/الخطأ (لمنع التكرار الثلاثي)
 (function() {
+    const KEY = 'salaries_auto_refresh_scheduled';
     const successAlert = document.getElementById('successAlert');
     const errorAlert = document.getElementById('errorAlert');
-    
-    // التحقق من وجود رسالة نجاح أو خطأ
     const alertElement = successAlert || errorAlert;
     
-    if (alertElement && alertElement.dataset.autoRefresh === 'true') {
-        // انتظار 3 ثوانٍ لإعطاء المستخدم وقتاً لرؤية الرسالة
-        setTimeout(function() {
-            // إعادة تحميل الصفحة بدون معاملات GET لمنع تكرار الطلبات
-            const currentUrl = new URL(window.location.href);
-            // إزالة معاملات success و error من URL
+    if (!alertElement || alertElement.dataset.autoRefresh !== 'true') return;
+    // منع تشغيل أكثر من مرة (مثلاً إن وُجد السكربت مرتين أو تداخل مع سكربتات أخرى)
+    if (sessionStorage.getItem(KEY)) return;
+    sessionStorage.setItem(KEY, '1');
+    
+    setTimeout(function() {
+        try {
+            sessionStorage.removeItem(KEY);
+            var currentUrl = new URL(window.location.href);
             currentUrl.searchParams.delete('success');
             currentUrl.searchParams.delete('error');
-            // إعادة تحميل الصفحة
             window.location.href = currentUrl.toString();
-        }, 3000);
-    }
+        } catch (e) {}
+    }, 3000);
 })();
 </script>

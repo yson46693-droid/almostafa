@@ -163,6 +163,17 @@
         const wasRefreshed = sessionStorage.getItem(REFRESH_FLAG_KEY);
         const isSidebarNavigation = sessionStorage.getItem('sidebar_navigation');
         
+        // عدم إعادة التحميل إذا كانت الصفحة تعرض رسالة نجاح/خطأ (مثل بعد تعديل الراتب)
+        const successAlert = document.getElementById('successAlert');
+        const errorAlert = document.getElementById('errorAlert');
+        const alertEl = successAlert || errorAlert;
+        if (alertEl && alertEl.dataset && alertEl.dataset.autoRefresh === 'true') {
+            sessionStorage.removeItem(REFRESH_FLAG_KEY);
+            sessionStorage.removeItem('sidebar_navigation');
+            sessionStorage.removeItem('sidebar_navigation_url');
+            return;
+        }
+        
         if (isSidebarNavigation === 'true' && wasRefreshed !== 'true') {
             // هذا تحميل جديد للصفحة من الشريط الجانبي - نحتاج لإعادة التحميل
             // إظهار التنبيه أولاً
