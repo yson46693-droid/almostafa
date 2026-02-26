@@ -266,6 +266,33 @@ if (empty($settlementsTableCheck)) {
     }
 }
 
+// إنشاء جدول سجل المعاملات المالية للموظف (نوته - مبالغ وملاحظات لكل شهر)
+$financialNotesTableCheck = $db->queryOne("SHOW TABLES LIKE 'employee_financial_notes'");
+if (empty($financialNotesTableCheck)) {
+    try {
+        $db->execute("
+            CREATE TABLE IF NOT EXISTS `employee_financial_notes` (
+              `id` int(11) NOT NULL AUTO_INCREMENT,
+              `user_id` int(11) NOT NULL COMMENT 'معرف الموظف',
+              `month` tinyint(2) NOT NULL COMMENT 'الشهر 1-12',
+              `year` smallint(4) NOT NULL COMMENT 'السنة',
+              `amount` decimal(10,2) NOT NULL DEFAULT 0.00 COMMENT 'المبلغ',
+              `notes` text DEFAULT NULL COMMENT 'ملاحظات',
+              `created_by` int(11) DEFAULT NULL COMMENT 'من قام بالتسجيل',
+              `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              PRIMARY KEY (`id`),
+              KEY `user_id` (`user_id`),
+              KEY `month_year` (`month`, `year`),
+              KEY `user_month_year` (`user_id`, `month`, `year`),
+              CONSTRAINT `employee_financial_notes_user_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+              CONSTRAINT `employee_financial_notes_created_by_fk` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+    } catch (Exception $e) {
+        error_log("Error creating employee_financial_notes table: " . $e->getMessage());
+    }
+}
+
 // الحصول على الشهر والسنة الحالية
 $selectedMonth = isset($_GET['month']) ? intval($_GET['month']) : date('n');
 $selectedYear = isset($_GET['year']) ? intval($_GET['year']) : date('Y');
@@ -1425,7 +1452,7 @@ $usersQuery = "SELECT id, username, full_name, hourly_rate, role
                FROM users 
                WHERE status = 'active' 
                AND role != 'manager'
-               AND role IN ('production', 'accountant', 'sales')";
+               AND role IN ('production', 'accountant', 'sales', 'driver')";
                
 if ($selectedUserId > 0) {
     $usersQuery .= " AND id = " . intval($selectedUserId);
@@ -1436,7 +1463,8 @@ $usersQuery .= " ORDER BY
         WHEN 'production' THEN 1
         WHEN 'accountant' THEN 2
         WHEN 'sales' THEN 3
-        ELSE 4
+        WHEN 'driver' THEN 4
+        ELSE 5
     END,
     full_name ASC";
 
@@ -2662,6 +2690,15 @@ body {
     color: #065f46;
 }
 
+.role-badge.driver {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.profile-icon.driver {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+}
+
 /* Salary Amount */
 .salary-amount {
     font-size: 24px;
@@ -3501,7 +3538,8 @@ $pageTitle = ($view === 'advances') ? 'السلف' : (($view === 'pending') ? '�
                 $roleLabels = [
                     'production' => 'إنتاج',
                     'accountant' => 'محاسب',
-                    'sales' => 'مندوب مبيعات'
+                    'sales' => 'مندوب مبيعات',
+                    'driver' => 'سائق'
                 ];
                 $roleLabel = $roleLabels[$salary['role']] ?? $salary['role'];
                 $roleClass = $salary['role'] ?? 'production';
@@ -3928,12 +3966,6 @@ $pageTitle = ($view === 'advances') ? 'السلف' : (($view === 'pending') ? '�
                         <?php endif; ?>
                         
                         <div class="detail-actions">
-                            <button class="btn btn-warning btn-sm" 
-                                    onclick="openModifyModal(<?php echo $hasSalaryId ? $salary['id'] : 0; ?>, <?php echo htmlspecialchars(json_encode($salary), ENT_QUOTES); ?>)" 
-                                    title="تعديل">
-                                <i class="bi bi-pencil me-1"></i>تعديل
-                            </button>
-                            
                             <?php 
                             // استخدام القيم المحسوبة من collapse (الحساب الثاني) التي تطابق بطاقة الموظف
                             // هذه القيم تم حسابها في السطر 3320-3341 باستخدام $totalSalary المحسوب من المكونات
@@ -3994,13 +4026,11 @@ $pageTitle = ($view === 'advances') ? 'السلف' : (($view === 'pending') ? '�
                             </button>
                             <?php endif; ?>
                             
-                            <?php if ($hasSalaryId): ?>
-                            <button class="btn btn-primary btn-sm" 
-                                    onclick="openStatementModal(<?php echo $salary['id']; ?>, <?php echo $userId; ?>, '<?php echo htmlspecialchars($employeeName); ?>')" 
-                                    title="كشف حساب">
-                                <i class="bi bi-file-earmark-text me-1"></i>كشف حساب
+                            <button class="btn btn-info btn-sm" 
+                                    onclick="openFinancialNotesModal(<?php echo $userId; ?>, <?php echo json_encode($employeeName, JSON_UNESCAPED_UNICODE); ?>, <?php echo $selectedMonth; ?>, <?php echo $selectedYear; ?>)" 
+                                    title="سجل المعاملات المالية">
+                                <i class="bi bi-journal-bookmark me-1"></i>سجل المعاملات المالية
                             </button>
-                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
@@ -4679,7 +4709,7 @@ function closeAllForms(excludeCardId = null) {
     // إغلاق جميع Cards على الموبايل
     const cards = [
         'salaryDetailsCard', 'modifySalaryCard', 'requestAdvanceCard',
-        'rejectCard', 'settleSalaryCard', 'salaryStatementCard'
+        'rejectCard', 'settleSalaryCard', 'salaryStatementCard', 'financialNotesCard'
     ];
     cards.forEach(function(cardId) {
         // تخطي Card معين إذا كان سيتم فتحه مرة أخرى
@@ -4702,7 +4732,7 @@ function closeAllForms(excludeCardId = null) {
     // إغلاق جميع Modals على الكمبيوتر
     const modals = [
         'salaryDetailsModal', 'modifySalaryModal', 'requestAdvanceModal',
-        'rejectModal', 'settleSalaryModal', 'salaryStatementModal'
+        'rejectModal', 'settleSalaryModal', 'salaryStatementModal', 'financialNotesModal'
     ];
     modals.forEach(function(modalId) {
         const modal = document.getElementById(modalId);
@@ -6199,6 +6229,164 @@ function openStatementModal(salaryId, userId, employeeName) {
     }
 }
 
+function openFinancialNotesModal(userId, employeeName, month, year) {
+    closeAllForms();
+    const m = parseInt(month, 10) || new Date().getMonth() + 1;
+    const y = parseInt(year, 10) || new Date().getFullYear();
+    if (isMobile()) {
+        const card = document.getElementById('financialNotesCard');
+        if (card) {
+            document.getElementById('financialNotesUserIdCard').value = userId;
+            document.getElementById('financialNotesEmployeeNameCard').textContent = employeeName || '-';
+            document.getElementById('financialNotesMonthCard').value = m;
+            document.getElementById('financialNotesYearCard').value = y;
+            card.style.display = 'block';
+            setTimeout(function() { financialNotesReloadCard(); scrollToElement(card); }, 50);
+        }
+    } else {
+        document.getElementById('financialNotesUserId').value = userId;
+        document.getElementById('financialNotesEmployeeName').textContent = employeeName || '-';
+        document.getElementById('financialNotesMonth').value = m;
+        document.getElementById('financialNotesYear').value = y;
+        safeShowModal('financialNotesModal', 'financialNotesCard');
+        financialNotesReload();
+    }
+}
+
+function financialNotesReload() {
+    const userId = document.getElementById('financialNotesUserId')?.value;
+    const month = document.getElementById('financialNotesMonth')?.value;
+    const year = document.getElementById('financialNotesYear')?.value;
+    if (!userId) return;
+    const apiUrl = '<?php echo getBasePath(); ?>/api/employee_financial_notes.php?user_id=' + encodeURIComponent(userId) + '&month=' + encodeURIComponent(month) + '&year=' + encodeURIComponent(year);
+    const tbody = document.getElementById('financialNotesTableBody');
+    const totalEl = document.getElementById('financialNotesTotal');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">جاري التحميل...</td></tr>';
+    fetch(apiUrl).then(function(r) { return r.json(); }).then(function(data) {
+        if (!data.success || !Array.isArray(data.items)) {
+            if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">لا توجد سجلات</td></tr>';
+            if (totalEl) totalEl.textContent = '0.00';
+            return;
+        }
+        var rows = '';
+        data.items.forEach(function(item) {
+            var dateStr = item.created_at ? item.created_at.replace(/^(\d{4})-(\d{2})-(\d{2}).*/, '$3/$2/$1') : '-';
+            var amt = parseFloat(item.amount) || 0;
+            rows += '<tr><td>' + dateStr + '</td><td>' + amt.toFixed(2) + '</td><td>' + (item.notes ? escapeHtml(item.notes) : '-') + '</td><td>' + (item.created_by_name ? escapeHtml(item.created_by_name) : '-') + '</td></tr>';
+        });
+        if (tbody) tbody.innerHTML = rows || '<tr><td colspan="4" class="text-center text-muted">لا توجد سجلات</td></tr>';
+        if (totalEl) totalEl.textContent = (data.total != null ? parseFloat(data.total).toFixed(2) : '0.00');
+    }).catch(function() {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">خطأ في التحميل</td></tr>';
+        if (totalEl) totalEl.textContent = '0.00';
+    });
+}
+
+function financialNotesReloadCard() {
+    const userId = document.getElementById('financialNotesUserIdCard')?.value;
+    const month = document.getElementById('financialNotesMonthCard')?.value;
+    const year = document.getElementById('financialNotesYearCard')?.value;
+    if (!userId) return;
+    const apiUrl = '<?php echo getBasePath(); ?>/api/employee_financial_notes.php?user_id=' + encodeURIComponent(userId) + '&month=' + encodeURIComponent(month) + '&year=' + encodeURIComponent(year);
+    const tbody = document.getElementById('financialNotesTableBodyCard');
+    const totalEl = document.getElementById('financialNotesTotalCard');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">جاري التحميل...</td></tr>';
+    fetch(apiUrl).then(function(r) { return r.json(); }).then(function(data) {
+        if (!data.success || !Array.isArray(data.items)) {
+            if (tbody) tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">لا توجد سجلات</td></tr>';
+            if (totalEl) totalEl.textContent = '0.00';
+            return;
+        }
+        var rows = '';
+        data.items.forEach(function(item) {
+            var dateStr = item.created_at ? item.created_at.replace(/^(\d{4})-(\d{2})-(\d{2}).*/, '$3/$2/$1') : '-';
+            var amt = parseFloat(item.amount) || 0;
+            rows += '<tr><td>' + dateStr + '</td><td>' + amt.toFixed(2) + '</td><td>' + (item.notes ? escapeHtml(item.notes) : '-') + '</td></tr>';
+        });
+        if (tbody) tbody.innerHTML = rows || '<tr><td colspan="3" class="text-center text-muted">لا توجد سجلات</td></tr>';
+        if (totalEl) totalEl.textContent = (data.total != null ? parseFloat(data.total).toFixed(2) : '0.00');
+    }).catch(function() {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="3" class="text-center text-danger">خطأ في التحميل</td></tr>';
+        if (totalEl) totalEl.textContent = '0.00';
+    });
+}
+
+function closeFinancialNotesCard() {
+    const card = document.getElementById('financialNotesCard');
+    if (card) card.style.display = 'none';
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    var div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    var basePath = '<?php echo getBasePath(); ?>';
+    var form = document.getElementById('financialNotesAddForm');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var userId = document.getElementById('financialNotesUserId')?.value;
+            var month = document.getElementById('financialNotesMonth')?.value;
+            var year = document.getElementById('financialNotesYear')?.value;
+            var amount = document.getElementById('financialNotesAmount')?.value;
+            var notes = document.getElementById('financialNotesNotes')?.value || '';
+            if (!userId || !amount) return;
+            var fd = new FormData();
+            fd.append('user_id', userId);
+            fd.append('month', month);
+            fd.append('year', year);
+            fd.append('amount', amount.replace(',', '.'));
+            fd.append('notes', notes);
+            fetch(basePath + '/api/employee_financial_notes.php', { method: 'POST', body: fd })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.success) {
+                        document.getElementById('financialNotesAmount').value = '';
+                        document.getElementById('financialNotesNotes').value = '';
+                        financialNotesReload();
+                    } else {
+                        alert(data.message || 'فشل الحفظ');
+                    }
+                })
+                .catch(function() { alert('خطأ في الاتصال'); });
+        });
+    }
+    var formCard = document.getElementById('financialNotesAddFormCard');
+    if (formCard) {
+        formCard.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var userId = document.getElementById('financialNotesUserIdCard')?.value;
+            var month = document.getElementById('financialNotesMonthCard')?.value;
+            var year = document.getElementById('financialNotesYearCard')?.value;
+            var amount = document.getElementById('financialNotesAmountCard')?.value;
+            var notes = document.getElementById('financialNotesNotesCard')?.value || '';
+            if (!userId || !amount) return;
+            var fd = new FormData();
+            fd.append('user_id', userId);
+            fd.append('month', month);
+            fd.append('year', year);
+            fd.append('amount', amount.replace(',', '.'));
+            fd.append('notes', notes);
+            fetch(basePath + '/api/employee_financial_notes.php', { method: 'POST', body: fd })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.success) {
+                        document.getElementById('financialNotesAmountCard').value = '';
+                        document.getElementById('financialNotesNotesCard').value = '';
+                        financialNotesReloadCard();
+                    } else {
+                        alert(data.message || 'فشل الحفظ');
+                    }
+                })
+                .catch(function() { alert('خطأ في الاتصال'); });
+        });
+    }
+});
+
 function updateStatementPeriodFields() {
     const periodType = document.getElementById('statementPeriodType')?.value;
     const monthFields = document.getElementById('statementMonthFields');
@@ -6556,6 +6744,79 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 
+<!-- Modal سجل المعاملات المالية (نوته) -->
+<div class="modal fade d-none d-md-block" id="financialNotesModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="bi bi-journal-bookmark me-2"></i>سجل المعاملات المالية - <span id="financialNotesEmployeeName">-</span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="financialNotesUserId">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">الشهر</label>
+                        <select class="form-select" id="financialNotesMonth" onchange="financialNotesReload()">
+                            <?php for ($m = 1; $m <= 12; $m++): ?>
+                                <option value="<?php echo $m; ?>"><?php echo date('F', mktime(0, 0, 0, $m, 1)); ?></option>
+                            <?php endfor; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">السنة</label>
+                        <select class="form-select" id="financialNotesYear" onchange="financialNotesReload()">
+                            <?php for ($y = date('Y'); $y >= date('Y') - 10; $y--): ?>
+                                <option value="<?php echo $y; ?>"><?php echo $y; ?></option>
+                            <?php endfor; ?>
+                        </select>
+                    </div>
+                </div>
+                <div class="table-responsive mb-3">
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-light">
+                            <tr>
+                                <th>التاريخ</th>
+                                <th>المبلغ</th>
+                                <th>ملاحظات</th>
+                                <th>المسجّل</th>
+                            </tr>
+                        </thead>
+                        <tbody id="financialNotesTableBody">
+                            <tr><td colspan="4" class="text-center text-muted">جاري التحميل...</td></tr>
+                        </tbody>
+                        <tfoot class="table-light">
+                            <tr>
+                                <th colspan="1">الإجمالي</th>
+                                <th id="financialNotesTotal">0.00</th>
+                                <th colspan="2"></th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                <hr>
+                <h6 class="mb-2">إضافة سجل جديد</h6>
+                <form id="financialNotesAddForm">
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <input type="number" step="0.01" class="form-control" id="financialNotesAmount" placeholder="المبلغ" required>
+                        </div>
+                        <div class="col-md-5">
+                            <input type="text" class="form-control" id="financialNotesNotes" placeholder="ملاحظات">
+                        </div>
+                        <div class="col-md-3">
+                            <button type="submit" class="btn btn-info w-100"><i class="bi bi-plus-lg me-1"></i>إضافة</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Cards للموبايل - نماذج الرواتب -->
 <!-- Card تفاصيل الراتب - للموبايل فقط -->
 <div class="card shadow-sm mb-4 d-md-none" id="salaryDetailsCard" style="display: none;">
@@ -6850,6 +7111,53 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 
+<!-- Card سجل المعاملات المالية - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="financialNotesCard" style="display: none;">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0"><i class="bi bi-journal-bookmark me-2"></i>سجل المعاملات المالية - <span id="financialNotesEmployeeNameCard">-</span></h5>
+    </div>
+    <div class="card-body">
+        <input type="hidden" id="financialNotesUserIdCard">
+        <div class="row mb-3">
+            <div class="col-6">
+                <label class="form-label small">الشهر</label>
+                <select class="form-select form-select-sm" id="financialNotesMonthCard" onchange="financialNotesReloadCard()">
+                    <?php for ($m = 1; $m <= 12; $m++): ?>
+                        <option value="<?php echo $m; ?>"><?php echo date('F', mktime(0, 0, 0, $m, 1)); ?></option>
+                    <?php endfor; ?>
+                </select>
+            </div>
+            <div class="col-6">
+                <label class="form-label small">السنة</label>
+                <select class="form-select form-select-sm" id="financialNotesYearCard" onchange="financialNotesReloadCard()">
+                    <?php for ($y = date('Y'); $y >= date('Y') - 10; $y--): ?>
+                        <option value="<?php echo $y; ?>"><?php echo $y; ?></option>
+                    <?php endfor; ?>
+                </select>
+            </div>
+        </div>
+        <div class="table-responsive mb-3">
+            <table class="table table-sm table-bordered">
+                <thead class="table-light"><tr><th>التاريخ</th><th>المبلغ</th><th>ملاحظات</th></tr></thead>
+                <tbody id="financialNotesTableBodyCard"></tbody>
+                <tfoot class="table-light"><tr><th>الإجمالي</th><th id="financialNotesTotalCard">0.00</th><th></th></tr></tfoot>
+            </table>
+        </div>
+        <form id="financialNotesAddFormCard">
+            <div class="mb-2">
+                <input type="number" step="0.01" class="form-control form-control-sm" id="financialNotesAmountCard" placeholder="المبلغ" required>
+            </div>
+            <div class="mb-2">
+                <input type="text" class="form-control form-control-sm" id="financialNotesNotesCard" placeholder="ملاحظات">
+            </div>
+            <button type="submit" class="btn btn-info btn-sm w-100"><i class="bi bi-plus-lg me-1"></i>إضافة</button>
+        </form>
+    </div>
+    <div class="card-footer">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeFinancialNotesCard()">إغلاق</button>
+    </div>
+</div>
+
 <!-- إعادة تحميل الصفحة تلقائياً بعد أي رسالة (نجاح أو خطأ) لمنع تكرار الطلبات -->
 <script>
 // دالة تحديث الساعات
@@ -6886,7 +7194,8 @@ function updateTotalHours() {
         'requestAdvanceModal': 'requestAdvanceCard',
         'rejectModal': 'rejectCard',
         'settleSalaryModal': 'settleSalaryCard',
-        'salaryStatementModal': 'salaryStatementCard'
+        'salaryStatementModal': 'salaryStatementCard',
+        'financialNotesModal': 'financialNotesCard'
     };
     
     // حماية قوية: منع فتح النماذج على الموبايل قبل أن تفتح
