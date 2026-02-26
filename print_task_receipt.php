@@ -490,10 +490,19 @@ $singleReceipt = count($receipts) === 1;
             <button class="btn-print" onclick="window.print()"><?php echo $singleReceipt ? 'طباعة' : 'طباعة الكل (' . count($receipts) . ')'; ?></button>
             <?php
             $receiptUserRole = $currentUser['role'] ?? 'production';
+            $backToProductionTasks = ($receiptUserRole === 'manager' || $receiptUserRole === 'accountant');
             if (function_exists('getDashboardUrl')) {
-                $backUrl = getDashboardUrl($receiptUserRole) . ($receiptUserRole === 'manager' ? '?page=production_tasks' : '?page=tasks');
+                $backUrl = getDashboardUrl($receiptUserRole) . ($backToProductionTasks ? '?page=production_tasks' : '?page=tasks');
             } else {
-                $backUrl = $receiptUserRole === 'driver' ? getRelativeUrl('dashboard/driver.php?page=tasks') : getRelativeUrl('dashboard/production.php?page=tasks');
+                if ($receiptUserRole === 'driver') {
+                    $backUrl = getRelativeUrl('dashboard/driver.php?page=tasks');
+                } elseif ($receiptUserRole === 'manager') {
+                    $backUrl = getRelativeUrl('dashboard/manager.php?page=production_tasks');
+                } elseif ($receiptUserRole === 'accountant') {
+                    $backUrl = getRelativeUrl('dashboard/accountant.php?page=production_tasks');
+                } else {
+                    $backUrl = getRelativeUrl('dashboard/production.php?page=tasks');
+                }
             }
             ?>
             <a href="<?php echo htmlspecialchars($backUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn-back" style="text-decoration: none; display: inline-block;">
