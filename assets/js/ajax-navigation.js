@@ -51,7 +51,7 @@
         if (!url) return false;
         try {
             const u = typeof url === 'string' ? url : (url.url || '');
-            return u.indexOf('page=production_tasks') !== -1;
+            return u.indexOf('page=production_tasks') !== -1 || u.indexOf('page=daily_collection_schedules') !== -1;
         } catch (e) {
             return false;
         }

@@ -150,7 +150,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $error = 'الجدول غير موجود.';
         }
     }
-    $redirect = $baseUrl . '?page=daily_collection_schedules';
+    $redirect = $baseUrl . '?page=daily_collection_schedules&_nocache=' . (string)(time() * 1000);
     if (!headers_sent()) { header('Location: ' . $redirect); exit; }
 }
 
@@ -209,7 +209,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
         }
     }
     if (empty($error)) {
-        $redirect = $baseUrl . '?page=daily_collection_schedules';
+        $redirect = $baseUrl . '?page=daily_collection_schedules&_nocache=' . (string)(time() * 1000);
         if (!headers_sent()) { header('Location: ' . $redirect); exit; }
     }
 }
@@ -432,6 +432,15 @@ if ($editId > 0) {
 </div>
 <script>
 (function() {
+    // بعد التوجيه بكسر الكاش، تنظيف الرابط في شريط العنوان (إزالة _nocache)
+    try {
+        var u = new URL(window.location.href);
+        if (u.searchParams.has('_nocache')) {
+            u.searchParams.delete('_nocache');
+            var clean = u.pathname + (u.search || '') + (u.hash || '');
+            if (window.history && window.history.replaceState) window.history.replaceState({}, '', clean);
+        }
+    } catch (e) {}
     var container = document.getElementById('schedule-items-container');
     var addBtn = document.getElementById('add-schedule-item');
     if (!container || !addBtn) return;
