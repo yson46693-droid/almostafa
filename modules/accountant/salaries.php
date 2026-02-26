@@ -4026,8 +4026,11 @@ $pageTitle = ($view === 'advances') ? 'السلف' : (($view === 'pending') ? '�
                             </button>
                             <?php endif; ?>
                             
-                            <button class="btn btn-info btn-sm" 
-                                    onclick="openFinancialNotesModal(<?php echo $userId; ?>, <?php echo json_encode($employeeName, JSON_UNESCAPED_UNICODE); ?>, <?php echo $selectedMonth; ?>, <?php echo $selectedYear; ?>)" 
+                            <button type="button" class="btn btn-info btn-sm" 
+                                    data-financial-user-id="<?php echo (int)$userId; ?>"
+                                    data-financial-name="<?php echo htmlspecialchars($salary['full_name'] ?? $salary['username'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-financial-month="<?php echo (int)$selectedMonth; ?>"
+                                    data-financial-year="<?php echo (int)$selectedYear; ?>"
                                     title="سجل المعاملات المالية">
                                 <i class="bi bi-journal-bookmark me-1"></i>سجل المعاملات المالية
                             </button>
@@ -6322,6 +6325,21 @@ function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
+
+// ربط زر سجل المعاملات المالية (باستخدام التفويض لتجنب مشاكل التوقيت والأسماء)
+document.addEventListener('DOMContentLoaded', function() {
+    document.body.addEventListener('click', function(e) {
+        var btn = e.target && (e.target.closest ? e.target.closest('button[data-financial-user-id]') : null);
+        if (!btn) return;
+        var userId = btn.getAttribute('data-financial-user-id');
+        var name = btn.getAttribute('data-financial-name') || '';
+        var month = btn.getAttribute('data-financial-month') || '';
+        var year = btn.getAttribute('data-financial-year') || '';
+        if (userId && typeof openFinancialNotesModal === 'function') {
+            openFinancialNotesModal(parseInt(userId, 10), name, parseInt(month, 10) || new Date().getMonth() + 1, parseInt(year, 10) || new Date().getFullYear());
+        }
+    });
+});
 
 document.addEventListener('DOMContentLoaded', function() {
     var basePath = '<?php echo getBasePath(); ?>';
