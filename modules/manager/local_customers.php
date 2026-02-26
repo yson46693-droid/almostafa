@@ -1977,8 +1977,8 @@ var dashboardWrapper = null;
             <input type="hidden" name="page" value="local_customers">
             <div class="row g-3 align-items-end">
                 <div class="col-12">
-                    <label for="customerSearch" class="form-label small text-muted mb-1">بحث في جميع بيانات العميل</label>
-                    <div class="local-search-input-wrapper position-relative">
+                    <label for="customerSearch" class="form-label small text-muted mb-1">ابحث عن العميل المحلي</label>
+                    <div class="local-search-input-wrapper position-relative search-wrap">
                         <span class="local-search-icon">
                             <i class="bi bi-search"></i>
                         </span>
@@ -1988,7 +1988,7 @@ var dashboardWrapper = null;
                             id="customerSearch"
                             name="search"
                             value="<?php echo htmlspecialchars($search); ?>"
-                            placeholder="ابحث في الاسم، الهاتف، العنوان، المنطقة، الرقم، من أضاف العميل، رصيد العميل..."
+                            placeholder="اكتب للبحث في قائمة العملاء المحليين..."
                             autocomplete="off"
                             aria-label="بحث عن العملاء المحليين"
                             aria-autocomplete="list"
@@ -1998,9 +1998,9 @@ var dashboardWrapper = null;
                         <button type="button" class="btn btn-link local-search-clear" id="localSearchClearBtn" title="مسح البحث" style="display: <?php echo $search !== '' ? 'inline-block' : 'none'; ?>;">
                             <i class="bi bi-x-circle-fill text-muted"></i>
                         </button>
-                        <span class="local-search-hint small text-muted">اكتب أي حرف — النتائج تُحدَّث بشكل لحظي</span>
-                        <!-- Autocomplete Dropdown -->
-                        <div id="autocompleteDropdown" class="autocomplete-dropdown" role="listbox" aria-label="نتائج البحث"></div>
+                        <span class="local-search-hint small text-muted">اكتب ثم اختر من القائمة أو اضغط Enter للبحث</span>
+                        <!-- قائمة منسدلة مثل خانة العميل في صفحة الأسعار المخصصة -->
+                        <div id="autocompleteDropdown" class="autocomplete-dropdown search-dropdown" role="listbox" aria-label="نتائج البحث"></div>
                     </div>
                 </div>
                 <div class="col-12 col-md-auto d-flex flex-wrap gap-2 align-items-center">

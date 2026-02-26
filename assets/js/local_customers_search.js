@@ -309,7 +309,7 @@
                 var balanceText = 'رصيد: ' + result.balance_formatted;
                 if (result.balance > 0) { balanceClass = 'positive'; balanceText = 'مدين: ' + result.balance_formatted; }
                 else if (result.balance < 0) { balanceClass = 'negative'; balanceText = 'دائن: ' + result.balance_formatted; }
-                html += '<div class="autocomplete-item" data-index="' + index + '" data-customer-id="' + result.id + '" role="option" tabindex="0">';
+                html += '<div class="autocomplete-item search-dropdown-item" data-index="' + index + '" data-customer-id="' + result.id + '" role="option" tabindex="0">';
                 html += '<div class="autocomplete-item-name">' + escapeHtml(result.name) + '</div>';
                 html += '<div class="autocomplete-item-sub">';
                 if (result.sub_text) html += '<span>' + escapeHtml(result.sub_text) + '</span>';
@@ -338,33 +338,17 @@
             if (autocompleteAbortController) autocompleteAbortController.abort();
             autocompleteAbortController = new AbortController();
             showAutocompleteLoading();
-            // استخدام نفس API البحث المتقدم (جميع بيانات العميل: الاسم، الهاتف، العنوان، المنطقة، الرقم، الرصيد...)
-            var apiUrl = (localCustomersApiBase || '') + '/api/get_local_customers_search.php';
-            var params = new URLSearchParams();
-            params.append('search', query);
-            params.append('p', 1);
-            fetch(apiUrl + '?' + params.toString(), {
+            var apiUrl = (localCustomersApiBase || '') + '/fs.php';
+            fetch(apiUrl + '?q=' + encodeURIComponent(query), {
                 method: 'GET',
                 credentials: 'include',
                 signal: autocompleteAbortController.signal
             })
             .then(function(response) { return response.json(); })
             .then(function(data) {
-                if (data.success && data.customers && data.customers.length > 0) {
-                    autocompleteResults = data.customers.map(function(c) {
-                        var subParts = [];
-                        if (c.phones && c.phones.length) subParts.push(c.phones.slice(0, 2).join('، '));
-                        else if (c.phone) subParts.push(c.phone);
-                        if (c.region_name) subParts.push(c.region_name);
-                        return {
-                            id: c.id,
-                            name: c.name,
-                            balance: c.balance,
-                            balance_formatted: c.balance_formatted,
-                            sub_text: subParts.join(' • ')
-                        };
-                    });
-                    displayAutocompleteResults(autocompleteResults);
+                if (data.success && data.results) {
+                    autocompleteResults = data.results;
+                    displayAutocompleteResults(data.results);
                 } else {
                     showAutocompleteNoResults();
                 }
@@ -391,6 +375,7 @@
             });
         }
 
+        // مثل خانة العميل في صفحة الأسعار المخصصة: الكتابة تظهر القائمة المنسدلة فقط، والجدول يتحدث عند الاختيار من القائمة أو Enter
         customerSearchInput.addEventListener('input', function() {
             var v = this.value;
             if (v === undefined || v === null) { this.value = ''; v = ''; }
@@ -403,9 +388,6 @@
             } else {
                 hideAutocomplete();
             }
-            if (searchTimeout) clearTimeout(searchTimeout);
-            if (currentAbortController) currentAbortController.abort();
-            searchTimeout = setTimeout(function() { fetchCustomers(1); }, 500);
         });
 
         customerSearchInput.addEventListener('keydown', function(e) {
@@ -462,6 +444,11 @@
             if (autocompleteDropdown && customerSearchInput && !customerSearchInput.contains(e.target) && !autocompleteDropdown.contains(e.target)) {
                 hideAutocomplete();
             }
+        });
+
+        customerSearchInput.addEventListener('focus', function() {
+            var query = (this.value || '').trim();
+            if (query.length >= 1) performAutocompleteSearch(query);
         });
 
         customerSearchInput.addEventListener('blur', function() {

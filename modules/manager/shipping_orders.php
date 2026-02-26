@@ -4750,6 +4750,113 @@ function closeCollectFromShippingCard() {
     if (card) card.style.display = 'none';
 }
 
+function closeShippingCompanyStatementCard() {
+    var card = document.getElementById('shippingCompanyStatementCard');
+    if (card) card.style.display = 'none';
+}
+
+function showShippingCompanyStatement(companyId, companyName) {
+    closeAllForms();
+    var card = document.getElementById('shippingCompanyStatementCard');
+    if (!card) return;
+    document.getElementById('statementCardCompanyId').value = companyId;
+    document.getElementById('statementCardCompanyName').textContent = companyName || '-';
+    document.getElementById('statementCardLoading').style.display = 'block';
+    document.getElementById('statementCardContent').style.display = 'none';
+    document.getElementById('statementCardEmpty').style.display = 'none';
+    card.style.display = 'block';
+    setTimeout(function() { scrollToElement(card); }, 50);
+    var formData = new FormData();
+    formData.append('action', 'get_shipping_company_statement');
+    formData.append('company_id', companyId);
+    fetch(window.location.href, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: formData, credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            document.getElementById('statementCardLoading').style.display = 'none';
+            if (data.success && data.movements && data.movements.length) {
+                var tbody = document.getElementById('statementCardTableBody');
+                tbody.innerHTML = '';
+                var fmt = function(n) { return (parseFloat(n) || 0).toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+                data.movements.forEach(function(m) {
+                    var dateStr = (m.date && m.date.toString().substring) ? m.date.toString().substring(0, 10) : (m.date || '-');
+                    var tr = document.createElement('tr');
+                    tr.innerHTML = '<td>' + dateStr + '</td><td>' + (m.label || '-') + '</td><td class="text-end">' + (m.debit > 0 ? fmt(m.debit) + ' ج.م' : '-') + '</td><td class="text-end">' + (m.credit > 0 ? fmt(m.credit) + ' ج.م' : '-') + '</td><td class="text-end fw-semibold">' + fmt(m.balance_after) + ' ج.م</td>';
+                    tbody.appendChild(tr);
+                });
+                document.getElementById('statementTotalDebit').textContent = fmt(data.totals.total_debit);
+                document.getElementById('statementTotalCredit').textContent = fmt(data.totals.total_credit);
+                document.getElementById('statementNetBalance').textContent = fmt(data.totals.net_balance);
+                document.getElementById('statementCardContent').style.display = 'block';
+            } else {
+                document.getElementById('statementCardEmpty').style.display = 'block';
+            }
+        })
+        .catch(function() {
+            document.getElementById('statementCardLoading').style.display = 'none';
+            document.getElementById('statementCardEmpty').innerHTML = '<i class="bi bi-exclamation-triangle fs-1"></i><p class="mb-0">حدث خطأ في تحميل كشف الحساب.</p>';
+            document.getElementById('statementCardEmpty').style.display = 'block';
+        });
+}
+
+function showCompanyPaperInvoicesByIdName(companyId, companyName) {
+    var btn = document.createElement('button');
+    btn.setAttribute('data-company-id', companyId);
+    btn.setAttribute('data-company-name', companyName);
+    showCompanyPaperInvoicesCard(btn);
+}
+
+function showEditBalanceByIdName(companyId, companyName, balance) {
+    var btn = document.createElement('button');
+    btn.setAttribute('data-company-id', companyId);
+    btn.setAttribute('data-company-name', companyName);
+    btn.setAttribute('data-company-balance', balance);
+    showEditShippingCompanyBalanceModal(btn);
+}
+
+function showCollectByIdName(companyId, companyName, balance, balanceFormatted) {
+    var btn = document.createElement('button');
+    btn.setAttribute('data-company-id', companyId);
+    btn.setAttribute('data-company-name', companyName);
+    btn.setAttribute('data-company-balance', balance);
+    btn.setAttribute('data-company-balance-formatted', balanceFormatted || balance);
+    showCollectFromShippingCompanyModal(btn);
+}
+
+function showDeductFromShippingCompany(companyId, companyName, balance) {
+    closeAllForms();
+    var balanceFormatted = (parseFloat(balance) || 0).toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ج.م';
+    if (isMobile()) {
+        var card = document.getElementById('deductFromShippingCompanyCard');
+        if (card) {
+            document.getElementById('deductCardCompanyId').value = companyId;
+            document.getElementById('deductCardCompanyName').textContent = companyName || '-';
+            document.getElementById('deductCardCurrentDebt').textContent = balanceFormatted;
+            var amountInput = document.getElementById('deductCardAmount');
+            if (amountInput) { amountInput.value = ''; amountInput.max = balance; }
+            document.getElementById('deductCardNotes').value = '';
+            card.style.display = 'block';
+            setTimeout(function() { scrollToElement(card); }, 50);
+        }
+    } else {
+        var modal = document.getElementById('deductFromShippingCompanyModal');
+        if (modal) {
+            document.getElementById('deductModalCompanyId').value = companyId;
+            document.getElementById('deductModalCompanyName').textContent = companyName || '-';
+            document.getElementById('deductModalCurrentDebt').textContent = balanceFormatted;
+            var amountInput = document.getElementById('deductModalAmount');
+            if (amountInput) { amountInput.value = ''; amountInput.max = balance; }
+            document.getElementById('deductModalNotes').value = '';
+            var modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+function closeDeductFromShippingCard() {
+    var card = document.getElementById('deductFromShippingCompanyCard');
+    if (card) card.style.display = 'none';
+}
+
 function showDeliveryModal(button) {
     if (!button) return;
     
@@ -6333,6 +6440,72 @@ document.addEventListener('DOMContentLoaded', function() {
                 })
                 .catch(function() {
                     if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = 'تحصيل المبلغ'; }
+                    if (typeof window.hidePageLoading === 'function') window.hidePageLoading();
+                    showShippingToast('حدث خطأ في الاتصال.', 'danger');
+                });
+            return false;
+        });
+    }
+
+    var deductModalForm = document.getElementById('deductShippingCompanyFormModal');
+    if (deductModalForm) {
+        deductModalForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var formData = new FormData(deductModalForm);
+            var submitBtn = deductModalForm.querySelector('button[type="submit"]');
+            if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جاري الخصم...'; }
+            fetch(window.location.href, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: formData, credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = 'تنفيذ الخصم'; }
+                    if (typeof window.hidePageLoading === 'function') window.hidePageLoading();
+                    if (data.success) {
+                        showShippingToast(data.message || 'تم خصم المبلغ بنجاح.', 'success');
+                        var deductModal = document.getElementById('deductFromShippingCompanyModal');
+                        if (typeof bootstrap !== 'undefined' && bootstrap.Modal && deductModal) {
+                            var m = bootstrap.Modal.getInstance(deductModal);
+                            if (m) m.hide();
+                        }
+                        if (data.new_balance != null) {
+                            var debtEl = document.getElementById('deductModalCurrentDebt');
+                            if (debtEl) debtEl.textContent = parseFloat(data.new_balance).toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ج.م';
+                        }
+                        if (window.location && window.location.reload) window.location.reload();
+                    } else {
+                        showShippingToast(data.error || 'حدث خطأ.', 'danger');
+                    }
+                })
+                .catch(function() {
+                    if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = 'تنفيذ الخصم'; }
+                    if (typeof window.hidePageLoading === 'function') window.hidePageLoading();
+                    showShippingToast('حدث خطأ في الاتصال.', 'danger');
+                });
+            return false;
+        });
+    }
+
+    var deductCardForm = document.getElementById('deductShippingCompanyFormCard');
+    if (deductCardForm) {
+        deductCardForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var formData = new FormData(deductCardForm);
+            var submitBtn = deductCardForm.querySelector('button[type="submit"]');
+            if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جاري الخصم...'; }
+            fetch(window.location.href, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: formData, credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = 'تنفيذ الخصم'; }
+                    if (typeof window.hidePageLoading === 'function') window.hidePageLoading();
+                    if (data.success) {
+                        showShippingToast(data.message || 'تم خصم المبلغ بنجاح.', 'success');
+                        closeDeductFromShippingCard();
+                        if (window.location && window.location.reload) window.location.reload();
+                    } else {
+                        showShippingToast(data.error || 'حدث خطأ.', 'danger');
+                    }
+                })
+                .catch(function() {
+                    if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = 'تنفيذ الخصم'; }
                     if (typeof window.hidePageLoading === 'function') window.hidePageLoading();
                     showShippingToast('حدث خطأ في الاتصال.', 'danger');
                 });
