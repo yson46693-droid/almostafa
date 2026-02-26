@@ -185,6 +185,29 @@ try {
     error_log('shipping_orders: shipping_company_collections table -> ' . $e->getMessage());
 }
 
+// جدول خصومات شركات الشحن (إجراء خصم من الرصيد بدون تحصيل نقدي)
+try {
+    $deductionsTableExists = $db->queryOne("SHOW TABLES LIKE 'shipping_company_deductions'");
+    if (empty($deductionsTableExists)) {
+        $db->execute(
+            "CREATE TABLE IF NOT EXISTS `shipping_company_deductions` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `shipping_company_id` int(11) NOT NULL,
+                `amount` decimal(15,2) NOT NULL COMMENT 'المبلغ المخصوم',
+                `notes` text DEFAULT NULL COMMENT 'ملاحظات',
+                `created_by` int(11) DEFAULT NULL,
+                `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (`id`),
+                KEY `shipping_company_id` (`shipping_company_id`),
+                KEY `created_at` (`created_at`),
+                CONSTRAINT `sc_deductions_company_fk` FOREIGN KEY (`shipping_company_id`) REFERENCES `shipping_companies` (`id`) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='خصومات من رصيد شركات الشحن'"
+        );
+    }
+} catch (Throwable $e) {
+    error_log('shipping_orders: shipping_company_deductions table -> ' . $e->getMessage());
+}
+
 // جدول الفواتير الورقية لشركات الشحن (سجل فواتير ورقية مرفقة بكل شركة)
 $paperInvTable = $db->queryOne("SHOW TABLES LIKE 'shipping_company_paper_invoices'");
 if (empty($paperInvTable)) {
@@ -231,6 +254,102 @@ function generateShippingOrderNumber(Database $db): string
     return substr(time(), -5);
 }
 
+/**
+ * جلب بيانات كشف حساب شركة الشحن (سجل الحركات المالية: مدين/دائن والرصيد بعد كل معاملة)
+ */
+function getShippingCompanyStatementData($companyId) {
+    $db = db();
+    $movements = [];
+
+    // طلبات الشحن المسلّمة للشركة (مدين) - نستخدم handed_over_at أو created_at
+    $orders = $db->query(
+        "SELECT id, order_number, total_amount, handed_over_at, created_at
+         FROM shipping_company_orders
+         WHERE shipping_company_id = ? AND status IN ('assigned', 'in_transit', 'delivered')
+         ORDER BY COALESCE(handed_over_at, created_at) ASC",
+        [$companyId]
+    ) ?: [];
+    foreach ($orders as $o) {
+        $date = !empty($o['handed_over_at']) ? $o['handed_over_at'] : $o['created_at'];
+        $sortDate = date('Y-m-d', strtotime($date));
+        $movements[] = [
+            'sort_date' => $sortDate,
+            'sort_id' => (int)$o['id'],
+            'type_order' => 1,
+            'type' => 'order',
+            'date' => $date,
+            'label' => 'طلب شحن #' . ($o['order_number'] ?? $o['id']),
+            'debit' => (float)($o['total_amount'] ?? 0),
+            'credit' => 0.0,
+        ];
+    }
+
+    // التحصيلات (دائن)
+    $collectionsTableExists = $db->queryOne("SHOW TABLES LIKE 'shipping_company_collections'");
+    if (!empty($collectionsTableExists)) {
+        $collections = $db->query(
+            "SELECT id, amount, date, collection_number FROM shipping_company_collections WHERE shipping_company_id = ? ORDER BY date ASC, id ASC",
+            [$companyId]
+        ) ?: [];
+        foreach ($collections as $c) {
+            $label = !empty($c['collection_number']) ? 'تحصيل ' . $c['collection_number'] : ('تحصيل #' . $c['id']);
+            $movements[] = [
+                'sort_date' => $c['date'],
+                'sort_id' => (int)$c['id'] + 500000,
+                'type_order' => 2,
+                'type' => 'collection',
+                'date' => $c['date'],
+                'label' => $label,
+                'debit' => 0.0,
+                'credit' => (float)($c['amount'] ?? 0),
+            ];
+        }
+    }
+
+    // الخصومات (دائن)
+    $deductionsTableExists = $db->queryOne("SHOW TABLES LIKE 'shipping_company_deductions'");
+    if (!empty($deductionsTableExists)) {
+        $deductions = $db->query(
+            "SELECT id, amount, notes, created_at FROM shipping_company_deductions WHERE shipping_company_id = ? ORDER BY created_at ASC",
+            [$companyId]
+        ) ?: [];
+        foreach ($deductions as $d) {
+            $movements[] = [
+                'sort_date' => date('Y-m-d', strtotime($d['created_at'])),
+                'sort_id' => (int)$d['id'] + 600000,
+                'type_order' => 3,
+                'type' => 'deduction',
+                'date' => $d['created_at'],
+                'label' => 'خصم' . (!empty(trim($d['notes'] ?? '')) ? ' - ' . trim($d['notes']) : ''),
+                'debit' => 0.0,
+                'credit' => (float)($d['amount'] ?? 0),
+            ];
+        }
+    }
+
+    usort($movements, function ($a, $b) {
+        $c = strcmp($a['sort_date'], $b['sort_date']);
+        if ($c !== 0) return $c;
+        $to = ($a['type_order'] ?? 9) - ($b['type_order'] ?? 9);
+        return $to !== 0 ? $to : ($a['sort_id'] - $b['sort_id']);
+    });
+
+    $balance = 0.0;
+    foreach ($movements as &$m) {
+        $balance += $m['debit'] - $m['credit'];
+        $m['balance_after'] = $balance;
+    }
+    unset($m);
+
+    $totals = ['total_debit' => 0, 'total_credit' => 0, 'net_balance' => $balance];
+    foreach ($movements as $m) {
+        $totals['total_debit'] += $m['debit'];
+        $totals['total_credit'] += $m['credit'];
+    }
+
+    return ['movements' => $movements, 'totals' => $totals];
+}
+
 $mainWarehouse = $db->queryOne("SELECT id, name FROM warehouses WHERE warehouse_type = 'main' AND status = 'active' LIMIT 1");
 if (!$mainWarehouse) {
     $db->execute(
@@ -243,6 +362,31 @@ if (!$mainWarehouse) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     $isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+
+    if ($action === 'get_shipping_company_statement' && $isAjax) {
+        $companyId = isset($_POST['company_id']) ? (int)$_POST['company_id'] : 0;
+        if ($companyId <= 0) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'error' => 'معرف الشركة غير صالح.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        $company = $db->queryOne("SELECT id, name, balance FROM shipping_companies WHERE id = ?", [$companyId]);
+        if (!$company) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'error' => 'الشركة غير موجودة.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        $data = getShippingCompanyStatementData($companyId);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'success' => true,
+            'company_name' => $company['name'] ?? '',
+            'current_balance' => (float)($company['balance'] ?? 0),
+            'movements' => $data['movements'],
+            'totals' => $data['totals'],
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
 
     if ($action === 'search_orders') {
         $query = trim($_POST['query'] ?? '');
@@ -759,6 +903,90 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!empty($_SESSION[$sessionErrorKey])) {
                 unset($_SESSION[$sessionErrorKey]);
             }
+            exit;
+        }
+        redirectAfterPost('shipping_orders', [], [], 'manager');
+        exit;
+    }
+
+    if ($action === 'deduct_from_shipping_company') {
+        $companyId = isset($_POST['company_id']) ? (int)$_POST['company_id'] : 0;
+        $amount = isset($_POST['amount']) ? cleanFinancialValue($_POST['amount']) : 0;
+        $notes = trim($_POST['notes'] ?? '');
+
+        if ($companyId <= 0) {
+            $_SESSION[$sessionErrorKey] = 'معرف شركة الشحن غير صالح.';
+        } elseif ($amount <= 0) {
+            $_SESSION[$sessionErrorKey] = 'يجب إدخال مبلغ خصم أكبر من صفر.';
+        } else {
+            try {
+                $company = $db->queryOne(
+                    "SELECT id, name, balance FROM shipping_companies WHERE id = ? FOR UPDATE",
+                    [$companyId]
+                );
+                if (!$company) {
+                    throw new InvalidArgumentException('لم يتم العثور على شركة الشحن.');
+                }
+                $currentBalance = (float)($company['balance'] ?? 0);
+                if ($amount > $currentBalance) {
+                    throw new InvalidArgumentException('المبلغ المدخل أكبر من ديون الشركة الحالية.');
+                }
+                $newBalance = round(max($currentBalance - $amount, 0), 2);
+
+                $db->execute(
+                    "UPDATE shipping_companies SET balance = ?, updated_by = ?, updated_at = NOW() WHERE id = ?",
+                    [$newBalance, $currentUser['id'] ?? null, $companyId]
+                );
+
+                $deductionsTableExists = $db->queryOne("SHOW TABLES LIKE 'shipping_company_deductions'");
+                if (!empty($deductionsTableExists)) {
+                    $db->execute(
+                        "INSERT INTO shipping_company_deductions (shipping_company_id, amount, notes, created_by) VALUES (?, ?, ?, ?)",
+                        [$companyId, $amount, $notes ?: null, $currentUser['id'] ?? null]
+                    );
+                }
+
+                logAudit(
+                    $currentUser['id'] ?? null,
+                    'deduct_from_shipping_company',
+                    'shipping_company',
+                    $companyId,
+                    null,
+                    ['amount' => $amount, 'previous_balance' => $currentBalance, 'new_balance' => $newBalance]
+                );
+
+                $_SESSION[$sessionSuccessKey] = 'تم خصم المبلغ بنجاح. الرصيد الجديد: ' . number_format($newBalance, 2) . ' ج.م.';
+                if ($isAjax) {
+                    header('Content-Type: application/json; charset=utf-8');
+                    echo json_encode([
+                        'success' => true,
+                        'message' => 'تم خصم المبلغ بنجاح.',
+                        'new_balance' => (float)$newBalance,
+                        'company_id' => $companyId
+                    ], JSON_UNESCAPED_UNICODE);
+                    exit;
+                }
+            } catch (InvalidArgumentException $e) {
+                $_SESSION[$sessionErrorKey] = $e->getMessage();
+                if ($isAjax) {
+                    header('Content-Type: application/json; charset=utf-8');
+                    echo json_encode(['success' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+                    exit;
+                }
+            } catch (Throwable $e) {
+                error_log('shipping_orders: deduct_from_shipping_company -> ' . $e->getMessage());
+                $_SESSION[$sessionErrorKey] = 'حدث خطأ أثناء تنفيذ الخصم. يرجى المحاولة مرة أخرى.';
+                if ($isAjax) {
+                    header('Content-Type: application/json; charset=utf-8');
+                    echo json_encode(['success' => false, 'error' => 'حدث خطأ أثناء تنفيذ الخصم.'], JSON_UNESCAPED_UNICODE);
+                    exit;
+                }
+            }
+        }
+        if ($isAjax) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'error' => $_SESSION[$sessionErrorKey] ?? 'خطأ في البيانات المدخلة.'], JSON_UNESCAPED_UNICODE);
+            if (!empty($_SESSION[$sessionErrorKey])) unset($_SESSION[$sessionErrorKey]);
             exit;
         }
         redirectAfterPost('shipping_orders', [], [], 'manager');
@@ -3444,30 +3672,18 @@ $hasShippingCompanies = !empty($shippingCompanies);
                                     <?php echo $balanceFormatted; ?>
                                 </td>
                                 <td>
-                                    <div class="d-flex flex-wrap gap-2">
-                                        <button type="button" class="btn btn-sm btn-outline-info" onclick="showCompanyPaperInvoicesCard(this)"
-                                                data-company-id="<?php echo (int)$company['id']; ?>"
-                                                data-company-name="<?php echo htmlspecialchars($company['name']); ?>"
-                                                title="سجل الفواتير الورقية">
-                                            <i class="bi bi-receipt-cutoff me-1"></i>فواتير ورقية
+                                    <div class="dropdown">
+                                        <button type="button" class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" title="إجراءات">
+                                            <i class="bi bi-gear me-1"></i>إجراءات
                                         </button>
-                                        <button type="button" class="btn btn-sm btn-outline-warning" onclick="showEditShippingCompanyBalanceModal(this)"
-                                                data-company-id="<?php echo (int)$company['id']; ?>"
-                                                data-company-name="<?php echo htmlspecialchars($company['name']); ?>"
-                                                data-company-balance="<?php echo $companyBalance; ?>"
-                                                title="تعديل ديون الشركة">
-                                            <i class="bi bi-pencil me-1"></i>تعديل الديون
-                                        </button>
-                                        <button type="button" class="btn btn-sm <?php echo $companyBalance > 0 ? 'btn-success' : 'btn-outline-secondary'; ?>"
-                                                onclick="showCollectFromShippingCompanyModal(this)"
-                                                data-company-id="<?php echo (int)$company['id']; ?>"
-                                                data-company-name="<?php echo htmlspecialchars($company['name']); ?>"
-                                                data-company-balance="<?php echo $companyBalance; ?>"
-                                                data-company-balance-formatted="<?php echo htmlspecialchars($balanceFormatted); ?>"
-                                                <?php echo $companyBalance <= 0 ? ' disabled' : ''; ?>
-                                                title="تحصيل من شركة الشحن">
-                                            <i class="bi bi-cash-coin me-1"></i>تحصيل
-                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-end">
+                                            <li><a class="dropdown-item" href="#" onclick="showShippingCompanyStatement(<?php echo (int)$company['id']; ?>, <?php echo json_encode($company['name'], JSON_UNESCAPED_UNICODE); ?>); return false;"><i class="bi bi-journal-text me-2"></i>كشف حساب</a></li>
+                                            <li><a class="dropdown-item" href="#" onclick="showCompanyPaperInvoicesByIdName(<?php echo (int)$company['id']; ?>, <?php echo json_encode($company['name'], JSON_UNESCAPED_UNICODE); ?>); return false;"><i class="bi bi-receipt-cutoff me-2"></i>فواتير ورقية</a></li>
+                                            <li><a class="dropdown-item" href="#" onclick="showEditBalanceByIdName(<?php echo (int)$company['id']; ?>, <?php echo json_encode($company['name'], JSON_UNESCAPED_UNICODE); ?>, <?php echo $companyBalance; ?>); return false;"><i class="bi bi-pencil me-2"></i>تعديل الديون</a></li>
+                                            <li><a class="dropdown-item <?php echo $companyBalance <= 0 ? 'disabled' : ''; ?>" href="#" onclick="if (!this.classList.contains('disabled')) showCollectByIdName(<?php echo (int)$company['id']; ?>, <?php echo json_encode($company['name'], JSON_UNESCAPED_UNICODE); ?>, <?php echo $companyBalance; ?>, <?php echo json_encode($balanceFormatted, JSON_UNESCAPED_UNICODE); ?>); return false;"><i class="bi bi-cash-coin me-2"></i>تحصيل</a></li>
+                                            <li><hr class="dropdown-divider"></li>
+                                            <li><a class="dropdown-item <?php echo $companyBalance <= 0 ? 'disabled' : ''; ?>" href="#" onclick="if (!this.classList.contains('disabled')) showDeductFromShippingCompany(<?php echo (int)$company['id']; ?>, <?php echo json_encode($company['name'], JSON_UNESCAPED_UNICODE); ?>, <?php echo $companyBalance; ?>); return false;"><i class="bi bi-dash-circle me-2"></i>خصم</a></li>
+                                        </ul>
                                     </div>
                                 </td>
                             </tr>
@@ -3476,6 +3692,46 @@ $hasShippingCompanies = !empty($shippingCompanies);
                 </table>
             </div>
         <?php endif; ?>
+    </div>
+</div>
+
+<!-- بطاقة كشف حساب شركة الشحن (سجل الحركات المالية) -->
+<div class="card shadow-sm mb-4 border-primary" id="shippingCompanyStatementCard" style="display: none;">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <h5 class="mb-0"><i class="bi bi-journal-text me-2"></i>كشف حساب - <span id="statementCardCompanyName">-</span></h5>
+        <button type="button" class="btn btn-sm btn-light" onclick="closeShippingCompanyStatementCard()" aria-label="إغلاق"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="card-body">
+        <input type="hidden" id="statementCardCompanyId" value="">
+        <div id="statementCardLoading" class="text-center py-4 text-muted">
+            <div class="spinner-border" role="status"></div>
+            <p class="mt-2 mb-0">جاري تحميل كشف الحساب...</p>
+        </div>
+        <div id="statementCardContent" style="display: none;">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>التاريخ</th>
+                            <th>البيان</th>
+                            <th class="text-end">مدين</th>
+                            <th class="text-end">دائن</th>
+                            <th class="text-end">الرصيد</th>
+                        </tr>
+                    </thead>
+                    <tbody id="statementCardTableBody"></tbody>
+                </table>
+            </div>
+            <div class="row mt-3 text-muted small">
+                <div class="col">إجمالي المدين: <strong id="statementTotalDebit">0</strong> ج.م</div>
+                <div class="col">إجمالي الدائن: <strong id="statementTotalCredit">0</strong> ج.م</div>
+                <div class="col">الرصيد النهائي: <strong id="statementNetBalance" class="text-primary">0</strong> ج.م</div>
+            </div>
+        </div>
+        <div id="statementCardEmpty" class="text-center py-4 text-muted" style="display: none;">
+            <i class="bi bi-inbox fs-1"></i>
+            <p class="mb-0">لا توجد حركات مالية مسجلة لهذه الشركة.</p>
+        </div>
     </div>
 </div>
 
@@ -4059,6 +4315,45 @@ $hasShippingCompanies = !empty($shippingCompanies);
     </div>
 </div>
 
+<!-- Modal خصم من رصيد شركة الشحن - للكمبيوتر -->
+<div class="modal fade d-none d-md-block" id="deductFromShippingCompanyModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-dash-circle me-2"></i>خصم من رصيد شركة الشحن</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <form method="POST" data-no-loading="true" id="deductShippingCompanyFormModal">
+                <input type="hidden" name="action" value="deduct_from_shipping_company">
+                <input type="hidden" name="company_id" id="deductModalCompanyId">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <div class="fw-semibold text-muted">شركة الشحن</div>
+                        <div class="fs-5" id="deductModalCompanyName">-</div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="fw-semibold text-muted">الديون الحالية</div>
+                        <div class="fs-5 text-warning" id="deductModalCurrentDebt">-</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="deductModalAmount">مبلغ الخصم <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" id="deductModalAmount" name="amount" step="0.01" min="0.01" required>
+                        <div class="form-text">سيُخصم من ديون الشركة (بدون تحصيل نقدي).</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="deductModalNotes">ملاحظات (اختياري)</label>
+                        <textarea class="form-control" id="deductModalNotes" name="notes" rows="2" placeholder="سبب الخصم أو تفاصيل إضافية"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-warning">تنفيذ الخصم</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Modal إلغاء الطلب - إدخال مبلغ الشحن المخصوم -->
 <div class="modal fade" id="cancelOrderModal" tabindex="-1" aria-labelledby="cancelOrderModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -4168,6 +4463,39 @@ $hasShippingCompanies = !empty($shippingCompanies);
     </div>
 </div>
 
+<!-- Card للموبايل - خصم من رصيد شركة الشحن -->
+<div class="card shadow-sm mb-4 d-md-none" id="deductFromShippingCompanyCard" style="display: none;">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0"><i class="bi bi-dash-circle me-2"></i>خصم من رصيد شركة الشحن</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" data-no-loading="true" id="deductShippingCompanyFormCard">
+            <input type="hidden" name="action" value="deduct_from_shipping_company">
+            <input type="hidden" name="company_id" id="deductCardCompanyId">
+            <div class="mb-3">
+                <div class="fw-semibold text-muted">شركة الشحن</div>
+                <div class="fs-5" id="deductCardCompanyName">-</div>
+            </div>
+            <div class="mb-3">
+                <div class="fw-semibold text-muted">الديون الحالية</div>
+                <div class="fs-5 text-warning" id="deductCardCurrentDebt">-</div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="deductCardAmount">مبلغ الخصم <span class="text-danger">*</span></label>
+                <input type="number" class="form-control" id="deductCardAmount" name="amount" step="0.01" min="0.01" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="deductCardNotes">ملاحظات (اختياري)</label>
+                <textarea class="form-control" id="deductCardNotes" name="notes" rows="2"></textarea>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-warning">تنفيذ الخصم</button>
+                <button type="button" class="btn btn-secondary" onclick="closeDeductFromShippingCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- Card للموبايل - إضافة شركة شحن -->
 <div class="card shadow-sm mb-4 d-md-none" id="addShippingCompanyCard" style="display: none;">
     <div class="card-header bg-primary text-white">
@@ -4270,7 +4598,7 @@ function scrollToElement(element) {
 }
 
 function closeAllForms() {
-    const cards = ['addShippingCompanyCard', 'addLocalCustomerCard'];
+    const cards = ['addShippingCompanyCard', 'addLocalCustomerCard', 'companyPaperInvoicesCard', 'shippingCompanyStatementCard', 'collectFromShippingCompanyCard', 'deductFromShippingCompanyCard'];
     cards.forEach(function(cardId) {
         const card = document.getElementById(cardId);
         if (card && card.style.display !== 'none') {
@@ -4280,7 +4608,7 @@ function closeAllForms() {
         }
     });
     
-    const modals = ['addShippingCompanyModal', 'addLocalCustomerModal', 'deliveryModal', 'editShippingCompanyBalanceModal', 'collectFromShippingCompanyModal'];
+    const modals = ['addShippingCompanyModal', 'addLocalCustomerModal', 'deliveryModal', 'editShippingCompanyBalanceModal', 'collectFromShippingCompanyModal', 'deductFromShippingCompanyModal'];
     
     // إضافة deliveryCard
     const deliveryCard = document.getElementById('deliveryCard');

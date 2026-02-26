@@ -106,6 +106,39 @@ if ($page === 'representatives_customers' &&
     }
 }
 
+// معالجة GET لبحث العملاء في جداول التحصيل اليومية (قبل أي إخراج حتى يُرجع JSON فقط)
+if ($page === 'daily_collection_schedules' && $_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['ajax']) && $_GET['ajax'] === 'search_local_customers') {
+    require_once __DIR__ . '/../includes/config.php';
+    require_once __DIR__ . '/../includes/db.php';
+    require_once __DIR__ . '/../includes/auth.php';
+    require_once __DIR__ . '/../includes/path_helper.php';
+    if (function_exists('isLoggedIn') && isLoggedIn()) {
+        $currentUser = getCurrentUser();
+        $role = strtolower($currentUser['role'] ?? '');
+        if (in_array($role, ['manager', 'accountant', 'developer'], true)) {
+            $db = db();
+            $q = trim($_GET['q'] ?? '');
+            header('Content-Type: application/json; charset=utf-8');
+            if ($q === '') {
+                echo json_encode(['success' => true, 'customers' => []], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+            try {
+                $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%';
+                $list = $db->query(
+                    "SELECT id, name, phone FROM local_customers WHERE status = 'active' AND (name LIKE ? OR phone LIKE ?) ORDER BY name ASC LIMIT 25",
+                    [$like, $like]
+                );
+                echo json_encode(['success' => true, 'customers' => $list ?: []], JSON_UNESCAPED_UNICODE);
+            } catch (Throwable $e) {
+                error_log('Daily collection customer search: ' . $e->getMessage());
+                echo json_encode(['success' => false, 'customers' => []], JSON_UNESCAPED_UNICODE);
+            }
+            exit;
+        }
+    }
+}
+
 // معالجة POST لصفحة جداول التحصيل اليومية (حذف/تعديل/إنشاء) قبل أي إخراج لضمان عمل التوجيه
 if ($page === 'daily_collection_schedules' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     require_once __DIR__ . '/../includes/config.php';

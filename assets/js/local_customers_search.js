@@ -338,17 +338,33 @@
             if (autocompleteAbortController) autocompleteAbortController.abort();
             autocompleteAbortController = new AbortController();
             showAutocompleteLoading();
-            var apiUrl = (localCustomersApiBase || '') + '/fs.php';
-            fetch(apiUrl + '?q=' + encodeURIComponent(query), {
+            // استخدام نفس API البحث المتقدم (جميع بيانات العميل: الاسم، الهاتف، العنوان، المنطقة، الرقم، الرصيد...)
+            var apiUrl = (localCustomersApiBase || '') + '/api/get_local_customers_search.php';
+            var params = new URLSearchParams();
+            params.append('search', query);
+            params.append('p', 1);
+            fetch(apiUrl + '?' + params.toString(), {
                 method: 'GET',
                 credentials: 'include',
                 signal: autocompleteAbortController.signal
             })
             .then(function(response) { return response.json(); })
             .then(function(data) {
-                if (data.success && data.results) {
-                    autocompleteResults = data.results;
-                    displayAutocompleteResults(data.results);
+                if (data.success && data.customers && data.customers.length > 0) {
+                    autocompleteResults = data.customers.map(function(c) {
+                        var subParts = [];
+                        if (c.phones && c.phones.length) subParts.push(c.phones.slice(0, 2).join('، '));
+                        else if (c.phone) subParts.push(c.phone);
+                        if (c.region_name) subParts.push(c.region_name);
+                        return {
+                            id: c.id,
+                            name: c.name,
+                            balance: c.balance,
+                            balance_formatted: c.balance_formatted,
+                            sub_text: subParts.join(' • ')
+                        };
+                    });
+                    displayAutocompleteResults(autocompleteResults);
                 } else {
                     showAutocompleteNoResults();
                 }

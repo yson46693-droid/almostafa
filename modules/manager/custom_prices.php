@@ -18,8 +18,10 @@ $db = db();
 $currentUser = getCurrentUser();
 $basePath = getBasePath();
 $apiBase = rtrim(getRelativeUrl('api'), '/');
+// رابط API البحث المتقدم في العملاء المحليين (الاسم، الهاتف، العنوان، المنطقة، الرصيد...)
+$localCustomerSearchApiUrl = getRelativeUrl('fs.php');
 
-// قائمة العملاء المحليين
+// قائمة العملاء المحليين (تُستخدم كنسخة احتياطية عند تعطّل API أو للعرض الأولي)
 $localCustomers = [];
 try {
     $t = $db->queryOne("SHOW TABLES LIKE 'local_customers'");
@@ -108,7 +110,7 @@ $units = ['كرتونه', 'عبوة', 'كيلو', 'جرام', 'شرينك', 'ج�
                     <div id="customer_select_local" class="customer-select-block mb-3">
                         <label class="form-label">ابحث عن العميل المحلي</label>
                         <div class="search-wrap">
-                            <input type="text" id="local_customer_search" class="form-control" placeholder="اكتب للبحث في قائمة العملاء المحليين..." autocomplete="off">
+                            <input type="text" id="local_customer_search" class="form-control" placeholder="ابحث بالاسم، الهاتف، المنطقة، الرصيد..." autocomplete="off">
                             <input type="hidden" id="local_customer_id" value="">
                             <div id="local_customer_dropdown" class="search-dropdown d-none"></div>
                         </div>
@@ -240,6 +242,7 @@ $units = ['كرتونه', 'عبوة', 'كيلو', 'جرام', 'شرينك', 'ج�
     var basePath = <?php echo json_encode($basePath); ?>;
     var apiBase = <?php echo json_encode($apiBase); ?>;
     if (!apiBase) apiBase = basePath ? basePath + '/api' : 'api';
+    var localCustomerSearchApiUrl = <?php echo json_encode($localCustomerSearchApiUrl); ?>;
 
     var units = <?php echo json_encode($units); ?>;
     var localCustomers = <?php echo json_encode(array_map(function($c) { return ['id' => (int)$c['id'], 'name' => $c['name']]; }, $localCustomers)); ?>;
@@ -324,7 +327,68 @@ $units = ['كرتونه', 'عبوة', 'كيلو', 'جرام', 'شرينك', 'ج�
             if ((input.value || '').trim()) showCustomerDropdown(inputId, hiddenId, dropdownId, list, getLabel);
         });
     }
-    initCustomerSearch('local_customer_search', 'local_customer_id', 'local_customer_dropdown', localCustomers, function(c) { return c.name; });
+
+    // البحث المتقدم عن العميل المحلي (نفس منطق صفحة العملاء المحليين: الاسم، الهاتف، العنوان، المنطقة، الرصيد...)
+    (function initLocalCustomerSearchAdvanced() {
+        var input = document.getElementById('local_customer_search');
+        var hidden = document.getElementById('local_customer_id');
+        var drop = document.getElementById('local_customer_dropdown');
+        if (!input || !hidden || !drop) return;
+        var searchTimeout = null;
+        var abortController = null;
+        var apiUrl = (localCustomerSearchApiUrl && localCustomerSearchApiUrl.indexOf('/') === 0) ? localCustomerSearchApiUrl : (basePath || '') + (localCustomerSearchApiUrl || '/fs.php');
+        function doSearch() {
+            var q = (input.value || '').trim();
+            if (!q) {
+                drop.innerHTML = '';
+                drop.classList.add('d-none');
+                hidden.value = '';
+                return;
+            }
+            if (abortController) abortController.abort();
+            abortController = new AbortController();
+            drop.innerHTML = '<div class="search-dropdown-item text-muted"><i class="bi bi-hourglass-split me-1"></i>جاري البحث...</div>';
+            drop.classList.remove('d-none');
+            fetch(apiUrl + '?q=' + encodeURIComponent(q), { method: 'GET', credentials: 'include', signal: abortController.signal })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (!data.success || !data.results || data.results.length === 0) {
+                        drop.innerHTML = '<div class="search-dropdown-item text-muted">لا توجد نتائج</div>';
+                        drop.classList.remove('d-none');
+                        return;
+                    }
+                    drop.innerHTML = '';
+                    data.results.forEach(function(c) {
+                        var div = document.createElement('div');
+                        div.className = 'search-dropdown-item';
+                        div.innerHTML = '<span class="d-block fw-semibold">' + escapeHtml(c.name) + '</span>' + (c.sub_text ? '<span class="small text-muted">' + escapeHtml(c.sub_text) + '</span>' : '');
+                        div.dataset.id = c.id;
+                        div.dataset.name = c.name;
+                        div.addEventListener('click', function() {
+                            hidden.value = this.dataset.id;
+                            input.value = this.dataset.name;
+                            drop.classList.add('d-none');
+                        });
+                        drop.appendChild(div);
+                    });
+                    drop.classList.remove('d-none');
+                })
+                .catch(function(err) {
+                    if (err.name === 'AbortError') return;
+                    drop.innerHTML = '<div class="search-dropdown-item text-danger">تعذّر الاتصال بالخادم</div>';
+                    drop.classList.remove('d-none');
+                });
+        }
+        input.addEventListener('input', function() {
+            hidden.value = '';
+            if (searchTimeout) clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(doSearch, 220);
+        });
+        input.addEventListener('focus', function() {
+            if ((input.value || '').trim()) doSearch();
+        });
+    })();
+
     initCustomerSearch('rep_customer_search', 'rep_customer_id', 'rep_customer_dropdown', repCustomers, function(c) { return c.rep_name ? c.name + ' (' + c.rep_name + ')' : c.name; });
 
     document.addEventListener('click', function(e) {
