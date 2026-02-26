@@ -106,6 +106,26 @@ if ($page === 'representatives_customers' &&
     }
 }
 
+// معالجة POST لصفحة جداول التحصيل اليومية (حذف/تعديل/إنشاء) قبل أي إخراج لضمان عمل التوجيه
+if ($page === 'daily_collection_schedules' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    require_once __DIR__ . '/../includes/config.php';
+    require_once __DIR__ . '/../includes/db.php';
+    require_once __DIR__ . '/../includes/auth.php';
+    require_once __DIR__ . '/../includes/path_helper.php';
+    require_once __DIR__ . '/../includes/audit_log.php';
+    if (function_exists('isLoggedIn') && isLoggedIn()) {
+        $currentUser = getCurrentUser();
+        $role = strtolower($currentUser['role'] ?? '');
+        if (in_array($role, ['manager', 'accountant', 'developer'], true)) {
+            $modulePath = __DIR__ . '/../modules/manager/daily_collection_schedules.php';
+            if (file_exists($modulePath)) {
+                include $modulePath;
+                exit;
+            }
+        }
+    }
+}
+
 // معالجة AJAX لجلب بيانات الأوردر للتعديل - قبل أي إخراج أو headers
 if ($page === 'production_tasks' && 
     $_SERVER['REQUEST_METHOD'] === 'GET' && 

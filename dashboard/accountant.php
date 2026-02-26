@@ -10,6 +10,27 @@ ob_start();
 
 define('ACCESS_ALLOWED', true);
 
+$page = $_GET['page'] ?? 'dashboard';
+// معالجة POST لصفحة جداول التحصيل اليومية (حذف/تعديل/إنشاء) قبل أي إخراج لضمان عمل التوجيه
+if ($page === 'daily_collection_schedules' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    require_once __DIR__ . '/../includes/config.php';
+    require_once __DIR__ . '/../includes/db.php';
+    require_once __DIR__ . '/../includes/auth.php';
+    require_once __DIR__ . '/../includes/path_helper.php';
+    require_once __DIR__ . '/../includes/audit_log.php';
+    if (function_exists('isLoggedIn') && isLoggedIn()) {
+        $currentUser = getCurrentUser();
+        $role = strtolower($currentUser['role'] ?? '');
+        if (in_array($role, ['accountant', 'manager', 'developer'], true)) {
+            $modulePath = __DIR__ . '/../modules/manager/daily_collection_schedules.php';
+            if (file_exists($modulePath)) {
+                include $modulePath;
+                exit;
+            }
+        }
+    }
+}
+
 // إضافة Permissions-Policy header للسماح بالوصول إلى Geolocation, Camera, Microphone
 // ملاحظة: notifications تم إزالته من Feature-Policy لأنه غير مدعوم
 // يجب أن يكون في البداية قبل أي output
