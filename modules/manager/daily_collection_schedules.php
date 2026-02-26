@@ -528,5 +528,14 @@ if ($editId > 0) {
             alert('يرجى اختيار عميل واحد على الأقل من خلال البحث واختيار نتيجة من القائمة.');
         }
     });
+
+    // إخفاء شاشة التحميل عند تحميل الصفحة (بعد إعادة التوجيه من إنشاء/تحديث الجدول) لضمان اختفائها
+    (function hideLoadingOnPageLoad() {
+        if (typeof window.resetPageLoading === 'function') window.resetPageLoading();
+        var go = document.getElementById('global-loading-overlay');
+        if (go) go.classList.remove('is-active');
+        var aj = document.getElementById('ajax-loading-indicator');
+        if (aj) aj.style.display = 'none';
+    })();
 })();
 </script>
