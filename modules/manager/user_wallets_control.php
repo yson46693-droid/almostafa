@@ -198,14 +198,22 @@ if ($isWalletControlAjax) {
         ) ?: [];
     }
     $selectedUserIdAjax = isset($_GET['user_id']) ? (int)$_GET['user_id'] : 0;
+    $txPageAjax = max(1, (int)($_GET['tx_page'] ?? 1));
+    $perPageAjax = 15;
     $selectedTransactionsAjax = [];
     $selectedUserBalanceFormatted = '';
     $selectedUserBalanceRaw = 0;
+    $transactionsTotalCountAjax = 0;
+    $transactionsTotalPagesAjax = 0;
     if ($selectedUserIdAjax > 0) {
         $selectedUserBalanceRaw = $userBalancesAjax[$selectedUserIdAjax] ?? 0;
         $selectedUserBalanceFormatted = formatCurrency($selectedUserBalanceRaw);
+        $countRowAjax = $db->queryOne("SELECT COUNT(*) AS cnt FROM user_wallet_transactions WHERE user_id = ?", [$selectedUserIdAjax]);
+        $transactionsTotalCountAjax = (int)($countRowAjax['cnt'] ?? 0);
+        $transactionsTotalPagesAjax = $transactionsTotalCountAjax > 0 ? (int)ceil($transactionsTotalCountAjax / $perPageAjax) : 0;
+        $txOffsetAjax = ($txPageAjax - 1) * $perPageAjax;
         $selectedTransactionsAjax = $db->query(
-            "SELECT t.*, u.full_name as created_by_name FROM user_wallet_transactions t LEFT JOIN users u ON u.id = t.created_by WHERE t.user_id = ? ORDER BY t.created_at DESC LIMIT 50",
+            "SELECT t.*, u.full_name as created_by_name FROM user_wallet_transactions t LEFT JOIN users u ON u.id = t.created_by WHERE t.user_id = ? ORDER BY t.created_at DESC LIMIT " . (int)$perPageAjax . " OFFSET " . (int)$txOffsetAjax,
             [$selectedUserIdAjax]
         ) ?: [];
     }
@@ -218,7 +226,13 @@ if ($isWalletControlAjax) {
         'selected_user_balance' => $selectedUserBalanceRaw,
         'selected_user_balance_formatted' => $selectedUserBalanceFormatted,
         'transactions' => [],
-        'pending_requests' => []
+        'pending_requests' => [],
+        'pagination' => [
+            'current_page' => $txPageAjax,
+            'total_pages' => $transactionsTotalPagesAjax,
+            'total_count' => $transactionsTotalCountAjax,
+            'per_page' => $perPageAjax
+        ]
     ];
     foreach ($userBalancesAjax as $uid => $bal) {
         $out['user_balances'][(string)$uid] = formatCurrency($bal);
@@ -427,13 +441,21 @@ foreach ($walletUsers as $u) {
     $userBalances[$u['id']] = getWalletBalanceForControl($db, $u['id']);
 }
 
+$transactionsPerPage = 15;
+$txPage = max(1, (int)($_GET['tx_page'] ?? 1));
 $selectedUser = null;
 $selectedTransactions = [];
+$transactionsTotalCount = 0;
+$transactionsTotalPages = 0;
 if ($selectedUserId > 0) {
     $selectedUser = $db->queryOne("SELECT id, full_name, username, role FROM users WHERE id = ? AND role IN ('driver', 'production')", [$selectedUserId]);
     if ($selectedUser) {
+        $countRow = $db->queryOne("SELECT COUNT(*) AS cnt FROM user_wallet_transactions WHERE user_id = ?", [$selectedUserId]);
+        $transactionsTotalCount = (int)($countRow['cnt'] ?? 0);
+        $transactionsTotalPages = $transactionsTotalCount > 0 ? (int)ceil($transactionsTotalCount / $transactionsPerPage) : 0;
+        $txOffset = ($txPage - 1) * $transactionsPerPage;
         $selectedTransactions = $db->query(
-            "SELECT t.*, u.full_name as created_by_name FROM user_wallet_transactions t LEFT JOIN users u ON u.id = t.created_by WHERE t.user_id = ? ORDER BY t.created_at DESC LIMIT 50",
+            "SELECT t.*, u.full_name as created_by_name FROM user_wallet_transactions t LEFT JOIN users u ON u.id = t.created_by WHERE t.user_id = ? ORDER BY t.created_at DESC LIMIT " . (int)$transactionsPerPage . " OFFSET " . (int)$txOffset,
             [$selectedUserId]
         ) ?: [];
     }
@@ -628,7 +650,7 @@ $roleLabels = ['driver' => 'سائق', 'production' => 'عامل إنتاج'];
                                                 <td>
                                                     <?php if ($orderIdForPrint > 0): ?>
                                                         <a href="<?php echo htmlspecialchars($printReceiptBase . (strpos($printReceiptBase, '?') !== false ? '&' : '?') . 'id=' . $orderIdForPrint); ?>" target="_blank" class="btn btn-outline-primary btn-sm" title="طباعة الأوردر #<?php echo $orderIdForPrint; ?>">
-                                                            <i class="bi bi-printer me-1"></i>طباعة الأوردر
+                                                            <i class="bi bi-printer me-1"></i> 
                                                         </a>
                                                     <?php else: ?>
                                                         <span class="text-muted">—</span>
@@ -639,6 +661,41 @@ $roleLabels = ['driver' => 'سائق', 'production' => 'عامل إنتاج'];
                                     <?php endif; ?>
                                 </tbody>
                             </table>
+                        </div>
+                        <?php
+                        $paginationBaseParams = array_merge($_GET, ['page' => 'user_wallets_control']);
+                        if ($selectedUserId > 0) {
+                            $paginationBaseParams['user_id'] = $selectedUserId;
+                        }
+                        $paginationScript = $_SERVER['PHP_SELF'] ?? 'manager.php';
+                        ?>
+                        <div class="card-footer bg-light py-2 d-flex flex-wrap align-items-center justify-content-between gap-2" id="wallets-control-pagination" data-pagination-script="<?php echo htmlspecialchars($paginationScript); ?>" data-user-id="<?php echo (int)$selectedUserId; ?>">
+                            <?php if ($transactionsTotalPages > 1): ?>
+                            <nav aria-label="ترقيم سجل المعاملات" class="mb-0">
+                                <ul class="pagination pagination-sm mb-0 flex-wrap">
+                                    <?php
+                                    $prevParams = array_merge($paginationBaseParams, ['tx_page' => $txPage - 1]);
+                                    $nextParams = array_merge($paginationBaseParams, ['tx_page' => $txPage + 1]);
+                                    ?>
+                                    <li class="page-item <?php echo $txPage <= 1 ? 'disabled' : ''; ?>">
+                                        <a class="page-link" href="<?php echo $txPage <= 1 ? '#' : htmlspecialchars($paginationScript . '?' . http_build_query($prevParams)); ?>">السابق</a>
+                                    </li>
+                                    <?php
+                                    $from = max(1, $txPage - 2);
+                                    $to = min($transactionsTotalPages, $txPage + 2);
+                                    for ($p = $from; $p <= $to; $p++):
+                                        $pageParams = array_merge($paginationBaseParams, ['tx_page' => $p]);
+                                        $link = $paginationScript . '?' . http_build_query($pageParams);
+                                    ?>
+                                    <li class="page-item <?php echo $p === $txPage ? 'active' : ''; ?>"><a class="page-link" href="<?php echo htmlspecialchars($link); ?>"><?php echo $p; ?></a></li>
+                                    <?php endfor; ?>
+                                    <li class="page-item <?php echo $txPage >= $transactionsTotalPages ? 'disabled' : ''; ?>">
+                                        <a class="page-link" href="<?php echo $txPage >= $transactionsTotalPages ? '#' : htmlspecialchars($paginationScript . '?' . http_build_query($nextParams)); ?>">التالي</a>
+                                    </li>
+                                </ul>
+                            </nav>
+                            <?php endif; ?>
+                            <small class="text-muted"><?php echo $transactionsTotalCount; ?> معاملة<?php echo $transactionsTotalPages > 1 ? ' — صفحة ' . $txPage . ' من ' . $transactionsTotalPages : ''; ?></small>
                         </div>
                     </div>
                 </div>
@@ -725,6 +782,30 @@ $roleLabels = ['driver' => 'سائق', 'production' => 'عامل إنتاج'];
                 pendingTbody.innerHTML = ph;
                 bindWalletsControlForms();
             }
+        }
+        var paginationEl = document.getElementById('wallets-control-pagination');
+        if (paginationEl && data.pagination) {
+            var pg = data.pagination;
+            var totalCount = pg.total_count || 0;
+            var totalPages = pg.total_pages || 0;
+            var currentPage = pg.current_page || 1;
+            var script = paginationEl.getAttribute('data-pagination-script') || '';
+            var userId = paginationEl.getAttribute('data-user-id') || (data.selected_user_id || '');
+            var baseQuery = 'page=user_wallets_control&user_id=' + encodeURIComponent(userId);
+            var html = '';
+            if (totalPages > 1) {
+                var from = Math.max(1, currentPage - 2);
+                var to = Math.min(totalPages, currentPage + 2);
+                html += '<nav aria-label="ترقيم سجل المعاملات" class="mb-0"><ul class="pagination pagination-sm mb-0 flex-wrap">';
+                html += '<li class="page-item' + (currentPage <= 1 ? ' disabled' : '') + '"><a class="page-link" href="' + (currentPage <= 1 ? '#' : (script + '?' + baseQuery + '&tx_page=' + (currentPage - 1))) + '">السابق</a></li>';
+                for (var p = from; p <= to; p++) {
+                    html += '<li class="page-item' + (p === currentPage ? ' active' : '') + '"><a class="page-link" href="' + (script + '?' + baseQuery + '&tx_page=' + p) + '">' + p + '</a></li>';
+                }
+                html += '<li class="page-item' + (currentPage >= totalPages ? ' disabled' : '') + '"><a class="page-link" href="' + (currentPage >= totalPages ? '#' : (script + '?' + baseQuery + '&tx_page=' + (currentPage + 1))) + '">التالي</a></li>';
+                html += '</ul></nav>';
+            }
+            html += '<small class="text-muted">' + totalCount + ' معاملة' + (totalPages > 1 ? ' — صفحة ' + currentPage + ' من ' + totalPages : '') + '</small>';
+            paginationEl.innerHTML = html;
         }
     }
 
