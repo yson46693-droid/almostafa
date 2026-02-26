@@ -19,6 +19,14 @@ requireRole(['manager', 'accountant', 'developer']);
 $currentUser = getCurrentUser();
 $db = db();
 
+// منع الكاش عند التبديل بين حسابات "المستخدمون ذوو المحافظ" لضمان عرض بيانات محدثة
+if (!headers_sent()) {
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Cache-Control: post-check=0, pre-check=0', false);
+    header('Pragma: no-cache');
+    header('Expires: 0');
+}
+
 // التأكد من وجود جدول المحفظة
 $tableCheck = $db->queryOne("SHOW TABLES LIKE 'user_wallet_transactions'");
 if (empty($tableCheck)) {
