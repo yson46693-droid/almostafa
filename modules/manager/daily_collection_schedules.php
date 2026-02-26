@@ -95,10 +95,13 @@ try {
 $error = '';
 $success = '';
 $editId = isset($_GET['edit']) ? (int)$_GET['edit'] : 0;
-$baseUrl = (strpos($_SERVER['PHP_SELF'] ?? '', 'accountant.php') !== false)
-    ? (getDashboardUrl() . 'accountant.php')
-    : (getDashboardUrl() . 'manager.php');
-$pageParam = (strpos($_SERVER['PHP_SELF'] ?? '', 'accountant.php') !== false) ? 'accountant' : 'manager';
+// استخدام مسار السكريبت الفعلي (الذي استقبل الطلب) لضمان التوجيه لنفس الصفحة وليس لوجهة أخرى
+$scriptPath = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
+if ($scriptPath !== '' && strpos($scriptPath, '?') !== false) {
+    $scriptPath = strstr($scriptPath, '?', true) ?: $scriptPath;
+}
+$baseUrl = ($scriptPath !== '') ? $scriptPath : (getDashboardUrl(strtolower($currentUser['role'] ?? 'manager')));
+$pageParam = (strpos($scriptPath, 'accountant.php') !== false) ? 'accountant' : 'manager';
 
 // AJAX: بحث العملاء المحليين للإدخال اليدوي (autocomplete)
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['ajax']) && $_GET['ajax'] === 'search_local_customers') {
