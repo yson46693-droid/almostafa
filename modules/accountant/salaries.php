@@ -266,6 +266,21 @@ if (empty($settlementsTableCheck)) {
     }
 }
 
+// إضافة عمود settlement_source في جدول salary_settlements (مصدر التسوية: من الخزنة أو من الإدارة)
+$settlementSourceColumnCheck = $db->queryOne("SHOW COLUMNS FROM salary_settlements LIKE 'settlement_source'");
+if (empty($settlementSourceColumnCheck)) {
+    try {
+        $db->execute("
+            ALTER TABLE `salary_settlements`
+            ADD COLUMN `settlement_source` enum('company_main','management') NOT NULL DEFAULT 'company_main'
+            COMMENT 'مصدر التسوية: من الخزنة الرئيسية للشركة أو من الإدارة'
+            AFTER `created_by`
+        ");
+    } catch (Exception $e) {
+        error_log("Error adding settlement_source column to salary_settlements: " . $e->getMessage());
+    }
+}
+
 // إنشاء جدول سجل المعاملات المالية للموظف (نوته - مبالغ وملاحظات لكل شهر)
 $financialNotesTableCheck = $db->queryOne("SHOW TABLES LIKE 'employee_financial_notes'");
 if (empty($financialNotesTableCheck)) {
@@ -1132,6 +1147,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $settlementAmount = floatval($_POST['settlement_amount'] ?? 0);
         $settlementDate = trim($_POST['settlement_date'] ?? date('Y-m-d'));
         $notes = trim($_POST['notes'] ?? '');
+        $settlementSource = isset($_POST['settlement_source']) && $_POST['settlement_source'] === 'management' ? 'management' : 'company_main';
         
         if ($salaryId <= 0) {
             $_SESSION['salaries_error'] = 'معرف الراتب غير صحيح';
@@ -1230,15 +1246,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     header('Location: ' . $redirectUrl);
                     exit;
                 } else {
-                    // التحقق من رصيد خزنة الشركة قبل التسوية
-                    $companyBalance = calculateCompanyCashBalance($db);
-                    
-                    if ($settlementAmount > $companyBalance) {
-                        $_SESSION['salaries_error'] = 'رصيد خزنة الشركة غير كافي. الرصيد المتاح: ' . formatCurrency($companyBalance) . 
-                                                       ' | المبلغ المطلوب: ' . formatCurrency($settlementAmount);
-                        $redirectUrl = $buildViewUrl($view, ['month' => $selectedMonth, 'year' => $selectedYear]);
-                        header('Location: ' . $redirectUrl);
-                        exit;
+                    // التحقق من رصيد خزنة الشركة قبل التسوية (فقط عند الخصم من الخزنة الرئيسية)
+                    $companyBalance = 0;
+                    if ($settlementSource === 'company_main') {
+                        $companyBalance = calculateCompanyCashBalance($db);
+                        if ($settlementAmount > $companyBalance) {
+                            $_SESSION['salaries_error'] = 'رصيد خزنة الشركة غير كافي. الرصيد المتاح: ' . formatCurrency($companyBalance) . 
+                                                           ' | المبلغ المطلوب: ' . formatCurrency($settlementAmount);
+                            $redirectUrl = $buildViewUrl($view, ['month' => $selectedMonth, 'year' => $selectedYear]);
+                            header('Location: ' . $redirectUrl);
+                            exit;
+                        }
                     }
                     
                     try {
@@ -1272,51 +1290,89 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             [$newSettlementsAdvances, $salaryId]
                         );
                         
-                        // إنشاء سجل التسوية
-                        $db->execute(
-                            "INSERT INTO salary_settlements 
-                                (salary_id, user_id, settlement_amount, previous_accumulated, 
-                                 remaining_after_settlement, settlement_type, settlement_date, 
-                                 notes, created_by)
-                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                            [
-                                $salaryId,
-                                $salary['user_id'],
-                                $settlementAmount,
-                                $currentAccumulated,
-                                $remainingAfter,
-                                $settlementType,
-                                $settlementDate,
-                                $notes,
-                                $currentUser['id']
-                            ]
-                        );
+                        // إنشاء سجل التسوية (مع مصدر التسوية إن وُجد العمود)
+                        $hasSettlementSource = $db->queryOne("SHOW COLUMNS FROM salary_settlements LIKE 'settlement_source'");
+                        if (!empty($hasSettlementSource)) {
+                            $db->execute(
+                                "INSERT INTO salary_settlements 
+                                    (salary_id, user_id, settlement_amount, previous_accumulated, 
+                                     remaining_after_settlement, settlement_type, settlement_date, 
+                                     notes, created_by, settlement_source)
+                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                [
+                                    $salaryId,
+                                    $salary['user_id'],
+                                    $settlementAmount,
+                                    $currentAccumulated,
+                                    $remainingAfter,
+                                    $settlementType,
+                                    $settlementDate,
+                                    $notes,
+                                    $currentUser['id'],
+                                    $settlementSource
+                                ]
+                            );
+                        } else {
+                            $db->execute(
+                                "INSERT INTO salary_settlements 
+                                    (salary_id, user_id, settlement_amount, previous_accumulated, 
+                                     remaining_after_settlement, settlement_type, settlement_date, 
+                                     notes, created_by)
+                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                [
+                                    $salaryId,
+                                    $salary['user_id'],
+                                    $settlementAmount,
+                                    $currentAccumulated,
+                                    $remainingAfter,
+                                    $settlementType,
+                                    $settlementDate,
+                                    $notes,
+                                    $currentUser['id']
+                                ]
+                            );
+                        }
                         
                         $settlementId = $db->getLastInsertId();
                         
-                        // تسجيل تسوية الراتب في accountant_transactions كـ payment (دفعة معتمدة)
-                        $user = $db->queryOne("SELECT full_name, username FROM users WHERE id = ?", [$salary['user_id']]);
-                        $employeeName = $user['full_name'] ?? $user['username'] ?? 'غير محدد';
-                        $settlementDescription = 'تسوية راتب موظف: ' . $employeeName . 
-                                                 ' (تسوية #' . $settlementId . ' - راتب #' . $salaryId . ')';
-                        $referenceNumber = 'SAL-SETTLE-' . $settlementId . '-' . date('YmdHis');
+                        // تسجيل تسوية الراتب في accountant_transactions كـ payment (دفعة معتمدة) — فقط عند الخصم من الخزنة الرئيسية
+                        if ($settlementSource === 'company_main') {
+                            $user = $db->queryOne("SELECT full_name, username FROM users WHERE id = ?", [$salary['user_id']]);
+                            $employeeName = $user['full_name'] ?? $user['username'] ?? 'غير محدد';
+                            $settlementDescription = 'تسوية راتب موظف: ' . $employeeName . 
+                                                     ' (تسوية #' . $settlementId . ' - راتب #' . $salaryId . ')';
+                            $referenceNumber = 'SAL-SETTLE-' . $settlementId . '-' . date('YmdHis');
+                            
+                            $accountantTableCheck = $db->queryOne("SHOW TABLES LIKE 'accountant_transactions'");
+                            if (!empty($accountantTableCheck)) {
+                                $db->execute(
+                                    "INSERT INTO accountant_transactions 
+                                        (transaction_type, amount, description, reference_number, 
+                                         status, approved_by, created_by, approved_at)
+                                     VALUES (?, ?, ?, ?, 'approved', ?, ?, NOW())",
+                                    [
+                                        'payment',
+                                        $settlementAmount,
+                                        $settlementDescription,
+                                        $referenceNumber,
+                                        $currentUser['id'],
+                                        $currentUser['id']
+                                    ]
+                                );
+                            }
+                        }
                         
-                        // التأكد من وجود جدول accountant_transactions
-                        $accountantTableCheck = $db->queryOne("SHOW TABLES LIKE 'accountant_transactions'");
-                        if (!empty($accountantTableCheck)) {
+                        // تسجيل المعاملة في سجل المعاملات المالية للموظف (في كلا الحالتين: من الخزنة أو من الإدارة)
+                        $financialNotesTableCheck = $db->queryOne("SHOW TABLES LIKE 'employee_financial_notes'");
+                        if (!empty($financialNotesTableCheck)) {
+                            $settlementDateObj = DateTime::createFromFormat('Y-m-d', $settlementDate);
+                            $noteMonth = $settlementDateObj ? (int) $settlementDateObj->format('n') : (int) date('n');
+                            $noteYear = $settlementDateObj ? (int) $settlementDateObj->format('Y') : (int) date('Y');
+                            $sourceLabel = $settlementSource === 'company_main' ? 'من الخزنة الرئيسية للشركة' : 'من الإدارة';
+                            $financialNoteText = 'تسوية راتب #' . $settlementId . ' - ' . $sourceLabel . ($notes ? ' | ' . $notes : '');
                             $db->execute(
-                                "INSERT INTO accountant_transactions 
-                                    (transaction_type, amount, description, reference_number, 
-                                     status, approved_by, created_by, approved_at)
-                                 VALUES (?, ?, ?, ?, 'approved', ?, ?, NOW())",
-                                [
-                                    'payment',
-                                    $settlementAmount,
-                                    $settlementDescription,
-                                    $referenceNumber,
-                                    $currentUser['id'],
-                                    $currentUser['id']
-                                ]
+                                "INSERT INTO employee_financial_notes (user_id, month, year, amount, notes, created_by) VALUES (?, ?, ?, ?, ?, ?)",
+                                [$salary['user_id'], $noteMonth, $noteYear, $settlementAmount, $financialNoteText, $currentUser['id']]
                             );
                         }
                         
@@ -1414,18 +1470,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             Cache::flush();
                         }
                         
-                        logAudit($currentUser['id'], 'settle_salary', 'salary', $salaryId, null, [
+                        $auditData = [
                             'settlement_amount' => $settlementAmount,
                             'previous_accumulated' => $currentAccumulated,
                             'remaining' => $remainingAfter,
                             'settlement_type' => $settlementType,
-                            'company_balance_before' => $companyBalance,
-                            'company_balance_after' => $companyBalance - $settlementAmount
-                        ]);
+                            'settlement_source' => $settlementSource
+                        ];
+                        if ($settlementSource === 'company_main') {
+                            $auditData['company_balance_before'] = $companyBalance;
+                            $auditData['company_balance_after'] = $companyBalance - $settlementAmount;
+                        }
+                        logAudit($currentUser['id'], 'settle_salary', 'salary', $salaryId, null, $auditData);
                         
-                        $_SESSION['salaries_success'] = 'تم تسوية مستحقات الموظف بنجاح. المبلغ المسدد: ' . formatCurrency($settlementAmount) . 
-                                   ($remainingAfter > 0 ? ' | المتبقي: ' . formatCurrency($remainingAfter) : '') .
-                                   ' | رصيد الخزنة بعد التسوية: ' . formatCurrency($companyBalance - $settlementAmount);
+                        $successMsg = 'تم تسوية مستحقات الموظف بنجاح. المبلغ المسدد: ' . formatCurrency($settlementAmount) . 
+                            ($remainingAfter > 0 ? ' | المتبقي: ' . formatCurrency($remainingAfter) : '');
+                        if ($settlementSource === 'company_main') {
+                            $successMsg .= ' | رصيد الخزنة بعد التسوية: ' . formatCurrency($companyBalance - $settlementAmount);
+                        } else {
+                            $successMsg .= ' | المصدر: من الإدارة (لم يُخصم من الخزنة)';
+                        }
+                        $_SESSION['salaries_success'] = $successMsg;
                         
                         // إضافة versioning parameter لضمان عدم عرض كاش قديم
                         $version = time();
@@ -6590,6 +6655,20 @@ function printSalaryStatementCard() {
                     </div>
                     
                     <div class="mb-3">
+                        <label class="form-label">خصم المبلغ من <span class="text-danger">*</span></label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="settlement_source" id="settleSourceCompany" value="company_main" checked>
+                            <label class="form-check-label" for="settleSourceCompany">الخزنة الرئيسية للشركة</label>
+                            <small class="text-muted d-block ms-4">يُخصم المبلغ من رصيد خزنة الشركة</small>
+                        </div>
+                        <div class="form-check mt-2">
+                            <input class="form-check-input" type="radio" name="settlement_source" id="settleSourceManagement" value="management">
+                            <label class="form-check-label" for="settleSourceManagement">من الإدارة</label>
+                            <small class="text-muted d-block ms-4">لا يُخصم أي رصيد من الخزنة</small>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
                         <label class="form-label">تاريخ التسوية <span class="text-danger">*</span></label>
                         <div class="input-group">
                             <input type="date" class="form-control" name="settlement_date" id="settleDate" required value="<?php echo date('Y-m-d'); ?>">
@@ -7033,6 +7112,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 <label class="form-label">مبلغ التسوية <span class="text-danger">*</span></label>
                 <input type="number" step="0.01" min="0" class="form-control" name="settlement_amount" id="settleAmountCard" required oninput="updateSettleRemainingCard()" onchange="updateSettleRemainingCard()" onkeyup="updateSettleRemainingCard()">
                 <small class="text-muted">أقصى مبلغ متاح: <span id="settleRemainingAmount2Card"></span></small>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">خصم المبلغ من <span class="text-danger">*</span></label>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="settlement_source" id="settleSourceCompanyCard" value="company_main" checked>
+                    <label class="form-check-label" for="settleSourceCompanyCard">الخزنة الرئيسية للشركة</label>
+                    <small class="text-muted d-block ms-4">يُخصم المبلغ من رصيد خزنة الشركة</small>
+                </div>
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="radio" name="settlement_source" id="settleSourceManagementCard" value="management">
+                    <label class="form-check-label" for="settleSourceManagementCard">من الإدارة</label>
+                    <small class="text-muted d-block ms-4">لا يُخصم أي رصيد من الخزنة</small>
+                </div>
             </div>
             
             <div class="mb-3">
