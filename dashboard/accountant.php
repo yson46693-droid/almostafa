@@ -17,6 +17,11 @@ if (!headers_sent()) {
     header("Permissions-Policy: geolocation=(self), camera=(self), microphone=(self)");
     // Feature-Policy كبديل للمتصفحات القديمة (بدون notifications)
     header("Feature-Policy: geolocation 'self'; camera 'self'; microphone 'self'");
+    // منع الكاش عند التبديل بين الصفحات/الحسابات لضمان عدم رجوع أي كاش قديم
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Cache-Control: post-check=0, pre-check=0', false);
+    header('Pragma: no-cache');
+    header('Expires: 0');
 }
 
 require_once __DIR__ . '/../includes/config.php';
