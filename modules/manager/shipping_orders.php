@@ -3642,7 +3642,14 @@ $hasShippingCompanies = !empty($shippingCompanies);
         <?php if (empty($shippingCompanies)): ?>
             <div class="p-4 text-center text-muted">لم يتم إضافة شركات شحن بعد.</div>
         <?php else: ?>
-            <div class="table-responsive">
+            <div class="table-responsive dashboard-table-wrapper">
+                <style>
+                /* قائمة إجراءات: قابلة للتمرير ومرئية فوق الجدول على الموبايل */
+                .task-actions-dropdown-menu-inbody { max-height: 70vh !important; overflow-y: auto !important; z-index: 1060 !important; }
+                @media (max-width: 768px) {
+                    .dashboard-table-wrapper .dropdown-menu { max-height: 70vh; overflow-y: auto; }
+                }
+                </style>
                 <table class="table table-striped table-hover mb-0 align-middle">
                     <thead class="table-light">
                         <tr>
@@ -3698,6 +3705,54 @@ $hasShippingCompanies = !empty($shippingCompanies);
         <?php endif; ?>
     </div>
 </div>
+
+<script>
+(function() {
+    'use strict';
+    function initTableActionsDropdowns() {
+        var wrapper = document.querySelector('.dashboard-table-wrapper');
+        if (!wrapper) return;
+        wrapper.querySelectorAll('.dropdown').forEach(function(dropdownEl) {
+            if (dropdownEl._tableActionsInit) return;
+            dropdownEl._tableActionsInit = true;
+            var toggle = dropdownEl.querySelector('[data-bs-toggle="dropdown"]');
+            var menu = dropdownEl.querySelector('.dropdown-menu');
+            if (!toggle || !menu) return;
+            dropdownEl.addEventListener('show.bs.dropdown', function() {
+                var rect = toggle.getBoundingClientRect();
+                var menuHeight = Math.min(menu.scrollHeight, window.innerHeight * 0.7);
+                var spaceBelow = window.innerHeight - rect.bottom;
+                var openAbove = spaceBelow < menuHeight && rect.top > spaceBelow;
+                menu.classList.add('task-actions-dropdown-menu-inbody');
+                document.body.appendChild(menu);
+                var style = menu.style;
+                style.position = 'fixed';
+                if (document.documentElement.dir === 'rtl') {
+                    style.right = (window.innerWidth - rect.right) + 'px';
+                    style.left = 'auto';
+                } else {
+                    style.left = rect.left + 'px';
+                }
+                style.top = openAbove ? (rect.top - menuHeight) + 'px' : rect.bottom + 'px';
+                style.minWidth = rect.width + 'px';
+                style.maxHeight = '70vh';
+                style.overflowY = 'auto';
+                style.zIndex = '1060';
+            });
+            dropdownEl.addEventListener('hide.bs.dropdown', function() {
+                menu.classList.remove('task-actions-dropdown-menu-inbody');
+                menu.removeAttribute('style');
+                dropdownEl.appendChild(menu);
+            });
+        });
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initTableActionsDropdowns);
+    } else {
+        initTableActionsDropdowns();
+    }
+})();
+</script>
 
 <!-- بطاقة كشف حساب شركة الشحن (سجل الحركات المالية) -->
 <div class="card shadow-sm mb-4 border-primary" id="shippingCompanyStatementCard" style="display: none;">

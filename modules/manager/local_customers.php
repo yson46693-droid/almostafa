@@ -2080,6 +2080,13 @@ document.addEventListener('DOMContentLoaded', function() {
         <h5 class="mb-0">قائمة العملاء المحليين (<span id="customersCount"><?php echo $totalCustomers; ?></span>)</h5>
     </div>
     <div class="card-body">
+        <style>
+        /* قائمة إجراءات: قابلة للتمرير ومرئية فوق الجدول على الموبايل */
+        .task-actions-dropdown-menu-inbody { max-height: 70vh !important; overflow-y: auto !important; z-index: 1060 !important; }
+        @media (max-width: 768px) {
+            .dashboard-table-wrapper .dropdown-menu { max-height: 70vh; overflow-y: auto; }
+        }
+        </style>
         <div id="customersTableLoading" class="text-center py-4" style="display: none;">
             <div class="spinner-border text-primary" role="status">
                 <span class="visually-hidden">جاري التحميل...</span>
@@ -2295,6 +2302,54 @@ document.addEventListener('DOMContentLoaded', function() {
         </nav>
     </div>
 </div>
+
+<script>
+(function() {
+    'use strict';
+    function initTableActionsDropdowns() {
+        var wrapper = document.querySelector('.dashboard-table-wrapper');
+        if (!wrapper) return;
+        wrapper.querySelectorAll('.dropdown').forEach(function(dropdownEl) {
+            if (dropdownEl._tableActionsInit) return;
+            dropdownEl._tableActionsInit = true;
+            var toggle = dropdownEl.querySelector('[data-bs-toggle="dropdown"]');
+            var menu = dropdownEl.querySelector('.dropdown-menu');
+            if (!toggle || !menu) return;
+            dropdownEl.addEventListener('show.bs.dropdown', function() {
+                var rect = toggle.getBoundingClientRect();
+                var menuHeight = Math.min(menu.scrollHeight, window.innerHeight * 0.7);
+                var spaceBelow = window.innerHeight - rect.bottom;
+                var openAbove = spaceBelow < menuHeight && rect.top > spaceBelow;
+                menu.classList.add('task-actions-dropdown-menu-inbody');
+                document.body.appendChild(menu);
+                var style = menu.style;
+                style.position = 'fixed';
+                if (document.documentElement.dir === 'rtl') {
+                    style.right = (window.innerWidth - rect.right) + 'px';
+                    style.left = 'auto';
+                } else {
+                    style.left = rect.left + 'px';
+                }
+                style.top = openAbove ? (rect.top - menuHeight) + 'px' : rect.bottom + 'px';
+                style.minWidth = rect.width + 'px';
+                style.maxHeight = '70vh';
+                style.overflowY = 'auto';
+                style.zIndex = '1060';
+            });
+            dropdownEl.addEventListener('hide.bs.dropdown', function() {
+                menu.classList.remove('task-actions-dropdown-menu-inbody');
+                menu.removeAttribute('style');
+                dropdownEl.appendChild(menu);
+            });
+        });
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initTableActionsDropdowns);
+    } else {
+        initTableActionsDropdowns();
+    }
+})();
+</script>
 
 <!-- Modal تحصيل ديون العميل - للكمبيوتر فقط -->
 <div class="modal fade d-none d-md-block" id="collectPaymentModal" tabindex="-1" aria-hidden="true">
