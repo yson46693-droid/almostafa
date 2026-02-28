@@ -2192,13 +2192,11 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                                                 }
                                             }
                                             if ($creatorRoleLabel) {
-                                                echo '<div class="text-muted small"><i class="bi bi-person me-1"></i>من: ' . htmlspecialchars($task['creator_name']) . '</div>';
+                                                echo '<div class="text-muted small"><i class="bi bi-person me-1"></i>' . htmlspecialchars($task['creator_name']) . '</div>';
                                             }
                                         }
                                         ?>
-                                        <button type="button" class="btn btn-outline-secondary btn-sm btn-icon-only mt-1" onclick="openTaskReceiptModal(<?php echo (int)$task['id']; ?>)" title="عرض إيصال مختصر (المنتجات والكميات)">
-                                            <i class="bi bi-eye"></i>
-                                        </button>
+                                        
                                     </td>
                                     <td>
                                         <?php
