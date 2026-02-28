@@ -1500,10 +1500,10 @@ function tasksHtml(string $value): string
     <?php endforeach; ?>
 
     <div class="d-flex justify-content-between align-items-center flex-wrap mb-3">
-        <h2 class="mb-0"><i class="bi bi-list-check me-2"></i>إدارة المهام</h2>
+        <h2 class="mb-0"><i class="bi bi-list-check me-2"></i>إدارة الاوردرات</h2>
         <?php if ($isManager): ?>
             <button type="button" class="btn btn-primary" onclick="showAddTaskModal()">
-                <i class="bi bi-plus-circle me-2"></i>إضافة مهمة جديدة
+                <i class="bi bi-plus-circle me-2"></i>إضافة اوردر جديد
             </button>
         <?php endif; ?>
     </div>
