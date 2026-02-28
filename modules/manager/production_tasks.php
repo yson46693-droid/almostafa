@@ -2146,7 +2146,7 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                             <?php endif; ?>
                             <th>رقم الطلب</th>
                             <th>اسم العميل</th>
-                            <th>الاوردر</th>
+                            <th>من</th>
                             <th>نوع الاوردر</th>
                             <th>الحاله</th>
                             <th>تاريخ التسليم</th>
