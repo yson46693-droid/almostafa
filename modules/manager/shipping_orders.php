@@ -263,12 +263,16 @@ function getShippingCompanyStatementData($companyId) {
 
     // طلبات الشحن المسلّمة للشركة (مدين) - نستخدم handed_over_at أو created_at
     $orders = $db->query(
-        "SELECT id, order_number, total_amount, handed_over_at, created_at
+        "SELECT id, order_number, total_amount, handed_over_at, created_at, status
          FROM shipping_company_orders
          WHERE shipping_company_id = ? AND status IN ('assigned', 'in_transit', 'delivered')
          ORDER BY COALESCE(handed_over_at, created_at) ASC",
         [$companyId]
     ) ?: [];
+    $hasDeliveredAt = false;
+    try {
+        $hasDeliveredAt = !empty($db->queryOne("SHOW COLUMNS FROM shipping_company_orders LIKE 'delivered_at'"));
+    } catch (Throwable $e) { /* ignore */ }
     foreach ($orders as $o) {
         $date = !empty($o['handed_over_at']) ? $o['handed_over_at'] : $o['created_at'];
         $sortDate = date('Y-m-d', strtotime($date));
@@ -284,6 +288,28 @@ function getShippingCompanyStatementData($companyId) {
         ];
     }
 
+    // تسليم الطلب للعميل (دائن) — عند التسليم يُخصم المبلغ من دين الشركة في النظام، فيجب ظهوره في الكشف
+    if ($hasDeliveredAt) {
+        $deliveredOrders = $db->query(
+            "SELECT id, order_number, total_amount, delivered_at FROM shipping_company_orders
+             WHERE shipping_company_id = ? AND status = 'delivered' AND delivered_at IS NOT NULL
+             ORDER BY delivered_at ASC",
+            [$companyId]
+        ) ?: [];
+        foreach ($deliveredOrders as $o) {
+            $movements[] = [
+                'sort_date' => date('Y-m-d', strtotime($o['delivered_at'])),
+                'sort_id' => (int)$o['id'] + 400000,
+                'type_order' => 2,
+                'type' => 'delivery_to_customer',
+                'date' => $o['delivered_at'],
+                'label' => 'تسليم الطلب للعميل #' . ($o['order_number'] ?? $o['id']),
+                'debit' => 0.0,
+                'credit' => (float)($o['total_amount'] ?? 0),
+            ];
+        }
+    }
+
     // التحصيلات (دائن)
     $collectionsTableExists = $db->queryOne("SHOW TABLES LIKE 'shipping_company_collections'");
     if (!empty($collectionsTableExists)) {
@@ -296,7 +322,7 @@ function getShippingCompanyStatementData($companyId) {
             $movements[] = [
                 'sort_date' => $c['date'],
                 'sort_id' => (int)$c['id'] + 500000,
-                'type_order' => 2,
+                'type_order' => 3,
                 'type' => 'collection',
                 'date' => $c['date'],
                 'label' => $label,
@@ -317,7 +343,7 @@ function getShippingCompanyStatementData($companyId) {
             $movements[] = [
                 'sort_date' => date('Y-m-d', strtotime($d['created_at'])),
                 'sort_id' => (int)$d['id'] + 600000,
-                'type_order' => 3,
+                'type_order' => 4,
                 'type' => 'deduction',
                 'date' => $d['created_at'],
                 'label' => 'خصم' . (!empty(trim($d['notes'] ?? '')) ? ' - ' . trim($d['notes']) : ''),
@@ -3784,7 +3810,8 @@ $hasShippingCompanies = !empty($shippingCompanies);
             <div class="row mt-3 text-muted small">
                 <div class="col">إجمالي المدين: <strong id="statementTotalDebit">0</strong> ج.م</div>
                 <div class="col">إجمالي الدائن: <strong id="statementTotalCredit">0</strong> ج.م</div>
-                <div class="col">الرصيد النهائي: <strong id="statementNetBalance" class="text-primary">0</strong> ج.م</div>
+                <div class="col">الرصيد من الكشف: <strong id="statementNetBalance" class="text-primary">0</strong> ج.م</div>
+                <div class="col">الرصيد الحالي في السجل: <strong id="statementCurrentBalance">0</strong> ج.م</div>
             </div>
         </div>
         <div id="statementCardEmpty" class="text-center py-4 text-muted" style="display: none;">
@@ -4845,6 +4872,16 @@ function showShippingCompanyStatement(companyId, companyName) {
                 document.getElementById('statementTotalDebit').textContent = fmt(data.totals.total_debit);
                 document.getElementById('statementTotalCredit').textContent = fmt(data.totals.total_credit);
                 document.getElementById('statementNetBalance').textContent = fmt(data.totals.net_balance);
+                var currentBal = typeof data.current_balance !== 'undefined' ? data.current_balance : '';
+                var currentBalEl = document.getElementById('statementCurrentBalance');
+                if (currentBalEl) {
+                    currentBalEl.textContent = fmt(currentBal);
+                    currentBalEl.classList.remove('text-success', 'text-danger');
+                    if (Math.abs((parseFloat(data.totals.net_balance) || 0) - (parseFloat(currentBal) || 0)) > 0.01)
+                        currentBalEl.classList.add('text-danger');
+                    else
+                        currentBalEl.classList.add('text-success');
+                }
                 document.getElementById('statementCardContent').style.display = 'block';
             } else {
                 document.getElementById('statementCardEmpty').style.display = 'block';
