@@ -1635,16 +1635,12 @@ function tasksHtml(string $value): string
                 <div id="tasksAdvancedSearch" class="mt-2">
                     <div class="row g-2 pt-2 border-top">
                         <div class="col-6 col-md-4 col-lg-2">
-                            <label class="form-label small mb-0">رقم الطلب</label>
+                            <label class="form-label small mb-0">رقم الاوردر</label>
                             <input type="text" name="task_id" class="form-control form-control-sm" placeholder="#" value="<?php echo tasksHtml($filterTaskId); ?>">
                         </div>
                         <div class="col-6 col-md-4 col-lg-2">
                             <label class="form-label small mb-0">اسم العميل / هاتف</label>
                             <input type="text" name="search_customer" class="form-control form-control-sm" placeholder="اسم أو رقم" value="<?php echo tasksHtml($filterCustomer); ?>">
-                        </div>
-                        <div class="col-6 col-md-4 col-lg-2">
-                            <label class="form-label small mb-0">رقم الأوردر</label>
-                            <input type="text" name="search_order_id" class="form-control form-control-sm" placeholder="رقم الأوردر" value="<?php echo tasksHtml($filterOrderId); ?>">
                         </div>
                         <div class="col-6 col-md-4 col-lg-2">
                             <label class="form-label small mb-0">نوع الاوردر</label>
@@ -1668,29 +1664,7 @@ function tasksHtml(string $value): string
                         </div>
                     </div>
                 </div>
-                <div class="row g-2 align-items-end mt-2">
-                    <div class="col-md-2 col-sm-6">
-                        <label class="form-label mb-1">الحالة</label>
-                        <select class="form-select form-select-sm" name="status" onchange="this.form.submit()">
-                            <option value="">الكل</option>
-                            <option value="pending" <?php echo $statusFilter === 'pending' ? 'selected' : ''; ?>>معلقة</option>
-                            <option value="received" <?php echo $statusFilter === 'received' ? 'selected' : ''; ?>>مستلمة</option>
-                            <option value="completed" <?php echo $statusFilter === 'completed' ? 'selected' : ''; ?>>مكتملة</option>
-                            <option value="with_delegate" <?php echo $statusFilter === 'with_delegate' ? 'selected' : ''; ?>>مع المندوب</option>
-                            <option value="delivered" <?php echo $statusFilter === 'delivered' ? 'selected' : ''; ?>>تم التوصيل</option>
-                            <option value="returned" <?php echo $statusFilter === 'returned' ? 'selected' : ''; ?>>تم الارجاع</option>
-                            <option value="cancelled" <?php echo $statusFilter === 'cancelled' ? 'selected' : ''; ?>>ملغاة</option>
-                        </select>
-                    </div>
-                    <div class="col-md-2 col-sm-6">
-                        <label class="form-label mb-1">الأولوية</label>
-                        <select class="form-select form-select-sm" name="priority">
-                            <option value="">الكل</option>
-                            <option value="urgent" <?php echo $priorityFilter === 'urgent' ? 'selected' : ''; ?>>عاجلة</option>
-                            <option value="normal" <?php echo $priorityFilter === 'normal' ? 'selected' : ''; ?>>عادية</option>
-                            <option value="low" <?php echo $priorityFilter === 'low' ? 'selected' : ''; ?>>منخفضة</option>
-                        </select>
-                    </div>
+               
                     <?php if ($isManager): ?>
                     <div class="col-md-2 col-sm-6">
                         <label class="form-label mb-1">المخصص إلى</label>
@@ -1704,16 +1678,7 @@ function tasksHtml(string $value): string
                         </select>
                     </div>
                     <?php endif; ?>
-                    <div class="col-md-2 col-sm-6">
-                        <button type="submit" class="btn btn-primary btn-sm w-100">
-                            <i class="bi bi-search me-1"></i>بحث
-                        </button>
-                    </div>
-                    <div class="col-md-1 col-sm-6">
-                        <a href="?page=tasks" class="btn btn-secondary btn-sm w-100" title="إعادة تعيين">
-                            <i class="bi bi-x"></i>
-                        </a>
-                    </div>
+                    
                 </div>
             </form>
         </div>
