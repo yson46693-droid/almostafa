@@ -2123,31 +2123,7 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                                     </td>
                                     <td><?php 
                                         $custName = isset($task['customer_name']) ? trim((string)$task['customer_name']) : '';
-                                        $custPhone = isset($task['customer_phone']) ? trim((string)$task['customer_phone']) : '';
-                                        $custPhoneEsc = $custPhone !== '' ? 'tel:' . preg_replace('/[^\d+]/', '', $custPhone) : '';
-                                        
-                                        if ($custName !== '') {
-                                            echo '<div>' . htmlspecialchars($custName, ENT_QUOTES, 'UTF-8') . '</div>';
-                                            if ($custPhone !== '') {
-                                                echo '<div class="text-muted small d-flex align-items-center gap-1" dir="ltr">';
-                                                echo '<span>' . htmlspecialchars($custPhone, ENT_QUOTES, 'UTF-8') . '</span>';
-                                                if ($custPhoneEsc !== 'tel:') {
-                                                    echo ' <a href="' . htmlspecialchars($custPhoneEsc, ENT_QUOTES, 'UTF-8') . '" class="btn btn-sm btn-outline-success btn-icon-only p-1" title="اتصال بالعميل" aria-label="اتصال"><i class="bi bi-telephone-fill"></i></a>';
-                                                }
-                                                echo '</div>';
-                                            }
-                                        } else {
-                                            if ($custPhone !== '') {
-                                                echo '<div class="d-flex align-items-center gap-1" dir="ltr">';
-                                                echo '<span>' . htmlspecialchars($custPhone, ENT_QUOTES, 'UTF-8') . '</span>';
-                                                if ($custPhoneEsc !== 'tel:') {
-                                                    echo ' <a href="' . htmlspecialchars($custPhoneEsc, ENT_QUOTES, 'UTF-8') . '" class="btn btn-sm btn-outline-success btn-icon-only p-1" title="اتصال بالعميل" aria-label="اتصال"><i class="bi bi-telephone-fill"></i></a>';
-                                                }
-                                                echo '</div>';
-                                            } else {
-                                                echo '<span class="text-muted">-</span>';
-                                            }
-                                        }
+                                        echo $custName !== '' ? htmlspecialchars($custName, ENT_QUOTES, 'UTF-8') : '<span class="text-muted">-</span>';
                                     ?></td>
                                     <td>                                        <?php 
                                         // عرض منشئ المهمة إذا كان المحاسب أو المدير
@@ -2217,6 +2193,17 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                                                 <i class="bi bi-three-dots-vertical"></i> إجراءات
                                             </button>
                                             <ul class="dropdown-menu dropdown-menu-end">
+                                                <?php
+                                                $custPhone = isset($task['customer_phone']) ? trim((string)$task['customer_phone']) : '';
+                                                $custPhoneEsc = $custPhone !== '' ? 'tel:' . preg_replace('/[^\d+]/', '', $custPhone) : '';
+                                                if ($custPhone !== '' && $custPhoneEsc !== 'tel:'):
+                                                ?>
+                                                <li>
+                                                    <a class="dropdown-item" href="<?php echo htmlspecialchars($custPhoneEsc, ENT_QUOTES, 'UTF-8'); ?>" title="اتصال بالعميل">
+                                                        <i class="bi bi-telephone-fill me-1"></i>اتصال بالعميل
+                                                    </a>
+                                                </li>
+                                                <?php endif; ?>
                                                 <?php if ($canPrintTasks): ?>
                                                 <li>
                                                     <a class="dropdown-item" href="<?php echo getRelativeUrl('print_task_receipt.php?id=' . (int) $task['id']); ?>" target="_blank">
