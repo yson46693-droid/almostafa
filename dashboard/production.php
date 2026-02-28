@@ -1111,13 +1111,13 @@ if ($isAjaxNavigation) {
                 ?>
                 
             <?php elseif ($page === 'tasks'): ?>
-                <!-- صفحة إدارة المهام -->
+                <!-- صفحة إدارة الاوردرات -->
                 <?php 
                 $modulePath = __DIR__ . '/../modules/production/tasks.php';
                 if (file_exists($modulePath)) {
                     include $modulePath;
                 } else {
-                    echo '<div class="alert alert-warning">صفحة المهام غير متاحة حالياً</div>';
+                    echo '<div class="alert alert-warning">صفحة الاوردرات غير متاحة حالياً</div>';
                 }
                 ?>
                 

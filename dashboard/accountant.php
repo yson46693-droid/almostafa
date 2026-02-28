@@ -2628,7 +2628,7 @@ if ($isAjaxNavigation) {
                 ?>
                 
             <?php elseif ($page === 'production_tasks'): ?>
-                <!-- صفحة تسجيل مهام الإنتاج -->
+                <!-- صفحة تسجيل اوردرات الإنتاج -->
                 <?php 
                 $modulePath = __DIR__ . '/../modules/manager/production_tasks.php';
                 if (file_exists($modulePath)) {

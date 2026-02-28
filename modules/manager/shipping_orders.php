@@ -4918,7 +4918,8 @@ function showDeductFromShippingCompany(companyId, companyName, balance) {
     }
     var container = document.getElementById('shippingCompaniesCard');
     if (!container) return;
-    container.addEventListener('click', function(e) {
+    // استخدام document لأن القائمة تُنقل إلى body عند الفتح فالنقر لا يصل إلى الـ card
+    document.addEventListener('click', function(e) {
         var btn = e.target && e.target.closest && e.target.closest('.js-shipping-company-action');
         if (!btn || btn.classList.contains('disabled')) return;
         e.preventDefault();
@@ -4927,13 +4928,11 @@ function showDeductFromShippingCompany(companyId, companyName, balance) {
         var companyName = parseCompanyName(btn.getAttribute('data-company-name'));
         var balance = parseFloat(btn.getAttribute('data-balance')) || 0;
         var balanceFormatted = parseCompanyName(btn.getAttribute('data-balance-formatted')) || (balance + ' ج.م');
-        setTimeout(function() {
-            if (action === 'statement') showShippingCompanyStatement(companyId, companyName);
-            else if (action === 'paper-invoices') showCompanyPaperInvoicesByIdName(companyId, companyName);
-            else if (action === 'edit-balance') showEditBalanceByIdName(companyId, companyName, balance);
-            else if (action === 'collect') showCollectByIdName(companyId, companyName, balance, balanceFormatted);
-            else if (action === 'deduct') showDeductFromShippingCompany(companyId, companyName, balance);
-        }, 0);
+        if (action === 'statement') showShippingCompanyStatement(companyId, companyName);
+        else if (action === 'paper-invoices') showCompanyPaperInvoicesByIdName(companyId, companyName);
+        else if (action === 'edit-balance') showEditBalanceByIdName(companyId, companyName, balance);
+        else if (action === 'collect') showCollectByIdName(companyId, companyName, balance, balanceFormatted);
+        else if (action === 'deduct') showDeductFromShippingCompany(companyId, companyName, balance);
     }, true);
 })();
 
