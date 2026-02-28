@@ -6133,22 +6133,22 @@ if ($section === 'honey') {
                                                 <td class="text-center"><strong class="text-warning"><?php echo number_format($item['raw_quantity'], 2); ?></strong> كجم</td>
                                                 <td class="text-center"><strong class="text-success"><?php echo number_format($item['filtered_quantity'], 2); ?></strong> كجم</td>
                                                 <td class="text-center">
-                                                    <div class="row g-1 justify-content-center">
-                                                        <div class="col-6 col-md-auto">
+                                                    <div class="row g-1">
+                                                        <div class="col-6">
                                                             <button class="btn btn-warning btn-sm w-100" 
                                                                     onclick="filterHoney(<?php echo $item['id']; ?>, '<?php echo $supplierDisplayEscaped; ?>', '<?php echo $varietyDisplayEscaped; ?>', <?php echo $item['raw_quantity']; ?>)"
                                                                     <?php echo $item['raw_quantity'] <= 0 ? 'disabled' : ''; ?>>
                                                                 <i class="bi bi-funnel"></i> تصفية
                                                             </button>
                                                         </div>
-                                                        <div class="col-6 col-md-auto">
+                                                        <div class="col-6">
                                                             <button class="btn btn-success btn-sm w-100"
                                                                     onclick="openAddRemainingFilteredModal(<?php echo $item['id']; ?>, '<?php echo $supplierDisplayEscaped; ?>', '<?php echo $varietyDisplayEscaped; ?>', <?php echo $item['filtered_quantity']; ?>)"
                                                             >
                                                                 <i class="bi bi-plus-circle"></i> إضافة باقي التصفية
                                                             </button>
                                                         </div>
-                                                        <div class="col-6 col-md-auto">
+                                                        <div class="col-6">
                                                             <button class="btn btn-danger btn-sm w-100"
                                                                     onclick="openHoneyDamageModal(<?php echo $item['id']; ?>, '<?php echo $supplierDisplayEscaped; ?>', '<?php echo $varietyDisplayEscaped; ?>', <?php echo $item['raw_quantity']; ?>, <?php echo $item['filtered_quantity']; ?>)"
                                                                     <?php echo ($item['raw_quantity'] <= 0 && $item['filtered_quantity'] <= 0) ? 'disabled' : ''; ?>>
