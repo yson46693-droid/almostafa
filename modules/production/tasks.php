@@ -1484,6 +1484,12 @@ function tasksHtml(string $value): string
 }
 ?>
 
+<style>
+.task-actions-btns { display: grid; grid-template-columns: repeat(2, auto); gap: 0.25rem; align-content: start; }
+@media (max-width: 400px) {
+    .task-actions-btns { grid-template-columns: 1fr; }
+}
+</style>
 <div class="container-fluid">
     <?php foreach ($errorMessages as $message): ?>
         <div class="alert alert-danger alert-dismissible fade show" id="errorAlert" role="alert">
@@ -1620,19 +1626,14 @@ function tasksHtml(string $value): string
                             <i class="bi bi-search me-1"></i>بحث
                         </button>
                     </div>
-                    <div class="col-auto">
-                        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#tasksAdvancedSearch" aria-expanded="false" aria-controls="tasksAdvancedSearch">
-                            <i class="bi bi-funnel me-1"></i>بحث متقدم
-                        </button>
-                    </div>
                     <?php if ($filterTaskId !== '' || $filterCustomer !== '' || $filterOrderId !== '' || $filterTaskType !== '' || $filterDueFrom !== '' || $filterDueTo !== '' || $filterSearchText !== '' || $search !== ''): ?>
                     <div class="col-auto">
                         <a href="?page=tasks<?php echo $statusFilter !== '' ? '&status=' . rawurlencode($statusFilter) : ''; ?><?php echo $priorityFilter !== '' ? '&priority=' . rawurlencode($priorityFilter) : ''; ?><?php echo $assignedFilter > 0 ? '&assigned=' . $assignedFilter : ''; ?><?php echo $overdueFilter ? '&overdue=1' : ''; ?>" class="btn btn-outline-danger btn-sm">إزالة الفلتر</a>
                     </div>
                     <?php endif; ?>
                 </div>
-                <div class="collapse <?php echo ($filterTaskId !== '' || $filterCustomer !== '' || $filterOrderId !== '' || $filterTaskType !== '' || $filterDueFrom !== '' || $filterDueTo !== '') ? 'show' : ''; ?>" id="tasksAdvancedSearch">
-                    <div class="row g-2 pt-2 border-top mt-2">
+                <div id="tasksAdvancedSearch" class="mt-2">
+                    <div class="row g-2 pt-2 border-top">
                         <div class="col-6 col-md-4 col-lg-2">
                             <label class="form-label small mb-0">رقم الطلب</label>
                             <input type="text" name="task_id" class="form-control form-control-sm" placeholder="#" value="<?php echo tasksHtml($filterTaskId); ?>">
@@ -1720,7 +1721,7 @@ function tasksHtml(string $value): string
 
     <div class="card">
         <div class="card-header bg-transparent border-bottom d-flex flex-wrap align-items-center justify-content-between gap-2">
-            <h6 class="mb-0"><i class="bi bi-list-task me-2"></i>آخر المهام التي تم إرسالها</h6>
+            <h6 class="mb-0"><i class="bi bi-list-task me-2"></i>الاوردرات </h6>
             <?php if (($isManager || $isProduction) && !empty($tasks)): ?>
             <button type="button" class="btn btn-outline-primary btn-sm" id="printSelectedReceiptsBtn" title="طباعة إيصالات الأوردرات المحددة" disabled>
                 <i class="bi bi-printer me-1"></i>طباعة المحدد (<span id="selectedCount">0</span>)
@@ -1731,7 +1732,7 @@ function tasksHtml(string $value): string
             <?php if (empty($tasks)): ?>
                 <div class="text-center py-5">
                     <i class="bi bi-inbox display-5 text-muted"></i>
-                    <p class="text-muted mt-3 mb-0">لا توجد مهام</p>
+                    <p class="text-muted mt-3 mb-0">لا توجد اوردرات</p>
                 </div>
             <?php else: ?>
                 <div class="table-responsive dashboard-table-wrapper">
@@ -1745,7 +1746,6 @@ function tasksHtml(string $value): string
                                 <?php endif; ?>
                                 <th style="width: 60px;">#</th>
                                 <?php if (!$isDriver): ?>
-                                <th>الكمية</th>
                                 <th>اسم العميل</th>
                                 <?php else: ?>
                                 <th>اسم العميل</th>
@@ -1814,16 +1814,7 @@ function tasksHtml(string $value): string
                                         <?php endif; ?>
                                         <strong><?php echo (int) $task['id']; ?></strong>
                                     </td>
-                                    <?php if (!$isDriver): ?>
-                                    <td><?php 
-                                        if (isset($task['quantity']) && $task['quantity'] !== null) {
-                                            $unit = !empty($task['unit']) ? $task['unit'] : 'قطعة';
-                                            echo number_format((float) $task['quantity'], 2) . ' ' . htmlspecialchars($unit);
-                                        } else {
-                                            echo '<span class="text-muted">-</span>';
-                                        }
-                                    ?></td>
-                                    <?php endif; ?>
+                                    
                                     <td><?php 
                                         $customerDisplay = isset($task['customer_display']) ? trim((string)$task['customer_display']) : '';
                                         echo $customerDisplay !== '' ? tasksHtml($customerDisplay) : '<span class="text-muted">-</span>';
@@ -1847,7 +1838,7 @@ function tasksHtml(string $value): string
                                         <?php endif; ?>
                                     </td>
                                     <td class="task-actions-cell">
-                                        <div class="btn-group btn-group-sm" role="group">
+                                        <div class="task-actions-btns">
                                             <?php if ($isProduction): ?>
                                                 <?php 
                                                 // التحقق من أن المهمة مخصصة لعامل إنتاج
