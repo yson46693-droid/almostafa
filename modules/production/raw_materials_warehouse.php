@@ -4331,6 +4331,44 @@ if (!$isApiMode && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         }
+        elseif ($action === 'add_quantity_date') {
+            if (!isset($dateStockTableReady)) {
+                $dateStockTableReady = ensureDateStockTable(true);
+            }
+            if (!$dateStockTableReady) {
+                $error = 'لا يمكن الوصول إلى جدول مخزون البلح.';
+            } else {
+                $stockId = intval($_POST['stock_id'] ?? 0);
+                $quantity = floatval($_POST['quantity'] ?? 0);
+                $notes = trim($_POST['notes'] ?? '');
+                if ($stockId <= 0 || $quantity <= 0) {
+                    $error = $stockId <= 0 ? 'معرف المخزون غير صحيح' : 'يجب إدخال كمية صحيحة';
+                } else {
+                    $stock = $db->queryOne("SELECT * FROM date_stock WHERE id = ?", [$stockId]);
+                    if (!$stock) {
+                        $error = 'سجل المخزون غير موجود';
+                    } else {
+                        $newNotes = $notes !== '' ? $notes : ($stock['notes'] ?? null);
+                        $db->execute("UPDATE date_stock SET quantity = quantity + ?, notes = ?, updated_at = NOW() WHERE id = ?", [$quantity, $newNotes, $stockId]);
+                        logAudit($currentUser['id'], 'add_quantity_date', 'date_stock', $stockId, null, ['quantity' => $quantity]);
+                        $supplierRow = $db->queryOne("SELECT name FROM suppliers WHERE id = ? LIMIT 1", [$stock['supplier_id']]);
+                        recordProductionSupplyLog([
+                            'material_category' => 'date',
+                            'material_label' => 'بلح',
+                            'stock_source' => 'date_stock',
+                            'stock_id' => $stockId,
+                            'supplier_id' => $stock['supplier_id'],
+                            'supplier_name' => $supplierRow['name'] ?? null,
+                            'quantity' => $quantity,
+                            'unit' => 'كجم',
+                            'details' => 'إضافة كمية إلى الصنف - ' . ($stock['date_type'] ?? ''),
+                            'recorded_by' => $currentUser['id'] ?? null,
+                        ]);
+                        preventDuplicateSubmission('تم إضافة الكمية بنجاح', ['page' => 'raw_materials_warehouse', 'section' => 'date'], null, $dashboardSlug);
+                    }
+                }
+            }
+        }
         
         // عمليات التلبينات
         elseif ($action === 'add_single_turbine') {
@@ -4408,6 +4446,44 @@ if (!$isApiMode && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     } catch (Exception $e) {
                         $db->rollBack();
                         $error = 'حدث خطأ أثناء تسجيل التالف: ' . $e->getMessage();
+                    }
+                }
+            }
+        }
+        elseif ($action === 'add_quantity_turbine') {
+            if (!isset($turbineStockTableReady)) {
+                $turbineStockTableReady = ensureTurbineStockTable(true);
+            }
+            if (!$turbineStockTableReady) {
+                $error = 'لا يمكن الوصول إلى جدول مخزون التلبينات.';
+            } else {
+                $stockId = intval($_POST['stock_id'] ?? 0);
+                $quantity = floatval($_POST['quantity'] ?? 0);
+                $notes = trim($_POST['notes'] ?? '');
+                if ($stockId <= 0 || $quantity <= 0) {
+                    $error = $stockId <= 0 ? 'معرف المخزون غير صحيح' : 'يجب إدخال كمية صحيحة';
+                } else {
+                    $stock = $db->queryOne("SELECT * FROM turbine_stock WHERE id = ?", [$stockId]);
+                    if (!$stock) {
+                        $error = 'سجل المخزون غير موجود';
+                    } else {
+                        $newNotes = $notes !== '' ? $notes : ($stock['notes'] ?? null);
+                        $db->execute("UPDATE turbine_stock SET quantity = quantity + ?, notes = ?, updated_at = NOW() WHERE id = ?", [$quantity, $newNotes, $stockId]);
+                        logAudit($currentUser['id'], 'add_quantity_turbine', 'turbine_stock', $stockId, null, ['quantity' => $quantity]);
+                        $supplierRow = $db->queryOne("SELECT name FROM suppliers WHERE id = ? LIMIT 1", [$stock['supplier_id']]);
+                        recordProductionSupplyLog([
+                            'material_category' => 'turbines',
+                            'material_label' => 'تلبينات',
+                            'stock_source' => 'turbine_stock',
+                            'stock_id' => $stockId,
+                            'supplier_id' => $stock['supplier_id'],
+                            'supplier_name' => $supplierRow['name'] ?? null,
+                            'quantity' => $quantity,
+                            'unit' => 'كجم',
+                            'details' => 'إضافة كمية إلى الصنف - ' . ($stock['turbine_type'] ?? ''),
+                            'recorded_by' => $currentUser['id'] ?? null,
+                        ]);
+                        preventDuplicateSubmission('تم إضافة الكمية بنجاح', ['page' => 'raw_materials_warehouse', 'section' => 'turbines'], null, $dashboardSlug);
                     }
                 }
             }
@@ -4503,6 +4579,44 @@ if (!$isApiMode && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     } catch (Exception $e) {
                         $db->rollBack();
                         $error = 'حدث خطأ أثناء تسجيل التالف: ' . $e->getMessage();
+                    }
+                }
+            }
+        }
+        elseif ($action === 'add_quantity_herbal') {
+            if (!isset($herbalStockTableReady)) {
+                $herbalStockTableReady = ensureHerbalStockTable(true);
+            }
+            if (!$herbalStockTableReady) {
+                $error = 'لا يمكن الوصول إلى جدول مخزون العطاره.';
+            } else {
+                $stockId = intval($_POST['stock_id'] ?? 0);
+                $quantity = floatval($_POST['quantity'] ?? 0);
+                $notes = trim($_POST['notes'] ?? '');
+                if ($stockId <= 0 || $quantity <= 0) {
+                    $error = $stockId <= 0 ? 'معرف المخزون غير صحيح' : 'يجب إدخال كمية صحيحة';
+                } else {
+                    $stock = $db->queryOne("SELECT * FROM herbal_stock WHERE id = ?", [$stockId]);
+                    if (!$stock) {
+                        $error = 'سجل المخزون غير موجود';
+                    } else {
+                        $newNotes = $notes !== '' ? $notes : ($stock['notes'] ?? null);
+                        $db->execute("UPDATE herbal_stock SET quantity = quantity + ?, notes = ?, updated_at = NOW() WHERE id = ?", [$quantity, $newNotes, $stockId]);
+                        logAudit($currentUser['id'], 'add_quantity_herbal', 'herbal_stock', $stockId, null, ['quantity' => $quantity]);
+                        $supplierRow = $db->queryOne("SELECT name FROM suppliers WHERE id = ? LIMIT 1", [$stock['supplier_id']]);
+                        recordProductionSupplyLog([
+                            'material_category' => 'herbal',
+                            'material_label' => 'عطاره',
+                            'stock_source' => 'herbal_stock',
+                            'stock_id' => $stockId,
+                            'supplier_id' => $stock['supplier_id'],
+                            'supplier_name' => $supplierRow['name'] ?? null,
+                            'quantity' => $quantity,
+                            'unit' => 'كجم',
+                            'details' => 'إضافة كمية إلى الصنف - ' . ($stock['herbal_type'] ?? ''),
+                            'recorded_by' => $currentUser['id'] ?? null,
+                        ]);
+                        preventDuplicateSubmission('تم إضافة الكمية بنجاح', ['page' => 'raw_materials_warehouse', 'section' => 'herbal'], null, $dashboardSlug);
                     }
                 }
             }
@@ -9809,10 +9923,15 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
                                             <td class="text-center"><?php echo htmlspecialchars($stock['date_type'] ?? '—'); ?></td>
                                             <td class="text-center"><strong style="color: #8B4513;"><?php echo number_format($stock['quantity'], 3); ?></strong></td>
                                             <td class="text-center">
-                                                <div class="btn-group" role="group">
+                                                <div class="d-flex flex-wrap gap-1 justify-content-center">
+                                                    <button class="btn btn-sm btn-success"
+                                                        onclick="openAddQuantityDateCard(<?php echo $stock['id']; ?>, '<?php echo htmlspecialchars($stock['supplier_name'], ENT_QUOTES); ?>', '<?php echo htmlspecialchars($stock['date_type'] ?? '', ENT_QUOTES); ?>', <?php echo $stock['quantity']; ?>)"
+                                                        <?php echo $dateSectionTableError ? 'disabled' : ''; ?>>
+                                                        <i class="bi bi-plus-lg"></i> إضافة كمية
+                                                    </button>
                                                     <button class="btn btn-sm btn-danger"
-                                                            onclick="openDamageDateModal(<?php echo $stock['id']; ?>, 'بلح', '<?php echo htmlspecialchars($stock['supplier_name'], ENT_QUOTES); ?>', <?php echo $stock['quantity']; ?>)"
-                                                            <?php echo ($stock['quantity'] <= 0 || $dateSectionTableError) ? 'disabled' : ''; ?>>
+                                                        onclick="openDamageDateModal(<?php echo $stock['id']; ?>, 'بلح', '<?php echo htmlspecialchars($stock['supplier_name'], ENT_QUOTES); ?>', <?php echo $stock['quantity']; ?>)"
+                                                        <?php echo ($stock['quantity'] <= 0 || $dateSectionTableError) ? 'disabled' : ''; ?>>
                                                         <i class="bi bi-exclamation-triangle"></i> تالف
                                                     </button>
                                                 </div>
@@ -9825,6 +9944,45 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
                     <?php endif; ?>
                 </div>
             </div>
+        </div>
+    </div>
+    <!-- بطاقة إضافة كمية إلى صنف البلح -->
+    <div class="card border shadow-sm mb-4 d-none" id="addQuantityDateCard">
+        <div class="card-header text-white d-flex justify-content-between align-items-center flex-wrap gap-2" style="background: linear-gradient(135deg, #8B4513 0%, #A0522D 100%);">
+            <h5 class="card-title mb-0"><i class="bi bi-plus-circle me-2"></i>إضافة كمية إلى الصنف - بلح</h5>
+            <button type="button" class="btn btn-sm btn-light" onclick="closeAddQuantityDateCard()" aria-label="إغلاق">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div class="card-body">
+            <form method="POST">
+                <input type="hidden" name="action" value="add_quantity_date">
+                <input type="hidden" name="stock_id" id="add_quantity_date_stock_id">
+                <div class="mb-3">
+                    <label class="form-label">المورد / الصنف</label>
+                    <input type="text" class="form-control" id="add_quantity_date_label" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">الكمية الحالية (كجم)</label>
+                    <input type="text" class="form-control" id="add_quantity_date_current" readonly>
+                </div>
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label">الكمية المضافة (كجم) <span class="text-danger">*</span></label>
+                        <input type="number" step="0.001" min="0.001" name="quantity" class="form-control" required placeholder="0.000">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">ملاحظات</label>
+                        <input type="text" name="notes" class="form-control" placeholder="اختياري">
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end gap-2">
+                        <button type="button" class="btn btn-secondary" onclick="closeAddQuantityDateCard()">إلغاء</button>
+                        <button type="submit" class="btn text-white" style="background: linear-gradient(135deg, #8B4513 0%, #A0522D 100%);" <?php echo $dateActionsDisabledAttr; ?>>
+                            <i class="bi bi-plus-lg me-1"></i>إضافة
+                        </button>
+                    </div>
+                </div>
+            </form>
         </div>
     </div>
     
@@ -10116,6 +10274,24 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
             if (form) form.reset();
         }
     }
+
+    function openAddQuantityDateCard(id, supplierName, dateType, currentQty) {
+        var card = document.getElementById('addQuantityDateCard');
+        if (!card) return;
+        var stockInput = document.getElementById('add_quantity_date_stock_id');
+        var labelInput = document.getElementById('add_quantity_date_label');
+        var currentInput = document.getElementById('add_quantity_date_current');
+        var qty = parseFloat(currentQty) || 0;
+        if (stockInput) stockInput.value = id;
+        if (labelInput) labelInput.value = (supplierName || '') + (dateType ? ' - ' + dateType : '');
+        if (currentInput) currentInput.value = qty.toFixed(3) + ' كجم';
+        card.classList.remove('d-none');
+        card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    function closeAddQuantityDateCard() {
+        var card = document.getElementById('addQuantityDateCard');
+        if (card) card.classList.add('d-none');
+    }
     </script>
     
     <?php
@@ -10219,11 +10395,18 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
                                             <td class="text-center"><?php echo htmlspecialchars($stock['turbine_type'] ?? '—'); ?></td>
                                             <td class="text-center"><strong><?php echo number_format($stock['quantity'], 3); ?></strong></td>
                                             <td class="text-center">
-                                                <button class="btn btn-sm btn-danger"
-                                                    onclick="openDamageTurbineModal(<?php echo $stock['id']; ?>, 'تلبينات', '<?php echo htmlspecialchars($stock['supplier_name'], ENT_QUOTES); ?>', <?php echo $stock['quantity']; ?>)"
-                                                    <?php echo ($stock['quantity'] <= 0 || $turbineSectionTableError) ? 'disabled' : ''; ?>>
-                                                    <i class="bi bi-exclamation-triangle"></i> تالف
-                                                </button>
+                                                <div class="d-flex flex-wrap gap-1 justify-content-center">
+                                                    <button class="btn btn-sm btn-success"
+                                                        onclick="openAddQuantityTurbineCard(<?php echo $stock['id']; ?>, '<?php echo htmlspecialchars($stock['supplier_name'], ENT_QUOTES); ?>', '<?php echo htmlspecialchars($stock['turbine_type'] ?? '', ENT_QUOTES); ?>', <?php echo $stock['quantity']; ?>)"
+                                                        <?php echo $turbineSectionTableError ? 'disabled' : ''; ?>>
+                                                        <i class="bi bi-plus-lg"></i> إضافة كمية
+                                                    </button>
+                                                    <button class="btn btn-sm btn-danger"
+                                                        onclick="openDamageTurbineModal(<?php echo $stock['id']; ?>, 'تلبينات', '<?php echo htmlspecialchars($stock['supplier_name'], ENT_QUOTES); ?>', <?php echo $stock['quantity']; ?>)"
+                                                        <?php echo ($stock['quantity'] <= 0 || $turbineSectionTableError) ? 'disabled' : ''; ?>>
+                                                        <i class="bi bi-exclamation-triangle"></i> تالف
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
@@ -10233,6 +10416,45 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
                     <?php endif; ?>
                 </div>
             </div>
+        </div>
+    </div>
+    <!-- بطاقة إضافة كمية إلى صنف التلبينات -->
+    <div class="card border shadow-sm mb-4 d-none" id="addQuantityTurbineCard">
+        <div class="card-header text-white d-flex justify-content-between align-items-center flex-wrap gap-2" style="background: linear-gradient(135deg, #c9a227 0%, #8b6914 100%);">
+            <h5 class="card-title mb-0"><i class="bi bi-plus-circle me-2"></i>إضافة كمية إلى الصنف - تلبينات</h5>
+            <button type="button" class="btn btn-sm btn-light" onclick="closeAddQuantityTurbineCard()" aria-label="إغلاق">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div class="card-body">
+            <form method="POST">
+                <input type="hidden" name="action" value="add_quantity_turbine">
+                <input type="hidden" name="stock_id" id="add_quantity_turbine_stock_id">
+                <div class="mb-3">
+                    <label class="form-label">المورد / الصنف</label>
+                    <input type="text" class="form-control" id="add_quantity_turbine_label" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">الكمية الحالية (كجم)</label>
+                    <input type="text" class="form-control" id="add_quantity_turbine_current" readonly>
+                </div>
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label">الكمية المضافة (كجم) <span class="text-danger">*</span></label>
+                        <input type="number" step="0.001" min="0.001" name="quantity" class="form-control" required placeholder="0.000">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">ملاحظات</label>
+                        <input type="text" name="notes" class="form-control" placeholder="اختياري">
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end gap-2">
+                        <button type="button" class="btn btn-secondary" onclick="closeAddQuantityTurbineCard()">إلغاء</button>
+                        <button type="submit" class="btn text-white" style="background: linear-gradient(135deg, #c9a227 0%, #8b6914 100%);" <?php echo $turbineActionsDisabledAttr; ?>>
+                            <i class="bi bi-plus-lg me-1"></i>إضافة
+                        </button>
+                    </div>
+                </div>
+            </form>
         </div>
     </div>
     <!-- Modal إضافة تلبينات -->
@@ -10421,6 +10643,23 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
             new bootstrap.Modal(document.getElementById('damageTurbineModal')).show();
         }
     }
+    function openAddQuantityTurbineCard(id, supplierName, turbineType, currentQty) {
+        var card = document.getElementById('addQuantityTurbineCard');
+        if (!card) return;
+        var stockInput = document.getElementById('add_quantity_turbine_stock_id');
+        var labelInput = document.getElementById('add_quantity_turbine_label');
+        var currentInput = document.getElementById('add_quantity_turbine_current');
+        var qty = parseFloat(currentQty) || 0;
+        if (stockInput) stockInput.value = id;
+        if (labelInput) labelInput.value = (supplierName || '') + (turbineType ? ' - ' + turbineType : '');
+        if (currentInput) currentInput.value = qty.toFixed(3) + ' كجم';
+        card.classList.remove('d-none');
+        card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    function closeAddQuantityTurbineCard() {
+        var card = document.getElementById('addQuantityTurbineCard');
+        if (card) card.classList.add('d-none');
+    }
     </script>
     <?php
 } elseif ($section === 'herbal') {
@@ -10506,7 +10745,7 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
                                 <thead>
                                     <tr>
                                         <th>المورد</th>
-                                        <th class="text-center">نوع العطاره</th>
+                                        <th class="text-center">نوع </th>
                                         <th class="text-center">الكمية (كجم)</th>
                                         <th class="text-center">الإجراءات</th>
                                     </tr>
@@ -10523,11 +10762,18 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
                                             <td class="text-center"><?php echo htmlspecialchars($stock['herbal_type'] ?? '—'); ?></td>
                                             <td class="text-center"><strong><?php echo number_format($stock['quantity'], 3); ?></strong></td>
                                             <td class="text-center">
-                                                <button class="btn btn-sm btn-danger"
-                                                    onclick="openDamageHerbalModal(<?php echo $stock['id']; ?>, 'عطاره', '<?php echo htmlspecialchars($stock['supplier_name'], ENT_QUOTES); ?>', <?php echo $stock['quantity']; ?>)"
-                                                    <?php echo ($stock['quantity'] <= 0 || $herbalSectionTableError) ? 'disabled' : ''; ?>>
-                                                    <i class="bi bi-exclamation-triangle"></i> تالف
-                                                </button>
+                                                <div class="d-flex flex-wrap gap-1 justify-content-center">
+                                                    <button class="btn btn-sm btn-success"
+                                                        onclick="openAddQuantityHerbalCard(<?php echo $stock['id']; ?>, '<?php echo htmlspecialchars($stock['supplier_name'], ENT_QUOTES); ?>', '<?php echo htmlspecialchars($stock['herbal_type'] ?? '', ENT_QUOTES); ?>', <?php echo $stock['quantity']; ?>)"
+                                                        <?php echo $herbalSectionTableError ? 'disabled' : ''; ?>>
+                                                        <i class="bi bi-plus-lg"></i> إضافة كمية
+                                                    </button>
+                                                    <button class="btn btn-sm btn-danger"
+                                                        onclick="openDamageHerbalModal(<?php echo $stock['id']; ?>, 'عطاره', '<?php echo htmlspecialchars($stock['supplier_name'], ENT_QUOTES); ?>', <?php echo $stock['quantity']; ?>)"
+                                                        <?php echo ($stock['quantity'] <= 0 || $herbalSectionTableError) ? 'disabled' : ''; ?>>
+                                                        <i class="bi bi-exclamation-triangle"></i> تالف
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
@@ -10537,6 +10783,45 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
                     <?php endif; ?>
                 </div>
             </div>
+        </div>
+    </div>
+    <!-- بطاقة إضافة كمية إلى صنف العطاره -->
+    <div class="card border shadow-sm mb-4 d-none" id="addQuantityHerbalCard">
+        <div class="card-header text-white d-flex justify-content-between align-items-center flex-wrap gap-2" style="background: linear-gradient(135deg, #2d5016 0%, #4a7c23 100%);">
+            <h5 class="card-title mb-0"><i class="bi bi-plus-circle me-2"></i>إضافة كمية إلى الصنف</h5>
+            <button type="button" class="btn btn-sm btn-light" onclick="closeAddQuantityHerbalCard()" aria-label="إغلاق">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div class="card-body">
+            <form method="POST">
+                <input type="hidden" name="action" value="add_quantity_herbal">
+                <input type="hidden" name="stock_id" id="add_quantity_herbal_stock_id">
+                <div class="mb-3">
+                    <label class="form-label">المورد / الصنف</label>
+                    <input type="text" class="form-control" id="add_quantity_herbal_label" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">الكمية الحالية (كجم)</label>
+                    <input type="text" class="form-control" id="add_quantity_herbal_current" readonly>
+                </div>
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label">الكمية المضافة (كجم) <span class="text-danger">*</span></label>
+                        <input type="number" step="0.001" min="0.001" name="quantity" class="form-control" required placeholder="0.000">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">ملاحظات</label>
+                        <input type="text" name="notes" class="form-control" placeholder="اختياري">
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end gap-2">
+                        <button type="button" class="btn btn-secondary" onclick="closeAddQuantityHerbalCard()">إلغاء</button>
+                        <button type="submit" class="btn text-white" style="background: linear-gradient(135deg, #2d5016 0%, #4a7c23 100%);" <?php echo $herbalActionsDisabledAttr; ?>>
+                            <i class="bi bi-plus-lg me-1"></i>إضافة
+                        </button>
+                    </div>
+                </div>
+            </form>
         </div>
     </div>
     <!-- Modal إضافة عطاره -->
@@ -10724,6 +11009,23 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
             var q = document.getElementById('damage_herbal_quantity'); if (q) { q.value = ''; q.max = qty > 0 ? qty.toFixed(3) : ''; }
             new bootstrap.Modal(document.getElementById('damageHerbalModal')).show();
         }
+    }
+    function openAddQuantityHerbalCard(id, supplierName, herbalType, currentQty) {
+        var card = document.getElementById('addQuantityHerbalCard');
+        if (!card) return;
+        var stockInput = document.getElementById('add_quantity_herbal_stock_id');
+        var labelInput = document.getElementById('add_quantity_herbal_label');
+        var currentInput = document.getElementById('add_quantity_herbal_current');
+        var qty = parseFloat(currentQty) || 0;
+        if (stockInput) stockInput.value = id;
+        if (labelInput) labelInput.value = (supplierName || '') + (herbalType ? ' - ' + herbalType : '');
+        if (currentInput) currentInput.value = qty.toFixed(3) + ' كجم';
+        card.classList.remove('d-none');
+        card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    function closeAddQuantityHerbalCard() {
+        var card = document.getElementById('addQuantityHerbalCard');
+        if (card) card.classList.add('d-none');
     }
     </script>
     <?php

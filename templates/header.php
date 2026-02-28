@@ -3801,6 +3801,16 @@ if (ob_get_level() > 0) {
                         </li>
                         <?php endif; ?>
                         
+                        <!-- صفحة الحضور (لجميع الأدوار ما عدا المدير) -->
+                        <?php if (isLoggedIn() && $currentUserRole !== 'manager'): ?>
+                        <li>
+                            <a class="dropdown-item" href="<?php echo getRelativeUrl('attendance.php'); ?>">
+                                <i class="bi bi-calendar-check me-2" aria-hidden="true"></i>
+                                <span><?php echo isset($lang['menu_attendance']) ? $lang['menu_attendance'] : 'صفحة الحضور'; ?></span>
+                            </a>
+                        </li>
+                        <?php endif; ?>
+                        
                         <!-- Refresh Page Button -->
                         <li>
                             <a class="dropdown-item" href="#" id="refreshPageBtnDropdown">
