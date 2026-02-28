@@ -120,8 +120,8 @@ $stats['total_honey'] = $stats['total_raw_honey'] + $stats['total_filtered_honey
 </div>
 
 <!-- إحصائيات -->
-<div class="row mb-4">
-    <div class="col-md-3">
+<div class="row mb-4 g-3">
+    <div class="col-12 col-sm-6 col-md-6">
         <div class="card shadow-sm">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
@@ -136,7 +136,7 @@ $stats['total_honey'] = $stats['total_raw_honey'] + $stats['total_filtered_honey
             </div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-12 col-sm-6 col-md-6">
         <div class="card shadow-sm">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
@@ -151,7 +151,7 @@ $stats['total_honey'] = $stats['total_raw_honey'] + $stats['total_filtered_honey
             </div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-12 col-sm-6 col-md-6">
         <div class="card shadow-sm">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
@@ -166,7 +166,7 @@ $stats['total_honey'] = $stats['total_raw_honey'] + $stats['total_filtered_honey
             </div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-12 col-sm-6 col-md-6">
         <div class="card shadow-sm">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
