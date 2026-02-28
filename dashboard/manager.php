@@ -188,10 +188,40 @@ if ($page === 'production_tasks' &&
     exit;
 }
 
-// حل نهائي للكاش: إذا طُلبت أوردرات الإنتاج بدون معامل كسر كاش، نوجّه فوراً لرابط فريد لضمان عدم إرجاع استجابة مخزنة
+// معالجة AJAX إيصال المهمة المختصر (رقم الأوردر + المنتجات والكميات) - قبل أي إخراج
+if ($page === 'production_tasks' && 
+    $_SERVER['REQUEST_METHOD'] === 'GET' && 
+    isset($_GET['action']) && 
+    trim($_GET['action']) === 'get_task_receipt' &&
+    isset($_GET['task_id'])) {
+    
+    require_once __DIR__ . '/../includes/config.php';
+    require_once __DIR__ . '/../includes/db.php';
+    require_once __DIR__ . '/../includes/auth.php';
+    require_once __DIR__ . '/../includes/notifications.php';
+    require_once __DIR__ . '/../includes/audit_log.php';
+    require_once __DIR__ . '/../includes/security.php';
+    require_once __DIR__ . '/../includes/path_helper.php';
+    require_once __DIR__ . '/../includes/table_styles.php';
+    
+    requireRole(['manager', 'accountant', 'developer']);
+    
+    $modulePath = __DIR__ . '/../modules/manager/production_tasks.php';
+    if (file_exists($modulePath)) {
+        include $modulePath;
+        exit;
+    }
+    
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['success' => false]);
+    exit;
+}
+
+// حل نهائي للكاش: إذا طُلبت أوردرات الإنتاج بدون معامل كسر كاش، نوجّه فوراً لرابط فريد لضمان عدم إرجاع استجابة مخزنة (لا نوجّه طلبات AJAX)
 if ($page === 'production_tasks' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'GET' && !headers_sent()) {
+    $ajaxAction = trim($_GET['action'] ?? '');
     $hasBust = isset($_GET['_t']) || isset($_GET['_nocache']) || isset($_GET['_v']);
-    if (!$hasBust) {
+    if (!$hasBust && $ajaxAction !== 'get_task_for_edit' && $ajaxAction !== 'get_task_receipt') {
         $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/dashboard/manager.php';
         $params = $_GET;
         $params['_t'] = (string) (time() * 1000);

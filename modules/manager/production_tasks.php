@@ -4,6 +4,7 @@
  */
 
 $isGetTaskForEdit = ($_SERVER['REQUEST_METHOD'] ?? '') === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get_task_for_edit' && isset($_GET['task_id']);
+$isGetTaskReceipt = ($_SERVER['REQUEST_METHOD'] ?? '') === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get_task_receipt' && isset($_GET['task_id']);
 
 // منع الكاش عند التبديل بين الأوردرات/الحسابات لضمان عدم رجوع أي كاش قديم
 if (!headers_sent()) {
@@ -12,7 +13,7 @@ if (!headers_sent()) {
     header('Pragma: no-cache');
     header('Expires: 0');
 }
-if (!$isGetTaskForEdit && !headers_sent()) {
+if (!$isGetTaskForEdit && !$isGetTaskReceipt && !headers_sent()) {
     header('Content-Type: text/html; charset=UTF-8');
 }
 mb_internal_encoding('UTF-8');
@@ -2646,13 +2647,19 @@ window.openTaskReceiptModal = function(taskId) {
     params.set('action', 'get_task_receipt');
     params.set('task_id', String(taskId));
     fetch('?' + params.toString())
-        .then(function(r) { return r.json(); })
+        .then(function(r) {
+            var ct = (r.headers.get('Content-Type') || '');
+            if (!r.ok || ct.indexOf('application/json') === -1) {
+                throw new Error('غير JSON');
+            }
+            return r.json();
+        })
         .then(function(data) {
             loadingEl.style.display = 'none';
-            if (data.success && data.items) {
+            if (data.success && Array.isArray(data.items)) {
                 var title = data.order_number ? ('إيصال أوردر #' + data.order_number) : ('مهمة #' + data.task_id);
                 titleEl.innerHTML = '<i class="bi bi-eye me-1"></i>' + title;
-                var rows = (data.items || []).map(function(it) {
+                var rows = data.items.map(function(it) {
                     var qty = typeof it.quantity === 'number' ? it.quantity : parseFloat(it.quantity) || 0;
                     var un = (it.unit || 'قطعة').trim();
                     return '<tr><td>' + (it.product_name || '-') + '</td><td class="text-end">' + qty + ' ' + un + '</td></tr>';

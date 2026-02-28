@@ -244,10 +244,11 @@ $currentUser = getCurrentUser();
 $db = db();
 $page = $_GET['page'] ?? 'dashboard';
 
-// حل نهائي للكاش: إذا طُلبت أوردرات الإنتاج بدون معامل كسر كاش، نوجّه فوراً لرابط فريد لضمان عدم إرجاع استجابة مخزنة
+// حل نهائي للكاش: إذا طُلبت أوردرات الإنتاج بدون معامل كسر كاش، نوجّه فوراً لرابط فريد (لا نوجّه طلبات AJAX)
 if ($page === 'production_tasks' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'GET' && !headers_sent()) {
+    $ajaxAction = trim($_GET['action'] ?? '');
     $hasBust = isset($_GET['_t']) || isset($_GET['_nocache']) || isset($_GET['_v']);
-    if (!$hasBust) {
+    if (!$hasBust && $ajaxAction !== 'get_task_for_edit' && $ajaxAction !== 'get_task_receipt') {
         $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/dashboard/accountant.php';
         $params = $_GET;
         $params['_t'] = (string) (time() * 1000);
@@ -464,6 +465,28 @@ if ($page === 'production_tasks' &&
     }
     
     header('Content-Type: application/json; charset=UTF-8');
+    echo json_encode(['success' => false]);
+    exit;
+}
+
+// معالجة AJAX إيصال المهمة المختصر (رقم الأوردر + المنتجات والكميات)
+if ($page === 'production_tasks' && 
+    $_SERVER['REQUEST_METHOD'] === 'GET' && 
+    isset($_GET['action']) && 
+    trim($_GET['action']) === 'get_task_receipt' &&
+    isset($_GET['task_id'])) {
+    
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    
+    $modulePath = __DIR__ . '/../modules/manager/production_tasks.php';
+    if (file_exists($modulePath)) {
+        include $modulePath;
+        exit;
+    }
+    
+    header('Content-Type: application/json; charset=utf-8');
     echo json_encode(['success' => false]);
     exit;
 }
