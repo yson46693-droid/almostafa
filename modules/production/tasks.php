@@ -1802,7 +1802,7 @@ function tasksHtml(string $value): string
                                     <td class="task-status-cell"><span class="badge bg-<?php echo $statusClass; ?>"><?php echo tasksHtml($statusLabel); ?></span></td>
                                     <td>
                                         <?php if (!empty($task['due_date'])): ?>
-                                            <?php echo tasksHtml(date('d-M', strtotime((string) $task['due_date']))); ?>
+                                            <?php echo tasksHtml(date('d/m', strtotime((string) $task['due_date']))); ?>
                                         <?php else: ?>
                                             <span class="text-muted">-</span>
                                         <?php endif; ?>
