@@ -2198,7 +2198,6 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                                         <button type="button" class="btn btn-outline-secondary btn-sm btn-icon-only mt-1" onclick="openTaskReceiptModal(<?php echo (int)$task['id']; ?>)" title="عرض إيصال مختصر (المنتجات والكميات)">
                                             <i class="bi bi-eye"></i>
                                         </button>
-                                        <?php
                                     </td>
                                     <td>
                                         <?php
