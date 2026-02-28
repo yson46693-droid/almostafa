@@ -711,7 +711,7 @@ if ($isAjaxNavigation) {
                 <?php
                 $quickLinks = [
                     [
-                        'label' => 'مهام الإنتاج',
+                        'label' => 'اوردرات الإنتاج',
                         'icon' => 'bi-list-task',
                         'url' => getRelativeUrl('dashboard/manager.php?page=production_tasks')
                     ],

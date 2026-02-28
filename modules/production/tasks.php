@@ -1142,10 +1142,10 @@ if ($unifiedTemplatesExists && $productTemplatesExists) {
 
 $customerOrdersExists = !empty($db->queryOne("SHOW TABLES LIKE 'customer_orders'"));
 $orderCustomerJoin = '';
-$customerDisplaySelect = ", t.customer_name, COALESCE(NULLIF(TRIM(IFNULL(t.customer_name,'')), ''), '') AS customer_display";
+$customerDisplaySelect = ", t.customer_name, t.customer_phone, COALESCE(NULLIF(TRIM(IFNULL(t.customer_name,'')), ''), '') AS customer_display";
 if ($customerOrdersExists) {
     $orderCustomerJoin = " LEFT JOIN customer_orders co ON t.related_type = 'customer_order' AND t.related_id = co.id LEFT JOIN customers cust ON co.customer_id = cust.id";
-    $customerDisplaySelect = ", t.customer_name, COALESCE(NULLIF(TRIM(t.customer_name), ''), cust.name) AS customer_display";
+    $customerDisplaySelect = ", t.customer_name, t.customer_phone, COALESCE(NULLIF(TRIM(t.customer_name), ''), cust.name) AS customer_display";
 }
 
 $taskSql = "SELECT t.id, t.title, t.description, t.assigned_to, t.created_by, t.priority, t.status,
@@ -1484,12 +1484,6 @@ function tasksHtml(string $value): string
 }
 ?>
 
-<style>
-.task-actions-btns { display: grid; grid-template-columns: repeat(2, auto); gap: 0.25rem; align-content: start; }
-@media (max-width: 400px) {
-    .task-actions-btns { grid-template-columns: 1fr; }
-}
-</style>
 <div class="container-fluid">
     <?php foreach ($errorMessages as $message): ?>
         <div class="alert alert-danger alert-dismissible fade show" id="errorAlert" role="alert">
@@ -1801,97 +1795,59 @@ function tasksHtml(string $value): string
                                         <?php endif; ?>
                                     </td>
                                     <td class="task-actions-cell">
-                                        <div class="task-actions-btns">
-                                            <?php if ($isProduction): ?>
-                                                <?php 
-                                                // التحقق من أن المهمة مخصصة لعامل إنتاج
-                                                $taskAssignedTo = (int) ($task['assigned_to'] ?? 0);
-                                                $assignedUserRole = null;
-                                                $isTaskForProduction = false;
-                                                
-                                                // التحقق من assigned_to
-                                                if ($taskAssignedTo > 0) {
-                                                    $assignedUser = $db->queryOne('SELECT role FROM users WHERE id = ?', [$taskAssignedTo]);
-                                                    $assignedUserRole = $assignedUser['role'] ?? null;
-                                                    if ($assignedUserRole === 'production') {
-                                                        $isTaskForProduction = true;
-                                                    }
-                                                }
-                                                
-                                                // التحقق من notes للعثور على جميع العمال المخصصين
-                                                if (!$isTaskForProduction && !empty($task['notes'])) {
-                                                    if (preg_match('/\[ASSIGNED_WORKERS_IDS\]:\s*([0-9,]+)/', $task['notes'], $matches)) {
-                                                        $workerIds = array_filter(array_map('intval', explode(',', $matches[1])));
-                                                        if (!empty($workerIds)) {
-                                                            // التحقق من أن أحد العمال المخصصين هو عامل إنتاج
-                                                            $placeholders = implode(',', array_fill(0, count($workerIds), '?'));
-                                                            $workersCheck = $db->queryOne(
-                                                                "SELECT COUNT(*) as count FROM users WHERE id IN ($placeholders) AND role = 'production'",
-                                                                $workerIds
-                                                            );
-                                                            if ($workersCheck && (int)$workersCheck['count'] > 0) {
-                                                                $isTaskForProduction = true;
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                                
-                                                // السماح لأي عامل إنتاج بتغيير حالة أي مهمة مخصصة لعامل إنتاج - زر إكمال فقط
-                                                if ($isTaskForProduction && in_array($task['status'], ['pending', 'received', 'in_progress'])): 
-                                                ?>
-                                                    <button type="button" class="btn btn-outline-success" onclick="submitTaskAction('complete_task', <?php echo (int) $task['id']; ?>)">
-                                                        <i class="bi bi-check2-circle me-1"></i>إكمال
-                                                    </button>
+                                        <?php
+                                        $taskAssignedTo = (int) ($task['assigned_to'] ?? 0);
+                                        $assignedUserRole = null;
+                                        $isTaskForProduction = false;
+                                        if ($taskAssignedTo > 0) {
+                                            $assignedUser = $db->queryOne('SELECT role FROM users WHERE id = ?', [$taskAssignedTo]);
+                                            $assignedUserRole = $assignedUser['role'] ?? null;
+                                            if ($assignedUserRole === 'production') $isTaskForProduction = true;
+                                        }
+                                        if (!$isTaskForProduction && !empty($task['notes']) && preg_match('/\[ASSIGNED_WORKERS_IDS\]:\s*([0-9,]+)/', $task['notes'], $matches)) {
+                                            $workerIds = array_filter(array_map('intval', explode(',', $matches[1])));
+                                            if (!empty($workerIds)) {
+                                                $placeholders = implode(',', array_fill(0, count($workerIds), '?'));
+                                                $workersCheck = $db->queryOne("SELECT COUNT(*) as count FROM users WHERE id IN ($placeholders) AND role = 'production'", $workerIds);
+                                                if ($workersCheck && (int)$workersCheck['count'] > 0) $isTaskForProduction = true;
+                                            }
+                                        }
+                                        $canWithDelegate = ($isManager || $isProduction) && ($task['status'] ?? '') === 'completed';
+                                        $canDeliverReturn = ($isManager || $isProduction || $isDriver) && in_array($task['status'] ?? '', ['completed', 'with_delegate'], true);
+                                        $canDeliverReturnDriver = in_array($task['status'] ?? '', ['completed', 'with_delegate'], true);
+                                        $taskCustomerPhone = isset($task['customer_phone']) ? trim((string) $task['customer_phone']) : '';
+                                        $hasCustomerPhone = $taskCustomerPhone !== '';
+                                        $taskIdInt = (int) $task['id'];
+                                        ?>
+                                        <div class="dropdown">
+                                            <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" id="taskActionsDropdown<?php echo $taskIdInt; ?>">
+                                                <i class="bi bi-three-dots-vertical me-1"></i>إجراءات
+                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="taskActionsDropdown<?php echo $taskIdInt; ?>">
+                                                <?php if ($hasCustomerPhone): $telHref = 'tel:' . preg_replace('/[^\d+]/', '', $taskCustomerPhone); ?>
+                                                    <li><a class="dropdown-item" href="<?php echo tasksHtml($telHref); ?>"><i class="bi bi-telephone me-2"></i>الاتصال بالعميل</a></li>
+                                                    <li><hr class="dropdown-divider"></li>
                                                 <?php endif; ?>
-                                                <?php
-                                                // بعد مكتملة أو مع المندوب: زر مع المندوب (فقط من مكتملة)، ثم تم التوصيل و تم الارجاع (السائق يرى تم التوصيل/تم الارجاع فقط)
-                                                $canWithDelegate = ($isManager || $isProduction) && ($task['status'] ?? '') === 'completed';
-                                                $canDeliverReturn = ($isManager || $isProduction || $isDriver) && in_array($task['status'] ?? '', ['completed', 'with_delegate'], true);
-                                                if ($canWithDelegate):
-                                                ?>
-                                                    <button type="button" class="btn btn-outline-info btn-sm" onclick="submitTaskAction('with_delegate_task', <?php echo (int) $task['id']; ?>)">
-                                                        <i class="bi bi-person-badge me-1"></i>مع المندوب
-                                                    </button>
-                                                <?php endif;
-                                                if ($canDeliverReturn):
-                                                ?>
-                                                    <button type="button" class="btn btn-outline-success btn-sm" onclick="submitTaskAction('deliver_task', <?php echo (int) $task['id']; ?>)">
-                                                        <i class="bi bi-truck me-1"></i>تم التوصيل
-                                                    </button>
-                                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="submitTaskAction('return_task', <?php echo (int) $task['id']; ?>)">
-                                                        <i class="bi bi-arrow-return-left me-1"></i>تم الارجاع
-                                                    </button>
+                                                <?php if ($isProduction && $isTaskForProduction && in_array($task['status'], ['pending', 'received', 'in_progress'])): ?>
+                                                    <li><button type="button" class="dropdown-item" onclick="submitTaskAction('complete_task', <?php echo $taskIdInt; ?>)"><i class="bi bi-check2-circle me-2"></i>إكمال</button></li>
                                                 <?php endif; ?>
-                                            <?php endif; ?>
-
-                                            <?php if ($isDriver): ?>
-                                                <?php
-                                                $canDeliverReturnDriver = in_array($task['status'] ?? '', ['completed', 'with_delegate'], true);
-                                                if ($canDeliverReturnDriver):
-                                                ?>
-                                                    <button type="button" class="btn btn-outline-success btn-sm" onclick="submitTaskAction('deliver_task', <?php echo (int) $task['id']; ?>)">
-                                                        <i class="bi bi-truck me-1"></i>تم التوصيل
-                                                    </button>
-                                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="submitTaskAction('return_task', <?php echo (int) $task['id']; ?>)">
-                                                        <i class="bi bi-arrow-return-left me-1"></i>تم الارجاع
-                                                    </button>
+                                                <?php if ($canWithDelegate): ?>
+                                                    <li><button type="button" class="dropdown-item" onclick="submitTaskAction('with_delegate_task', <?php echo $taskIdInt; ?>)"><i class="bi bi-person-badge me-2"></i>مع المندوب</button></li>
                                                 <?php endif; ?>
-                                            <?php endif; ?>
-
-                                            <?php if ($isManager): ?>
-                                                <button type="button" class="btn btn-outline-secondary" onclick="viewTask(<?php echo (int) $task['id']; ?>)">
-                                                    <i class="bi bi-eye"></i>
-                                                </button>
-                                                <button type="button" class="btn btn-outline-danger" onclick="confirmDeleteTask(<?php echo (int) $task['id']; ?>)">
-                                                    <i class="bi bi-trash"></i>
-                                                </button>
-                                            <?php endif; ?>
-                                            
-                                            <?php if ($isManager || $isProduction || $isDriver): ?>
-                                                <a href="<?php echo getRelativeUrl('print_task_receipt.php?id=' . (int) $task['id']); ?>" target="_blank" class="btn btn-outline-primary" title="طباعة إيصال المهمة">
-                                                    <i class="bi bi-printer"></i>
-                                                </a>
-                                            <?php endif; ?>
+                                                <?php if ($canDeliverReturn || ($isDriver && $canDeliverReturnDriver)): ?>
+                                                    <li><button type="button" class="dropdown-item" onclick="submitTaskAction('deliver_task', <?php echo $taskIdInt; ?>)"><i class="bi bi-truck me-2"></i>تم التوصيل</button></li>
+                                                    <li><button type="button" class="dropdown-item" onclick="submitTaskAction('return_task', <?php echo $taskIdInt; ?>)"><i class="bi bi-arrow-return-left me-2"></i>تم الارجاع</button></li>
+                                                <?php endif; ?>
+                                                <?php if ($isManager): ?>
+                                                    <li><hr class="dropdown-divider"></li>
+                                                    <li><button type="button" class="dropdown-item" onclick="viewTask(<?php echo $taskIdInt; ?>)"><i class="bi bi-eye me-2"></i>عرض</button></li>
+                                                    <li><button type="button" class="dropdown-item text-danger" onclick="confirmDeleteTask(<?php echo $taskIdInt; ?>)"><i class="bi bi-trash me-2"></i>حذف</button></li>
+                                                <?php endif; ?>
+                                                <?php if ($isManager || $isProduction || $isDriver): ?>
+                                                    <li><hr class="dropdown-divider"></li>
+                                                    <li><a class="dropdown-item" href="<?php echo getRelativeUrl('print_task_receipt.php?id=' . $taskIdInt); ?>" target="_blank"><i class="bi bi-printer me-2"></i>طباعة إيصال</a></li>
+                                                <?php endif; ?>
+                                            </ul>
                                         </div>
                                     </td>
                                 </tr>
