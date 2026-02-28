@@ -69,7 +69,7 @@ try {
         SELECT COUNT(*) AS total 
         FROM suppliers 
         WHERE status = 'active' 
-          AND type IN ('honey', 'olive_oil', 'beeswax', 'derivatives', 'nuts', 'sesame')
+          AND type IN ('honey', 'olive_oil', 'beeswax', 'nuts', 'sesame', 'date', 'turbines', 'herbal')
     ")['total'] ?? 0);
     
     // Honey summary
@@ -183,10 +183,10 @@ try {
     // Beeswax summary
     $beeswaxSummary = $rawReportQueryOne($db, "
         SELECT 
-            COALESCE(SUM(quantity), 0) AS total_quantity,
+            COALESCE(SUM(weight), 0) AS total_quantity,
             COUNT(*) AS records,
             COUNT(DISTINCT supplier_id) AS suppliers,
-            SUM(CASE WHEN COALESCE(quantity,0) <= 0 THEN 1 ELSE 0 END) AS zero_items
+            SUM(CASE WHEN COALESCE(weight,0) <= 0 THEN 1 ELSE 0 END) AS zero_items
         FROM beeswax_stock
     ");
     if ($beeswaxSummary) {
@@ -262,47 +262,6 @@ try {
         $rawWarehouseReport['zero_items'] += (int)($nutsSummary['zero_items'] ?? 0);
     }
     
-    // Derivatives summary
-    $derivativesSummary = $rawReportQueryOne($db, "
-        SELECT 
-            COALESCE(SUM(quantity), 0) AS total_quantity,
-            COUNT(*) AS records,
-            COUNT(DISTINCT supplier_id) AS suppliers,
-            SUM(CASE WHEN COALESCE(quantity,0) <= 0 THEN 1 ELSE 0 END) AS zero_items
-        FROM derivatives_stock
-    ");
-    if ($derivativesSummary) {
-        $sectionKey = 'derivatives';
-        $rawWarehouseReport['sections_order'][] = $sectionKey;
-        $rawWarehouseReport['sections'][$sectionKey] = [
-            'title' => 'المشتقات',
-            'records' => (int)($derivativesSummary['records'] ?? 0),
-            'metrics' => [
-                [
-                    'label' => 'إجمالي الكمية',
-                    'value' => (float)($derivativesSummary['total_quantity'] ?? 0),
-                    'unit' => 'كجم',
-                    'decimals' => 2
-                ],
-                [
-                    'label' => 'عدد السجلات',
-                    'value' => (int)($derivativesSummary['records'] ?? 0),
-                    'unit' => null,
-                    'decimals' => 0
-                ],
-                [
-                    'label' => 'عدد الموردين',
-                    'value' => (int)($derivativesSummary['suppliers'] ?? 0),
-                    'unit' => null,
-                    'decimals' => 0
-                ]
-            ],
-            'top_items' => []
-        ];
-        $rawWarehouseReport['total_records'] += (int)($derivativesSummary['records'] ?? 0);
-        $rawWarehouseReport['zero_items'] += (int)($derivativesSummary['zero_items'] ?? 0);
-    }
-    
     // Sesame summary
     $sesameSummary = $rawReportQueryOne($db, "
         SELECT 
@@ -316,7 +275,7 @@ try {
         $sectionKey = 'sesame';
         $rawWarehouseReport['sections_order'][] = $sectionKey;
         $rawWarehouseReport['sections'][$sectionKey] = [
-            'title' => 'السمسم',
+            'title' => 'السمسم والطحينة',
             'records' => (int)($sesameSummary['records'] ?? 0),
             'metrics' => [
                 [
@@ -343,6 +302,130 @@ try {
         $rawWarehouseReport['total_records'] += (int)($sesameSummary['records'] ?? 0);
         $rawWarehouseReport['zero_items'] += (int)($sesameSummary['zero_items'] ?? 0);
     }
+
+    // Date (البلح) summary
+    $dateSummary = null;
+    try {
+        $dateSummary = $rawReportQueryOne($db, "
+            SELECT 
+                COALESCE(SUM(quantity), 0) AS total_quantity,
+                COUNT(*) AS records,
+                COUNT(DISTINCT supplier_id) AS suppliers,
+                SUM(CASE WHEN COALESCE(quantity,0) <= 0 THEN 1 ELSE 0 END) AS zero_items
+            FROM date_stock
+        ");
+    } catch (Exception $e) {
+        $dateSummary = null;
+    }
+    if ($dateSummary !== null) {
+        $sectionKey = 'date';
+        $rawWarehouseReport['sections_order'][] = $sectionKey;
+        $rawWarehouseReport['sections'][$sectionKey] = [
+            'title' => 'البلح',
+            'records' => (int)($dateSummary['records'] ?? 0),
+            'metrics' => [
+                ['label' => 'إجمالي مخزون البلح', 'value' => (float)($dateSummary['total_quantity'] ?? 0), 'unit' => 'كجم', 'decimals' => 3],
+                ['label' => 'عدد السجلات', 'value' => (int)($dateSummary['records'] ?? 0), 'unit' => null, 'decimals' => 0],
+                ['label' => 'عدد الموردين', 'value' => (int)($dateSummary['suppliers'] ?? 0), 'unit' => null, 'decimals' => 0]
+            ],
+            'top_items' => []
+        ];
+        $rawWarehouseReport['total_records'] += (int)($dateSummary['records'] ?? 0);
+        $rawWarehouseReport['zero_items'] += (int)($dateSummary['zero_items'] ?? 0);
+    }
+
+    // Turbines (التلبينات) summary
+    $turbineSummary = null;
+    try {
+        $turbineSummary = $rawReportQueryOne($db, "
+            SELECT 
+                COALESCE(SUM(quantity), 0) AS total_quantity,
+                COUNT(*) AS records,
+                COUNT(DISTINCT supplier_id) AS suppliers,
+                SUM(CASE WHEN COALESCE(quantity,0) <= 0 THEN 1 ELSE 0 END) AS zero_items
+            FROM turbine_stock
+        ");
+    } catch (Exception $e) {
+        $turbineSummary = null;
+    }
+    if ($turbineSummary !== null) {
+        $sectionKey = 'turbines';
+        $rawWarehouseReport['sections_order'][] = $sectionKey;
+        $rawWarehouseReport['sections'][$sectionKey] = [
+            'title' => 'التلبينات',
+            'records' => (int)($turbineSummary['records'] ?? 0),
+            'metrics' => [
+                ['label' => 'إجمالي مخزون التلبينات', 'value' => (float)($turbineSummary['total_quantity'] ?? 0), 'unit' => 'كجم', 'decimals' => 3],
+                ['label' => 'عدد السجلات', 'value' => (int)($turbineSummary['records'] ?? 0), 'unit' => null, 'decimals' => 0],
+                ['label' => 'عدد الموردين', 'value' => (int)($turbineSummary['suppliers'] ?? 0), 'unit' => null, 'decimals' => 0]
+            ],
+            'top_items' => []
+        ];
+        $rawWarehouseReport['total_records'] += (int)($turbineSummary['records'] ?? 0);
+        $rawWarehouseReport['zero_items'] += (int)($turbineSummary['zero_items'] ?? 0);
+    }
+
+    // Herbal (العطاره) summary
+    $herbalSummary = null;
+    try {
+        $herbalSummary = $rawReportQueryOne($db, "
+            SELECT 
+                COALESCE(SUM(quantity), 0) AS total_quantity,
+                COUNT(*) AS records,
+                COUNT(DISTINCT supplier_id) AS suppliers,
+                SUM(CASE WHEN COALESCE(quantity,0) <= 0 THEN 1 ELSE 0 END) AS zero_items
+            FROM herbal_stock
+        ");
+    } catch (Exception $e) {
+        $herbalSummary = null;
+    }
+    if ($herbalSummary !== null) {
+        $sectionKey = 'herbal';
+        $rawWarehouseReport['sections_order'][] = $sectionKey;
+        $rawWarehouseReport['sections'][$sectionKey] = [
+            'title' => 'العطاره',
+            'records' => (int)($herbalSummary['records'] ?? 0),
+            'metrics' => [
+                ['label' => 'إجمالي مخزون العطاره', 'value' => (float)($herbalSummary['total_quantity'] ?? 0), 'unit' => 'كجم', 'decimals' => 3],
+                ['label' => 'عدد السجلات', 'value' => (int)($herbalSummary['records'] ?? 0), 'unit' => null, 'decimals' => 0],
+                ['label' => 'عدد الموردين', 'value' => (int)($herbalSummary['suppliers'] ?? 0), 'unit' => null, 'decimals' => 0]
+            ],
+            'top_items' => []
+        ];
+        $rawWarehouseReport['total_records'] += (int)($herbalSummary['records'] ?? 0);
+        $rawWarehouseReport['zero_items'] += (int)($herbalSummary['zero_items'] ?? 0);
+    }
+
+    // ترتيب ثابت لجميع أقسام المخزن مع تضمين الأقسام الفارغة
+    $canonicalSectionsOrder = ['turbines', 'herbal', 'honey', 'olive_oil', 'beeswax', 'nuts', 'sesame', 'date'];
+    $sectionTitles = [
+        'turbines' => 'التلبينات',
+        'herbal' => 'العطاره',
+        'honey' => 'العسل',
+        'olive_oil' => 'زيت الزيتون',
+        'beeswax' => 'شمع العسل',
+        'nuts' => 'المكسرات',
+        'sesame' => 'السمسم والطحينة',
+        'date' => 'البلح'
+    ];
+    $emptySection = [
+        'records' => 0,
+        'metrics' => [
+            ['label' => 'إجمالي المخزون', 'value' => 0, 'unit' => 'كجم', 'decimals' => 2],
+            ['label' => 'عدد السجلات', 'value' => 0, 'unit' => null, 'decimals' => 0],
+            ['label' => 'عدد الموردين', 'value' => 0, 'unit' => null, 'decimals' => 0]
+        ],
+        'top_items' => []
+    ];
+    foreach ($canonicalSectionsOrder as $secKey) {
+        if (!isset($rawWarehouseReport['sections'][$secKey])) {
+            $rawWarehouseReport['sections'][$secKey] = array_merge(
+                ['title' => $sectionTitles[$secKey] ?? $secKey],
+                $emptySection
+            );
+        }
+    }
+    $rawWarehouseReport['sections_order'] = $canonicalSectionsOrder;
     
     $rawWarehouseReport['sections_count'] = count($rawWarehouseReport['sections']);
     

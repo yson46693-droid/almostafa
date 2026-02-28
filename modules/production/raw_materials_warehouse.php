@@ -2234,6 +2234,36 @@ if ($herbalSummary) {
     $rawWarehouseReport['zero_items'] += (int)($herbalSummary['zero_items'] ?? 0);
 }
 
+// ترتيب ثابت لجميع أقسام المخزن كما في واجهة الصفحة، مع تضمين الأقسام الفارغة
+$canonicalSectionsOrder = ['turbines', 'herbal', 'honey', 'olive_oil', 'beeswax', 'nuts', 'sesame', 'date'];
+$sectionTitles = [
+    'turbines' => 'التلبينات',
+    'herbal' => 'العطاره',
+    'honey' => 'العسل',
+    'olive_oil' => 'زيت الزيتون',
+    'beeswax' => 'شمع العسل',
+    'nuts' => 'المكسرات',
+    'sesame' => 'السمسم والطحينة',
+    'date' => 'البلح'
+];
+$emptySection = [
+    'records' => 0,
+    'metrics' => [
+        ['label' => 'إجمالي المخزون', 'value' => 0, 'unit' => 'كجم', 'decimals' => 2],
+        ['label' => 'عدد السجلات', 'value' => 0, 'unit' => null, 'decimals' => 0],
+        ['label' => 'عدد الموردين', 'value' => 0, 'unit' => null, 'decimals' => 0]
+    ],
+    'top_items' => []
+];
+foreach ($canonicalSectionsOrder as $secKey) {
+    if (!isset($rawWarehouseReport['sections'][$secKey])) {
+        $rawWarehouseReport['sections'][$secKey] = array_merge(
+            ['title' => $sectionTitles[$secKey] ?? $secKey],
+            $emptySection
+        );
+    }
+}
+$rawWarehouseReport['sections_order'] = $canonicalSectionsOrder;
 $rawWarehouseReport['sections_count'] = count($rawWarehouseReport['sections']);
 
 // ======= معالجة العمليات (تم تعطيل كود إنشاء الجداول القديم) =======
@@ -6103,22 +6133,28 @@ if ($section === 'honey') {
                                                 <td class="text-center"><strong class="text-warning"><?php echo number_format($item['raw_quantity'], 2); ?></strong> كجم</td>
                                                 <td class="text-center"><strong class="text-success"><?php echo number_format($item['filtered_quantity'], 2); ?></strong> كجم</td>
                                                 <td class="text-center">
-                                                    <div class="btn-group-vertical btn-group-sm" role="group">
-                                                        <button class="btn btn-warning btn-sm mb-1" 
-                                                                onclick="filterHoney(<?php echo $item['id']; ?>, '<?php echo $supplierDisplayEscaped; ?>', '<?php echo $varietyDisplayEscaped; ?>', <?php echo $item['raw_quantity']; ?>)"
-                                                                <?php echo $item['raw_quantity'] <= 0 ? 'disabled' : ''; ?>>
-                                                            <i class="bi bi-funnel"></i> تصفية
-                                                        </button>
-                                                        <button class="btn btn-success btn-sm mb-1"
-                                                                onclick="openAddRemainingFilteredModal(<?php echo $item['id']; ?>, '<?php echo $supplierDisplayEscaped; ?>', '<?php echo $varietyDisplayEscaped; ?>', <?php echo $item['filtered_quantity']; ?>)"
-                                                        >
-                                                            <i class="bi bi-plus-circle"></i> إضافة باقي التصفية
-                                                        </button>
-                                                        <button class="btn btn-danger btn-sm"
-                                                                onclick="openHoneyDamageModal(<?php echo $item['id']; ?>, '<?php echo $supplierDisplayEscaped; ?>', '<?php echo $varietyDisplayEscaped; ?>', <?php echo $item['raw_quantity']; ?>, <?php echo $item['filtered_quantity']; ?>)"
-                                                                <?php echo ($item['raw_quantity'] <= 0 && $item['filtered_quantity'] <= 0) ? 'disabled' : ''; ?>>
-                                                            <i class="bi bi-exclamation-triangle"></i> تسجيل تالف
-                                                        </button>
+                                                    <div class="row g-1 justify-content-center">
+                                                        <div class="col-6 col-md-auto">
+                                                            <button class="btn btn-warning btn-sm w-100" 
+                                                                    onclick="filterHoney(<?php echo $item['id']; ?>, '<?php echo $supplierDisplayEscaped; ?>', '<?php echo $varietyDisplayEscaped; ?>', <?php echo $item['raw_quantity']; ?>)"
+                                                                    <?php echo $item['raw_quantity'] <= 0 ? 'disabled' : ''; ?>>
+                                                                <i class="bi bi-funnel"></i> تصفية
+                                                            </button>
+                                                        </div>
+                                                        <div class="col-6 col-md-auto">
+                                                            <button class="btn btn-success btn-sm w-100"
+                                                                    onclick="openAddRemainingFilteredModal(<?php echo $item['id']; ?>, '<?php echo $supplierDisplayEscaped; ?>', '<?php echo $varietyDisplayEscaped; ?>', <?php echo $item['filtered_quantity']; ?>)"
+                                                            >
+                                                                <i class="bi bi-plus-circle"></i> إضافة باقي التصفية
+                                                            </button>
+                                                        </div>
+                                                        <div class="col-6 col-md-auto">
+                                                            <button class="btn btn-danger btn-sm w-100"
+                                                                    onclick="openHoneyDamageModal(<?php echo $item['id']; ?>, '<?php echo $supplierDisplayEscaped; ?>', '<?php echo $varietyDisplayEscaped; ?>', <?php echo $item['raw_quantity']; ?>, <?php echo $item['filtered_quantity']; ?>)"
+                                                                    <?php echo ($item['raw_quantity'] <= 0 && $item['filtered_quantity'] <= 0) ? 'disabled' : ''; ?>>
+                                                                <i class="bi bi-exclamation-triangle"></i> تسجيل تالف
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -10749,6 +10785,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (reportButton) {
         reportButton.addEventListener('click', async () => {
+            const isReady = reportButton.getAttribute('data-report-ready') === '1';
+            if (isReady && reportModalElement && typeof bootstrap !== 'undefined') {
+                const instance = bootstrap.Modal.getOrCreateInstance(reportModalElement);
+                instance.show();
+                return;
+            }
+
             // Disable button and show loading state
             const originalText = reportButton.innerHTML;
             reportButton.disabled = true;

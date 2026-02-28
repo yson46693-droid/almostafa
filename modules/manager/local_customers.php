@@ -2348,6 +2348,7 @@ document.addEventListener('DOMContentLoaded', function() {
     } else {
         initTableActionsDropdowns();
     }
+    window.reinitTableActionsDropdownsInBody = initTableActionsDropdowns;
 })();
 </script>
 

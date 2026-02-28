@@ -201,7 +201,10 @@
             });
 
             updatePagination(pagination);
-            // على الموبايل: تهيئة قوائم الإجراءات لعدم قص القائمة (strategy: fixed)
+            // تهيئة قوائم الإجراءات (نقل القائمة إلى body على الموبايل) بعد تحديث الجدول بالبحث
+            if (typeof window.reinitTableActionsDropdownsInBody === 'function') {
+                setTimeout(function() { window.reinitTableActionsDropdownsInBody(); }, 0);
+            }
             if (typeof window.reinitLocalCustomersTableActionsDropdowns === 'function') {
                 setTimeout(function() { window.reinitLocalCustomersTableActionsDropdowns(); }, 0);
             }
