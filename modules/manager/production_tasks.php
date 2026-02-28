@@ -2218,37 +2218,43 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                                         ?>
                                     </td>
                                     <td>
-                                        <div class="d-flex flex-column gap-1">
-                                            <div class="d-flex gap-1 flex-nowrap">
+                                        <div class="dropdown">
+                                            <button type="button" class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" title="إجراءات">
+                                                <i class="bi bi-three-dots-vertical"></i> إجراءات
+                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-end">
                                                 <?php if ($canPrintTasks): ?>
-                                                <a href="<?php echo getRelativeUrl('print_task_receipt.php?id=' . (int) $task['id']); ?>" target="_blank" class="btn btn-outline-primary btn-sm btn-icon-only" title="طباعة الاوردر">
-                                                    <i class="bi bi-printer"></i>
-                                                </a>
+                                                <li>
+                                                    <a class="dropdown-item" href="<?php echo getRelativeUrl('print_task_receipt.php?id=' . (int) $task['id']); ?>" target="_blank">
+                                                        <i class="bi bi-printer me-1"></i>طباعة الاوردر
+                                                    </a>
+                                                </li>
                                                 <?php endif; ?>
                                                 <?php if ($isAccountant || $isManager): ?>
-                                                <button type="button" class="btn btn-outline-info btn-sm btn-icon-only" onclick="openChangeStatusModal(<?php echo (int)$task['id']; ?>, '<?php echo htmlspecialchars($task['status'], ENT_QUOTES, 'UTF-8'); ?>')" title="تغيير حالة الطلب">
-                                                    <i class="bi bi-gear"></i>
-                                                </button>
-                                                <?php endif; ?>
-                                            </div>
-                                            <div class="d-flex gap-1 flex-nowrap">
-                                                <?php if ($isAccountant || $isManager): ?>
-                                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="openEditTaskModal(<?php echo (int)$task['id']; ?>)" title="تعديل الاوردر">
-                                                    <i class="bi bi-pencil-square me-1"></i>
-                                                </button>
-                                                <?php endif; ?>
-                                                <?php if (in_array($task['status'] ?? '', ['completed', 'delivered', 'returned'], true)): ?>
-                                                <span class="text-muted small align-self-center">—</span>
-                                                <?php else: ?>
-                                                <form method="post" class="d-inline" onsubmit="return confirm('هل أنت متأكد من حذف هذه المهمة؟ سيتم حذفها نهائياً ولن تظهر في الجدول.');">
-                                                    <input type="hidden" name="action" value="cancel_task">
-                                                    <input type="hidden" name="task_id" value="<?php echo (int)$task['id']; ?>">
-                                                    <button type="submit" class="btn btn-outline-danger btn-sm" title="حذف المهمة">
-                                                        <i class="bi bi-trash"></i>
+                                                <li>
+                                                    <button type="button" class="dropdown-item" onclick="openChangeStatusModal(<?php echo (int)$task['id']; ?>, '<?php echo htmlspecialchars($task['status'], ENT_QUOTES, 'UTF-8'); ?>')">
+                                                        <i class="bi bi-gear me-1"></i>تغيير حالة الطلب
                                                     </button>
-                                                </form>
+                                                </li>
+                                                <li>
+                                                    <button type="button" class="dropdown-item" onclick="openEditTaskModal(<?php echo (int)$task['id']; ?>)">
+                                                        <i class="bi bi-pencil-square me-1"></i>تعديل الاوردر
+                                                    </button>
+                                                </li>
                                                 <?php endif; ?>
-                                            </div>
+                                                <?php if (!in_array($task['status'] ?? '', ['completed', 'delivered', 'returned'], true)): ?>
+                                                <li><hr class="dropdown-divider"></li>
+                                                <li>
+                                                    <form method="post" class="d-inline" onsubmit="return confirm('هل أنت متأكد من حذف هذه المهمة؟ سيتم حذفها نهائياً ولن تظهر في الجدول.');">
+                                                        <input type="hidden" name="action" value="cancel_task">
+                                                        <input type="hidden" name="task_id" value="<?php echo (int)$task['id']; ?>">
+                                                        <button type="submit" class="dropdown-item text-danger">
+                                                            <i class="bi bi-trash me-1"></i>حذف المهمة
+                                                        </button>
+                                                    </form>
+                                                </li>
+                                                <?php endif; ?>
+                                            </ul>
                                         </div>
                                     </td>
                                 </tr>
