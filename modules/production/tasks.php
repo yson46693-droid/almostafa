@@ -1650,8 +1650,6 @@ function tasksHtml(string $value): string
                                 <option value="cash_customer" <?php echo $filterTaskType === 'cash_customer' ? 'selected' : ''; ?>>عميل نقدي</option>
                                 <option value="telegraph" <?php echo $filterTaskType === 'telegraph' ? 'selected' : ''; ?>>تليجراف</option>
                                 <option value="shipping_company" <?php echo $filterTaskType === 'shipping_company' ? 'selected' : ''; ?>>شركة شحن</option>
-                                <option value="general" <?php echo $filterTaskType === 'general' ? 'selected' : ''; ?>>مهمة عامة</option>
-                                <option value="production" <?php echo $filterTaskType === 'production' ? 'selected' : ''; ?>>إنتاج منتج</option>
                             </select>
                         </div>
                         <div class="col-6 col-md-4 col-lg-2">
