@@ -3631,7 +3631,7 @@ $hasShippingCompanies = !empty($shippingCompanies);
     </div>
 </div>
 
-<div class="card shadow-sm mb-4">
+<div class="card shadow-sm mb-4" id="shippingCompaniesCard">
     <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
         <h5 class="mb-0">شركات الشحن</h5>
         <button type="button" class="btn btn-primary btn-sm" onclick="showAddShippingCompanyModal()" title="إضافة شركة شحن">
@@ -3657,6 +3657,10 @@ $hasShippingCompanies = !empty($shippingCompanies);
                         <?php foreach ($shippingCompanies as $company):
                             $companyBalance = (float)($company['balance'] ?? 0);
                             $balanceFormatted = formatCurrency($companyBalance);
+                            $cid = (int)$company['id'];
+                            $cname = htmlspecialchars($company['name'], ENT_QUOTES, 'UTF-8');
+                            $cnameAttr = htmlspecialchars(json_encode($company['name'], JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
+                            $balanceFormattedAttr = htmlspecialchars(json_encode($balanceFormatted, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
                         ?>
                             <tr>
                                 <td><?php echo htmlspecialchars($company['name']); ?></td>
@@ -3677,12 +3681,12 @@ $hasShippingCompanies = !empty($shippingCompanies);
                                             <i class="bi bi-gear me-1"></i>إجراءات
                                         </button>
                                         <ul class="dropdown-menu dropdown-menu-end">
-                                            <li><button type="button" class="dropdown-item w-100 text-start border-0 bg-transparent" onclick="showShippingCompanyStatement(<?php echo (int)$company['id']; ?>, <?php echo json_encode($company['name'], JSON_UNESCAPED_UNICODE); ?>);"><i class="bi bi-journal-text me-2"></i>كشف حساب</button></li>
-                                            <li><button type="button" class="dropdown-item w-100 text-start border-0 bg-transparent" onclick="showCompanyPaperInvoicesByIdName(<?php echo (int)$company['id']; ?>, <?php echo json_encode($company['name'], JSON_UNESCAPED_UNICODE); ?>);"><i class="bi bi-receipt-cutoff me-2"></i>فواتير ورقية</button></li>
-                                            <li><button type="button" class="dropdown-item w-100 text-start border-0 bg-transparent" onclick="showEditBalanceByIdName(<?php echo (int)$company['id']; ?>, <?php echo json_encode($company['name'], JSON_UNESCAPED_UNICODE); ?>, <?php echo $companyBalance; ?>);"><i class="bi bi-pencil me-2"></i>تعديل الديون</button></li>
-                                            <li><button type="button" class="dropdown-item w-100 text-start border-0 bg-transparent <?php echo $companyBalance <= 0 ? 'disabled' : ''; ?>" onclick="if (!this.classList.contains('disabled')) showCollectByIdName(<?php echo (int)$company['id']; ?>, <?php echo json_encode($company['name'], JSON_UNESCAPED_UNICODE); ?>, <?php echo $companyBalance; ?>, <?php echo json_encode($balanceFormatted, JSON_UNESCAPED_UNICODE); ?>);"><i class="bi bi-cash-coin me-2"></i>تحصيل</button></li>
+                                            <li><button type="button" class="dropdown-item w-100 text-start border-0 bg-transparent js-shipping-company-action" data-action="statement" data-company-id="<?php echo $cid; ?>" data-company-name="<?php echo $cnameAttr; ?>"><i class="bi bi-journal-text me-2"></i>كشف حساب</button></li>
+                                            <li><button type="button" class="dropdown-item w-100 text-start border-0 bg-transparent js-shipping-company-action" data-action="paper-invoices" data-company-id="<?php echo $cid; ?>" data-company-name="<?php echo $cnameAttr; ?>"><i class="bi bi-receipt-cutoff me-2"></i>فواتير ورقية</button></li>
+                                            <li><button type="button" class="dropdown-item w-100 text-start border-0 bg-transparent js-shipping-company-action" data-action="edit-balance" data-company-id="<?php echo $cid; ?>" data-company-name="<?php echo $cnameAttr; ?>" data-balance="<?php echo (float)$companyBalance; ?>"><i class="bi bi-pencil me-2"></i>تعديل الديون</button></li>
+                                            <li><button type="button" class="dropdown-item w-100 text-start border-0 bg-transparent js-shipping-company-action <?php echo $companyBalance <= 0 ? 'disabled' : ''; ?>" data-action="collect" data-company-id="<?php echo $cid; ?>" data-company-name="<?php echo $cnameAttr; ?>" data-balance="<?php echo (float)$companyBalance; ?>" data-balance-formatted="<?php echo $balanceFormattedAttr; ?>"><i class="bi bi-cash-coin me-2"></i>تحصيل</button></li>
                                             <li><hr class="dropdown-divider"></li>
-                                            <li><button type="button" class="dropdown-item w-100 text-start border-0 bg-transparent <?php echo $companyBalance <= 0 ? 'disabled' : ''; ?>" onclick="if (!this.classList.contains('disabled')) showDeductFromShippingCompany(<?php echo (int)$company['id']; ?>, <?php echo json_encode($company['name'], JSON_UNESCAPED_UNICODE); ?>, <?php echo $companyBalance; ?>);"><i class="bi bi-dash-circle me-2"></i>خصم</button></li>
+                                            <li><button type="button" class="dropdown-item w-100 text-start border-0 bg-transparent js-shipping-company-action <?php echo $companyBalance <= 0 ? 'disabled' : ''; ?>" data-action="deduct" data-company-id="<?php echo $cid; ?>" data-company-name="<?php echo $cnameAttr; ?>" data-balance="<?php echo (float)$companyBalance; ?>"><i class="bi bi-dash-circle me-2"></i>خصم</button></li>
                                         </ul>
                                     </div>
                                 </td>
@@ -4851,6 +4855,32 @@ function showDeductFromShippingCompany(companyId, companyName, balance) {
         }
     }
 }
+
+(function() {
+    function parseCompanyName(val) {
+        if (val == null || val === '') return '';
+        try { return JSON.parse(val); } catch (e) { return val; }
+    }
+    var container = document.getElementById('shippingCompaniesCard');
+    if (!container) return;
+    container.addEventListener('click', function(e) {
+        var btn = e.target && e.target.closest && e.target.closest('.js-shipping-company-action');
+        if (!btn || btn.classList.contains('disabled')) return;
+        e.preventDefault();
+        var action = btn.getAttribute('data-action');
+        var companyId = parseInt(btn.getAttribute('data-company-id'), 10);
+        var companyName = parseCompanyName(btn.getAttribute('data-company-name'));
+        var balance = parseFloat(btn.getAttribute('data-balance')) || 0;
+        var balanceFormatted = parseCompanyName(btn.getAttribute('data-balance-formatted')) || (balance + ' ج.م');
+        setTimeout(function() {
+            if (action === 'statement') showShippingCompanyStatement(companyId, companyName);
+            else if (action === 'paper-invoices') showCompanyPaperInvoicesByIdName(companyId, companyName);
+            else if (action === 'edit-balance') showEditBalanceByIdName(companyId, companyName, balance);
+            else if (action === 'collect') showCollectByIdName(companyId, companyName, balance, balanceFormatted);
+            else if (action === 'deduct') showDeductFromShippingCompany(companyId, companyName, balance);
+        }, 0);
+    }, true);
+})();
 
 function closeDeductFromShippingCard() {
     var card = document.getElementById('deductFromShippingCompanyCard');
