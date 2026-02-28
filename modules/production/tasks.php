@@ -1709,7 +1709,7 @@ function tasksHtml(string $value): string
                                 <?php endif; ?>
                                 <th>نوع الاوردر</th>
                                 <th>الحالة</th>
-                                <th>تاريخ التسليم</th>
+                                <th>التسليم</th>
                                 <th style="width: 180px;">الإجراءات</th>
                             </tr>
                         </thead>
@@ -1789,7 +1789,7 @@ function tasksHtml(string $value): string
                                     <td class="task-status-cell"><span class="badge bg-<?php echo $statusClass; ?>"><?php echo tasksHtml($statusLabel); ?></span></td>
                                     <td>
                                         <?php if (!empty($task['due_date'])): ?>
-                                            <?php echo tasksHtml(date('Y-m-d', strtotime((string) $task['due_date']))); ?>
+                                            <?php echo tasksHtml(date('d-M', strtotime((string) $task['due_date']))); ?>
                                         <?php else: ?>
                                             <span class="text-muted">-</span>
                                         <?php endif; ?>
