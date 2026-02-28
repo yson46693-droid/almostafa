@@ -1183,6 +1183,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['act
     exit;
 }
 
+// إيصال مختصر للمهمة: رقم الأوردر (إن وُجد) + المنتجات والكميات فقط
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get_task_receipt' && isset($_GET['task_id'])) {
+    $tid = (int)$_GET['task_id'];
+    if ($tid > 0) {
+        $task = $db->queryOne("SELECT id, related_type, related_id, notes, product_name, quantity, unit FROM tasks WHERE id = ?", [$tid]);
+        if ($task) {
+            $orderNumber = null;
+            $items = [];
+            $hasOrder = !empty($task['related_type']) && (string)$task['related_type'] === 'customer_order' && !empty($task['related_id']);
+            $orderId = $hasOrder ? (int)$task['related_id'] : 0;
+            if ($orderId > 0) {
+                $orderTableCheck = $db->queryOne("SHOW TABLES LIKE 'customer_orders'");
+                if (!empty($orderTableCheck)) {
+                    $order = $db->queryOne("SELECT order_number FROM customer_orders WHERE id = ?", [$orderId]);
+                    if ($order) {
+                        $orderNumber = $order['order_number'] ?? (string)$orderId;
+                        $itemsTable = 'order_items';
+                        $itemsCheck = $db->queryOne("SHOW TABLES LIKE 'customer_order_items'");
+                        if (!empty($itemsCheck)) $itemsTable = 'customer_order_items';
+                        $rows = $db->query("SELECT oi.*, COALESCE(oi.product_name, p.name) AS display_name FROM {$itemsTable} oi LEFT JOIN products p ON oi.product_id = p.id WHERE oi.order_id = ? ORDER BY oi.id", [$orderId]);
+                        foreach ($rows as $row) {
+                            $items[] = ['product_name' => $row['display_name'] ?? $row['product_name'] ?? '-', 'quantity' => $row['quantity'] ?? 0, 'unit' => $row['unit'] ?? 'قطعة'];
+                        }
+                    }
+                }
+            }
+            if (empty($items)) {
+                $notes = (string)($task['notes'] ?? '');
+                $products = [];
+                if (preg_match('/\[PRODUCTS_JSON\]\s*:\s*(.+?)(?=\s*\n\s*\n|\[ASSIGNED_WORKERS_IDS\]|$)/s', $notes, $m)) {
+                    $decoded = json_decode(trim($m[1]), true);
+                    if (is_array($decoded)) {
+                        foreach ($decoded as $p) {
+                            $products[] = ['name' => trim((string)($p['name'] ?? '')), 'quantity' => isset($p['quantity']) ? (float)$p['quantity'] : null, 'unit' => trim((string)($p['unit'] ?? 'قطعة')) ?: 'قطعة'];
+                        }
+                    }
+                }
+                if (empty($products) && preg_match_all('/المنتج:\s*([^\n]+?)(?:\s*-\s*الكمية:\s*([0-9.]+))?/u', $notes, $matches, PREG_SET_ORDER)) {
+                    foreach ($matches as $m) {
+                        $products[] = ['name' => trim($m[1]), 'quantity' => isset($m[2]) ? (float)$m[2] : null, 'unit' => trim((string)($task['unit'] ?? 'قطعة')) ?: 'قطعة'];
+                    }
+                }
+                if (empty($products)) {
+                    $pn = trim((string)($task['product_name'] ?? ''));
+                    $qty = isset($task['quantity']) ? (float)$task['quantity'] : null;
+                    if ($pn !== '' || $qty !== null) {
+                        $products[] = ['name' => $pn, 'quantity' => $qty, 'unit' => trim((string)($task['unit'] ?? 'قطعة')) ?: 'قطعة'];
+                    }
+                }
+                foreach ($products as $p) {
+                    $items[] = ['product_name' => $p['name'] ?: '-', 'quantity' => $p['quantity'] ?? 0, 'unit' => $p['unit'] ?? 'قطعة'];
+                }
+            }
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => true, 'order_number' => $orderNumber, 'task_id' => (int)$task['id'], 'items' => $items], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+    }
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['success' => false]);
+    exit;
+}
+
 // قراءة رسائل النجاح/الخطأ من session بعد redirect
 applyPRGPattern($error, $success);
 
@@ -1756,16 +1819,6 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                 </div>
             </a>
         </div>
-        <div class="col-4 col-sm-4 col-md-2">
-            <a href="?page=production_tasks&status=cancelled" class="text-decoration-none">
-                <div class="card <?php echo $statusFilter === 'cancelled' ? 'bg-danger text-white' : 'border-danger'; ?> h-100">
-                    <div class="card-body text-center py-2 px-2">
-                        <div class="<?php echo $statusFilter === 'cancelled' ? 'text-white-50' : 'text-muted'; ?> small mb-1">ملغاة</div>
-                        <div class="fs-5 <?php echo $statusFilter === 'cancelled' ? 'text-white' : 'text-danger'; ?> fw-semibold"><?php echo $stats['cancelled']; ?></div>
-                    </div>
-                </div>
-            </a>
-        </div>
     </div>
 
     <button class="btn btn-primary mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#createTaskFormCollapse" aria-expanded="false" aria-controls="createTaskFormCollapse">
@@ -2141,20 +2194,11 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                                                 echo '<div class="text-muted small"><i class="bi bi-person me-1"></i>من: ' . htmlspecialchars($task['creator_name']) . '</div>';
                                             }
                                         }
-                                        // عرض اسم المنتج المستخرج من notes (تم استخراجه مسبقاً في loop)
-                                        if (!empty($task['extracted_product_name'])) {
-                                            echo '<div class="text-muted small"><i class="bi bi-box me-1"></i>المنتج: ' . htmlspecialchars($task['extracted_product_name']) . '</div>';
-                                        }
                                         ?>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm btn-icon-only mt-1" onclick="openTaskReceiptModal(<?php echo (int)$task['id']; ?>)" title="عرض إيصال مختصر (المنتجات والكميات)">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
                                         <?php
-                                        $hasOrder = !empty($task['related_type']) && (string)$task['related_type'] === 'customer_order' && !empty($task['related_id']);
-                                        $orderIdForBtn = $hasOrder ? (int)$task['related_id'] : 0;
-                                        if ($orderIdForBtn > 0):
-                                        ?>
-                                            <button type="button" class="btn btn-outline-primary btn-sm mt-1" onclick="openOrderReceiptModal(<?php echo $orderIdForBtn; ?>)" title="عرض تفاصيل الأوردر">
-                                                <i class="bi bi-receipt me-1"></i>عرض الأوردر
-                                            </button>
-                                        <?php endif; ?>
                                     </td>
                                     <td>
                                         <?php
@@ -2407,6 +2451,25 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
     </div>
 </div>
 
+<!-- مودال إيصال مختصر (رقم الأوردر + المنتجات والكميات فقط) -->
+<div class="modal fade" id="taskReceiptModal" tabindex="-1" aria-labelledby="taskReceiptModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-sm modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2 bg-light border-bottom">
+                <h6 class="modal-title" id="taskReceiptModalLabel"><i class="bi bi-eye me-1"></i>إيصال</h6>
+                <button type="button" class="btn-close btn-sm" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body p-3" id="taskReceiptContent">
+                <div class="text-center py-3 text-muted" id="taskReceiptLoading">
+                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                    <p class="mt-2 mb-0 small">جاري التحميل...</p>
+                </div>
+                <div id="taskReceiptBody" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <style>
 .search-wrap.position-relative { position: relative; }
 .search-dropdown-task { position: absolute; left: 0; right: 0; top: 100%; z-index: 1050; max-height: 220px; overflow-y: auto; background: #fff; border: 1px solid #dee2e6; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); margin-top: 2px; }
@@ -2565,6 +2628,46 @@ window.openOrderReceiptModal = function(orderId) {
         .catch(function() {
             loadingEl.style.display = 'none';
             bodyEl.innerHTML = '<p class="text-danger mb-0">حدث خطأ أثناء تحميل تفاصيل الأوردر.</p>';
+            bodyEl.style.display = 'block';
+        });
+};
+
+window.openTaskReceiptModal = function(taskId) {
+    var modalEl = document.getElementById('taskReceiptModal');
+    var titleEl = document.getElementById('taskReceiptModalLabel');
+    var loadingEl = document.getElementById('taskReceiptLoading');
+    var bodyEl = document.getElementById('taskReceiptBody');
+    if (!modalEl || !titleEl || !loadingEl || !bodyEl) return;
+    loadingEl.style.display = 'block';
+    bodyEl.style.display = 'none';
+    bodyEl.innerHTML = '';
+    var modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modalInstance.show();
+    var params = new URLSearchParams(window.location.search);
+    params.set('action', 'get_task_receipt');
+    params.set('task_id', String(taskId));
+    fetch('?' + params.toString())
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            loadingEl.style.display = 'none';
+            if (data.success && data.items) {
+                var title = data.order_number ? ('إيصال أوردر #' + data.order_number) : ('مهمة #' + data.task_id);
+                titleEl.innerHTML = '<i class="bi bi-eye me-1"></i>' + title;
+                var rows = (data.items || []).map(function(it) {
+                    var qty = typeof it.quantity === 'number' ? it.quantity : parseFloat(it.quantity) || 0;
+                    var un = (it.unit || 'قطعة').trim();
+                    return '<tr><td>' + (it.product_name || '-') + '</td><td class="text-end">' + qty + ' ' + un + '</td></tr>';
+                }).join('');
+                bodyEl.innerHTML = '<table class="table table-sm table-bordered mb-0"><thead class="table-light"><tr><th>المنتج</th><th class="text-end">الكمية</th></tr></thead><tbody>' + rows + '</tbody></table>';
+                bodyEl.style.display = 'block';
+            } else {
+                bodyEl.innerHTML = '<p class="text-muted small mb-0">لا توجد بيانات للعرض.</p>';
+                bodyEl.style.display = 'block';
+            }
+        })
+        .catch(function() {
+            loadingEl.style.display = 'none';
+            bodyEl.innerHTML = '<p class="text-danger small mb-0">حدث خطأ أثناء التحميل.</p>';
             bodyEl.style.display = 'block';
         });
 };
