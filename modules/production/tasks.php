@@ -1483,7 +1483,20 @@ function tasksHtml(string $value): string
     return htmlspecialchars(tasksSafeString($value), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 ?>
-
+<style>
+/* قائمة إجراءات المهام: قابلة للتمرير ومرئية فوق الجدول على الموبايل */
+.task-actions-dropdown-menu-inbody {
+    max-height: 70vh !important;
+    overflow-y: auto !important;
+    z-index: 1060 !important;
+}
+@media (max-width: 768px) {
+    .dashboard-table-wrapper .dropdown-menu {
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+}
+</style>
 <div class="container-fluid">
     <?php foreach ($errorMessages as $message): ?>
         <div class="alert alert-danger alert-dismissible fade show" id="errorAlert" role="alert">
@@ -1824,8 +1837,8 @@ function tasksHtml(string $value): string
                                                 <i class="bi bi-three-dots-vertical me-1"></i>إجراءات
                                             </button>
                                             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="taskActionsDropdown<?php echo $taskIdInt; ?>">
-                                                <?php if ($hasCustomerPhone): $telHref = 'tel:' . preg_replace('/[^\d+]/', '', $taskCustomerPhone); ?>
-                                                    <li><a class="dropdown-item" href="<?php echo tasksHtml($telHref); ?>"><i class="bi bi-telephone me-2"></i>الاتصال بالعميل</a></li>
+                                                <?php if ($isManager || $isProduction || $isDriver): ?>
+                                                    <li><a class="dropdown-item" href="<?php echo getRelativeUrl('print_task_receipt.php?id=' . $taskIdInt); ?>" target="_blank"><i class="bi bi-printer me-2"></i>طباعة إيصال</a></li>
                                                     <li><hr class="dropdown-divider"></li>
                                                 <?php endif; ?>
                                                 <?php if ($isProduction && $isTaskForProduction && in_array($task['status'], ['pending', 'received', 'in_progress'])): ?>
@@ -1839,13 +1852,12 @@ function tasksHtml(string $value): string
                                                     <li><button type="button" class="dropdown-item" onclick="submitTaskAction('return_task', <?php echo $taskIdInt; ?>)"><i class="bi bi-arrow-return-left me-2"></i>تم الارجاع</button></li>
                                                 <?php endif; ?>
                                                 <?php if ($isManager): ?>
-                                                    <li><hr class="dropdown-divider"></li>
                                                     <li><button type="button" class="dropdown-item" onclick="viewTask(<?php echo $taskIdInt; ?>)"><i class="bi bi-eye me-2"></i>عرض</button></li>
                                                     <li><button type="button" class="dropdown-item text-danger" onclick="confirmDeleteTask(<?php echo $taskIdInt; ?>)"><i class="bi bi-trash me-2"></i>حذف</button></li>
                                                 <?php endif; ?>
-                                                <?php if ($isManager || $isProduction || $isDriver): ?>
+                                                <?php if ($hasCustomerPhone): $telHref = 'tel:' . preg_replace('/[^\d+]/', '', $taskCustomerPhone); ?>
                                                     <li><hr class="dropdown-divider"></li>
-                                                    <li><a class="dropdown-item" href="<?php echo getRelativeUrl('print_task_receipt.php?id=' . $taskIdInt); ?>" target="_blank"><i class="bi bi-printer me-2"></i>طباعة إيصال</a></li>
+                                                    <li><a class="dropdown-item" href="<?php echo tasksHtml($telHref); ?>"><i class="bi bi-telephone me-2"></i>الاتصال بالعميل</a></li>
                                                 <?php endif; ?>
                                             </ul>
                                         </div>
@@ -2736,6 +2748,56 @@ function tasksHtml(string $value): string
 
     if (quantityInput) {
         quantityInput.addEventListener('input', updateProductionTitle);
+    }
+})();
+</script>
+
+<!-- نقل قائمة إجراءات المهام إلى body على الموبايل لتفادي القص داخل الجدول -->
+<script>
+(function() {
+    'use strict';
+    function initTaskActionsDropdowns() {
+        var wrapper = document.querySelector('.dashboard-table-wrapper');
+        if (!wrapper) return;
+        var dropdowns = wrapper.querySelectorAll('.dropdown');
+        dropdowns.forEach(function(dropdownEl) {
+            if (dropdownEl._taskActionsInit) return;
+            dropdownEl._taskActionsInit = true;
+            var toggle = dropdownEl.querySelector('[data-bs-toggle="dropdown"]');
+            var menu = dropdownEl.querySelector('.dropdown-menu');
+            if (!toggle || !menu) return;
+            dropdownEl.addEventListener('show.bs.dropdown', function() {
+                var rect = toggle.getBoundingClientRect();
+                var menuHeight = Math.min(menu.scrollHeight, window.innerHeight * 0.7);
+                var spaceBelow = window.innerHeight - rect.bottom;
+                var openAbove = spaceBelow < menuHeight && rect.top > spaceBelow;
+                menu.classList.add('task-actions-dropdown-menu-inbody');
+                document.body.appendChild(menu);
+                var style = menu.style;
+                style.position = 'fixed';
+                if (document.documentElement.dir === 'rtl') {
+                    style.right = (window.innerWidth - rect.right) + 'px';
+                    style.left = 'auto';
+                } else {
+                    style.left = rect.left + 'px';
+                }
+                style.top = openAbove ? (rect.top - menuHeight) + 'px' : rect.bottom + 'px';
+                style.minWidth = rect.width + 'px';
+                style.maxHeight = '70vh';
+                style.overflowY = 'auto';
+                style.zIndex = '1060';
+            });
+            dropdownEl.addEventListener('hide.bs.dropdown', function() {
+                menu.classList.remove('task-actions-dropdown-menu-inbody');
+                menu.removeAttribute('style');
+                dropdownEl.appendChild(menu);
+            });
+        });
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initTaskActionsDropdowns);
+    } else {
+        initTaskActionsDropdowns();
     }
 })();
 </script>
