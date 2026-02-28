@@ -190,13 +190,18 @@ $backUrl = '?page=attendance_management&month=' . urlencode($selectedMonth);
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
 <?php endif; ?>
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2><i class="bi bi-calendar-check me-2"></i>متابعة الحضور والانصراف</h2>
-    <?php if ($selectedUserId > 0 && $selectedUserStats): ?>
-        <a href="<?php echo htmlspecialchars($backUrl); ?>" class="btn btn-back">
-            <i class="bi bi-arrow-right me-2"></i><span>رجوع</span>
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <h2 class="mb-0"><i class="bi bi-calendar-check me-2"></i>متابعة الحضور والانصراف</h2>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <a href="<?php echo htmlspecialchars(getRelativeUrl('print_attendance_monthly_summary.php?month=' . urlencode($selectedMonth))); ?>" target="_blank" class="btn btn-outline-primary btn-sm" title="طباعة تقرير الحضور الشهري المجمع لجميع العمال">
+            <i class="bi bi-printer me-1"></i><span>طباعة التقرير الشهري المجمع</span>
         </a>
-    <?php endif; ?>
+        <?php if ($selectedUserId > 0 && $selectedUserStats): ?>
+            <a href="<?php echo htmlspecialchars($backUrl); ?>" class="btn btn-back">
+                <i class="bi bi-arrow-right me-2"></i><span>رجوع</span>
+            </a>
+        <?php endif; ?>
+    </div>
 </div>
 
 <!-- فلترة -->
