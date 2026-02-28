@@ -2042,31 +2042,23 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                                 <i class="bi bi-search me-1"></i>بحث
                             </button>
                         </div>
-                        <div class="col-auto">
-                            <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#recentTasksAdvancedSearch" aria-expanded="false" aria-controls="recentTasksAdvancedSearch">
-                                <i class="bi bi-funnel me-1"></i>بحث متقدم
-                            </button>
-                        </div>
                         <?php if ($filterTaskId !== '' || $filterCustomer !== '' || $filterOrderId !== '' || $filterTaskType !== '' || $filterDueFrom !== '' || $filterDueTo !== '' || $filterSearchText !== ''): ?>
                         <div class="col-auto">
                             <a href="?<?php echo $statusFilter !== '' ? 'page=production_tasks&status=' . rawurlencode($statusFilter) : 'page=production_tasks'; ?>" class="btn btn-outline-danger btn-sm">إزالة الفلتر</a>
                         </div>
                         <?php endif; ?>
                     </div>
-                    <div class="collapse <?php echo ($filterTaskId !== '' || $filterCustomer !== '' || $filterOrderId !== '' || $filterTaskType !== '' || $filterDueFrom !== '' || $filterDueTo !== '') ? 'show' : ''; ?>" id="recentTasksAdvancedSearch">
-                        <div class="row g-2 pt-2 border-top mt-2">
+                    <div class="pt-2 border-top mt-2">
+                        <div class="row g-2">
                             <div class="col-6 col-md-4 col-lg-2">
-                                <label class="form-label small mb-0">رقم الطلب</label>
+                                <label class="form-label small mb-0">رقم الاوردر</label>
                                 <input type="text" name="task_id" class="form-control form-control-sm" placeholder="#" value="<?php echo htmlspecialchars($filterTaskId, ENT_QUOTES, 'UTF-8'); ?>">
                             </div>
                             <div class="col-6 col-md-4 col-lg-2">
                                 <label class="form-label small mb-0">اسم العميل / هاتف</label>
                                 <input type="text" name="search_customer" class="form-control form-control-sm" placeholder="اسم أو رقم" value="<?php echo htmlspecialchars($filterCustomer, ENT_QUOTES, 'UTF-8'); ?>">
                             </div>
-                            <div class="col-6 col-md-4 col-lg-2">
-                                <label class="form-label small mb-0">رقم الأوردر</label>
-                                <input type="text" name="search_order_id" class="form-control form-control-sm" placeholder="رقم الأوردر" value="<?php echo htmlspecialchars($filterOrderId, ENT_QUOTES, 'UTF-8'); ?>">
-                            </div>
+                           
                             <div class="col-6 col-md-4 col-lg-2">
                                 <label class="form-label small mb-0">نوع الاوردر</label>
                                 <select name="task_type" class="form-select form-select-sm">
@@ -2075,8 +2067,6 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                                     <option value="cash_customer" <?php echo $filterTaskType === 'cash_customer' ? 'selected' : ''; ?>>عميل نقدي</option>
                                     <option value="telegraph" <?php echo $filterTaskType === 'telegraph' ? 'selected' : ''; ?>>تليجراف</option>
                                     <option value="shipping_company" <?php echo $filterTaskType === 'shipping_company' ? 'selected' : ''; ?>>شركة شحن</option>
-                                    <option value="general" <?php echo $filterTaskType === 'general' ? 'selected' : ''; ?>>مهمة عامة</option>
-                                    <option value="production" <?php echo $filterTaskType === 'production' ? 'selected' : ''; ?>>إنتاج منتج</option>
                                 </select>
                             </div>
                             <div class="col-6 col-md-4 col-lg-2">
@@ -2229,7 +2219,7 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                                     </td>
                                     <td>
                                         <div class="d-flex flex-column gap-1">
-                                            <div class="d-flex gap-1 flex-wrap">
+                                            <div class="d-flex gap-1 flex-nowrap">
                                                 <?php if ($canPrintTasks): ?>
                                                 <a href="<?php echo getRelativeUrl('print_task_receipt.php?id=' . (int) $task['id']); ?>" target="_blank" class="btn btn-outline-primary btn-sm btn-icon-only" title="طباعة الاوردر">
                                                     <i class="bi bi-printer"></i>
@@ -2241,10 +2231,10 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                                                 </button>
                                                 <?php endif; ?>
                                             </div>
-                                            <div class="d-flex gap-1 flex-wrap">
+                                            <div class="d-flex gap-1 flex-nowrap">
                                                 <?php if ($isAccountant || $isManager): ?>
                                                 <button type="button" class="btn btn-outline-secondary btn-sm" onclick="openEditTaskModal(<?php echo (int)$task['id']; ?>)" title="تعديل الاوردر">
-                                                    <i class="bi bi-pencil-square me-1"></i>تعديل
+                                                    <i class="bi bi-pencil-square me-1"></i>
                                                 </button>
                                                 <?php endif; ?>
                                                 <?php if (in_array($task['status'] ?? '', ['completed', 'delivered', 'returned'], true)): ?>
