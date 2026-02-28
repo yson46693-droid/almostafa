@@ -2162,7 +2162,7 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                                                 }
                                             }
                                             if ($creatorRoleLabel) {
-                                                echo '<div class="text-muted small"><i class="bi bi-person me-1"></i>من: ' . htmlspecialchars($task['creator_name']) . ' (' . $creatorRoleLabel . ')</div>';
+                                                echo '<div class="text-muted small"><i class="bi bi-person me-1"></i>من: ' . htmlspecialchars($task['creator_name']) . '</div>';
                                             }
                                         }
                                         // عرض اسم المنتج المستخرج من notes (تم استخراجه مسبقاً في loop)
