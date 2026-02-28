@@ -5743,42 +5743,40 @@ function openBeeswaxDamageModal(id, supplier, quantity) {
     </div>
 </div>
 
-<div class="modal fade" id="rawMaterialsReportModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-md">
-        <div class="modal-content">
-            <div class="modal-header bg-dark text-white">
-                <h5 class="modal-title"><i class="bi bi-clipboard-data me-2"></i>خيارات تقرير مخزن الخامات</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+<div class="card border shadow-sm mb-4 d-none" id="rawMaterialsReportCard">
+    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <h5 class="card-title mb-0"><i class="bi bi-clipboard-data me-2"></i>خيارات تقرير مخزن الخامات</h5>
+        <button type="button" class="btn btn-sm btn-light btn-close-card" data-card-id="rawMaterialsReportCard" aria-label="إغلاق">
+            <i class="bi bi-x-lg"></i>
+        </button>
+    </div>
+    <div class="card-body">
+        <?php if ($rawMaterialsReportViewUrl): ?>
+            <p class="mb-3 text-muted">
+                تم حفظ نسخة من التقرير في مساحة التخزين الآمنة بتاريخ
+                <span class="fw-semibold"><?php echo htmlspecialchars($rawMaterialsReportGeneratedAt, ENT_QUOTES, 'UTF-8'); ?></span>.
+                اختر الإجراء المطلوب أدناه.
+            </p>
+            <div class="d-grid gap-2">
+                <button type="button" class="btn btn-primary" id="rawReportViewBtn">
+                    <i class="bi bi-display me-2"></i>
+                    عرض التقرير داخل المتصفح
+                </button>
+                <button type="button" class="btn btn-outline-primary" id="rawReportPrintBtn">
+                    <i class="bi bi-printer me-2"></i>
+                    طباعة / حفظ التقرير كـ PDF
+                </button>
             </div>
-            <div class="modal-body scrollable-modal-body">
-                <?php if ($rawMaterialsReportViewUrl): ?>
-                    <p class="mb-3 text-muted">
-                        تم حفظ نسخة من التقرير في مساحة التخزين الآمنة بتاريخ
-                        <span class="fw-semibold"><?php echo htmlspecialchars($rawMaterialsReportGeneratedAt, ENT_QUOTES, 'UTF-8'); ?></span>.
-                        اختر الإجراء المطلوب أدناه.
-                    </p>
-                    <div class="d-grid gap-2">
-                        <button type="button" class="btn btn-primary" id="rawReportViewBtn">
-                            <i class="bi bi-display me-2"></i>
-                            عرض التقرير داخل المتصفح
-                        </button>
-                        <button type="button" class="btn btn-outline-primary" id="rawReportPrintBtn">
-                            <i class="bi bi-printer me-2"></i>
-                            طباعة / حفظ التقرير كـ PDF
-                        </button>
-                    </div>
-                    <div class="alert alert-light border mt-3 mb-0 small text-muted">
-                        <i class="bi bi-shield-lock me-1"></i>
-                        يتم فتح التقرير عبر `view.php` لضمان الحماية ومنع خطأ Forbidden.
-                    </div>
-                <?php else: ?>
-                    <div class="alert alert-danger mb-0">
-                        <i class="bi bi-exclamation-triangle me-2"></i>
-                        تعذّر تجهيز ملف التقرير. يرجى تحديث الصفحة أو التأكد من صلاحيات مجلد التخزين.
-                    </div>
-                <?php endif; ?>
+            <div class="alert alert-light border mt-3 mb-0 small text-muted">
+                <i class="bi bi-shield-lock me-1"></i>
+                يتم فتح التقرير عبر `view.php` لضمان الحماية ومنع خطأ Forbidden.
             </div>
-        </div>
+        <?php else: ?>
+            <div class="alert alert-danger mb-0">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                تعذّر تجهيز ملف التقرير. يرجى تحديث الصفحة أو التأكد من صلاحيات مجلد التخزين.
+            </div>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -5800,51 +5798,51 @@ function openBeeswaxDamageModal(id, supplier, quantity) {
 
 <!-- Tabs للأقسام الأربعة -->
 <div class="section-tabs">
-    <ul class="nav nav-pills justify-content-center">
-        <li class="nav-item">
-            <a class="nav-link <?php echo $section === 'turbines' ? 'active' : ''; ?>" 
+    <ul class="nav nav-pills justify-content-center row g-2">
+        <li class="nav-item col-4 col-md-auto">
+            <a class="nav-link text-center <?php echo $section === 'turbines' ? 'active' : ''; ?>" 
                href="?page=raw_materials_warehouse&section=turbines">
                 <i class="bi bi-cup-hot-fill"></i>التلبينات
             </a>
         </li>
-        <li class="nav-item">
-            <a class="nav-link <?php echo $section === 'herbal' ? 'active' : ''; ?>" 
+        <li class="nav-item col-4 col-md-auto">
+            <a class="nav-link text-center <?php echo $section === 'herbal' ? 'active' : ''; ?>" 
                href="?page=raw_materials_warehouse&section=herbal">
                 <i class="bi bi-flower2"></i>العطاره
             </a>
         </li>
-        <li class="nav-item">
-            <a class="nav-link <?php echo $section === 'honey' ? 'active' : ''; ?>" 
+        <li class="nav-item col-4 col-md-auto">
+            <a class="nav-link text-center <?php echo $section === 'honey' ? 'active' : ''; ?>" 
                href="?page=raw_materials_warehouse&section=honey">
                 <i class="bi bi-droplet-fill"></i>العسل
             </a>
         </li>
-        <li class="nav-item">
-            <a class="nav-link <?php echo $section === 'olive_oil' ? 'active' : ''; ?>" 
+        <li class="nav-item col-4 col-md-auto">
+            <a class="nav-link text-center <?php echo $section === 'olive_oil' ? 'active' : ''; ?>" 
                href="?page=raw_materials_warehouse&section=olive_oil">
                 <i class="bi bi-cup-straw"></i>زيت الزيتون
             </a>
         </li>
-        <li class="nav-item">
-            <a class="nav-link <?php echo $section === 'beeswax' ? 'active' : ''; ?>" 
+        <li class="nav-item col-4 col-md-auto">
+            <a class="nav-link text-center <?php echo $section === 'beeswax' ? 'active' : ''; ?>" 
                href="?page=raw_materials_warehouse&section=beeswax">
                 <i class="bi bi-hexagon-fill"></i>شمع العسل
             </a>
         </li>
-        <li class="nav-item">
-            <a class="nav-link <?php echo $section === 'nuts' ? 'active' : ''; ?>" 
+        <li class="nav-item col-4 col-md-auto">
+            <a class="nav-link text-center <?php echo $section === 'nuts' ? 'active' : ''; ?>" 
                href="?page=raw_materials_warehouse&section=nuts">
                 <i class="bi bi-nut-fill"></i>المكسرات
             </a>
         </li>
-        <li class="nav-item">
-            <a class="nav-link <?php echo $section === 'sesame' ? 'active' : ''; ?>" 
+        <li class="nav-item col-4 col-md-auto">
+            <a class="nav-link text-center <?php echo $section === 'sesame' ? 'active' : ''; ?>" 
                href="?page=raw_materials_warehouse&section=sesame">
                 <i class="bi bi-circle-fill"></i>السمسم
             </a>
         </li>
-        <li class="nav-item">
-            <a class="nav-link <?php echo $section === 'date' ? 'active' : ''; ?>" 
+        <li class="nav-item col-4 col-md-auto">
+            <a class="nav-link text-center <?php echo $section === 'date' ? 'active' : ''; ?>" 
                href="?page=raw_materials_warehouse&section=date">
                 <i class="bi bi-tree-fill"></i>البلح
             </a>
@@ -10743,7 +10741,7 @@ foreach ($honeyVarietiesCatalog as $catalogVariety => $meta) {
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const reportButton = document.getElementById('generateRawMaterialsReportBtn');
-    const reportModalElement = document.getElementById('rawMaterialsReportModal');
+    const reportCardElement = document.getElementById('rawMaterialsReportCard');
     const viewButton = document.getElementById('rawReportViewBtn');
     const printButton = document.getElementById('rawReportPrintBtn');
     const openInNewTab = (url) => {
@@ -10773,22 +10771,26 @@ document.addEventListener('DOMContentLoaded', function () {
         window.open(url, '_blank', 'noopener');
     };
 
-    const hideModal = () => {
-        if (!reportModalElement || typeof bootstrap === 'undefined') {
-            return;
-        }
-        const instance = bootstrap.Modal.getInstance(reportModalElement);
-        if (instance) {
-            instance.hide();
+    const showReportCard = () => {
+        if (reportCardElement) {
+            reportCardElement.classList.remove('d-none');
+            reportCardElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
     };
+    const hideReportCard = () => {
+        if (reportCardElement) {
+            reportCardElement.classList.add('d-none');
+        }
+    };
+    document.querySelectorAll('.btn-close-card[data-card-id="rawMaterialsReportCard"]').forEach(btn => {
+        btn.addEventListener('click', hideReportCard);
+    });
 
     if (reportButton) {
         reportButton.addEventListener('click', async () => {
             const isReady = reportButton.getAttribute('data-report-ready') === '1';
-            if (isReady && reportModalElement && typeof bootstrap !== 'undefined') {
-                const instance = bootstrap.Modal.getOrCreateInstance(reportModalElement);
-                instance.show();
+            if (isReady && reportCardElement) {
+                showReportCard();
                 return;
             }
 
@@ -10937,16 +10939,15 @@ document.addEventListener('DOMContentLoaded', function () {
                     reportButton.setAttribute('data-report-ready', '1');
                     reportButton.setAttribute('data-generated-at', data.generated_at || '');
                     
-                    // Update modal content if it exists
-                    const generatedAtSpan = document.querySelector('#rawMaterialsReportModal .fw-semibold');
+                    // Update card content if it exists
+                    const generatedAtSpan = document.querySelector('#rawMaterialsReportCard .fw-semibold');
                     if (generatedAtSpan) {
                         generatedAtSpan.textContent = data.generated_at || '';
                     }
                     
-                    // Show modal or open report
-                    if (reportModalElement && typeof bootstrap !== 'undefined') {
-                        const instance = bootstrap.Modal.getOrCreateInstance(reportModalElement);
-                        instance.show();
+                    // Show card or open report
+                    if (reportCardElement) {
+                        showReportCard();
                     } else if (data.viewer_url) {
                         openInNewTab(data.viewer_url);
                     }
@@ -10977,7 +10978,7 @@ document.addEventListener('DOMContentLoaded', function () {
             viewButton.addEventListener('click', () => {
                 const currentViewUrl = reportButton.getAttribute('data-viewer-url') || viewUrl;
                 openInNewTab(currentViewUrl);
-                hideModal();
+                hideReportCard();
             });
         }
 
@@ -10985,7 +10986,7 @@ document.addEventListener('DOMContentLoaded', function () {
             printButton.addEventListener('click', () => {
                 const currentPrintUrl = reportButton.getAttribute('data-print-url') || resolvedPrintUrl;
                 openInNewTab(currentPrintUrl);
-                hideModal();
+                hideReportCard();
             });
         }
     }
