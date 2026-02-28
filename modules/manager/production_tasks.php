@@ -2170,12 +2170,6 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                                             echo '<div class="text-muted small"><i class="bi bi-box me-1"></i>المنتج: ' . htmlspecialchars($task['extracted_product_name']) . '</div>';
                                         }
                                         ?>
-                                        <?php if ((float)($task['quantity'] ?? 0) > 0): ?>
-                                            <?php 
-                                            $unit = !empty($task['unit']) ? $task['unit'] : 'قطعة';
-                                            ?>
-                                            <div class="text-muted small">الكمية: <?php echo number_format((float)$task['quantity'], 2) . ' ' . htmlspecialchars($unit); ?></div>
-                                        <?php endif; ?>
                                         <?php
                                         $hasOrder = !empty($task['related_type']) && (string)$task['related_type'] === 'customer_order' && !empty($task['related_id']);
                                         $orderIdForBtn = $hasOrder ? (int)$task['related_id'] : 0;

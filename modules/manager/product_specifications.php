@@ -463,12 +463,13 @@ $specificationsCount = is_countable($productSpecifications) ? count($productSpec
     </div>
 </div>
 
-<!-- Card للموبايل - تعديل مواصفة -->
-<div class="card shadow-sm mb-4 d-md-none" id="editSpecificationCard" style="display: none;">
-    <div class="card-header bg-secondary text-white">
+<!-- بطاقة تعديل مواصفة (لجميع الأحجام بدل المودال) -->
+<div class="card shadow-sm mb-4" id="editSpecificationCard" style="display: none;">
+    <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
         <h5 class="mb-0">
             <i class="bi bi-pencil-square me-2"></i>تعديل مواصفة المنتج
         </h5>
+        <button type="button" class="btn btn-close btn-close-white" onclick="closeEditSpecificationCard()" aria-label="إغلاق"></button>
     </div>
     <div class="card-body">
         <form method="POST">
@@ -577,7 +578,7 @@ function showAddSpecificationModal() {
     }
 }
 
-// فتح نموذج تعديل مواصفة
+// فتح نموذج تعديل مواصفة (دائماً كبطاقة وليس مودال)
 function showEditSpecificationModal(button) {
     if (!button) return;
     
@@ -589,46 +590,24 @@ function showEditSpecificationModal(button) {
     const packaging = button.getAttribute('data-packaging') || '';
     const notes = button.getAttribute('data-notes') || '';
     
-    if (isMobile()) {
-        // على الموبايل: استخدام Card
-        const card = document.getElementById('editSpecificationCard');
-        if (card) {
-            const specIdInput = card.querySelector('#editSpecCardId');
-            const productNameInput = card.querySelector('#editSpecCardProductName');
-            const rawMaterialsInput = card.querySelector('#editSpecCardRawMaterials');
-            const packagingInput = card.querySelector('#editSpecCardPackaging');
-            const notesInput = card.querySelector('#editSpecCardNotes');
-            
-            if (specIdInput) specIdInput.value = specId;
-            if (productNameInput) productNameInput.value = productName;
-            if (rawMaterialsInput) rawMaterialsInput.value = rawMaterials;
-            if (packagingInput) packagingInput.value = packaging;
-            if (notesInput) notesInput.value = notes;
-            
-            card.style.display = 'block';
-            setTimeout(function() {
-                scrollToElement(card);
-            }, 50);
-        }
-    } else {
-        // على الكمبيوتر: استخدام Modal
-        const modal = document.getElementById('editSpecificationModal');
-        if (modal) {
-            const specIdInput = modal.querySelector('#editSpecId');
-            const productNameInput = modal.querySelector('#editProductName');
-            const rawMaterialsInput = modal.querySelector('#editRawMaterials');
-            const packagingInput = modal.querySelector('#editPackaging');
-            const notesInput = modal.querySelector('#editNotes');
-            
-            if (specIdInput) specIdInput.value = specId;
-            if (productNameInput) productNameInput.value = productName;
-            if (rawMaterialsInput) rawMaterialsInput.value = rawMaterials;
-            if (packagingInput) packagingInput.value = packaging;
-            if (notesInput) notesInput.value = notes;
-            
-            const modalInstance = new bootstrap.Modal(modal);
-            modalInstance.show();
-        }
+    const card = document.getElementById('editSpecificationCard');
+    if (card) {
+        const specIdInput = card.querySelector('#editSpecCardId');
+        const productNameInput = card.querySelector('#editSpecCardProductName');
+        const rawMaterialsInput = card.querySelector('#editSpecCardRawMaterials');
+        const packagingInput = card.querySelector('#editSpecCardPackaging');
+        const notesInput = card.querySelector('#editSpecCardNotes');
+        
+        if (specIdInput) specIdInput.value = specId;
+        if (productNameInput) productNameInput.value = productName;
+        if (rawMaterialsInput) rawMaterialsInput.value = rawMaterials;
+        if (packagingInput) packagingInput.value = packaging;
+        if (notesInput) notesInput.value = notes;
+        
+        card.style.display = 'block';
+        setTimeout(function() {
+            scrollToElement(card);
+        }, 50);
     }
 }
 
