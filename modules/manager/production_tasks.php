@@ -2029,17 +2029,6 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                             <label class="form-label">تاريخ الاستحقاق</label>
                             <input type="date" class="form-control" name="due_date" id="editDueDate">
                         </div>
-                        <div class="col-md-3">
-                            <label class="form-label">اختر العمال المستهدفين</label>
-                            <div style="max-height: 120px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 0.375rem;">
-                                <select class="form-select form-select-sm border-0" name="assigned_to[]" multiple style="max-height: 100px;" id="editAssignedTo">
-                                    <?php foreach ($productionUsers as $worker): ?>
-                                        <option value="<?php echo (int)$worker['id']; ?>"><?php echo htmlspecialchars($worker['full_name']); ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div class="form-text small">يمكن تحديد أكثر من عامل باستخدام زر CTRL أو SHIFT.</div>
-                        </div>
                         <div class="col-md-2">
                             <label class="form-label">اسم العميل</label>
                             <div class="position-relative">
@@ -2621,13 +2610,6 @@ window.openEditTaskModal = function(taskId) {
                 document.getElementById('editCustomerName').value = t.customer_name || '';
                 document.getElementById('editCustomerPhone').value = t.customer_phone || '';
                 document.getElementById('editDetails').value = t.details || '';
-                var assignSelect = document.getElementById('editAssignedTo');
-                if (assignSelect) {
-                    var assigneeIds = (t.assignees || []).map(function(a) { return parseInt(a, 10); });
-                    for (var i = 0; i < assignSelect.options.length; i++) {
-                        assignSelect.options[i].selected = assigneeIds.indexOf(parseInt(assignSelect.options[i].value, 10)) >= 0;
-                    }
-                }
                 var shippingEl = document.getElementById('editTaskShippingFees');
                 if (shippingEl && typeof t.shipping_fees === 'number') shippingEl.value = t.shipping_fees;
                 if (shippingEl && (typeof t.shipping_fees === 'string' && t.shipping_fees !== '')) shippingEl.value = t.shipping_fees;
