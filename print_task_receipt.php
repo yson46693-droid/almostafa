@@ -138,6 +138,7 @@ foreach ($taskIds as $taskId) {
         $displayNotes = preg_replace('/\[SHIPPING_FEES\]:\s*[0-9.]+/', '', $displayNotes);
         $displayNotes = preg_replace('/المنتج:\s*[^\n]+/', '', $displayNotes);
         $displayNotes = preg_replace('/الكمية:\s*[0-9.]+/', '', $displayNotes);
+        $displayNotes = preg_replace('/^[^\n]*العامل المخصص[^\n]*\n?/m', '', $displayNotes);
         $displayNotes = preg_replace('/\n\s*\n\s*\n+/', "\n\n", $displayNotes);
         $displayNotes = trim($displayNotes);
     }
@@ -550,18 +551,14 @@ $singleReceipt = count($receipts) === 1;
                     }
                     ?>
                 </td>
-                <td>الأولوية:</td>
-                <td><?php echo htmlspecialchars($priorityLabel); ?></td>
+                <td>نوع الاوردر:</td>
+                <td><?php echo htmlspecialchars($taskTypeLabel); ?></td>
             </tr>
             <tr>
                 <td>الطلب :</td>
                 <td><?php echo date('m-d', strtotime($createdAt)) . ' | ' . date('h:i A', strtotime($createdAt)); ?></td>
                 <td>تسليم:</td>
                 <td><?php echo $dueDate ? date('m-d', strtotime($dueDate)) : '-'; ?></td>
-            </tr>
-            <tr>
-                <td>نوع الاوردر:</td>
-                <td colspan="3" style="font-weight: 700;"><?php echo htmlspecialchars($taskTypeLabel); ?></td>
             </tr>
         </table>
         
@@ -570,8 +567,9 @@ $singleReceipt = count($receipts) === 1;
         <table class="products-table">
             <thead>
                 <tr>
-                    <th style="width: 45%;">المنتج</th>
-                    <th style="width: 30%; text-align: center;">الكمية</th>
+                    <th style="width: 35%;">المنتج</th>
+                    <th style="width: 20%; text-align: center;">الكمية</th>
+                    <th style="width: 20%; text-align: center;">السعر</th>
                     <th style="width: 25%; text-align: center;">اجمالي(ج.م)</th>
                 </tr>
             </thead>
@@ -604,6 +602,15 @@ $singleReceipt = count($receipts) === 1;
                         }
                         ?>
                     </td>
+                    <td class="product-quantity" style="text-align: center;">
+                        <?php 
+                        if ($productPrice !== null) {
+                            echo number_format($productPrice, 2);
+                        } else {
+                            echo '<span style="color: #999;">-</span>';
+                        }
+                        ?>
+                    </td>
                     <td class="product-quantity" style="text-align: center; font-weight: 600;">
                         <?php 
                         if ($lineTotal !== null) {
@@ -618,7 +625,7 @@ $singleReceipt = count($receipts) === 1;
             </tbody>
             <tfoot>
                 <tr style="border-top: 2px solid #000; font-weight: 700; background-color: #f0f0f0;">
-                    <td colspan="2" style="text-align: left; padding: 8px 5px;">الإجمالي</td>
+                    <td colspan="3" style="text-align: left; padding: 8px 5px;">الإجمالي</td>
                     <td style="text-align: center; padding: 8px 5px;"><?php echo number_format($grandTotal, 2); ?> ج.م</td>
                 </tr>
                 <?php 
@@ -626,12 +633,12 @@ $singleReceipt = count($receipts) === 1;
                 $finalTotal = $grandTotal + $receiptShippingFees;
                 if ($receiptShippingFees > 0): ?>
                 <tr style="font-weight: 700; background-color: #f8f8f8;">
-                    <td colspan="2" style="text-align: left; padding: 6px 5px;">رسوم الشحن</td>
+                    <td colspan="3" style="text-align: left; padding: 6px 5px;">رسوم الشحن</td>
                     <td style="text-align: center; padding: 6px 5px;"><?php echo number_format($receiptShippingFees, 2); ?> ج.م</td>
                 </tr>
                 <?php endif; ?>
                 <tr style="font-weight: 700; background-color: #e8f5e9;">
-                    <td colspan="2" style="text-align: left; padding: 8px 5px;">الإجمالي النهائي</td>
+                    <td colspan="3" style="text-align: left; padding: 8px 5px;">الإجمالي النهائي</td>
                     <td style="text-align: center; padding: 8px 5px;"><?php echo number_format($finalTotal, 2); ?> ج.م</td>
                 </tr>
             </tfoot>
