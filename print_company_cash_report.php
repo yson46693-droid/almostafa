@@ -691,7 +691,7 @@ $statusLabels = [
         <?php endif; ?>
         
         <div class="footer">
-        powered by <a href="https://wa.me/201102289090" target="_blank">Osama Saied</a>
+        powered by <a href="https://wa.me/+201102289090" target="_blank">Osama Saied</a>
         <p>© <?php echo date('Y'); ?> - جميع الحقوق محفوظة</p>
         </div>
     </div>
