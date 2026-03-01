@@ -543,14 +543,7 @@ $singleReceipt = count($receipts) === 1;
         <table class="info-table customer-priority-row" style="margin: 12px 0;">
             <tr>
                 <td>العميل:</td>
-                <td>
-                    <?php 
-                    echo $customerName !== '' ? htmlspecialchars($customerName) : '-';
-                    if (!empty($task['customer_phone'])) {
-                        echo '<br><span style="font-weight: normal; font-size: 13px;">' . htmlspecialchars($task['customer_phone']) . '</span>';
-                    }
-                    ?>
-                </td>
+                <td><?php echo $customerName !== '' ? htmlspecialchars($customerName) : '-'; ?></td>
                 <td>النوع :</td>
                 <td><?php echo htmlspecialchars($taskTypeLabel); ?></td>
             </tr>
@@ -663,6 +656,12 @@ $singleReceipt = count($receipts) === 1;
             <?php endif; ?>
         </table>
         <?php endif; ?>
+        <div class="section-title">هاتف العميل</div>
+        <div class="task-details">
+            <div style="font-size: 14px; line-height: 1.8; padding: 4px 0; font-weight: 500; color: #000;">
+                <?php echo !empty($task['customer_phone']) ? htmlspecialchars($task['customer_phone']) : '<span style="color: #666;">-</span>'; ?>
+            </div>
+        </div>
         <?php if ($displayNotes !== ''): ?>
         <div class="section-title">ملاحظات</div>
         <div class="task-details">
