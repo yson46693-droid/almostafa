@@ -551,12 +551,12 @@ $singleReceipt = count($receipts) === 1;
                     }
                     ?>
                 </td>
-                <td>نوع الاوردر:</td>
+                <td>النوع :</td>
                 <td><?php echo htmlspecialchars($taskTypeLabel); ?></td>
             </tr>
             <tr>
                 <td>الطلب :</td>
-                <td><?php echo date('m-d', strtotime($createdAt)) . ' | ' . date('h:i A', strtotime($createdAt)); ?></td>
+                <td><?php echo date('m-d', strtotime($createdAt)) . ' | ' . date('g:i A', strtotime($createdAt)); ?></td>
                 <td>تسليم:</td>
                 <td><?php echo $dueDate ? date('m-d', strtotime($dueDate)) : '-'; ?></td>
             </tr>
@@ -568,9 +568,9 @@ $singleReceipt = count($receipts) === 1;
             <thead>
                 <tr>
                     <th style="width: 35%;">المنتج</th>
-                    <th style="width: 20%; text-align: center;">الكمية</th>
+                    <th style="width: 20%; text-align: center;">ك</th>
                     <th style="width: 20%; text-align: center;">السعر</th>
-                    <th style="width: 25%; text-align: center;">اجمالي(ج.م)</th>
+                    <th style="width: 25%; text-align: center;">اجمالي</th>
                 </tr>
             </thead>
             <tbody>
@@ -651,7 +651,7 @@ $singleReceipt = count($receipts) === 1;
             </tr>
             <?php 
             $receiptShippingFeesEmpty = isset($r['shippingFees']) ? (float)$r['shippingFees'] : 0;
-            if ($receiptShippingFeesEmpty > 0): ?>
+            if ($receiptShippingFeesEmpty > -1): ?>
             <tr style="font-weight: 700;">
                 <td>رسوم الشحن</td>
                 <td><?php echo number_format($receiptShippingFeesEmpty, 2); ?> ج.م</td>
