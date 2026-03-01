@@ -625,7 +625,7 @@ $singleReceipt = count($receipts) === 1;
                 <?php 
                 $receiptShippingFees = isset($r['shippingFees']) ? (float)$r['shippingFees'] : 0;
                 $finalTotal = $grandTotal + $receiptShippingFees;
-                if ($receiptShippingFees > 0): ?>
+                if ($receiptShippingFees > -1): ?>
                 <tr style="font-weight: 700; background-color: #f8f8f8;">
                     <td colspan="3" style="text-align: left; padding: 6px 5px;">رسوم الشحن</td>
                     <td style="text-align: center; padding: 6px 5px;"><?php echo number_format($receiptShippingFees, 2); ?> ج.م</td>
