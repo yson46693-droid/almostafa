@@ -1004,6 +1004,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $assignees = isset($_POST['assigned_to']) && is_array($_POST['assigned_to'])
                         ? array_filter(array_map('intval', $_POST['assigned_to']))
                         : [];
+                    $shippingFees = 0;
+                    if (isset($_POST['shipping_fees']) && $_POST['shipping_fees'] !== '') {
+                        $shippingFees = (float) str_replace(',', '.', (string) $_POST['shipping_fees']);
+                        if ($shippingFees < 0) $shippingFees = 0;
+                    }
                     $products = [];
                     if (isset($_POST['products']) && is_array($_POST['products'])) {
                         foreach ($_POST['products'] as $p) {
@@ -1035,6 +1040,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $notesParts[] = 'العمال المخصصون: ' . implode(', ', $assigneeNames) . "\n[ASSIGNED_WORKERS_IDS]:" . implode(',', $assignees);
                     } elseif (count($assignees) === 1) {
                         $notesParts[] = 'العامل المخصص: ' . ($assigneeNames[0] ?? '') . "\n[ASSIGNED_WORKERS_IDS]:" . $assignees[0];
+                    }
+                    if ($shippingFees > 0) {
+                        $notesParts[] = '[SHIPPING_FEES]:' . $shippingFees;
                     }
                     $notesValue = !empty($notesParts) ? implode("\n\n", $notesParts) : null;
                     $firstProduct = !empty($products) ? $products[0] : null;
@@ -2534,6 +2542,37 @@ function buildEditProductRow(idx, product) {
         '<div class="col-md-1 d-flex align-items-end">' +
         '<button type="button" class="btn btn-danger btn-sm w-100 edit-remove-product-btn"><i class="bi bi-trash"></i></button></div></div></div>';
 }
+function updateEditTaskSummary() {
+    var container = document.getElementById('editProductsContainer');
+    var subEl = document.getElementById('editTaskSubtotalDisplay');
+    var shipEl = document.getElementById('editTaskShippingDisplay');
+    var finalEl = document.getElementById('editTaskFinalTotalDisplay');
+    var shipInput = document.getElementById('editTaskShippingFees');
+    if (!container || !subEl || !shipEl || !finalEl) return;
+    var subtotal = 0;
+    container.querySelectorAll('.edit-product-line-total').forEach(function(input) {
+        var v = parseFloat(input.value);
+        if (!isNaN(v) && v >= 0) subtotal += v;
+    });
+    var shipping = (shipInput && !isNaN(parseFloat(shipInput.value))) ? Math.max(0, parseFloat(shipInput.value)) : 0;
+    var finalTotal = subtotal + shipping;
+    subEl.textContent = subtotal.toFixed(2) + ' ج.م';
+    shipEl.textContent = shipping.toFixed(2) + ' ج.م';
+    finalEl.textContent = finalTotal.toFixed(2) + ' ج.م';
+}
+function delegateEditSummaryInputs() {
+    var form = document.getElementById('editTaskForm');
+    if (!form || form._editSummaryDelegated) return;
+    form._editSummaryDelegated = true;
+    form.addEventListener('input', function(e) {
+        if (e.target.matches('.edit-product-line-total, .edit-product-price, .edit-product-qty') || e.target.id === 'editTaskShippingFees')
+            updateEditTaskSummary();
+    });
+    form.addEventListener('change', function(e) {
+        if (e.target.matches('.edit-product-line-total, .edit-product-price, .edit-product-qty') || e.target.id === 'editTaskShippingFees')
+            updateEditTaskSummary();
+    });
+}
 function addEditProductRow(product) {
     var container = document.getElementById('editProductsContainer');
     if (!container) return;
@@ -2544,8 +2583,10 @@ function addEditProductRow(product) {
     row.querySelector('.edit-remove-product-btn').addEventListener('click', function() {
         var rows = container.querySelectorAll('.edit-product-row');
         if (rows.length > 1) row.remove();
+        updateEditTaskSummary();
     });
     editProductIndex++;
+    updateEditTaskSummary();
 }
 window.closeEditTaskCard = function() {
     var collapse = document.getElementById('editTaskFormCollapse');
@@ -2587,12 +2628,17 @@ window.openEditTaskModal = function(taskId) {
                         assignSelect.options[i].selected = assigneeIds.indexOf(parseInt(assignSelect.options[i].value, 10)) >= 0;
                     }
                 }
+                var shippingEl = document.getElementById('editTaskShippingFees');
+                if (shippingEl && typeof t.shipping_fees === 'number') shippingEl.value = t.shipping_fees;
+                if (shippingEl && (typeof t.shipping_fees === 'string' && t.shipping_fees !== '')) shippingEl.value = t.shipping_fees;
                 var products = Array.isArray(t.products) ? t.products : [];
                 if (products.length === 0) products = [{}];
                 products.forEach(function(p) {
-                    var row = { name: p.name || '', quantity: p.quantity, unit: p.unit || 'قطعة', price: p.price };
+                    var row = { name: p.name || '', quantity: p.quantity, unit: p.unit || 'قطعة', price: p.price, line_total: p.line_total };
                     addEditProductRow(row);
                 });
+                updateEditTaskSummary();
+                delegateEditSummaryInputs();
             }
         })
         .catch(function() { addEditProductRow({}); });
@@ -2605,6 +2651,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (editAddBtn) {
         editAddBtn.addEventListener('click', function() { addEditProductRow({}); });
     }
+    delegateEditSummaryInputs();
 });
 
 window.openOrderReceiptModal = function(orderId) {
