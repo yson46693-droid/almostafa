@@ -78,6 +78,27 @@ try {
         error_log('Error fetching product_templates: ' . $e->getMessage());
     }
     
+    // جلب أسماء المنتجات الخارجية من products
+    try {
+        $hasProductType = $db->queryOne("SHOW COLUMNS FROM products LIKE 'product_type'");
+        if (!empty($hasProductType)) {
+            $externalProducts = $db->query("
+                SELECT DISTINCT name 
+                FROM products 
+                WHERE product_type = 'external' AND status = 'active' AND name IS NOT NULL AND name != ''
+                ORDER BY name ASC
+            ");
+            foreach ($externalProducts as $row) {
+                $name = trim($row['name'] ?? '');
+                if ($name !== '') {
+                    $templates[] = $name;
+                }
+            }
+        }
+    } catch (Exception $e) {
+        error_log('Error fetching external products for templates: ' . $e->getMessage());
+    }
+    
     // إزالة التكرار وترتيب القوالب أبجدياً
     $templates = array_unique($templates);
     sort($templates);
