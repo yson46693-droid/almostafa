@@ -691,8 +691,8 @@ $statusLabels = [
         <?php endif; ?>
         
         <div class="footer">
-            <p>تم إنشاء هذا التقرير تلقائياً من نظام إدارة خزنة الشركة</p>
-            <p>© <?php echo date('Y'); ?> - جميع الحقوق محفوظة</p>
+        powered by <a href="https://www.wa.me/+201102289090" target="_blank">Osama Saied</a>
+        <p>© <?php echo date('Y'); ?> - جميع الحقوق محفوظة</p>
         </div>
     </div>
     

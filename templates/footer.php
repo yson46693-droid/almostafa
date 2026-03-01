@@ -12,7 +12,7 @@ if (!defined('ACCESS_ALLOWED')) {
             <div class="row">
                 <div class="col-md-6 text-center text-md-start">
                     <small class="text-muted">
-                        &copy; <?php echo date('Y'); ?> <?php echo COMPANY_NAME; ?>. <?php echo $lang['all_rights_reserved'] ?? 'جميع الحقوق محفوظة'; ?>
+                        powered by <a href="https://www.wa.me/+201102289090" target="_blank">Osama Saied</a>
                     </small>
                 </div>
             </div>
