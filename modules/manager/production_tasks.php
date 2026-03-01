@@ -1107,7 +1107,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['act
                             'name' => trim((string)($p['name'] ?? '')),
                             'quantity' => isset($p['quantity']) ? (is_numeric($p['quantity']) ? (float)$p['quantity'] : null) : null,
                             'unit' => trim((string)($p['unit'] ?? 'قطعة')) ?: 'قطعة',
-                            'price' => isset($p['price']) && $p['price'] !== '' && $p['price'] !== null ? (is_numeric($p['price']) ? (float)$p['price'] : null) : null
+                            'price' => isset($p['price']) && $p['price'] !== '' && $p['price'] !== null ? (is_numeric($p['price']) ? (float)$p['price'] : null) : null,
+                            'line_total' => isset($p['line_total']) && $p['line_total'] !== '' && $p['line_total'] !== null && is_numeric($p['line_total']) ? (float)$p['line_total'] : null
                         ];
                     }
                 }
@@ -1119,7 +1120,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['act
                         'name' => trim($m[1]),
                         'quantity' => isset($m[2]) ? (float)$m[2] : null,
                         'unit' => trim((string)($task['unit'] ?? 'قطعة')) ?: 'قطعة',
-                        'price' => null
+                        'price' => null,
+                        'line_total' => null
                     ];
                 }
             }
@@ -1132,9 +1134,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['act
                         'name' => $pn,
                         'quantity' => $qty,
                         'unit' => trim((string)($task['unit'] ?? 'قطعة')) ?: 'قطعة',
-                        'price' => null
+                        'price' => null,
+                        'line_total' => null
                     ];
                 }
+            }
+            $shippingFees = 0;
+            if (preg_match('/\[SHIPPING_FEES\]\s*:\s*([0-9.]+)/', $notes, $m)) {
+                $shippingFees = (float)$m[1];
             }
             // استخراج العمال المخصصين
             if (preg_match('/\[ASSIGNED_WORKERS_IDS\]\s*:\s*([0-9,\s]+)/', $notes, $m)) {
@@ -1173,7 +1180,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['act
                     'customer_phone' => trim((string)($task['customer_phone'] ?? '')),
                     'details' => $details,
                     'products' => $products,
-                    'assignees' => array_values($assignees)
+                    'assignees' => array_values($assignees),
+                    'shipping_fees' => $shippingFees
                 ]
             ], JSON_UNESCAPED_UNICODE);
             exit;
@@ -2045,6 +2053,34 @@ $recentTasksQueryString = http_build_query($recentTasksQueryParams, '', '&', PHP
                                 <i class="bi bi-plus-circle me-1"></i>إضافة منتج آخر
                             </button>
                         </div>
+                        <div class="col-12 col-md-6 col-lg-4">
+                            <label class="form-label" for="editTaskShippingFees">رسوم الشحن (ج.م)</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" name="shipping_fees" id="editTaskShippingFees" step="0.01" min="0" placeholder="0.00" value="0">
+                                <span class="input-group-text">ج.م</span>
+                            </div>
+                        </div>
+                        <div class="col-12 mt-3">
+                            <div class="card bg-light border-secondary border-opacity-25" id="editTaskTotalSummaryCard">
+                                <div class="card-body py-3">
+                                    <h6 class="card-title mb-2"><i class="bi bi-calculator me-2"></i>ملخص الإجمالي النهائي</h6>
+                                    <div class="row g-2 small">
+                                        <div class="col-6 col-md-4">
+                                            <span class="text-muted">إجمالي المنتجات:</span>
+                                            <strong class="d-block" id="editTaskSubtotalDisplay">0.00 ج.م</strong>
+                                        </div>
+                                        <div class="col-6 col-md-4">
+                                            <span class="text-muted">رسوم الشحن:</span>
+                                            <strong class="d-block" id="editTaskShippingDisplay">0.00 ج.م</strong>
+                                        </div>
+                                        <div class="col-12 col-md-4">
+                                            <span class="text-muted">الإجمالي النهائي:</span>
+                                            <strong class="d-block fs-5 text-success" id="editTaskFinalTotalDisplay">0.00 ج.م</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div class="d-flex justify-content-end mt-4 gap-2">
                         <button type="button" class="btn btn-outline-secondary" onclick="closeEditTaskCard()"><i class="bi bi-x-circle me-1"></i>إلغاء</button>
@@ -2474,25 +2510,28 @@ var __repCustomersForTask = <?php echo json_encode($repCustomersForTask); ?>;
 
 var editProductIndex = 0;
 function buildEditProductRow(idx, product) {
-    var p = product || { name: '', quantity: '', unit: 'قطعة', price: '' };
+    var p = product || { name: '', quantity: '', unit: 'قطعة', price: '', line_total: '' };
     var unitVal = String(p.unit || 'قطعة').trim();
     var opts = ['كرتونة','عبوة','كيلو','جرام','شرينك','قطعة'].map(function(u) {
         return '<option value="' + u + '"' + (u === unitVal ? ' selected' : '') + '>' + u + '</option>';
     }).join('');
     var qtyVal = (p.quantity !== null && p.quantity !== undefined && p.quantity !== '') ? String(p.quantity) : '';
     var priceVal = (p.price !== null && p.price !== undefined && p.price !== '') ? String(p.price) : '';
+    var lineTotalVal = (p.line_total !== null && p.line_total !== undefined && p.line_total !== '') ? String(p.line_total) : '';
     var nameVal = String(p.name || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     return '<div class="product-row mb-3 p-3 border rounded edit-product-row" data-edit-product-index="' + idx + '">' +
         '<div class="row g-2">' +
-        '<div class="col-md-4"><label class="form-label small">اسم المنتج</label>' +
-        '<input type="text" class="form-control" name="products[' + idx + '][name]" placeholder="اسم المنتج أو القالب" list="templateSuggestions" value="' + nameVal + '"></div>' +
-        '<div class="col-md-2"><label class="form-label small">الكمية</label>' +
-        '<input type="number" class="form-control" name="products[' + idx + '][quantity]" step="0.01" min="0" placeholder="120" value="' + qtyVal + '"></div>' +
-        '<div class="col-md-2"><label class="form-label small">الوحدة</label>' +
+        '<div class="col-md-3"><label class="form-label small">اسم المنتج</label>' +
+        '<input type="text" class="form-control edit-product-name" name="products[' + idx + '][name]" placeholder="اسم المنتج أو القالب" list="templateSuggestions" value="' + nameVal + '"></div>' +
+        '<div class="col-md-1"><label class="form-label small">الكمية</label>' +
+        '<input type="number" class="form-control edit-product-qty" name="products[' + idx + '][quantity]" step="0.01" min="0" placeholder="120" value="' + qtyVal + '"></div>' +
+        '<div class="col-md-1"><label class="form-label small">الوحدة</label>' +
         '<select class="form-select form-select-sm" name="products[' + idx + '][unit]">' + opts + '</select></div>' +
-        '<div class="col-md-2"><label class="form-label small">السعر</label>' +
-        '<input type="number" class="form-control" name="products[' + idx + '][price]" step="0.01" min="0" placeholder="0.00" value="' + priceVal + '"></div>' +
-        '<div class="col-md-2 d-flex align-items-end">' +
+        '<div class="col-md-1"><label class="form-label small">السعر</label>' +
+        '<input type="number" class="form-control edit-product-price" name="products[' + idx + '][price]" step="0.01" min="0" placeholder="0.00" value="' + priceVal + '"></div>' +
+        '<div class="col-md-2"><label class="form-label small">الإجمالي</label>' +
+        '<div class="input-group input-group-sm"><input type="number" class="form-control edit-product-line-total" name="products[' + idx + '][line_total]" step="0.01" min="0" placeholder="0.00" value="' + lineTotalVal + '"><span class="input-group-text">ج.م</span></div></div>' +
+        '<div class="col-md-1 d-flex align-items-end">' +
         '<button type="button" class="btn btn-danger btn-sm w-100 edit-remove-product-btn"><i class="bi bi-trash"></i></button></div></div></div>';
 }
 function addEditProductRow(product) {
