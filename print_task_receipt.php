@@ -176,6 +176,7 @@ $singleReceipt = count($receipts) === 1;
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo $singleReceipt ? 'إيصال مهمة - ' . (int)$receipts[0]['taskNumber'] : 'طباعة إيصالات (' . count($receipts) . ')'; ?></title>
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <style>
         * {
             margin: 0;
@@ -656,27 +657,21 @@ $singleReceipt = count($receipts) === 1;
             <?php endif; ?>
         </table>
         <?php endif; ?>
-        <div class="section-title">هاتف العميل</div>
-        <div class="task-details">
-            <div style="font-size: 14px; line-height: 1.8; padding: 4px 0; font-weight: 500; color: #000;">
-                <?php echo !empty($task['customer_phone']) ? htmlspecialchars($task['customer_phone']) : '<span style="color: #666;">-</span>'; ?>
-            </div>
-        </div>
-        <?php if ($displayNotes !== ''): ?>
         <div class="section-title">ملاحظات</div>
         <div class="task-details">
             <div style="font-size: 14px; line-height: 1.8; padding: 4px 0; font-weight: 500; color: #000;">
-                <?php echo nl2br(htmlspecialchars($displayNotes)); ?>
+                <?php if ($displayNotes !== ''): ?>
+                    <?php echo nl2br(htmlspecialchars($displayNotes)); ?>
+                <?php else: ?>
+                    <span style="color: #666; font-weight: 500;">لا توجد ملاحظات</span>
+                <?php endif; ?>
+                <?php if (!empty($task['customer_phone'])): ?>
+                    <div style="margin-top: 8px; padding-top: 6px; border-top: 1px dashed #ccc;">
+                        <i class="bi bi-telephone-fill" style="color: #0d6efd; margin-left: 4px;"></i><?php echo htmlspecialchars($task['customer_phone']); ?>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
-        <?php else: ?>
-        <div class="section-title">ملاحظات</div>
-        <div class="task-details">
-            <div style="font-size: 14px; line-height: 1.8; padding: 4px 0; font-weight: 500; color: #000;">
-                <span style="color: #666; font-weight: 500;">لا توجد ملاحظات</span>
-            </div>
-        </div>
-        <?php endif; ?>
         </div>
         </div>
         <?php endforeach; ?>
