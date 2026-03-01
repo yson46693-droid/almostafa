@@ -549,7 +549,7 @@ $singleReceipt = count($receipts) === 1;
             </tr>
             <tr>
                 <td>الطلب :</td>
-                <td><?php echo date('m-d', strtotime($createdAt)) . ' | ' . date('g:i A', strtotime($createdAt)); ?></td>
+                <td><?php echo date('m-d', strtotime($createdAt)) . ' | ' . date('g:i', strtotime($createdAt)); ?></td>
                 <td>تسليم:</td>
                 <td><?php echo $dueDate ? date('m-d', strtotime($dueDate)) : '-'; ?></td>
             </tr>
