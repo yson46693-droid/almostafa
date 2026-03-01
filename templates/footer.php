@@ -12,7 +12,7 @@ if (!defined('ACCESS_ALLOWED')) {
             <div class="row">
                 <div class="col-md-6 text-center text-md-start">
                     <small class="text-muted">
-                        powered by <a href="https://wa.me/+201102289090" target="_blank">Osama Saied</a>
+                        powered by <a href="https://www.facebook.com/osama.saied.3382?mibextid=wwXIfr&rdid=IzHWpq4MfAwtaSFI&share_url=https%3A%2F%2Fwww.facebook.com%2Fshare%2F1GeL6Hnxqk%2F%3Fmibextid%3DwwXIfr" target="_blank">Osama Saied</a>
                     </small>
                 </div>
             </div>
