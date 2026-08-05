@@ -54,8 +54,20 @@ if (empty($_SESSION['_prod_tasks_migrations_done'])) {
         // توسيع عمود status ليشمل كل الحالات المطلوبة
         if (isset($columnsMap['status'])) {
             $statusCol = $db->queryOne("SHOW COLUMNS FROM tasks LIKE 'status'");
-            if (!empty($statusCol['Type']) && stripos((string)$statusCol['Type'], 'with_driver') === false) {
-                $db->execute("ALTER TABLE tasks MODIFY COLUMN status ENUM('pending','received','in_progress','completed','with_delegate','with_driver','delivered','returned','cancelled') DEFAULT 'pending'");
+            $statusType = strtolower((string) ($statusCol['Type'] ?? ''));
+            // إذا كان VARCHAR فهو يقبل أي قيمة — تخطي
+            if (!empty($statusType) && strpos($statusType, 'varchar') === false && stripos($statusType, 'with_shipping_company') === false) {
+                try {
+                    $db->execute("ALTER TABLE tasks MODIFY COLUMN status ENUM('pending','received','in_progress','completed','with_delegate','with_driver','with_shipping_company','delivered','returned','cancelled') DEFAULT 'pending'");
+                } catch (Throwable $enumErr) {
+                    // فشل تعديل ENUM — تحويل إلى VARCHAR
+                    error_log('tasks status ENUM alter failed, converting to VARCHAR: ' . $enumErr->getMessage());
+                    try {
+                        $db->execute("ALTER TABLE tasks MODIFY COLUMN status VARCHAR(50) NOT NULL DEFAULT 'pending'");
+                    } catch (Throwable $varErr) {
+                        error_log('tasks status VARCHAR alter also failed: ' . $varErr->getMessage());
+                    }
+                }
             }
         }
         // إنشاء جدول driver_assignments إذا لم يكن موجوداً
@@ -161,6 +173,37 @@ if (!function_exists('tasksSafeString')) {
         return trim($value);
     }
 }
+
+if (!function_exists('tasksEnsureStatusEnum')) {
+    function tasksEnsureStatusEnum($db): void
+    {
+        try {
+            $statusCol = $db->queryOne("SHOW COLUMNS FROM tasks LIKE 'status'");
+            $statusType = strtolower((string) ($statusCol['Type'] ?? ''));
+            // إذا كان العمود VARCHAR فهو يقبل أي قيمة — لا حاجة لتعديل
+            if ($statusType === '' || strpos($statusType, 'varchar') !== false) {
+                return;
+            }
+            // العمود ENUM — تحقق إن كانت القيمة الجديدة موجودة
+            if (stripos($statusType, 'with_shipping_company') === false) {
+                try {
+                    $db->execute("ALTER TABLE tasks MODIFY COLUMN status ENUM('pending','received','in_progress','completed','with_delegate','with_driver','with_shipping_company','delivered','returned','cancelled') DEFAULT 'pending'");
+                } catch (Throwable $enumErr) {
+                    error_log('tasksEnsureStatusEnum ENUM alter failed, converting to VARCHAR: ' . $enumErr->getMessage());
+                    try {
+                        $db->execute("ALTER TABLE tasks MODIFY COLUMN status VARCHAR(50) NOT NULL DEFAULT 'pending'");
+                    } catch (Throwable $varErr) {
+                        error_log('tasksEnsureStatusEnum VARCHAR alter also failed: ' . $varErr->getMessage());
+                    }
+                }
+            }
+        } catch (Throwable $e) {
+            error_log('tasksEnsureStatusEnum error: ' . $e->getMessage());
+        }
+    }
+}
+
+tasksEnsureStatusEnum($db);
 
 if (!function_exists('tasksSafeJsonEncode')) {
     function tasksSafeJsonEncode($data): string
@@ -651,6 +694,7 @@ function tasksHandleAction(string $action, array $input, array $context): array
             case 'start_task':
             case 'complete_task':
             case 'with_delegate_task':
+            case 'with_shipping_company_task':
             case 'deliver_task':
             case 'return_task':
             case 'assign_to_driver':
@@ -691,9 +735,12 @@ function tasksHandleAction(string $action, array $input, array $context): array
                         throw new RuntimeException('غير مصرح لك بتنفيذ هذا الإجراء');
                     }
                     $currentStatus = $task['status'] ?? '';
-                    $allowedDeliverStatuses = ['completed', 'with_delegate', 'with_driver'];
+                    $allowedDeliverStatuses = ['completed', 'with_delegate', 'with_driver', 'with_shipping_company'];
                     if (!in_array($currentStatus, $allowedDeliverStatuses, true)) {
                         throw new RuntimeException('يمكن تطبيق تم التوصيل أو تم الارجاع على المهام المكتملة أو المعطاة للمندوب أو مع السائق فقط');
+                    }
+                    if ($isProduction && $currentStatus === 'with_shipping_company') {
+                        throw new RuntimeException('غير مصرح لعمال الإنتاج بتنفيذ هذا الإجراء عندما تكون الحالة مع شركة الشحن');
                     }
                 } elseif ($action === 'with_delegate_task') {
                     if (!$isManager && !$isProduction && !$isDriver) {
@@ -705,6 +752,17 @@ function tasksHandleAction(string $action, array $input, array $context): array
                     $backendTaskType = (strpos((string)($task['related_type'] ?? ''), 'manager_') === 0) ? substr((string)$task['related_type'], 8) : ($task['task_type'] ?? 'general');
                     if ($backendTaskType !== 'telegraph') {
                         throw new RuntimeException('مع المندوب متاح فقط لأوردرات التليجراف');
+                    }
+                } elseif ($action === 'with_shipping_company_task') {
+                    if (!$isManager && !$isProduction && !$isDriver) {
+                        throw new RuntimeException('غير مصرح لك بتنفيذ هذا الإجراء');
+                    }
+                    if (($task['status'] ?? '') !== 'completed') {
+                        throw new RuntimeException('يمكن تطبيق مع شركة الشحن على المهام المكتملة فقط');
+                    }
+                    $backendTaskType = (strpos((string)($task['related_type'] ?? ''), 'manager_') === 0) ? substr((string)$task['related_type'], 8) : ($task['task_type'] ?? 'general');
+                    if ($backendTaskType !== 'telegraph') {
+                        throw new RuntimeException('مع شركة الشحن متاح فقط لأوردرات التليجراف');
                     }
                 } elseif ($action === 'assign_to_driver') {
                     if (!$isManager && !$isProduction) {
@@ -754,6 +812,7 @@ function tasksHandleAction(string $action, array $input, array $context): array
                     'start_task' => ['status' => 'in_progress', 'column' => 'started_at'],
                     'complete_task' => ['status' => 'completed', 'column' => 'completed_at'],
                     'with_delegate_task' => ['status' => 'with_delegate', 'column' => 'completed_at'],
+                    'with_shipping_company_task' => ['status' => 'with_shipping_company', 'column' => 'completed_at'],
                     'deliver_task' => ['status' => 'delivered', 'column' => 'completed_at'],
                     'return_task' => ['status' => 'returned', 'column' => 'completed_at'],
                 ];
@@ -810,7 +869,7 @@ function tasksHandleAction(string $action, array $input, array $context): array
             case 'change_status':
                 $taskId = isset($input['task_id']) ? (int) $input['task_id'] : 0;
                 $status = $input['status'] ?? 'pending';
-                $validStatuses = ['pending', 'received', 'in_progress', 'completed', 'with_delegate', 'with_driver', 'delivered', 'returned', 'cancelled'];
+                $validStatuses = ['pending', 'received', 'in_progress', 'completed', 'with_delegate', 'with_driver', 'with_shipping_company', 'delivered', 'returned', 'cancelled'];
 
                 if ($taskId <= 0 || !in_array($status, $validStatuses, true)) {
                     throw new RuntimeException('بيانات غير صحيحة لتحديث المهمة');
@@ -832,7 +891,7 @@ function tasksHandleAction(string $action, array $input, array $context): array
                     $values[] = $currentUser['id'];
                 }
 
-                $setParts[] = in_array($status, ['completed', 'with_delegate', 'with_driver', 'delivered', 'returned'], true) ? 'completed_at = NOW()' : 'completed_at = NULL';
+                $setParts[] = in_array($status, ['completed', 'with_delegate', 'with_driver', 'with_shipping_company', 'delivered', 'returned'], true) ? 'completed_at = NOW()' : 'completed_at = NULL';
                 $setParts[] = $status === 'received' ? 'received_at = NOW()' : 'received_at = NULL';
                 $setParts[] = $status === 'in_progress' ? 'started_at = NOW()' : 'started_at = NULL';
 
@@ -1117,13 +1176,14 @@ if ($filterSearchText !== '') {
 }
 
 if ($overdueFilter) {
-    $whereConditions[] = "t.status NOT IN ('completed','with_delegate','delivered','returned','cancelled')";
+    $whereConditions[] = "t.status NOT IN ('completed','with_delegate','with_driver','with_shipping_company','delivered','returned','cancelled')";
     $whereConditions[] = 't.due_date < CURDATE()';
 }
 
 // السائق يرى: مكتملة، مع المندوب، تم التوصيل، تم الارجاع + مع السائق (المعينة له فقط)
+// السائق لا يرى أوردرات التليجراف
 if ($isDriver) {
-    $driverAllowedStatuses = ['completed', 'with_delegate', 'with_driver', 'delivered', 'returned'];
+        $driverAllowedStatuses = ['completed', 'with_delegate', 'with_driver', 'with_shipping_company', 'delivered', 'returned'];
     if ($statusFilter === 'with_driver') {
         $whereConditions[] = "t.status = 'with_driver'";
         $whereConditions[] = "t.id IN (SELECT task_id FROM driver_assignments WHERE driver_id = ? AND status = 'accepted')";
@@ -1132,9 +1192,11 @@ if ($isDriver) {
         $whereConditions[] = 't.status = ?';
         $params[] = $statusFilter;
     } else {
-        $whereConditions[] = "(t.status IN ('completed', 'with_delegate', 'delivered', 'returned') OR (t.status = 'with_driver' AND t.id IN (SELECT task_id FROM driver_assignments WHERE driver_id = ? AND status = 'accepted')))";
+        $whereConditions[] = "(t.status IN ('completed', 'with_delegate', 'with_shipping_company', 'delivered', 'returned') OR (t.status = 'with_driver' AND t.id IN (SELECT task_id FROM driver_assignments WHERE driver_id = ? AND status = 'accepted')))";
         $params[] = $currentUser['id'];
     }
+    // إخفاء أوردرات التليجراف عن السائق
+    $whereConditions[] = "(t.task_type != 'telegraph' AND t.related_type != 'manager_telegraph')";
 } elseif ($statusFilter !== '') {
     $whereConditions[] = 't.status = ?';
     $params[] = $statusFilter;
@@ -1454,9 +1516,10 @@ $stats = [
     'completed' => $buildStatsQuery("status = 'completed'"),
     'with_delegate' => $buildStatsQuery("status = 'with_delegate'"),
     'with_driver' => $buildStatsQuery("status = 'with_driver'"),
+    'with_shipping_company' => $buildStatsQuery("status = 'with_shipping_company'"),
     'delivered' => $buildStatsQuery("status = 'delivered'"),
     'returned' => $buildStatsQuery("status = 'returned'"),
-    'overdue' => $buildStatsQuery("status NOT IN ('completed','with_delegate','with_driver','delivered','returned','cancelled') AND due_date < CURDATE()")
+    'overdue' => $buildStatsQuery("status NOT IN ('completed','with_delegate','with_driver','with_shipping_company','delivered','returned','cancelled') AND due_date < CURDATE()")
 ];
 
 $tasksJson = tasksSafeJsonEncode($tasks);
@@ -1467,43 +1530,61 @@ function tasksHtml(string $value): string
 }
 ?>
 <style>
-/* عمود الإجراءات: ثابت عند التمرير الأفقى وواضح على كل الصفوف */
+/* عمود رقم الطلب */
+.task-id-col {
+    width: 52px !important;
+    min-width: 52px !important;
+    max-width: 52px !important;
+    padding-inline: 0.35rem !important;
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* عمود الإجراءات */
 .task-actions-header,
 .task-actions-cell {
     min-width: 120px;
     width: 120px;
     white-space: nowrap;
-    position: sticky;
-    inset-inline-end: 0;
-    z-index: 2;
-    box-shadow: -4px 0 8px rgba(0,0,0,0.06);
 }
-.task-actions-header {
-    background: var(--global-table-header-bg, #1d4ed8) !important;
-}
-[dir="rtl"] .task-actions-header,
-[dir="rtl"] .task-actions-cell {
-    box-shadow: 4px 0 8px rgba(0,0,0,0.06);
-}
-.dashboard-table tbody tr .task-actions-cell {
-    background: var(--global-table-row-bg, #fff);
-}
-.dashboard-table tbody tr:nth-child(even) .task-actions-cell {
-    background: var(--global-table-row-alt-bg, #f8fafc);
-}
-.dashboard-table tbody tr.table-danger .task-actions-cell {
-    background: rgba(220, 53, 69, 0.08);
-}
-.task-actions-cell .dropdown .btn {
-    background: #fff !important;
-    border: 1px solid #6c757d !important;
-    color: #495057 !important;
-    font-weight: 600;
-}
-.task-actions-cell .dropdown .btn:hover {
-    background: #e9ecef !important;
-    border-color: #6c757d !important;
-    color: #212529 !important;
+@media (max-width: 768px) {
+    .task-actions-header,
+    .task-actions-cell {
+        min-width: 90px;
+        width: 90px;
+    }
+    /* تصغير حجم الجدول على الموبايل */
+    .dashboard-table thead th,
+    .dashboard-table tbody td {
+        padding: 0.4rem 0.5rem !important;
+        font-size: 0.75rem !important;
+    }
+    .dashboard-table {
+        min-width: 480px;
+    }
+    .dashboard-table tbody td .badge {
+        font-size: 0.65rem !important;
+        padding: 0.2rem 0.4rem !important;
+    }
+    .task-actions-cell .btn {
+        padding: 0.2rem 0.4rem !important;
+        font-size: 0.72rem !important;
+    }
+    /* تمديد الصفحة للحواف — تعويض padding الـ dashboard-main (16px) */
+    .tasks-page-container {
+        margin-left: -16px !important;
+        margin-right: -16px !important;
+        width: calc(100% + 32px) !important;
+    }
+    /* إزالة الحواف الدائرية على الكاردات الممتدة للحافة */
+    .tasks-page-container .card {
+        border-radius: 0 !important;
+        border-left: none !important;
+        border-right: none !important;
+    }
+    .tasks-page-container .dashboard-table-wrapper {
+        border-radius: 0 !important;
+    }
 }
 .task-status-filter-card {
     display: block;
@@ -1512,17 +1593,6 @@ function tasksHtml(string $value): string
     border: 0;
     background: transparent;
     text-align: inherit;
-}
-@media (max-width: 768px) {
-    .task-actions-header,
-    .task-actions-cell {
-        min-width: 100px;
-        width: 100px;
-    }
-    .task-actions-cell .btn {
-        padding: 0.25rem 0.5rem;
-        font-size: 0.875rem;
-    }
 }
 /* قائمة إجراءات المهام: قابلة للتمرير ومرئية فوق الجدول على الموبايل */
 .task-actions-dropdown-menu-inbody {
@@ -1542,7 +1612,7 @@ function tasksHtml(string $value): string
     }
 }
 </style>
-<div class="container-fluid">
+<div class="container-fluid px-0 px-md-3 tasks-page-container">
     <?php foreach ($errorMessages as $message): ?>
         <div class="alert alert-danger alert-dismissible fade show" id="errorAlert" role="alert">
             <i class="bi bi-exclamation-triangle me-2"></i><?php echo tasksHtml($message); ?>
@@ -1582,7 +1652,14 @@ function tasksHtml(string $value): string
     if ($filterOrderDateTo !== '') { $filterBaseUrl .= '&order_date_to=' . rawurlencode($filterOrderDateTo); }
     ?>
     <?php if (!defined('TASKS_PARTIAL_TABLE') || !TASKS_PARTIAL_TABLE): ?>
-    <div class="row g-2 mb-3" id="taskStatusFilterCards">
+    <div class="card mb-3">
+        <div class="card-header bg-transparent py-2 d-flex align-items-center justify-content-between" style="cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#taskStatusCardsCollapse" aria-expanded="true" aria-controls="taskStatusCardsCollapse" id="taskStatusCardsHeader">
+            <span class="fw-semibold small"><i class="bi bi-bar-chart-line me-1"></i>ملخص الحالات</span>
+            <i class="bi bi-chevron-down tasks-status-cards-chevron" style="transition:transform .25s; transform:rotate(180deg);"></i>
+        </div>
+        <div class="collapse show" id="taskStatusCardsCollapse">
+        <div class="card-body p-2">
+    <div class="row g-2" id="taskStatusFilterCards">
         <div class="col-6 col-md-4 col-lg-2">
             <button type="button" class="text-decoration-none task-status-filter-card" data-status="all">
                 <div class="card <?php echo $statusFilter === '' && !$overdueFilter ? 'bg-primary text-white' : 'border-primary'; ?> text-center h-100">
@@ -1625,6 +1702,16 @@ function tasksHtml(string $value): string
             </button>
         </div>
         <div class="col-6 col-md-4 col-lg-2">
+            <button type="button" class="text-decoration-none task-status-filter-card" data-status="with_shipping_company">
+                <div class="card <?php echo $statusFilter === 'with_shipping_company' ? 'bg-warning text-dark' : 'border-warning'; ?> text-center h-100">
+                    <div class="card-body p-2">
+                        <h5 class="<?php echo $statusFilter === 'with_shipping_company' ? 'text-dark' : 'text-warning'; ?> mb-0"><?php echo $stats['with_shipping_company']; ?></h5>
+                        <small class="<?php echo $statusFilter === 'with_shipping_company' ? 'text-dark-50' : 'text-muted'; ?>">مع شركة الشحن</small>
+                    </div>
+                </div>
+            </button>
+        </div>
+        <div class="col-6 col-md-4 col-lg-2">
             <button type="button" class="text-decoration-none task-status-filter-card" data-status="with_driver">
                 <div class="card <?php echo $statusFilter === 'with_driver' ? 'bg-primary text-white' : 'border-primary'; ?> text-center h-100">
                     <div class="card-body p-2">
@@ -1654,8 +1741,11 @@ function tasksHtml(string $value): string
                 </div>
             </button>
         </div>
-        
-    </div>
+
+    </div><!-- /row -->
+    </div><!-- /card-body -->
+    </div><!-- /collapse -->
+    </div><!-- /card -->
 
     <?php
     $filterIsActive = ($filterSearchText !== '' || $search !== '' || $filterTaskId !== '' || $filterCustomer !== '' || $filterOrderId !== '' || $filterTaskType !== '' || $filterDueFrom !== '' || $filterDueTo !== '' || $filterOrderDateFrom !== '' || $filterOrderDateTo !== '' || $assignedFilter > 0);
@@ -1680,12 +1770,17 @@ function tasksHtml(string $value): string
                             <label class="form-label small mb-0">بحث سريع</label>
                             <input type="text" class="form-control form-control-sm tasks-dynamic-filter" name="search_text" id="tasksSearchText" value="<?php echo tasksHtml($filterSearchText !== '' ? $filterSearchText : $search); ?>" placeholder="نص في العنوان، الملاحظات، العميل...">
                         </div>
-                        <div class="col-6 col-md-4 col-lg-2">
+                        <div class="col-5 col-md-3 col-lg-2">
                             <label class="form-label small mb-0">رقم الاوردر</label>
-                            <input type="text" name="task_id" class="form-control form-control-sm tasks-dynamic-filter" id="tasksFilterTaskId" placeholder="#" value="<?php echo tasksHtml($filterTaskId); ?>">
+                            <input type="text" inputmode="numeric" pattern="[0-9]*" name="task_id" class="form-control form-control-sm" id="tasksFilterTaskId" placeholder="#" value="<?php echo tasksHtml($filterTaskId); ?>">
+                        </div>
+                        <div class="col-auto align-self-end">
+                            <button type="submit" class="btn btn-primary btn-sm px-2" id="tasksSearchBtn" title="بحث">
+                                <i class="bi bi-search"></i>
+                            </button>
                         </div>
                         <div class="col-6 col-md-4 col-lg-2">
-                            <label class="form-label small mb-0">اسم العميل / هاتف</label>
+                            <label class="form-label small mb-0">اسم العميل / هاتف    </label>
                             <input type="text" name="search_customer" class="form-control form-control-sm tasks-dynamic-filter" id="tasksFilterCustomer" placeholder="اسم أو رقم" value="<?php echo tasksHtml($filterCustomer); ?>">
                         </div>
                         <div class="col-6 col-md-4 col-lg-2">
@@ -1693,6 +1788,7 @@ function tasksHtml(string $value): string
                             <select name="task_type" class="form-select form-select-sm tasks-dynamic-filter" id="tasksFilterTaskType">
                                 <option value="">— الكل —</option>
                                 <option value="shop_order" <?php echo $filterTaskType === 'shop_order' ? 'selected' : ''; ?>>اوردر محل</option>
+                                <option value="online_store" <?php echo $filterTaskType === 'online_store' ? 'selected' : ''; ?>>المتجر الالكتروني</option>
                                 <option value="cash_customer" <?php echo $filterTaskType === 'cash_customer' ? 'selected' : ''; ?>>عميل نقدي</option>
                                 <option value="telegraph" <?php echo $filterTaskType === 'telegraph' ? 'selected' : ''; ?>>تليجراف</option>
                                 <option value="shipping_company" <?php echo $filterTaskType === 'shipping_company' ? 'selected' : ''; ?>>شركة شحن</option>
@@ -1714,19 +1810,6 @@ function tasksHtml(string $value): string
                             <label class="form-label small mb-0">تاريخ الطلب إلى</label>
                             <input type="date" name="order_date_to" class="form-control form-control-sm tasks-dynamic-filter" id="tasksFilterOrderDateTo" value="<?php echo tasksHtml($filterOrderDateTo); ?>">
                         </div>
-                        <?php if ($isManager): ?>
-                        <div class="col-6 col-md-4 col-lg-2">
-                            <label class="form-label small mb-0">المخصص إلى</label>
-                            <select class="form-select form-select-sm tasks-dynamic-filter" name="assigned" id="tasksFilterAssigned">
-                                <option value="0">الكل</option>
-                                <?php foreach ($users as $user): ?>
-                                    <option value="<?php echo (int) $user['id']; ?>" <?php echo $assignedFilter === (int) $user['id'] ? 'selected' : ''; ?>>
-                                        <?php echo tasksHtml($user['full_name']); ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <?php endif; ?>
                         <div class="col-auto align-self-end">
                             <a href="?page=tasks<?php echo $statusFilter !== '' ? '&status=' . rawurlencode($statusFilter) : ''; ?><?php echo $priorityFilter !== '' ? '&priority=' . rawurlencode($priorityFilter) : ''; ?><?php echo $overdueFilter ? '&overdue=1' : ''; ?>" class="btn btn-outline-danger btn-sm">إزالة الفلتر</a>
                         </div>
@@ -1762,7 +1845,7 @@ function tasksHtml(string $value): string
                                     <input type="checkbox" class="form-check-input" id="selectAllTasks" title="تحديد الكل">
                                 </th>
                                 <?php endif; ?>
-                                <th style="width: 60px;">#</th>
+                                <th class="task-id-col">#</th>
                                 <?php if (!$isDriver): ?>
                                 <th>اسم العميل</th>
                                 <?php else: ?>
@@ -1771,9 +1854,6 @@ function tasksHtml(string $value): string
                                 <th>نوع الاوردر</th>
                                 <th>الحالة</th>
                                 <th>التسليم</th>
-                                <?php if ($isProduction || $isDriver): ?>
-                                <th style="width: 50px;" class="text-center" title="اعتماد الفاتورة"><i class="bi bi-receipt-cutoff"></i></th>
-                                <?php endif; ?>
                                 <th class="task-actions-header">الإجراءات</th>
                             </tr>
                         </thead>
@@ -1781,8 +1861,7 @@ function tasksHtml(string $value): string
                             <?php
                             if (empty($tasks)):
                                 if (defined('TASKS_PARTIAL_TABLE') && TASKS_PARTIAL_TABLE):
-                                    $colspan = ($isManager || $isProduction) ? 8 : 7;
-                                    if ($isProduction || $isDriver) $colspan++;
+                                    $colspan = ($isManager || $isProduction) ? 7 : 6;
                                     echo '<tr><td colspan="' . (int)$colspan . '" class="text-center py-5 text-muted">لا توجد اوردرات</td></tr>';
                                     exit;
                                 endif;
@@ -1809,6 +1888,7 @@ function tasksHtml(string $value): string
                                     'in_progress' => 'primary',
                                     'completed' => 'success',
                                     'with_delegate' => 'info',
+                                    'with_shipping_company' => 'warning',
                                     'delivered' => 'success',
                                     'returned' => 'secondary',
                                     'cancelled' => 'secondary',
@@ -1816,10 +1896,10 @@ function tasksHtml(string $value): string
 
                                 $statusLabel = [
                                     'pending' => 'معلقة',
-                                    'received' => 'مستلمة',
                                     'completed' => 'مكتملة',
                                     'with_delegate' => 'مع المندوب',
                                     'with_driver' => 'مع السائق',
+                                    'with_shipping_company' => 'مع شركة الشحن',
                                     'delivered' => 'تم التوصيل',
                                     'returned' => 'تم الارجاع',
                                     'cancelled' => 'ملغاة'
@@ -1832,7 +1912,7 @@ function tasksHtml(string $value): string
                                     'low' => 'منخفضة'
                                 ][$task['priority']] ?? tasksSafeString($task['priority']);
 
-                                $overdue = !in_array($task['status'], ['completed', 'with_delegate', 'delivered', 'returned', 'cancelled'], true)
+                                $overdue = !in_array($task['status'], ['completed', 'with_delegate', 'with_shipping_company', 'delivered', 'returned', 'cancelled'], true)
                                     && !empty($task['due_date'])
                                     && strtotime((string) $task['due_date']) < time();
                                 $searchParts = array_filter([
@@ -1854,22 +1934,28 @@ function tasksHtml(string $value): string
                                         <input type="checkbox" class="form-check-input task-print-checkbox" value="<?php echo (int) $task['id']; ?>" data-print-url="<?php echo htmlspecialchars(getRelativeUrl('print_task_receipt.php?id=' . (int) $task['id']), ENT_QUOTES, 'UTF-8'); ?>">
                                     </td>
                                     <?php endif; ?>
-                                    <td>
+                                    <td class="task-id-col">
                                         <strong><?php echo (int) $task['id']; ?></strong><br>
                                         <span class="text-muted" style="font-size:.7rem;"><?php echo !empty($task['created_at']) ? date('d/m', strtotime($task['created_at'])) : ''; ?></span>
                                     </td>
                                     
-                                    <td><?php 
+                                    <td>
+                                        <?php
                                         $customerDisplay = isset($task['customer_display']) ? trim((string)$task['customer_display']) : '';
                                         echo $customerDisplay !== '' ? tasksHtml($customerDisplay) : '<span class="text-muted">-</span>';
-                                    ?></td>
-                                    <?php if (!$isDriver): ?>
-                                    <?php endif; ?>
+                                        if ($isProduction || $isDriver):
+                                            $taskInvoiceApproved = in_array((int)$task['id'], $approvedTaskIds, true);
+                                        ?>
+                                        <?php if ($taskInvoiceApproved): ?>
+                                            <i class="bi bi-check2-circle text-success ms-1" title="تم اعتماد الفاتورة" style="font-size:.8rem;"></i>
+                                        <?php endif; ?>
+                                        <?php endif; ?>
+                                    </td>
                                     <td>
                                         <?php
                                         $relatedType = isset($task['related_type']) ? (string)$task['related_type'] : '';
                                         $displayType = (strpos($relatedType, 'manager_') === 0) ? substr($relatedType, 8) : ($task['task_type'] ?? 'general');
-                                        $orderTypeLabels = ['shop_order' => 'اوردر محل', 'cash_customer' => 'عميل نقدي', 'telegraph' => 'تليجراف', 'shipping_company' => 'شركة شحن', 'general' => 'مهمة عامة', 'production' => 'إنتاج منتج'];
+                                        $orderTypeLabels = ['shop_order' => 'اوردر محل', 'online_store' => 'المتجر الالكتروني', 'cash_customer' => 'عميل نقدي', 'telegraph' => 'تليجراف', 'shipping_company' => 'شركة شحن', 'general' => 'مهمة عامة', 'production' => 'إنتاج منتج'];
                                         echo tasksHtml($orderTypeLabels[$displayType] ?? $displayType);
                                         ?>
                                     </td>
@@ -1881,16 +1967,6 @@ function tasksHtml(string $value): string
                                             <span class="text-muted">-</span>
                                         <?php endif; ?>
                                     </td>
-                                    <?php if ($isProduction || $isDriver): ?>
-                                    <td class="text-center">
-                                        <?php $taskInvoiceApproved = in_array((int)$task['id'], $approvedTaskIds, true); ?>
-                                        <?php if ($taskInvoiceApproved): ?>
-                                        <i class="bi bi-check2-circle text-success" title="تم اعتماد الفاتورة" aria-label="تم اعتماد الفاتورة"></i>
-                                        <?php else: ?>
-                                        <span class="text-muted" title="لم تُعتمد الفاتورة">—</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <?php endif; ?>
                                     <td class="task-actions-cell">
                                         <?php
                                         $taskAssignedTo = (int) ($task['assigned_to'] ?? 0);
@@ -1910,9 +1986,11 @@ function tasksHtml(string $value): string
                                             }
                                         }
                                         $canWithDelegateType = (strpos(isset($task['related_type']) ? (string)$task['related_type'] : '', 'manager_') === 0) ? substr((string)$task['related_type'], 8) : ($task['task_type'] ?? 'general');
-                                        $canWithDelegate = ($isManager || $isProduction || $isDriver) && ($task['status'] ?? '') === 'completed' && $canWithDelegateType === 'telegraph';
+                                        $canWithDelegate = false; // مستبدل بـ "مع شركة الشحن" لأوردرات التليجراف
+                                        $canWithShippingCompany = ($isManager || $isProduction || $isDriver) && ($task['status'] ?? '') === 'completed' && $canWithDelegateType === 'telegraph';
                                         $canAssignDriver = ($isManager || $isProduction) && ($task['status'] ?? '') === 'completed' && $canWithDelegateType !== 'telegraph' && empty($pendingDriverAssignments[(int) $task['id']]);
-                                        $canDeliverReturn = ($isManager || $isProduction || $isDriver) && in_array($task['status'] ?? '', ['completed', 'with_delegate', 'with_driver'], true);
+                                        $canDeliverReturn = (($isManager || $isDriver) && in_array($task['status'] ?? '', ['completed', 'with_delegate', 'with_driver', 'with_shipping_company'], true))
+                                            || ($isProduction && in_array($task['status'] ?? '', ['completed', 'with_delegate', 'with_driver'], true));
                                         $canDeliverReturnDriver = in_array($task['status'] ?? '', ['completed', 'with_delegate'], true);
                                         $canDeliverAsDriver = $isDriver && ($task['status'] ?? '') === 'with_driver';
                                         $taskCustomerPhone = isset($task['customer_phone']) ? trim((string) $task['customer_phone']) : '';
@@ -1925,14 +2003,15 @@ function tasksHtml(string $value): string
                                             </button>
                                             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="taskActionsDropdown<?php echo $taskIdInt; ?>">
                                                 <?php if ($isManager || $isProduction || $isDriver): ?>
-                                                    <li><a class="dropdown-item" href="<?php echo getRelativeUrl('print_task_receipt.php?id=' . $taskIdInt); ?>" target="_blank"><i class="bi bi-printer me-2"></i>طباعة إيصال</a></li>
+                                                    <?php $taskReceiptUrl = getRelativeUrl('print_task_receipt.php?id=' . $taskIdInt . (($isDriver && !$isManager && !$isProduction) ? '' : '&print=1')); ?>
+                                                    <li><a class="dropdown-item" href="<?php echo $taskReceiptUrl; ?>" target="_blank" rel="noopener"><i class="bi bi-printer me-2"></i>طباعة إيصال</a></li>
                                                     <li><hr class="dropdown-divider"></li>
                                                 <?php endif; ?>
                                                 <?php if ($isProduction && in_array($task['status'], ['pending', 'received', 'in_progress'])): ?>
                                                     <li><button type="button" class="dropdown-item" onclick="submitTaskAction('complete_task', <?php echo $taskIdInt; ?>)"><i class="bi bi-check2-circle me-2"></i>إكمال</button></li>
                                                 <?php endif; ?>
-                                                <?php if ($canWithDelegate): ?>
-                                                    <li><button type="button" class="dropdown-item" onclick="submitTaskAction('with_delegate_task', <?php echo $taskIdInt; ?>)"><i class="bi bi-person-badge me-2"></i>مع المندوب</button></li>
+                                                <?php if ($canWithShippingCompany): ?>
+                                                    <li><button type="button" class="dropdown-item" onclick="submitTaskAction('with_shipping_company_task', <?php echo $taskIdInt; ?>)"><i class="bi bi-building me-2"></i>مع شركة الشحن</button></li>
                                                 <?php endif; ?>
                                                 <?php if ($canAssignDriver): ?>
                                                     <li><button type="button" class="dropdown-item" onclick="openDriverAssignModal(<?php echo $taskIdInt; ?>)"><i class="bi bi-truck me-2"></i>مع السائق</button></li>
@@ -2004,6 +2083,10 @@ function tasksHtml(string $value): string
     </div>
 </div>
 
+<?php
+// تمت إزالة الطباعة التلقائية عند البحث برقم الأوردر — كانت تسبب فتح تاب غير متوقع وظهور 404
+?>
+
 <?php if ($isManager): ?>
 <div class="modal fade d-none d-md-block" id="addTaskModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -2031,23 +2114,7 @@ function tasksHtml(string $value): string
                             <label class="form-label">الوصف</label>
                             <textarea class="form-control" name="description" rows="3" placeholder="تفاصيل المهمة"></textarea>
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label">المخصص إلى</label>
-                            <select class="form-select" name="assigned_to">
-                                <option value="0">غير محدد</option>
-                                <?php foreach ($users as $user): ?>
-                                    <option value="<?php echo (int) $user['id']; ?>"><?php echo tasksHtml($user['full_name']); ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">الأولوية</label>
-                            <select class="form-select" name="priority">
-                                <option value="normal" selected>عادية</option>
-                                <option value="low">منخفضة</option>
-                                <option value="urgent">عاجلة</option>
-                            </select>
-                        </div>
+                        
                         <div class="col-md-6">
                             <label class="form-label">تاريخ التسليم</label>
                             <input type="date" class="form-control" name="due_date">
@@ -2166,7 +2233,7 @@ function tasksHtml(string $value): string
             <div class="mb-3">
                 <label class="form-label">المخصص إلى</label>
                 <select class="form-select" name="assigned_to">
-                    <option value="0">غير محدد</option>
+                    <option value="0">-</option>
                     <?php foreach ($users as $user): ?>
                         <option value="<?php echo (int) $user['id']; ?>"><?php echo tasksHtml($user['full_name']); ?></option>
                     <?php endforeach; ?>
@@ -2279,7 +2346,7 @@ function tasksHtml(string $value): string
         <div class="list-group list-group-flush">
             <?php foreach ($pendingDriverRequests as $req):
                 $reqType = (strpos((string)($req['related_type'] ?? ''), 'manager_') === 0) ? substr((string)$req['related_type'], 8) : ($req['task_type'] ?? 'general');
-                $reqTypeLabels = ['shop_order' => 'اوردر محل', 'cash_customer' => 'عميل نقدي', 'telegraph' => 'تليجراف', 'shipping_company' => 'شركة شحن', 'general' => 'مهمة عامة', 'production' => 'إنتاج منتج'];
+                $reqTypeLabels = ['shop_order' => 'اوردر محل', 'online_store' => 'المتجر الالكتروني', 'cash_customer' => 'عميل نقدي', 'telegraph' => 'تليجراف', 'shipping_company' => 'شركة شحن', 'general' => 'مهمة عامة', 'production' => 'إنتاج منتج'];
             ?>
             <div class="list-group-item" id="driverRequest-<?php echo (int) $req['assignment_id']; ?>">
                 <div class="d-flex justify-content-between align-items-start mb-2">
@@ -2648,6 +2715,7 @@ function tasksHtml(string $value): string
         'completed': 'مكتملة',
         'with_delegate': 'مع المندوب',
         'with_driver': 'مع السائق',
+        'with_shipping_company': 'مع شركة الشحن',
         'delivered': 'تم التوصيل',
         'returned': 'تم الارجاع',
         'cancelled': 'ملغاة'
@@ -2659,6 +2727,7 @@ function tasksHtml(string $value): string
         'completed': 'success',
         'with_delegate': 'info',
         'with_driver': 'primary',
+        'with_shipping_company': 'warning',
         'delivered': 'success',
         'returned': 'secondary',
         'cancelled': 'secondary'
@@ -2671,7 +2740,8 @@ function tasksHtml(string $value): string
 
         // طباعة إيصال
         if (flags.isManager || flags.isProduction || flags.isDriver) {
-            items += '<li><a class="dropdown-item" href="' + printTaskReceiptBase + '?id=' + taskId + '" target="_blank"><i class="bi bi-printer me-2"></i>طباعة إيصال</a></li>';
+            var receiptUrl = printTaskReceiptBase + '?id=' + taskId + ((flags.isDriver && !flags.isManager && !flags.isProduction) ? '' : '&print=1');
+            items += '<li><a class="dropdown-item" href="' + receiptUrl + '" target="_blank"><i class="bi bi-printer me-2"></i>طباعة إيصال</a></li>';
             items += '<li><hr class="dropdown-divider"></li>';
         }
 
@@ -2680,9 +2750,9 @@ function tasksHtml(string $value): string
             items += '<li><button type="button" class="dropdown-item" onclick="submitTaskAction(\'complete_task\', ' + taskId + ')"><i class="bi bi-check2-circle me-2"></i>إكمال</button></li>';
         }
 
-        // مع المندوب (نوع برقية، مكتملة)
+        // مع شركة الشحن (نوع برقية، مكتملة) - يحل محل "مع المندوب"
         if ((flags.isManager || flags.isProduction || flags.isDriver) && newStatus === 'completed' && taskType === 'telegraph') {
-            items += '<li><button type="button" class="dropdown-item" onclick="submitTaskAction(\'with_delegate_task\', ' + taskId + ')"><i class="bi bi-person-badge me-2"></i>مع المندوب</button></li>';
+            items += '<li><button type="button" class="dropdown-item" onclick="submitTaskAction(\'with_shipping_company_task\', ' + taskId + ')"><i class="bi bi-building me-2"></i>مع شركة الشحن</button></li>';
         }
 
         // مع السائق (غير برقية، مكتملة، مدير أو إنتاج)
@@ -2691,7 +2761,14 @@ function tasksHtml(string $value): string
         }
 
         // تم التوصيل وتم الارجاع
-        if ((flags.isManager || flags.isProduction || flags.isDriver) && ['completed', 'with_delegate', 'with_driver'].indexOf(newStatus) !== -1) {
+        // المدير والسائق: يشمل with_shipping_company / عمال الإنتاج: لا يشمل with_shipping_company
+        var canDeliverReturn = false;
+        if (flags.isManager || flags.isDriver) {
+            canDeliverReturn = ['completed', 'with_delegate', 'with_driver', 'with_shipping_company'].indexOf(newStatus) !== -1;
+        } else if (flags.isProduction) {
+            canDeliverReturn = ['completed', 'with_delegate', 'with_driver'].indexOf(newStatus) !== -1;
+        }
+        if (canDeliverReturn) {
             items += '<li><button type="button" class="dropdown-item" onclick="submitTaskAction(\'deliver_task\', ' + taskId + ')"><i class="bi bi-truck me-2"></i>تم التوصيل</button></li>';
             items += '<li><button type="button" class="dropdown-item" onclick="submitTaskAction(\'return_task\', ' + taskId + ')"><i class="bi bi-arrow-return-left me-2"></i>تم الارجاع</button></li>';
         }
@@ -2724,7 +2801,11 @@ function tasksHtml(string $value): string
         if (actionsCell) {
             var taskType = row.getAttribute('data-task-type') || '';
             actionsCell.innerHTML = buildActionsHtml(taskId, newStatus, taskType);
+            if (typeof window.initTaskActionsDropdowns === 'function') {
+                window.initTaskActionsDropdowns();
+            }
         }
+        row.setAttribute('data-status', newStatus);
     }
 
     window.submitTaskAction = function (action, taskId) {
@@ -2929,10 +3010,10 @@ function tasksHtml(string $value): string
 
         const statusText = {
             'pending': 'معلقة',
-            'received': 'مستلمة',
             'completed': 'مكتملة',
             'with_delegate': 'مع المندوب',
             'with_driver': 'مع السائق',
+            'with_shipping_company': 'مع شركة الشحن',
             'delivered': 'تم التوصيل',
             'returned': 'تم الارجاع',
             'cancelled': 'ملغاة'
@@ -2958,6 +3039,8 @@ function tasksHtml(string $value): string
             : task.status === 'in_progress' ? 'primary'
             : task.status === 'completed' ? 'success'
             : task.status === 'with_delegate' ? 'info'
+            : task.status === 'with_driver' ? 'primary'
+            : task.status === 'with_shipping_company' ? 'warning'
             : task.status === 'delivered' ? 'success'
             : task.status === 'returned' ? 'secondary'
             : 'secondary';
@@ -3077,15 +3160,49 @@ function tasksHtml(string $value): string
 })();
 </script>
 
-<!-- تدوير سهم بطاقة الفلتر عند الفتح والإغلاق -->
+<!-- تدوير سهم بطاقات الفلتر + حفظ تفضيل الفتح/الإغلاق -->
 <script>
 (function() {
-    var collapseEl = document.getElementById('tasksFilterCollapse');
-    var chevron = document.querySelector('.tasks-filter-chevron');
-    if (collapseEl && chevron) {
-        collapseEl.addEventListener('show.bs.collapse', function() { chevron.style.transform = 'rotate(180deg)'; });
-        collapseEl.addEventListener('hide.bs.collapse', function() { chevron.style.transform = 'rotate(0deg)'; });
+    function initCollapsePref(collapseId, chevronSelector, prefKey, defaultOpen, forceOpen) {
+        var el = document.getElementById(collapseId);
+        var chevron = document.querySelector(chevronSelector);
+        var btn = document.querySelector('[data-bs-target="#' + collapseId + '"]');
+        if (!el) return;
+
+        function applyState(open) {
+            if (open) {
+                el.classList.add('show');
+                if (chevron) chevron.style.transform = 'rotate(180deg)';
+                if (btn) btn.setAttribute('aria-expanded', 'true');
+            } else {
+                el.classList.remove('show');
+                if (chevron) chevron.style.transform = 'rotate(0deg)';
+                if (btn) btn.setAttribute('aria-expanded', 'false');
+            }
+        }
+
+        if (!forceOpen) {
+            try {
+                var saved = localStorage.getItem(prefKey);
+                if (saved === 'true') applyState(true);
+                else if (saved === 'false') applyState(false);
+                else applyState(defaultOpen);
+            } catch(e) { applyState(defaultOpen); }
+        }
+
+        el.addEventListener('show.bs.collapse', function() {
+            if (chevron) chevron.style.transform = 'rotate(180deg)';
+            try { localStorage.setItem(prefKey, 'true'); } catch(e) {}
+        });
+        el.addEventListener('hide.bs.collapse', function() {
+            if (chevron) chevron.style.transform = 'rotate(0deg)';
+            try { localStorage.setItem(prefKey, 'false'); } catch(e) {}
+        });
     }
+
+    var filterIsActive = <?php echo $filterIsActive ? 'true' : 'false'; ?>;
+    initCollapsePref('tasksFilterCollapse',    '.tasks-filter-chevron',        'tasksFilterCollapseOpen',  false, filterIsActive);
+    initCollapsePref('taskStatusCardsCollapse','.tasks-status-cards-chevron',  'tasksStatusCardsOpen',     true,  false);
 })();
 </script>
 
@@ -3190,6 +3307,10 @@ function tasksHtml(string $value): string
                 card.className = 'card text-center h-100 ' + (isActive ? 'bg-info text-white' : 'border-info');
                 number.className = (isActive ? 'text-white' : 'text-info') + ' mb-0';
                 small.className = isActive ? 'text-white-50' : 'text-muted';
+            } else if (status === 'with_shipping_company') {
+                card.className = 'card text-center h-100 ' + (isActive ? 'bg-warning text-dark' : 'border-warning');
+                number.className = (isActive ? 'text-dark' : 'text-warning') + ' mb-0';
+                small.className = isActive ? 'text-dark-50' : 'text-muted';
             } else if (status === 'with_driver' || status === 'all') {
                 card.className = 'card text-center h-100 ' + (isActive ? 'bg-primary text-white' : 'border-primary');
                 number.className = (isActive ? 'text-white' : 'text-primary') + ' mb-0';
@@ -3214,6 +3335,67 @@ function tasksHtml(string $value): string
         return '?' + params.join('&');
     }
 
+    // بناء URL بحث برقم الأوردر فقط — بدون أي فلاتر أخرى
+    function buildTaskIdOnlyUrl(taskIdVal) {
+        return '?page=tasks&task_id=' + encodeURIComponent(taskIdVal) + '&p=1';
+    }
+
+    function applyResponseHtml(html) {
+        var parser = new DOMParser();
+        var doc = parser.parseFromString(html, 'text/html');
+        var currentListContent = getListContent();
+        var newListContent = doc.getElementById('tasksListContent');
+
+        if (currentListContent && newListContent) {
+            currentListContent.innerHTML = newListContent.innerHTML;
+        } else {
+            var currentTbody = getTbody();
+            var newTbody = doc.getElementById('tasksTableBody');
+            if (currentTbody && newTbody) {
+                currentTbody.innerHTML = newTbody.innerHTML;
+            }
+            var paginationNav = document.getElementById('tasksPagination');
+            var newPagination = doc.getElementById('tasksPagination');
+            if (paginationNav && newPagination) {
+                paginationNav.innerHTML = newPagination.innerHTML;
+            } else if (paginationNav && !newPagination) {
+                paginationNav.innerHTML = '';
+            }
+        }
+    }
+
+    function finishAjax(url) {
+        var lc = getListContent();
+        if (lc) { lc.style.opacity = ''; lc.style.pointerEvents = ''; }
+        applyTasksFilter();
+        updateStatusCards(statusInputEl ? statusInputEl.value : '');
+        window.dispatchEvent(new Event('tasks-table-updated'));
+        history.replaceState({ url: url }, '', url);
+    }
+
+    // بحث عالمي برقم الأوردر فقط (يتجاوز كل الفلاتر والصفحات)
+    function searchByTaskIdGlobal(taskIdVal) {
+        var url = buildTaskIdOnlyUrl(taskIdVal);
+        var listContent = getListContent();
+        if (listContent) { listContent.style.opacity = '0.5'; listContent.style.pointerEvents = 'none'; }
+
+        // إعادة تعيين فلاتر الحالة حتى لا يخفي applyTasksFilter النتيجة
+        if (statusInputEl) statusInputEl.value = '';
+        updateStatusCards('');
+
+        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
+            .then(function(r) { return r.text(); })
+            .then(function(html) {
+                applyResponseHtml(html);
+                finishAjax(url);
+            })
+            .catch(function() {
+                var lc = getListContent();
+                if (lc) { lc.style.opacity = ''; lc.style.pointerEvents = ''; }
+                window.location.href = url;
+            });
+    }
+
     function doAjaxTasksPage(targetPage) {
         var url = buildAjaxUrl(targetPage);
         var listContent = getListContent();
@@ -3229,39 +3411,8 @@ function tasksHtml(string $value): string
         })
             .then(function(r) { return r.text(); })
             .then(function(html) {
-                var parser = new DOMParser();
-                var doc = parser.parseFromString(html, 'text/html');
-                var currentListContent = getListContent();
-                var newListContent = doc.getElementById('tasksListContent');
-
-                if (currentListContent && newListContent) {
-                    currentListContent.innerHTML = newListContent.innerHTML;
-                } else {
-                    var currentTbody = getTbody();
-                    var newTbody = doc.getElementById('tasksTableBody');
-                    if (currentTbody && newTbody) {
-                        currentTbody.innerHTML = newTbody.innerHTML;
-                    }
-
-                    var paginationNav = document.getElementById('tasksPagination');
-                    var newPagination = doc.getElementById('tasksPagination');
-                    if (paginationNav && newPagination) {
-                        paginationNav.innerHTML = newPagination.innerHTML;
-                    } else if (paginationNav && !newPagination) {
-                        paginationNav.innerHTML = '';
-                    }
-                }
-
-                var refreshedListContent = getListContent();
-                if (refreshedListContent) {
-                    refreshedListContent.style.opacity = '';
-                    refreshedListContent.style.pointerEvents = '';
-                }
-
-                applyTasksFilter();
-                updateStatusCards(statusInputEl ? statusInputEl.value : '');
-                window.dispatchEvent(new Event('tasks-table-updated'));
-                history.replaceState(null, '', url);
+                applyResponseHtml(html);
+                finishAjax(url);
             })
             .catch(function() {
                 var refreshedListContent = getListContent();
@@ -3271,6 +3422,27 @@ function tasksHtml(string $value): string
                 }
                 window.location.href = url;
             });
+    }
+
+    // حقل رقم الأوردر: أرقام فقط + بحث عند Enter
+    if (taskIdEl) {
+        taskIdEl.addEventListener('keypress', function(e) {
+            if (e.key && !/^\d$/.test(e.key) && !['Backspace','Delete','ArrowLeft','ArrowRight','Tab','Enter'].includes(e.key)) {
+                e.preventDefault();
+            }
+        });
+        taskIdEl.addEventListener('input', function() {
+            this.value = this.value.replace(/\D/g, '');
+        });
+        taskIdEl.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                var val = this.value.trim();
+                if (val !== '') {
+                    searchByTaskIdGlobal(val);
+                }
+            }
+        });
     }
 
     var debounceTimer;
@@ -3290,6 +3462,23 @@ function tasksHtml(string $value): string
 
     form.addEventListener('submit', function(e) {
         e.preventDefault();
+        var taskIdVal = taskIdEl ? taskIdEl.value.trim() : '';
+        if (taskIdVal !== '') {
+            // البحث برقم الأوردر: تجاوز كل الفلاتر وابحث في كل الصفحات
+            searchByTaskIdGlobal(taskIdVal);
+            return;
+        }
+        // إذا كانت كل الفلاتر فارغة لا تبحث
+        var anyFilter = (searchTextEl && searchTextEl.value.trim() !== '') ||
+            (customerEl && customerEl.value.trim() !== '') ||
+            (taskTypeEl && taskTypeEl.value !== '') ||
+            (dueFromEl && dueFromEl.value !== '') ||
+            (dueToEl && dueToEl.value !== '') ||
+            (orderFromEl && orderFromEl.value !== '') ||
+            (orderToEl && orderToEl.value !== '') ||
+            (assignedEl && assignedEl.value !== '0' && assignedEl.value !== '') ||
+            (statusInputEl && statusInputEl.value !== '');
+        if (!anyFilter) return;
         doAjaxTasksPage(1);
     });
 
@@ -3322,10 +3511,49 @@ function tasksHtml(string $value): string
 })();
 </script>
 
-<!-- نقل قائمة إجراءات المهام إلى body على الموبايل لتفادي القص داخل الجدول -->
+<!-- نقل قائمة إجراءات المهام إلى body لتفادي القص داخل الجدول -->
 <script>
 (function() {
     'use strict';
+
+    function findTaskActionsMenu(dropdownEl) {
+        var m = dropdownEl.querySelector('.dropdown-menu');
+        if (m) return m;
+        var inBody = document.body.querySelectorAll('.task-actions-dropdown-menu-inbody');
+        for (var i = 0; i < inBody.length; i++) {
+            if (inBody[i]._taskActionsParent === dropdownEl) {
+                return inBody[i];
+            }
+        }
+        return null;
+    }
+
+    function restoreTaskActionsMenu(dropdownEl, menu) {
+        if (!menu) return;
+        menu.classList.remove('task-actions-dropdown-menu-inbody');
+        menu.removeAttribute('style');
+        menu._taskActionsParent = null;
+        if (dropdownEl && dropdownEl.isConnected) {
+            dropdownEl.appendChild(menu);
+        } else if (menu.parentNode === document.body) {
+            document.body.removeChild(menu);
+        }
+    }
+
+    function bindTaskActionsMenuEvents(menu) {
+        if (!menu || menu._taskActionsMenuBound) return;
+        menu._taskActionsMenuBound = true;
+        // منع إغلاق القائمة قبل تنفيذ onclick عند نقلها إلى body
+        menu.addEventListener('click', function(e) {
+            e.stopPropagation();
+        }, true);
+        menu.addEventListener('mousedown', function(e) {
+            if (e.target.closest('button.dropdown-item, a.dropdown-item')) {
+                e.stopPropagation();
+            }
+        }, true);
+    }
+
     function initTaskActionsDropdowns() {
         var wrapper = document.querySelector('.dashboard-table-wrapper');
         if (!wrapper) return;
@@ -3336,11 +3564,13 @@ function tasksHtml(string $value): string
             var toggle = dropdownEl.querySelector('[data-bs-toggle="dropdown"]');
             var menu = dropdownEl.querySelector('.dropdown-menu');
             if (!toggle || !menu) return;
+            bindTaskActionsMenuEvents(menu);
             dropdownEl.addEventListener('show.bs.dropdown', function(ev) {
                 var el = ev.currentTarget;
-                var m = el.querySelector('.dropdown-menu');
+                var m = findTaskActionsMenu(el);
                 var tgl = el.querySelector('[data-bs-toggle="dropdown"]');
                 if (!m || !tgl) return;
+                bindTaskActionsMenuEvents(m);
                 m._taskActionsParent = el;
                 var rect = tgl.getBoundingClientRect();
                 m.classList.add('task-actions-dropdown-menu-inbody');
@@ -3371,31 +3601,18 @@ function tasksHtml(string $value): string
             });
             dropdownEl.addEventListener('hide.bs.dropdown', function(ev) {
                 var el = ev.currentTarget;
-                var m = el.querySelector('.dropdown-menu');
-                if (!m) {
-                    var inBody = document.body.querySelectorAll('.task-actions-dropdown-menu-inbody');
-                    for (var i = 0; i < inBody.length; i++) {
-                        if (inBody[i]._taskActionsParent === el) {
-                            m = inBody[i];
-                            break;
-                        }
-                    }
-                    if (!m) m = document.body.querySelector('.task-actions-dropdown-menu-inbody');
-                }
-                if (m && el.isConnected) {
-                    m.classList.remove('task-actions-dropdown-menu-inbody');
-                    m.removeAttribute('style');
-                    if (m._taskActionsParent) m._taskActionsParent = null;
-                    el.appendChild(m);
-                } else if (m && !el.isConnected) {
-                    m.classList.remove('task-actions-dropdown-menu-inbody');
-                    m.removeAttribute('style');
-                    if (m._taskActionsParent) m._taskActionsParent = null;
-                    if (m.parentNode === document.body) document.body.removeChild(m);
-                }
+                var m = findTaskActionsMenu(el);
+                if (!m) return;
+                // تأخير إعادة القائمة حتى يُنفَّذ النقر على زر الإجراء أولاً
+                setTimeout(function() {
+                    restoreTaskActionsMenu(el, m);
+                }, 0);
             });
         });
     }
+
+    window.initTaskActionsDropdowns = initTaskActionsDropdowns;
+
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initTaskActionsDropdowns);
     } else {
@@ -3743,5 +3960,34 @@ function showAddTaskModal() {
             });
     }
     window.viewTask = viewTaskMobile;
+})();
+
+// ===== سكريبت الطباعة التلقائية عند البحث =====
+(function() {
+    'use strict';
+    
+    // إضافة event listener لزر البحث
+    const searchBtn = document.getElementById('tasksSearchBtn');
+    if (searchBtn) {
+        searchBtn.addEventListener('click', function(e) {
+            // الانتظار قليلاً لتحديث الجدول بعد البحث
+            setTimeout(function() {
+                const tbody = document.getElementById('tasksTableBody');
+                if (tbody) {
+                    // التحقق من وجود صفوف مرئية (غير مخفية)
+                    const visibleRows = tbody.querySelectorAll('tr.tasks-filter-row:not([style*="display: none"])');
+                    
+                    if (visibleRows.length > 0) {
+                        // إذا كان هناك نتائج، طباعة تلقائية
+                        const taskId = visibleRows[0].getAttribute('data-task-id');
+                        if (taskId) {
+                            const printUrl = 'print_task_receipt.php?id=' + taskId;
+                            window.open(printUrl, '_blank', 'noopener,noreferrer');
+                        }
+                    }
+                }
+            }, 500); // انتظار 500ms لتحديث الجدول
+        });
+    }
 })();
 </script>
